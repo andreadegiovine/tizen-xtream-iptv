@@ -1,33 +1,33 @@
-import { h, toast } from '../dom.js';
+import { h } from '../dom.js';
+import { createCard } from '../components/card.js';
 import { t, i18n } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel, ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
-import { openProviderDb } from '../../db/providerDb.js';
 import { listCategories, pageEntries } from '../../services/catalogQuery.js';
 import { formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
 
 const CATS_ZONE = 'browseCategories';
 const GRID_ZONE = 'browseGrid';
-export const GRID_COLUMNS = 7;
-export const GRID_ROWS = 3;
-export const PAGE_SIZE = GRID_COLUMNS * GRID_ROWS;
+/** Poster grids have 6 columns, channel tiles 4: any multiple of 12 fills whole rows for both. */
+export const columnsFor = (type) => (type === 'live' ? 4 : 6);
 
 /** Where focus lands after changing page: same column, first row going forward, last row going back. */
-export function indexAfterPageChange(direction, index, count) {
-  const column = index % GRID_COLUMNS;
-  const target = direction === 'next' ? column : (GRID_ROWS - 1) * GRID_COLUMNS + column;
-  return Math.max(0, Math.min(target, count - 1));
+export function indexAfterPageChange(direction, index, pageSize, columns) {
+  const column = index % columns;
+  const rows = Math.ceil(pageSize / columns);
+  const target = direction === 'next' ? column : (rows - 1) * columns + column;
+  return Math.max(0, Math.min(target, pageSize - 1));
 }
 
 /**
  * Grid navigation that turns "down from the last row" / "up from the first row" into page changes
  * when another page exists; otherwise behaves as a plain GridModel (and exits the zone).
  */
-export function createPagedGridModel({ getCount, hasNext, hasPrevious, changePage }) {
-  const grid = new GridModel({ columns: GRID_COLUMNS, getCount });
+export function createPagedGridModel({ columns, getCount, hasNext, hasPrevious, changePage }) {
+  const grid = new GridModel({ columns, getCount });
   return {
     getCount,
     navigate(dir, index) {
@@ -45,23 +45,14 @@ export function createPagedGridModel({ getCount, hasNext, hasPrevious, changePag
   };
 }
 
-function createCard(entry, type) {
-  const poster = h('div', { class: 'card-poster' });
-  if (entry.icon) {
-    const img = h('img', { src: entry.icon, alt: '', referrerpolicy: 'no-referrer' });
-    img.addEventListener('error', () => img.remove());
-    poster.appendChild(img);
-  }
-  const title = entry.year ? `${entry.name} (${entry.year})` : entry.name;
-  return h('div', { class: `card ${type}` }, poster, h('div', { class: 'card-title', text: title }));
-}
-
 /** Movies / Series / Live: category panel on the left, paged grid of grouped titles on the right. */
 export function createBrowsePage(ctx, params = {}) {
   const type = params.type;
+  const columns = columnsFor(type);
+  let pageSize = 24;
   const count = h('p', { class: 'muted browse-count' });
   const catList = h('div', { class: 'browse-cats' });
-  const gridEl = h('div', { class: 'browse-grid' });
+  const gridEl = h('div', { class: `browse-grid ${type}` });
   const empty = h('p', { class: 'muted browse-empty', text: t('browse.empty') });
   let db = null;
   let destroyed = false;
@@ -72,6 +63,7 @@ export function createBrowsePage(ctx, params = {}) {
   let hasMore = false;
   let entries = [];
   let cardNodes = [];
+  let cards = [];
   let loadToken = 0;
 
   function renderCategories() {
@@ -85,11 +77,13 @@ export function createBrowsePage(ctx, params = {}) {
 
   function renderGrid() {
     while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
-    cardNodes = entries.map((entry) => {
-      const node = createCard(entry, type);
-      gridEl.appendChild(node);
-      return node;
+    cards = entries.map((entry) => {
+      const card = createCard(entry, type);
+      gridEl.appendChild(card.el);
+      return card;
     });
+    cardNodes = cards.map((card) => card.el);
+    if (ctx.enrich) ctx.enrich(entries, cards, type);
     const name = categories[selected] ? categories[selected].name : '';
     count.textContent = entries.length
       ? t('browse.page', { page: formatNumber(page + 1, i18n.getLocale()), category: name })
@@ -100,7 +94,7 @@ export function createBrowsePage(ctx, params = {}) {
   async function loadPage(nextPage, focusIndex) {
     const token = (loadToken += 1);
     const category = categories[selected];
-    const result = await pageEntries(db, { type, categoryId: category ? category.id : null, offset: nextPage * PAGE_SIZE, limit: PAGE_SIZE });
+    const result = await pageEntries(db, { type, categoryId: category ? category.id : null, offset: nextPage * pageSize, limit: pageSize });
     if (destroyed || token !== loadToken) return;
     page = nextPage;
     hasMore = result.hasMore;
@@ -128,32 +122,34 @@ export function createBrowsePage(ctx, params = {}) {
   const gridZone = new FocusZone({
     id: GRID_ZONE,
     model: createPagedGridModel({
+      columns,
       getCount: () => entries.length,
       hasNext: () => hasMore,
       hasPrevious: () => page > 0,
       changePage: (direction, index) => {
         const nextPage = direction === 'next' ? page + 1 : page - 1;
         // The new page has a full (or last) row count; compute the landing index from the old column.
-        loadPage(nextPage, indexAfterPageChange(direction, index, PAGE_SIZE)).catch((err) => log.warn('Browse page failed', err && err.message));
+        loadPage(nextPage, indexAfterPageChange(direction, index, pageSize, columns)).catch((err) => log.warn('Browse page failed', err && err.message));
       },
     }),
     onFocus: (i) => {
       if (!cardNodes[i]) return;
       cardNodes[i].classList.add('focused');
-      ensureVisible(cardNodes[i], { first: i < GRID_COLUMNS });
+      ensureVisible(cardNodes[i], { first: i < columns });
     },
     onBlur: (i) => cardNodes[i] && cardNodes[i].classList.remove('focused'),
-    onActivate: () => toast(t('common.comingSoon')),
+    onActivate: (i) => {
+      if (!entries[i]) return;
+      const category = categories[selected];
+      ctx.openEntry(entries[i], { section: params.section, live: { categoryId: category ? category.id : null, offset: page * pageSize + i } });
+    },
   });
 
   async function init() {
-    const provider = await ctx.providers.getActive();
-    if (!provider || destroyed) return;
-    db = await openProviderDb(provider.id);
-    if (destroyed) {
-      db.close();
-      return;
-    }
+    const current = await ctx.active.get();
+    if (!current || destroyed) return;
+    db = current.db; // shared handle: never closed here
+    pageSize = (await ctx.settings.get()).gridItems;
     const cats = await listCategories(db, type);
     categories = [{ id: null, name: t('browse.all') }, ...cats.map((c) => ({ id: c.id, name: c.name }))];
     renderCategories();
@@ -177,7 +173,6 @@ export function createBrowsePage(ctx, params = {}) {
     },
     destroy() {
       destroyed = true;
-      if (db) db.close();
       ctx.focus.unregister(CATS_ZONE);
       ctx.focus.unregister(GRID_ZONE);
     },

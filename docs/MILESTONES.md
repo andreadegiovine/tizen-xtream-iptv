@@ -93,47 +93,88 @@ Stato: `[~]` catalog worker e sync progressivo fatti e testati in sandbox/Chrome
 ## 3. Navigazione
 topbar, griglie, pannello categorie, paginazione, ricerca.
 
-Stato: `[~]` parziale (topbar, griglie, categorie e paginazione fatte; manca la ricerca)
+Stato: `[x]` fatta in sandbox e Chrome desktop (topbar, griglie, categorie, paginazione, ricerca); **non provata su TV**.
 
 ### Note di avanzamento
 - Fatta la topbar in stile Netflix; le altre sezioni sono segnaposto "In arrivo".
 - 2026-11-02: la topbar ora distingue le sezioni e il dialog di uscita esiste (vedi note della milestone 1).
 - **2026-11-02 (sera, patch 2): griglie, pannello categorie e paginazione fatti** (Film, Serie, Live usano la stessa pagina `browsePage.js` con `params.type`).
   - `src/services/catalogQuery.js`: `listCategories(db, type)` (ordine alfabetico) e `pageEntries(db, {type, categoryId, offset, limit})`: cursore all'indietro sugli indici `byTypeAdded` (tutti) o `byCatAdded` (una categoria, con join su `entries`); legge `limit + 1` righe per sapere se esiste un'altra pagina senza contare nulla. Più recenti per primi.
-  - UI: a sinistra "Tutti" + categorie (Invio seleziona, la voce corrente ha la barra colorata); a destra una griglia **paginata** 7 colonne × 3 righe (21 per pagina, DOM sempre limitato anche con 30.000 titoli). Giù dall'ultima riga → pagina successiva, Su dalla prima riga → precedente (stessa colonna), altrimenti si esce verso la topbar; Sinistra dalla prima colonna → categorie. Card: locandina dall'icona del provider (se manca o non carica resta il riquadro), titolo normalizzato e anno. Invio su una card mostra per ora "In arrivo" (scheda dettaglio = milestone 4).
+  - UI: a sinistra "Tutti" + categorie (Invio seleziona, la voce corrente ha la barra colorata); a destra una griglia **paginata** (poi resa configurabile: 6 colonne per locandine, 4 per i canali, 12/24/36 titoli per pagina dalle impostazioni; DOM sempre limitato anche con 30.000 titoli). Giù dall'ultima riga → pagina successiva, Su dalla prima riga → precedente (stessa colonna), altrimenti si esce verso la topbar; Sinistra dalla prima colonna → categorie. Card: locandina dall'icona del provider (se manca o non carica resta il riquadro), titolo normalizzato e anno. Invio su una card mostra per ora "In arrivo" (scheda dettaglio = milestone 4).
   - Verificato in sandbox (135 test, lint, build) e in Chrome desktop headless con il server finto (30.000 film): cambio pagina avanti/indietro, selezione categoria, pannello Provider, aggiornamento forzato. **Non provato sulla TV** (vedi milestone 11).
-  - Mancano: ricerca (sezione "Cerca"), conteggi per categoria, ricordare categoria/pagina al ritorno dalla scheda, ricarica della griglia quando il sync finisce mentre è aperta, categorie escluse (milestone 7).
+  - **2026-11-02 (notte, patch 3): ricerca fatta.** `searchIndex.js` tiene in memoria una riga leggera per titolo (nome + chiavi normalizzate di tutti i membri del gruppo, quindi si trova anche con titoli alternativi) e non tocca IndexedDB durante la digitazione; si ricostruisce dopo ogni sync. Tutte le parole devono comparire; ordine: titolo identico, inizia con, inizio parola, contiene; a parità i più recenti. `searchPage.js`: campo con tastiera a schermo (Fatto avvia subito la ricerca, in ogni caso parte dopo 300 ms dall'ultimo tasto), griglia di risultati misti film/serie/canali con etichetta del tipo; Invio apre la scheda.
+  - Mancano: conteggi per categoria, ricordare categoria/pagina al ritorno dalla scheda, ricarica della griglia quando il sync finisce mentre è aperta.
 
 ## 4. Scheda e player
 dropdown stream, AVPlay con controlli, watch state, ripresa.
 
-Stato: `[ ]` da fare (esiste solo un wrapper AVPlay minimo, `src/services/avplaySpike.js`, usato dalla pagina Diagnostica).
+Stato: `[x]` fatta in sandbox e Chrome desktop con un <video> al posto di AVPlay; **su TV è provato solo l'avvio di uno stream dalla Diagnostica (vecchio wrapper), non il nuovo player**.
+
+### Note di avanzamento
+- **2026-11-02 (notte, patch 3)**
+  - `detailPage.js` (film, serie, canale): locandina, titolo, anno, voto, genere, trama (dal provider con `get_vod_info`/`get_series_info`, in cache 24 h nel DB provider, e sopra dai dati TMDB), pulsanti *Riproduci* / *Riprendi · mm:ss* / *Ricomincia*, **menu a tendina degli stream** (`dialogs.choose`, elenco degli stream id del gruppo; di default il più basso) per i film con più versioni; per le serie selettore stagione ed elenco episodi con ✓ per i visti e tempo di ripresa; per i canali il palinsesto delle prossime 24 h.
+  - Player (`playerPage.js` + `playerController.js` + `playerEngines.js`): motore AVPlay sulla TV e `<video>` nei browser desktop, stessa interfaccia; tutti i controlli sono HTML sopra il video (titolo, barra, tempo, stato Pausa/Buffering/Errore) e spariscono dopo 4 s. Tasti: OK/Play/Pausa, ←/→ ±10 s, ◀◀/▶▶ ±30 s, CH+/CH− = canale successivo/precedente (live, anche Su/Giù) o episodio successivo/precedente (serie), Stop/Indietro = esci. Il player riceve i tasti prima del gestore del focus (`page.onAction` in `main.js`); Back resta al gestore globale.
+  - Formato dei canali: HLS se consentito (altrimenti TS) dalla risposta di autenticazione, che il player ottiene solo per i canali.
+  - Stato di visione (`watchStore.js`, DB app, store `watch`): posizione salvata ogni 10 s e all'uscita; visto oltre il 90 %; ripresa solo se oltre 30 s e non finito. La chiave è `movie:t<tmdb>` (condivisa tra provider, sopravvive all'eliminazione del provider) oppure `<provider>:movie:i<id>`; per le serie un record per episodio (`…|s1e2`). Le letture aspettano i salvataggi ancora in corso (bug trovato in test: tornando dal player la scheda non mostrava "Riprendi").
+  - Episodio successivo: a fine episodio conto alla rovescia di 10 s (OK = subito, Indietro = esci), disattivabile in Impostazioni.
+  - Durante la riproduzione il sync del catalogo è in pausa e riprende all'uscita.
+  - `activeProvider.js`: handle condiviso sul DB e sul client del provider attivo (autenticazione pigra); `release()` prima di eliminare un provider.
+  - Verificato in Chrome (mp4 di prova, server finto): ricerca → scheda → player → seek → pausa → uscita → "Riprendi · 0:43"; serie → episodio → fine → conto alla rovescia → episodio 2 → l'elenco mostra la progressione; canale: CH± funziona.
+  - **Non verificato su TV**: AVPlay nel nuovo player (seek, `getCurrentTime`/`getDuration`, buffering, comportamento dei tasti media del telecomando, formati mkv/ts reali), trasparenza della pagina sopra il video.
 
 ## 5. TMDB
 matcher, metadata, titoli card, conteggi serie.
 
-Stato: `[ ]` da fare
+Stato: `[x]` fatta e testata con risposte finte; **la chiave TMDB non c'era, quindi mai provata contro TMDB reale**.
 
-## 6. EPG
+### Note di avanzamento
+- **2026-11-02 (notte, patch 3)**
+  - `tmdbClient.js`: chiave **inserita in fase di build** (`TMDB_API_KEY`, vedi README); senza chiave tutto resta spento senza errori. `tmdbService.js`: cache persistente nel DB app (store `tmdb`) per lingua dell'interfaccia (30 giorni; "non trovato" 7 giorni; in caso di errore di rete vale la cache scaduta), coda con 3 richieste in parallelo che si svuota a ogni cambio pagina.
+  - Titoli delle card: titolo TMDB e locandina quando disponibili (solo per i titoli con tmdb id del provider; carica a mano a mano), per le serie anche "N stagioni · M ep." (dai dati TMDB, nessuna chiamata al provider). Il voto resta quello del provider.
+  - Abbinamento senza tmdb id (solo nella scheda, mai nelle griglie): ricerca per titolo, accettata solo se **un solo** risultato ha titolo identico (o titolo originale) e, se noto, lo stesso anno; altrimenti nessun metadato. Il risultato non unisce mai i gruppi (decisione di design).
+  - Scheda: i dati TMDB sovrascrivono quelli del provider ma non li svuotano mai.
 worker, indice, card e scheda canale.
 
-Stato: `[ ]` da fare
+Stato: `[x]` fatta e provata in Chrome con un XMLTV finto; **non provata su TV né con una guida reale** (dimensioni, codifica, fusi orari dei vari provider).
+
+### Note di avanzamento
+- **2026-11-02 (notte, patch 3)**
+  - `xmltv.js`: lettore incrementale (a blocchi di testo, memoria costante), orari con fuso (`+0100`), entità XML; tiene solo i programmi che finiscono dopo adesso e iniziano entro 48 h, e solo dei canali presenti nell'elenco live (`epgChannelId`).
+  - `epgSync.js` + `epg.worker.js` (+ `epgService.js` con fallback sul thread principale come per il catalogo): scarica `xmltv.php`, scrive nello store `epg` del DB provider, poi cancella i programmi finiti; una guida vuota o non valida **non** cancella quella esistente. Al massimo una volta al giorno: parte dopo la fine di ogni sync del catalogo se l'ultima guida ha più di 24 h.
+  - UI: sulle card dei canali la riga "adesso in onda"; nel player il titolo in onda; nella scheda del canale le prossime 24 h.
+  - In Chrome con il server finto: 2.940 programmi per i canali presenti, scheda canale e player mostrano il palinsesto.
+  - Da decidere dopo la prova reale: guide molto grandi (decine di MB) sulla TV, canali con fusi sbagliati, guida per-canale (`get_short_epg`) come ripiego (il client ha già `getShortEpg`).
 
 ## 7. Home e impostazioni complete
 caroselli, continua a guardare.
 
-Stato: `[~]` parziale (impostazioni con cambio lingua presenti; la Home mostra per ora solo il riepilogo del catalogo per tipo, senza caroselli).
+Stato: `[x]` fatta in sandbox e Chrome; non su TV.
+
+### Note di avanzamento
+- **2026-11-02 (notte, patch 3)**
+  - Home: caroselli *Continua a guardare* (con barra di avanzamento ed etichetta S1E2), *Ultimi film*, *Ultime serie*; ogni riga ha la sua zona di focus e scorre in orizzontale; si ricostruiscono a fine sync. Sotto, il riepilogo del catalogo.
+  - Impostazioni: lingua, titoli per pagina (12/24/36), titoli per carosello (10/15/20/30), buffering (2/5/10/20/30 s), episodio successivo automatico, categorie visibili, stato TMDB, Trakt, Diagnostica. Le scelte da elenco usano il dialog `choose`.
+  - Categorie visibili (`categoriesPage.js`): per tipo si nascondono/mostrano le categorie; *Applica* salva e ricostruisce `entries` dagli `items` già scaricati (senza nuovo download; rifiutato mentre il catalogo si sta aggiornando).
 
 ## 8. Suggerimenti
-Stato: `[ ]` da fare
+Stato: `[x]` fatta e testata con risposte finte; senza chiave TMDB mostra un messaggio.
+
+### Note di avanzamento
+- **2026-11-02 (notte, patch 3)** `suggestions.js`: raccomandazioni TMDB per gli ultimi 6 titoli guardati (con tmdb id), unite e ordinate per numero di titoli di partenza che le raccomandano e per popolarità, tenute solo se il catalogo del provider ha lo stesso tmdb id (`entries.get('movie:t<id>')`) e non già guardate; se meno di 12, completate con i titoli di tendenza. Cache 24 h. Pagina `suggestionsPage.js` (griglia, Invio apre la scheda).
 
 ## 9. Trakt (fase 2)
-Stato: `[ ]` da fare
+Stato: `[x]` codice e test con risposte finte; **mai provato contro Trakt reale** (servono `TRAKT_CLIENT_ID` e `TRAKT_CLIENT_SECRET` in fase di build).
+
+### Note di avanzamento
+- **2026-11-02 (notte, patch 3)** Dietro l'adattatore dello stato di visione (`createWatchState` in `traktService.js`: stessa interfaccia di `WatchStore`, le pagine non sanno se Trakt è collegato). Accesso con codice dispositivo (Impostazioni → Trakt: la TV mostra indirizzo e codice, il sondaggio rispetta intervallo e "rallenta"); token nel DB app con rinnovo. Al passaggio a "visto" di un titolo con tmdb id viene inviata la cronologia (film, o episodio per le serie); se fallisce con errore del server resta in coda e riparte all'avvio. Dopo il collegamento importa gli ultimi film visti su Trakt come cronologia locale (aiuta i suggerimenti), senza sovrascrivere i progressi locali. Non importa le serie e non sincronizza le posizioni di riproduzione.
 
 ## 10. Rifinitura
 profiling su TV, memory leak, percorsi di errore.
 
-Stato: `[ ]` da fare
+Stato: `[~]` solo la parte fattibile senza TV.
+
+### Note di avanzamento
+- **2026-11-02 (notte, patch 3)** Gestione globale di `unhandledrejection`/`error` nel log (credenziali mascherate); ogni pagina libera le sue zone di focus e i timer in `destroy()`; le liste lunghe sono paginate o limitate (griglie 12–36 card, carosello ≤ 30, ricerca ≤ 36 risultati). Restano da fare con la TV: profiling reale (memoria con più pagine, scorrimento), prove di errore (rete assente durante il sync, provider scaduto durante la riproduzione, stream non riproducibile).
 
 ## 11. Fase finale di test su TV
 Decisione dell'utente (2026-11-02): le prove sulla TV rimandate si fanno tutte alla fine, con la build di produzione (.wgt). Riportare l'esito di ognuna.
@@ -144,11 +185,18 @@ Stato: `[ ]` da fare
 Eseguiti con esito positivo dall'utente il 2026-11-02 (non ripeterli): diagnostica completa (`workerFile`, `workerIdb`, storage, provider), sync del catalogo con provider reale e UI fluida, aggiornamento forzato, catalogo persistente dopo la chiusura, avvio di uno stream con AVPlay, Back dalla Home e dalle altre sezioni, topbar.
 
 Da fare:
-1. **Sync e riproduzione**: con un sync in corso avviare uno stream dalla Diagnostica, premere Stop: il sync, messo in pausa durante la riproduzione, riprende? La pagina Provider mostra "In pausa durante la riproduzione" e poi l'avanzamento?
-2. **Pagina Provider**: con due provider, *Usa* sul non attivo lo rende attivo (la Home cambia nome e il pannello del catalogo mostra i suoi dati); *Modifica* mostra i campi precompilati e salva dopo la verifica; *Rimuovi* chiede conferma; Back dal modulo torna all'elenco; le frecce si muovono bene tra i tre pulsanti, "Aggiorna il catalogo ora" e "Aggiungi un provider".
-3. **Tastiera a schermo (IME)**: nei campi del modulo "Fatto" passa al campo successivo senza attivare subito anche quello.
-4. **Griglie Film / Serie / Live**: il pannello categorie a sinistra scorre con Su/Giù; Invio su una categoria carica la griglia; Giù dall'ultima riga cambia pagina e Su dalla prima riga torna indietro; scorrimento fluido anche con molti titoli; le locandine (icone del provider) si caricano e, se mancano, resta un riquadro vuoto.
-5. **Tempi con il provider reale**: riportare motore usato (worker o thread principale) e tempi download/elementi/titoli che la pagina Provider mostra, per decidere se serve ottimizzare le scritture.
+1. **Player (priorità)**: da Film, Serie e Canale avviare un titolo reale: parte video e audio? OK = pausa/riprendi, ←/→ salto di 10 s, ◀◀/▶▶ 30 s, i tasti media del telecomando funzionano? la barra e il tempo sono corretti? Quanto impiega a partire? Con file `.mkv` e stream `.m3u8`/`.ts`: dire quali non partono e il messaggio di errore.
+2. **Ripresa e visti**: uscire a metà di un film, rientrare dalla scheda: "Riprendi · mm:ss" riparte dal punto giusto? Compare in *Continua a guardare*? Dopo il 90 % non più. Serie: ✓ sugli episodi visti.
+3. **Serie**: stagioni, episodio successivo automatico dopo 10 s (OK = subito, Indietro = ferma), CH+/CH− cambiano episodio.
+4. **Canali**: CH+/CH− e Su/Giù cambiano canale; formato scelto (HLS/TS); palinsesto (richiede un provider con `xmltv.php`): "adesso in onda" sulle card, prossime 24 h nella scheda, e se il download della guida è lento o blocca l'interfaccia (motore usato).
+5. **Sync e riproduzione**: durante un sync avviare un titolo e uscire: il sync riprende?
+6. **Ricerca**: scrivere con la tastiera a schermo ("Fatto" avvia la ricerca), risultati, apertura della scheda.
+7. **Pagina Provider**: con due provider, *Usa*, *Modifica* (campi precompilati), *Rimuovi* con conferma, Back; frecce tra pulsanti, "Aggiorna il catalogo ora" e "Aggiungi".
+8. **Tastiera a schermo nei moduli**: "Fatto" passa al campo successivo senza attivarlo subito.
+9. **Griglie, Home, Impostazioni**: pannello categorie, cambio pagina, scorrimento fluido; caroselli della Home; cambiare *Titoli per pagina* e *per carosello*; nascondere una categoria in *Categorie visibili* e applicare (tempo di ricostruzione).
+10. **TMDB** (solo se la build ha la chiave): titoli e locandine che si aggiornano, trama in lingua, conteggi stagioni; pagina *Suggerimenti*.
+11. **Trakt** (solo se la build ha le chiavi): collegamento con il codice, un titolo visto a fine riproduzione compare su Trakt, scollegamento.
+12. **Tempi con il provider reale**: motore e tempi di sync (download/elementi/titoli) mostrati nella pagina Provider, per decidere se ottimizzare le scritture.
 
 ## Questioni aperte
 - Package id `XtrmIptv01` e app id `XtrmIptv01.XtreamIPTV` sono una proposta, da confermare prima di creare il profilo del certificato.
@@ -156,3 +204,6 @@ Da fare:
 - Nessuna licenza scelta.
 - L'asset della release non è firmato (serve il certificato Samsung locale).
 - `style-loader` è ancora in `devDependencies` ma non usato.
+- La chiave TMDB e le credenziali Trakt non sono nel repository: vanno aggiunte come secret `TMDB_API_KEY`, `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET` della repo (la release le compila nell'app) e, per lo sviluppo, come variabili d'ambiente prima di `npm start`.
+- Una chiave compilata nell'app è estraibile da chi ha il .wgt: usare chiavi dedicate, revocabili.
+- I formati (mkv/ts) dipendono dal decoder della TV: fa fede la prova sul campo.

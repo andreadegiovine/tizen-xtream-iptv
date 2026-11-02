@@ -59,3 +59,8 @@ export function pageEntries(db, { type, categoryId = null, offset = 0, limit = 2
     };
   });
 }
+
+/** One grid entry by key (`movie:t603`, `series:i12`...). */
+export async function getEntry(db, key) {
+  return requestToPromise(db.transaction('entries', 'readonly').objectStore('entries').get(key));
+}

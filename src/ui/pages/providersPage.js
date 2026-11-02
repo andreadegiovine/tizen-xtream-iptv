@@ -104,6 +104,7 @@ export function createProvidersPage(ctx, params = {}) {
         });
         if (!ok) return;
         const wasActive = (await ctx.providers.getActiveId()) === provider.id;
+        ctx.active.release(); // an open connection would block deleting the provider's database
         await ctx.providers.remove(provider.id);
         if (wasActive) {
           const next = await ctx.providers.getActive();

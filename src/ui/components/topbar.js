@@ -8,17 +8,17 @@ export const TOPBAR_ZONE = 'topbar';
 // `id` is the section: it is what the bar highlights as "current", independently of the page
 // (several sections still share the same placeholder page).
 export const SECTIONS = [
-  { id: 'search', labelKey: 'nav.search', route: 'comingSoon', params: { titleKey: 'nav.search' } },
+  { id: 'search', labelKey: 'nav.search', route: 'search' },
   { id: 'home', labelKey: 'nav.home', route: 'home' },
   { id: 'live', labelKey: 'nav.live', route: 'browse', params: { type: 'live' } },
   { id: 'movies', labelKey: 'nav.movies', route: 'browse', params: { type: 'movie' } },
   { id: 'series', labelKey: 'nav.series', route: 'browse', params: { type: 'series' } },
-  { id: 'suggestions', labelKey: 'nav.suggestions', route: 'comingSoon', params: { titleKey: 'nav.suggestions' } },
+  { id: 'suggestions', labelKey: 'nav.suggestions', route: 'suggestions' },
   { id: 'provider', labelKey: 'nav.provider', route: 'providers' },
   { id: 'settings', labelKey: 'nav.settings', route: 'settings' },
 ];
 
-const SECTION_OF_ROUTE = { browse: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
+const SECTION_OF_ROUTE = { categories: 'settings', browse: 'home', search: 'search', suggestions: 'suggestions', detail: 'home', player: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
 
 /** Section a router entry belongs to: explicit `params.section`, otherwise derived from the route name. */
 export function sectionForEntry(entry) {

@@ -51,10 +51,41 @@ export function createDialogService({ focus, root = document.body }) {
     return promise;
   }
 
+  /** Modal list of options (custom dropdown). Resolves with the chosen value, or null when dismissed. */
+  function choose({ title, options, selected }) {
+    if (current) return current.promise;
+    const previous = { id: focus.activeId, index: focus.active ? focus.active.index : 0 };
+    const nodes = options.map((option, i) =>
+      h('div', { class: `choice${option.value === selected ? ' current' : ''}`, text: option.label, 'data-i': i }),
+    );
+    const list = h('div', { class: 'choice-list' }, nodes);
+    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog' }, h('h2', { text: title }), list));
+    root.appendChild(overlay);
+    const start = Math.max(0, options.findIndex((o) => o.value === selected));
+    const zone = new FocusZone({
+      id: DIALOG_ZONE,
+      model: new ListModel({ orientation: 'vertical', getCount: () => options.length }),
+      onFocus: (i) => {
+        nodes[i].classList.add('focused');
+        nodes[i].scrollIntoView({ block: 'nearest' });
+      },
+      onBlur: (i) => nodes[i].classList.remove('focused'),
+      onActivate: (i) => close(options[i].value),
+    });
+    focus.register(zone);
+    const promise = new Promise((resolve) => {
+      current = { overlay, previous, resolve, promise: null, cancelValue: null };
+    });
+    current.promise = promise;
+    focus.focus(DIALOG_ZONE, start);
+    return promise;
+  }
+
   return {
     confirm,
+    choose,
     isOpen: () => current !== null,
     /** Back key: closes the dialog as "cancel". */
-    dismiss: () => close(false),
+    dismiss: () => close(current && 'cancelValue' in current ? current.cancelValue : false),
   };
 }

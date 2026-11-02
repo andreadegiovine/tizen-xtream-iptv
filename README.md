@@ -28,6 +28,18 @@ provider account.
 - Local cache; Trakt sync planned as a second phase
 - English (`en-US`) and Italian (`it-IT`)
 
+## Optional API keys
+
+TMDB metadata/suggestions and Trakt are compiled in at build time and stay off when the keys are missing:
+
+| Variable | Used for |
+|---|---|
+| `TMDB_API_KEY` | TMDB v3 API key (titles, posters, suggestions) |
+| `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET` | Trakt device login and history |
+
+Locally: `TMDB_API_KEY=... npm start`. For releases add them as repository secrets with the same names.
+Keys that are compiled into an app can be extracted from the package: use dedicated, revocable keys.
+
 ## Requirements
 
 - Node.js 18 or newer
@@ -130,14 +142,15 @@ Design rules worth knowing:
 | 0 | Spike on a real TV (CORS, `webapis`, workers, AVPlay, storage quota) | Diagnostics run on the TV (partial results in `docs/MILESTONES.md`) |
 | 1 | Foundations: input, focus, router, i18n, errors, settings | Done |
 | 2 | Provider and catalog: client, setup, databases, normalizer, grouping | Catalog sync (worker + fallback) done, not yet verified on the TV |
-| 3 | Navigation: topbar, grids, category panel, pagination, search | Topbar, grids, category panel, pagination (search missing) |
-| 4 | Detail page and player with custom controls, watch state | Not started |
-| 5 | TMDB matching and metadata | Not started |
-| 6 | EPG | Not started |
-| 7 | Home carousels, complete settings | Not started |
-| 8 | Suggestions | Not started |
-| 9 | Trakt (second phase) | Not started |
-| 10 | Performance and memory pass on the TV | Not started |
+| 3 | Navigation: topbar, grids, category panel, pagination, search | Done off-TV |
+| 4 | Detail page and player with custom controls, watch state | Done off-TV (new player not yet run on the TV) |
+| 5 | TMDB matching and metadata | Done, needs a TMDB key in the build |
+| 6 | EPG (XMLTV in a worker, now/next, 24 h on the channel page) | Done off-TV |
+| 7 | Home carousels, complete settings, hidden categories | Done off-TV |
+| 8 | Suggestions | Done, needs a TMDB key |
+| 9 | Trakt (second phase) | Done, needs Trakt keys; never run against Trakt |
+| 10 | Performance and memory pass on the TV | Open: needs the TV |
+| 11 | Final round of tests on the TV | Open (list in `docs/MILESTONES.md`) |
 
 ## Application and package ids
 

@@ -1,9 +1,13 @@
-import { createPagedGridModel, indexAfterPageChange, GRID_COLUMNS, PAGE_SIZE } from '../../src/ui/pages/browsePage.js';
+import { createPagedGridModel, indexAfterPageChange, columnsFor } from '../../src/ui/pages/browsePage.js';
 import { summarizeType } from '../../src/ui/pages/homePage.js';
+
+const GRID_COLUMNS = 6;
+const PAGE_SIZE = 24;
 
 function model({ count = PAGE_SIZE, next = false, prev = false } = {}) {
   const changes = [];
   const m = createPagedGridModel({
+    columns: GRID_COLUMNS,
     getCount: () => count,
     hasNext: () => next,
     hasPrevious: () => prev,
@@ -39,8 +43,11 @@ describe('paged grid', () => {
   });
 
   test('landing index keeps the column', () => {
-    expect(indexAfterPageChange('next', 17, PAGE_SIZE)).toBe(17 % GRID_COLUMNS);
-    expect(indexAfterPageChange('previous', 3, PAGE_SIZE)).toBe(2 * GRID_COLUMNS + 3);
+    expect(indexAfterPageChange('next', 17, PAGE_SIZE, GRID_COLUMNS)).toBe(17 % GRID_COLUMNS);
+    expect(indexAfterPageChange('previous', 3, PAGE_SIZE, GRID_COLUMNS)).toBe(3 * GRID_COLUMNS + 3);
+    expect(indexAfterPageChange('previous', 1, 12, 4)).toBe(2 * 4 + 1);
+    expect(columnsFor('live')).toBe(4);
+    expect(columnsFor('movie')).toBe(6);
   });
 });
 

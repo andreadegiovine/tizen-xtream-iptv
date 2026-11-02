@@ -65,3 +65,11 @@ Decisions agreed during the design phase. Update this file when a decision chang
 ## Sfoglia il catalogo (2026-11-02)
 - Una pagina `browse` per film/serie/live: categorie a sinistra, griglia paginata a destra (21 titoli per pagina). Le pagine si leggono con cursori sugli indici `byTypeAdded` / `byCatAdded`; nessuna lista intera viene caricata in memoria.
 - Dettagli del sync e aggiornamento manuale: sezione Provider. La Home è un riepilogo.
+
+## Riproduzione, stato di visione e metadati (2026-11-02, notte)
+- Un solo `playerController` (macchina a stati) sopra un motore intercambiabile: AVPlay sulla TV, `<video>` in un browser desktop. I controlli sono HTML.
+- Stato di visione nel DB app, chiave `movie:t<tmdb>` (condivisa tra provider) o `<provider>:movie:i<id>`; serie per episodio. Trakt è un adattatore sopra lo store locale, che resta la fonte per la ripresa.
+- `activeProvider` è l'unico handle condiviso su DB e client del provider attivo.
+- Le chiavi TMDB/Trakt non stanno nel repository: sono compilate dalla build.
+- EPG: XMLTV filtrato per i canali presenti, letto a blocchi in un worker, una volta al giorno dopo il sync del catalogo.
+- Suggerimenti: raccomandazioni TMDB dalla cronologia, intersecate per tmdb id con il catalogo.

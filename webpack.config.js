@@ -40,6 +40,10 @@ module.exports = (env = {}, argv = {}) => {
       new webpack.DefinePlugin({
         __DEV__: JSON.stringify(!isProd),
         __APP_VERSION__: JSON.stringify(pkg.version),
+        // Optional third-party keys, injected at build time (see README). Empty = feature off.
+        __TMDB_API_KEY__: JSON.stringify(process.env.TMDB_API_KEY || ''),
+        __TRAKT_CLIENT_ID__: JSON.stringify(process.env.TRAKT_CLIENT_ID || ''),
+        __TRAKT_CLIENT_SECRET__: JSON.stringify(process.env.TRAKT_CLIENT_SECRET || ''),
       }),
       new HtmlWebpackPlugin({
         template: 'src/index.html',

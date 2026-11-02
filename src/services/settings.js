@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   bufferSeconds: 10,
   carouselItems: 15,
   gridItems: 24,
+  autoplayNext: true,
   excluded: {},
 });
 
@@ -22,6 +23,7 @@ function sanitize(raw) {
     bufferSeconds: pick(raw.bufferSeconds, BUFFER_OPTIONS, DEFAULT_SETTINGS.bufferSeconds),
     carouselItems: pick(raw.carouselItems, CAROUSEL_OPTIONS, DEFAULT_SETTINGS.carouselItems),
     gridItems: pick(raw.gridItems, GRID_OPTIONS, DEFAULT_SETTINGS.gridItems),
+    autoplayNext: typeof raw.autoplayNext === 'boolean' ? raw.autoplayNext : DEFAULT_SETTINGS.autoplayNext,
     excluded: raw.excluded && typeof raw.excluded === 'object' ? raw.excluded : {},
   };
 }
