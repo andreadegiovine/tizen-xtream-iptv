@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1920, height=1080, initial-scale=1" />
+    <title>Xtream IPTV</title>
+    <% if (htmlWebpackPlugin.options.includeWebapis) { %>
+    <script src="$WEBAPIS/webapis/webapis.js"></script>
+    <% } %>
+  </head>
+  <body>
+    <div id="topbar"></div>
+    <main id="content"></main>
+    <div id="toast" role="status"></div>
+  </body>
+</html>

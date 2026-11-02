@@ -1,0 +1,234 @@
+@use 'tokens' as *;
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: $bg;
+  color: $text;
+  font-family: $font;
+  font-size: 24px;
+  line-height: 1.35;
+}
+
+// AVPlay renders on a plane behind the page: while video plays the page must be see-through.
+body.video-active,
+body.video-active #content,
+body.video-active #topbar {
+  background: transparent;
+}
+
+h1 {
+  margin: 0 0 32px;
+  font-size: 48px;
+  font-weight: 700;
+}
+
+h2 {
+  margin: 32px 0 12px;
+  font-size: 28px;
+}
+
+.muted {
+  color: $text-muted;
+}
+
+#topbar {
+  height: $topbar-height;
+}
+
+#content {
+  height: calc(100% - #{$topbar-height});
+  overflow: hidden;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  height: $topbar-height;
+  padding: 0 $safe-x;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0));
+
+  .brand {
+    margin-right: 48px;
+    color: $accent;
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+}
+
+.topbar-item {
+  margin-right: 12px;
+  padding: 8px 20px;
+  border-radius: 6px;
+  color: $text-muted;
+  transition: transform 0.12s ease-out, background-color 0.12s ease-out;
+
+  &.current {
+    color: $text;
+    font-weight: 700;
+  }
+
+  &.focused {
+    background: $text;
+    color: $bg;
+    transform: scale(#{$focus-scale});
+  }
+}
+
+.page {
+  padding: 24px $safe-x;
+}
+
+.form {
+  width: 880px;
+}
+
+.field {
+  display: block;
+  margin-bottom: 16px;
+  padding: 12px 20px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: $bg-raised;
+  transition: transform 0.12s ease-out;
+
+  .field-label {
+    display: block;
+    color: $text-muted;
+    font-size: 20px;
+  }
+
+  input {
+    display: block;
+    width: 100%;
+    padding: 6px 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: $text;
+    font: inherit;
+  }
+
+  &.focused {
+    border-color: $text;
+    background: $bg-focus;
+    transform: scale(1.02);
+  }
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: $bg-raised;
+  color: $text;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  transition: transform 0.12s ease-out;
+
+  &.primary {
+    background: $accent;
+  }
+
+  &.focused {
+    border-color: $text;
+    transform: scale(1.02);
+  }
+}
+
+.status {
+  min-height: 36px;
+  color: $fail;
+}
+
+.list .row {
+  display: flex;
+  justify-content: space-between;
+  width: 880px;
+  margin-bottom: 12px;
+  padding: 18px 24px;
+  border-radius: 6px;
+  background: $bg-raised;
+  transition: transform 0.12s ease-out;
+
+  .value {
+    color: $text-muted;
+  }
+
+  &.focused {
+    background: $text;
+    color: $bg;
+    transform: scale(1.02);
+
+    .value {
+      color: $bg;
+    }
+  }
+}
+
+.diag-results {
+  margin-bottom: 16px;
+}
+
+.diag-row {
+  display: flex;
+  padding: 6px 12px;
+  border-left: 6px solid $text-muted;
+  background: $bg-raised;
+  margin-bottom: 4px;
+  font-size: 20px;
+
+  .diag-id {
+    width: 160px;
+    font-weight: 700;
+  }
+
+  &.ok {
+    border-left-color: $ok;
+  }
+
+  &.warn {
+    border-left-color: $warn;
+  }
+
+  &.fail {
+    border-left-color: $fail;
+  }
+}
+
+.diag-log {
+  width: 100%;
+  max-height: 240px;
+  margin: 0;
+  overflow: hidden;
+  color: $text-muted;
+  font-size: 16px;
+  white-space: pre-wrap;
+}
+
+#toast {
+  position: fixed;
+  right: $safe-x;
+  bottom: 48px;
+  padding: 12px 24px;
+  border-radius: 6px;
+  background: $bg-focus;
+  opacity: 0;
+  transition: opacity 0.2s;
+
+  &.visible {
+    opacity: 1;
+  }
+}
