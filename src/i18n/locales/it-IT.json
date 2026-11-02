@@ -73,5 +73,10 @@
   "providers.remove": "Rimuovi",
   "providers.removeTitle": "Rimuovere il provider?",
   "providers.removeMessage": "“{name}” e il catalogo scaricato verranno eliminati da questa TV.",
-  "setup.editTitle": "Modifica provider"
+  "setup.editTitle": "Modifica provider",
+  "home.titles": "{entries} titoli",
+  "home.hint": "Dettagli del catalogo e aggiornamento manuale sono nella sezione Provider.",
+  "browse.all": "Tutti",
+  "browse.empty": "Ancora niente da mostrare. Aggiorna il catalogo dalla sezione Provider.",
+  "browse.page": "{category} · pagina {page}"
 }

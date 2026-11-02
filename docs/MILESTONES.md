@@ -78,7 +78,7 @@ Stato: `[~]` catalog worker e sync progressivo fatti e testati in sandbox/Chrome
   - `src/services/catalogSync.js` (senza DOM): `syncType` (categorie → download → proiezione → scrittura `items` a lotti da 2000 → `entries`/`entry_cat` → pulizia righe sparite → `meta` con conteggi e tempi), `runSync` (ordine film → serie → live; un tipo che fallisce non ferma gli altri; TTL 12 h, `force`), `runSyncForProvider` (emette sempre `done`), `rebuildEntries` (ricostruisce dalle `items` salvate quando cambiano le categorie escluse, senza scaricare).
   - Scrive prima le righe nuove e poi cancella le vecchie; una lista vuota non sostituisce un catalogo esistente.
   - Worker `src/workers/catalog.worker.js` (involucro con annulla/pausa/riprendi), creato da file (`createCatalogWorker.js`, separato per Jest). `CatalogSyncService`: preferisce il worker; se non parte o non segnala `ready` entro 4 s esegue **lo stesso codice sul thread principale** (può bloccare la UI). `pause()/resume()` per la riproduzione, `cancel()`, `readStatus()`.
-  - Avvio all'apertura dell'app (se la lista ha più di 12 h) e dopo l'aggiunta di un provider (forzato). La Home mostra per film/serie/live avanzamento e ultimo risultato, motore usato, tempi (download/elementi/titoli) e il pulsante "Aggiorna il catalogo ora".
+  - Avvio all'apertura dell'app (se la lista ha più di 12 h) e dopo l'aggiunta di un provider (forzato). Lo stato per film/serie/live (avanzamento e ultimo risultato), il motore usato, i tempi (download/elementi/titoli) e il pulsante "Aggiorna il catalogo ora" stanno nella pagina **Provider** (vedi sotto).
   - Schema provider **v2**: `items` senza indici (un tipo = intervallo di chiavi primarie `movie:`…`movie:\uffff`), `entries` senza indice tmdb (chiave `type:t<tmdbId>`). Il DB provider è dato derivato: al cambio versione viene ricreato e ripopolato.
   - `XtreamClient.getCategories/getStreams` accettano `signal`; timeout cataloghi 120 s.
   - **Verifica in Chrome headless** con server Xtream finto (30.000 film, 3.000 serie, 2.000 canali): sync nel worker riuscito; con `Worker` bloccato il fallback riesce con gli stessi risultati. Tempi desktop (non rappresentano la TV): download ~0,1 s, scrittura film ~9,3 s (elementi 2,8 s + titoli 6,5 s), totale ~12 s. Il costo è dominato da IndexedDB per riga, non dal calcolo delle entries.
@@ -86,18 +86,23 @@ Stato: `[~]` catalog worker e sync progressivo fatti e testati in sandbox/Chrome
   - **Esito sulla TV (utente, 2026-11-02, build di produzione, provider reale):** il sync gira con l'interfaccia fluida (dettagli dalle foto della Home); l'aggiornamento forzato funziona bene; chiudendo e riaprendo l'app il catalogo resta in memoria. Storage 28–34 MB su 263 MB. Il motore usato (worker/thread principale) e i tempi sono visibili nelle foto della Home dell'utente, non riportati in chat: chiedere se servono per decidere l'ottimizzazione delle scritture.
   - **2026-11-02 (sera): pagina Provider** (richiesta dell'utente: la sezione "Provider" mostrava solo il modulo di aggiunta). Ora `src/ui/pages/providersPage.js` mostra l'elenco dei provider (nome, host, utente; barra colorata sull'attivo) con per ciascuno i pulsanti *Usa* / *Modifica* / *Rimuovi* e in fondo *Aggiungi un provider*; navigazione a griglia 3 colonne. *Usa* imposta il provider attivo e fa partire il sync (annulla quello in corso; salta se la lista ha meno di 12 h). *Rimuovi* chiede conferma, cancella provider e relativo DB; se era l'attivo passa al primo rimasto, e se non ne restano torna al primo avvio. *Modifica* riusa `providerSetupPage` con `params.providerId` (campi precompilati; verifica le credenziali prima di salvare; se cambiano URL/utente/password del provider attivo, forza un nuovo sync). Il modulo di aggiunta dal primo avvio porta alla Home, quello da questa pagina torna all'elenco. Il dialog di conferma è in `ctx.dialogs`.
     Verificato in sandbox (125 test, lint, build) e in Chrome desktop headless con server Xtream finto: aggiunta di un secondo provider, passaggio dell'attivo, modifica con campi precompilati, rimozione con conferma. **Non ancora provato sulla TV.** Da decidere con l'utente: gestione di più provider con cataloghi diversi sulla Home (per ora la Home mostra solo l'attivo).
+  - **2026-11-02 (sera, patch 2): dettagli di sync e aggiornamento manuale spostati nella pagina Provider** (scelta dell'utente). Il componente `src/ui/components/syncPanel.js` (testo per tipo, motore, tempi, pulsante; `describeType` ora è qui) è mostrato in cima alla pagina Provider per il provider attivo e si aggiorna quando cambia l'attivo. Focus: topbar → pulsante di aggiornamento → elenco provider (la pagina si apre comunque sull'elenco). La **Home** ora mostra solo il provider attivo e "N titoli" per tipo (o "Non ancora sincronizzato") con un rimando alla sezione Provider; non ha più zone di focus (il focus resta sulla topbar).
   - Mancano: lettura di `entries` da parte delle griglie (milestone 3), UI per le categorie escluse (milestone 7; logica `rebuildEntries` testata), cambio provider a runtime.
 - Il dev server ha un proxy same-origin `/__proxy?u=<url>` per le chiamate al provider (solo sviluppo).
 
 ## 3. Navigazione
 topbar, griglie, pannello categorie, paginazione, ricerca.
 
-Stato: `[~]` parziale
+Stato: `[~]` parziale (topbar, griglie, categorie e paginazione fatte; manca la ricerca)
 
 ### Note di avanzamento
 - Fatta la topbar in stile Netflix; le altre sezioni sono segnaposto "In arrivo".
 - 2026-11-02: la topbar ora distingue le sezioni e il dialog di uscita esiste (vedi note della milestone 1).
-- Mancano: griglie, pannello categorie, paginazione, ricerca.
+- **2026-11-02 (sera, patch 2): griglie, pannello categorie e paginazione fatti** (Film, Serie, Live usano la stessa pagina `browsePage.js` con `params.type`).
+  - `src/services/catalogQuery.js`: `listCategories(db, type)` (ordine alfabetico) e `pageEntries(db, {type, categoryId, offset, limit})`: cursore all'indietro sugli indici `byTypeAdded` (tutti) o `byCatAdded` (una categoria, con join su `entries`); legge `limit + 1` righe per sapere se esiste un'altra pagina senza contare nulla. Più recenti per primi.
+  - UI: a sinistra "Tutti" + categorie (Invio seleziona, la voce corrente ha la barra colorata); a destra una griglia **paginata** 7 colonne × 3 righe (21 per pagina, DOM sempre limitato anche con 30.000 titoli). Giù dall'ultima riga → pagina successiva, Su dalla prima riga → precedente (stessa colonna), altrimenti si esce verso la topbar; Sinistra dalla prima colonna → categorie. Card: locandina dall'icona del provider (se manca o non carica resta il riquadro), titolo normalizzato e anno. Invio su una card mostra per ora "In arrivo" (scheda dettaglio = milestone 4).
+  - Verificato in sandbox (135 test, lint, build) e in Chrome desktop headless con il server finto (30.000 film): cambio pagina avanti/indietro, selezione categoria, pannello Provider, aggiornamento forzato. **Non provato sulla TV** (vedi milestone 11).
+  - Mancano: ricerca (sezione "Cerca"), conteggi per categoria, ricordare categoria/pagina al ritorno dalla scheda, ricarica della griglia quando il sync finisce mentre è aperta, categorie escluse (milestone 7).
 
 ## 4. Scheda e player
 dropdown stream, AVPlay con controlli, watch state, ripresa.
@@ -117,7 +122,7 @@ Stato: `[ ]` da fare
 ## 7. Home e impostazioni complete
 caroselli, continua a guardare.
 
-Stato: `[~]` parziale (impostazioni con cambio lingua presenti; la Home mostra per ora solo lo stato del sync del catalogo, senza caroselli).
+Stato: `[~]` parziale (impostazioni con cambio lingua presenti; la Home mostra per ora solo il riepilogo del catalogo per tipo, senza caroselli).
 
 ## 8. Suggerimenti
 Stato: `[ ]` da fare
@@ -130,24 +135,24 @@ profiling su TV, memory leak, percorsi di errore.
 
 Stato: `[ ]` da fare
 
+## 11. Fase finale di test su TV
+Decisione dell'utente (2026-11-02): le prove sulla TV rimandate si fanno tutte alla fine, con la build di produzione (.wgt). Riportare l'esito di ognuna.
+
+Stato: `[ ]` da fare
+
+### Test in sospeso
+Eseguiti con esito positivo dall'utente il 2026-11-02 (non ripeterli): diagnostica completa (`workerFile`, `workerIdb`, storage, provider), sync del catalogo con provider reale e UI fluida, aggiornamento forzato, catalogo persistente dopo la chiusura, avvio di uno stream con AVPlay, Back dalla Home e dalle altre sezioni, topbar.
+
+Da fare:
+1. **Sync e riproduzione**: con un sync in corso avviare uno stream dalla Diagnostica, premere Stop: il sync, messo in pausa durante la riproduzione, riprende? La pagina Provider mostra "In pausa durante la riproduzione" e poi l'avanzamento?
+2. **Pagina Provider**: con due provider, *Usa* sul non attivo lo rende attivo (la Home cambia nome e il pannello del catalogo mostra i suoi dati); *Modifica* mostra i campi precompilati e salva dopo la verifica; *Rimuovi* chiede conferma; Back dal modulo torna all'elenco; le frecce si muovono bene tra i tre pulsanti, "Aggiorna il catalogo ora" e "Aggiungi un provider".
+3. **Tastiera a schermo (IME)**: nei campi del modulo "Fatto" passa al campo successivo senza attivare subito anche quello.
+4. **Griglie Film / Serie / Live**: il pannello categorie a sinistra scorre con Su/Giù; Invio su una categoria carica la griglia; Giù dall'ultima riga cambia pagina e Su dalla prima riga torna indietro; scorrimento fluido anche con molti titoli; le locandine (icone del provider) si caricano e, se mancano, resta un riquadro vuoto.
+5. **Tempi con il provider reale**: riportare motore usato (worker o thread principale) e tempi download/elementi/titoli che la pagina Provider mostra, per decidere se serve ottimizzare le scritture.
+
 ## Questioni aperte
 - Package id `XtrmIptv01` e app id `XtrmIptv01.XtreamIPTV` sono una proposta, da confermare prima di creare il profilo del certificato.
 - I privilegi in `tizen/config.xml` non sono verificati sulla TV.
 - Nessuna licenza scelta.
 - L'asset della release non è firmato (serve il certificato Samsung locale).
 - `style-loader` è ancora in `devDependencies` ma non usato.
-
-## Test da fare sulla TV (risultati richiesti)
-I punti 1–8 sono stati eseguiti dall'utente il 2026-11-02 (esito positivo, vedi note); restano aperti il 5 (sync dopo Stop durante la riproduzione) e i nuovi 9–10.
-Con la **build di produzione** (.wgt), salvo dove indicato "dev". Riportare l'esito di ognuno.
-
-1. **Diagnostica, prod e dev**: righe `worker`, `workerFile`, **`workerIdb`** (nuova), `indexeddb`, `storage`, `provider`. In dev il log si raggiunge scorrendo con Giù?
-2. **Sync con il provider reale (prod)**: lasciare finire il sync; dalla Home riportare *Motore* (worker o thread principale), riga tempi (download/elementi/titoli), conteggi film/serie/live e tempo reale totale. L'interfaccia resta fluida durante il sync? Se si blocca o si chiude, a quale fase?
-3. **Aggiornamento forzato** ("Aggiorna il catalogo ora") a dati presenti: tempo totale, Home usabile? Poi chiudere e riaprire: il catalogo è ancora presente?
-4. **Storage** dopo il sync: riga `storage` della Diagnostica (usati/quota). Dopo un riavvio della TV i dati ci sono ancora?
-5. **AVPlay**: in Diagnostica stream di un film (.mkv/.mp4) e di un canale (.m3u8) → log, video e audio ok? Con sync in corso, dopo Stop il sync riprende?
-6. **Back dalla Home**: dialog con focus su "Resta"; "Resta" chiude il dialog, "Esci" chiude l'app; Back con dialog aperto lo chiude.
-7. **Back da altre sezioni**: da Impostazioni torna alla Home senza chiedere; da Diagnostica a Impostazioni.
-8. **Topbar**: cambiando sezione il focus resta sulla barra, una sola voce è attiva; Giù entra nella pagina, Su torna alla voce corrente.
-9. **Pagina Provider (nuova)**: la sezione Provider mostra l'elenco; con 2 provider, *Usa* sul non attivo lo rende attivo (la Home cambia nome provider e avvia il sync); *Modifica* mostra i campi precompilati e salva dopo la verifica; *Rimuovi* chiede conferma; Back dal modulo torna all'elenco; le frecce si muovono bene tra i tre pulsanti e *Aggiungi*.
-10. **Setup provider con IME**: "Fatto" sulla tastiera a schermo passa al campo successivo senza attivare subito anche quello.

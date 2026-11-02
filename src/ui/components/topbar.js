@@ -10,15 +10,15 @@ export const TOPBAR_ZONE = 'topbar';
 export const SECTIONS = [
   { id: 'search', labelKey: 'nav.search', route: 'comingSoon', params: { titleKey: 'nav.search' } },
   { id: 'home', labelKey: 'nav.home', route: 'home' },
-  { id: 'live', labelKey: 'nav.live', route: 'comingSoon', params: { titleKey: 'nav.live' } },
-  { id: 'movies', labelKey: 'nav.movies', route: 'comingSoon', params: { titleKey: 'nav.movies' } },
-  { id: 'series', labelKey: 'nav.series', route: 'comingSoon', params: { titleKey: 'nav.series' } },
+  { id: 'live', labelKey: 'nav.live', route: 'browse', params: { type: 'live' } },
+  { id: 'movies', labelKey: 'nav.movies', route: 'browse', params: { type: 'movie' } },
+  { id: 'series', labelKey: 'nav.series', route: 'browse', params: { type: 'series' } },
   { id: 'suggestions', labelKey: 'nav.suggestions', route: 'comingSoon', params: { titleKey: 'nav.suggestions' } },
   { id: 'provider', labelKey: 'nav.provider', route: 'providers' },
   { id: 'settings', labelKey: 'nav.settings', route: 'settings' },
 ];
 
-const SECTION_OF_ROUTE = { home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
+const SECTION_OF_ROUTE = { browse: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
 
 /** Section a router entry belongs to: explicit `params.section`, otherwise derived from the route name. */
 export function sectionForEntry(entry) {

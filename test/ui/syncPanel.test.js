@@ -1,4 +1,4 @@
-import { describeType } from '../../src/ui/pages/homePage.js';
+import { describeType } from '../../src/ui/components/syncPanel.js';
 import { formatNumber, formatSeconds } from '../../src/core/format.js';
 
 describe('home sync text', () => {

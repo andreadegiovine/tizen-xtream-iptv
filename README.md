@@ -130,7 +130,7 @@ Design rules worth knowing:
 | 0 | Spike on a real TV (CORS, `webapis`, workers, AVPlay, storage quota) | Diagnostics run on the TV (partial results in `docs/MILESTONES.md`) |
 | 1 | Foundations: input, focus, router, i18n, errors, settings | Done |
 | 2 | Provider and catalog: client, setup, databases, normalizer, grouping | Catalog sync (worker + fallback) done, not yet verified on the TV |
-| 3 | Navigation: topbar, grids, category panel, pagination, search | Topbar only |
+| 3 | Navigation: topbar, grids, category panel, pagination, search | Topbar, grids, category panel, pagination (search missing) |
 | 4 | Detail page and player with custom controls, watch state | Not started |
 | 5 | TMDB matching and metadata | Not started |
 | 6 | EPG | Not started |

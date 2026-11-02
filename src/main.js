@@ -15,6 +15,7 @@ import { createComingSoonPage } from './ui/pages/simplePages.js';
 import { createHomePage } from './ui/pages/homePage.js';
 import { CatalogSyncService } from './services/catalogSyncService.js';
 import { createCatalogWorker } from './services/createCatalogWorker.js';
+import { createBrowsePage } from './ui/pages/browsePage.js';
 import { createProvidersPage } from './ui/pages/providersPage.js';
 import { createProviderSetupPage } from './ui/pages/providerSetupPage.js';
 import { createSettingsPage } from './ui/pages/settingsPage.js';
@@ -40,6 +41,7 @@ async function boot() {
     routes: {
       home: () => createHomePage(ctx),
       comingSoon: (params) => createComingSoonPage(ctx, params),
+      browse: (params) => createBrowsePage(ctx, params),
       providers: (params) => createProvidersPage(ctx, params),
       providerSetup: (params) => createProviderSetupPage(ctx, params),
       settings: () => createSettingsPage(ctx),
