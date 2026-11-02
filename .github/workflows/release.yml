@@ -2,12 +2,24 @@ name: Release
 
 # Runs when a GitHub release is published. The release tag must be a plain semantic version
 # (v1.2.3 or 1.2.3) because Tizen widget versions only accept numeric x.y.z.
+#
+# Assets attached to the release:
+#   - xtream-iptv-<version>.zip         unsigned contents of dist/ (+ .sha256)
+#   - xtream-iptv-<version>.wgt         signed production widget   (+ .sha256)
+#   - xtream-iptv-dev-<version>.wgt     signed dev-shell widget pointing to the LOCAL_PC_IP
+#                                       secret (npm run tizen:dev-shell) (+ .sha256)
+#
+# Required secrets: TIZEN_CERT_PASSWORD (password of ./tizencert.p12), LOCAL_PC_IP.
 on:
   release:
     types: [published]
 
 permissions:
   contents: write
+
+env:
+  TIZEN_STUDIO_VER: 4.5.1
+  TIZEN_PROFILE: xtream
 
 jobs:
   build-and-upload:
@@ -31,6 +43,24 @@ jobs:
           fi
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Validate secrets
+        env:
+          CERT_PASSWORD: ${{ secrets.TIZEN_CERT_PASSWORD }}
+          DEV_HOST: ${{ secrets.LOCAL_PC_IP }}
+        run: |
+          if [ -z "$CERT_PASSWORD" ]; then
+            echo "::error::Secret TIZEN_CERT_PASSWORD is not set."
+            exit 1
+          fi
+          if [[ ! "$DEV_HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
+            echo "::error::Secret LOCAL_PC_IP is missing or not a valid IP/hostname."
+            exit 1
+          fi
+          if [ ! -f tizencert.p12 ]; then
+            echo "::error::tizencert.p12 not found in the repository root."
+            exit 1
+          fi
+
       - run: npm ci
 
       - name: Stamp version
@@ -38,15 +68,97 @@ jobs:
 
       - run: npm run lint
       - run: npm test
+
+      # Production build -> dist/
       - run: npm run build
 
-      - name: Package build output
+      # Zip the unsigned dist/ BEFORE signing: `tizen package` adds signature files to the folder.
+      - name: Package build output (unsigned zip)
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           mkdir -p release
           (cd dist && zip -r "../release/xtream-iptv-${VERSION}.zip" .)
           (cd release && sha256sum "xtream-iptv-${VERSION}.zip" > "xtream-iptv-${VERSION}.zip.sha256")
+
+      # Dev shell -> build/dev-shell/ (tiny widget that opens the dev server on your PC)
+      - name: Generate dev shell
+        env:
+          DEV_HOST: ${{ secrets.LOCAL_PC_IP }}
+        run: npm run tizen:dev-shell
+
+      - name: Install Tizen Studio CLI
+        run: |
+          sudo apt-get install -y expect
+          curl -fsSL -o "${RUNNER_TEMP}/tizen-installer" \
+            "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
+          chmod +x "${RUNNER_TEMP}/tizen-installer"
+          "${RUNNER_TEMP}/tizen-installer" --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
+          rm "${RUNNER_TEMP}/tizen-installer"
+
+      - name: Register signing profile
+        env:
+          CERT_PASSWORD: ${{ secrets.TIZEN_CERT_PASSWORD }}
+        run: |
+          TIZEN="${GITHUB_WORKSPACE}/tizen-studio/tools/ide/bin/tizen"
+          PROFILES="${GITHUB_WORKSPACE}/tizen-studio-data/profile/profiles.xml"
+          SIGNER_PWD="tizenpkcs12passfordsigner"
+
+          "$TIZEN" security-profiles add -n "$TIZEN_PROFILE" -a "${GITHUB_WORKSPACE}/tizencert.p12" -p "$CERT_PASSWORD"
+          "$TIZEN" cli-config "profiles.path=${PROFILES}"
+          chmod 755 "$PROFILES"
+
+          # Replace the password-file references with the actual passwords so signing is non-interactive.
+          esc() { printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'; }
+          CERT_PWD_ESC="$(esc "$CERT_PASSWORD")"
+          sed -i "s|${GITHUB_WORKSPACE}/tizencert.pwd|${CERT_PWD_ESC}|g" "$PROFILES"
+          sed -i "s|${GITHUB_WORKSPACE}/tizen-studio-data/tools/certificate-generator/certificates/distributor/tizen-distributor-signer.pwd|${SIGNER_PWD}|g" "$PROFILES"
+          sed -i "s|password=\"\"|password=\"${SIGNER_PWD}\"|g" "$PROFILES"
+
+      # Safety net: answers any password prompt that `tizen package` still raises.
+      - name: Write expect helper
+        run: |
+          cat > "${RUNNER_TEMP}/package.exp" <<'EOF'
+          set timeout 300
+          spawn {*}$argv
+          expect {
+            -nocase -re {distributor[^\n]*password[^\n]*:} { send "tizenpkcs12passfordsigner\r"; exp_continue }
+            -nocase -re {password[^\n]*:} { send "$env(CERT_PASSWORD)\r"; exp_continue }
+            timeout { puts "timeout waiting for tizen package"; exit 1 }
+            eof
+          }
+          catch wait result
+          exit [lindex $result 3]
+          EOF
+
+      - name: Sign production and dev widgets
+        env:
+          CERT_PASSWORD: ${{ secrets.TIZEN_CERT_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          TIZEN="${GITHUB_WORKSPACE}/tizen-studio/tools/ide/bin/tizen"
+          mkdir -p release
+
+          sign() { # $1 = folder to package, $2 = final file name (without .wgt)
+            local out="${RUNNER_TEMP}/wgt-$2"
+            mkdir -p "$out"
+            expect "${RUNNER_TEMP}/package.exp" "$TIZEN" package -t wgt -s "$TIZEN_PROFILE" -o "$out" -- "$1"
+            local wgt
+            wgt="$(find "$out" "$1" -maxdepth 1 -name '*.wgt' | head -n1)"
+            if [ -z "$wgt" ]; then
+              echo "::error::No .wgt produced for $1"
+              exit 1
+            fi
+            mv "$wgt" "release/$2.wgt"
+            (cd release && sha256sum "$2.wgt" > "$2.wgt.sha256")
+          }
+
+          sign dist "xtream-iptv-${VERSION}"
+          sign build/dev-shell "xtream-iptv-dev-${VERSION}"
+
+      - name: Print Tizen CLI log
+        if: failure()
+        run: cat "${GITHUB_WORKSPACE}/tizen-studio-data/cli/logs/cli.log" || true
 
       - name: Upload assets to the release
         env:
