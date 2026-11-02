@@ -49,6 +49,12 @@ export class FocusManager {
     if (this.activeId === id) this.activeId = null;
     this.zones.delete(id);
     this.links.delete(id);
+    // Drop links pointing at the removed zone, so a stale target is never followed.
+    this.links.forEach((byDir) => {
+      Object.keys(byDir).forEach((dir) => {
+        if (byDir[dir] === id) delete byDir[dir];
+      });
+    });
   }
 
   link(fromId, dir, toId) {

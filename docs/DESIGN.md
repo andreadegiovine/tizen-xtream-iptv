@@ -46,3 +46,14 @@ Decisions agreed during the design phase. Update this file when a decision chang
   once a day when the app is opened; only programs ending in the future and starting within 48 h are kept.
 - Suggestions: TMDB recommendations seeded from watch history (trending as fallback), intersected with
   the provider catalog by tmdb id. Trakt follows in a second phase behind the watch-state adapter.
+
+## Back, uscita e sezioni (2026-11-02)
+- Back: dialog aperto → lo chiude; pagina con cronologia → indietro; altra sezione → Home; Home/primo avvio → conferma di uscita (default "Resta").
+- La topbar evidenzia la *sezione* corrente; cambiando sezione il focus resta sulla barra.
+
+## Sync del catalogo (2026-11-02)
+- Un'unica implementazione (`catalogSync.js`) in un worker da file; fallback sul thread principale.
+- Ordine film → serie → live; TTL 12 h; avvio all'apertura e dopo l'aggiunta di un provider; pausa durante la riproduzione.
+- Righe nuove prima, vecchie cancellate dopo; lista vuota non sostituisce un catalogo esistente.
+- Schema provider v2: `items` senza indici, `entries` senza indice tmdb (chiave `type:t<tmdbId>`).
+

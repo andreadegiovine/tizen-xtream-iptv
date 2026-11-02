@@ -40,6 +40,9 @@ Stato: `[~]` parziale
   - Da fare dall'utente: reinstallare nulla (basta ricaricare il guscio dev), aprire Diagnostica ed eseguire i controlli in dev e in produzione; riportare l'esito di `worker` e `workerFile`.
   - Decisione rimandata alla milestone 2: se in dev `workerFile` funziona, il catalog worker va creato da file (non da blob), perché funziona in entrambi gli ambienti; se fallisce anche quello, la CSP del guscio remoto va aggirata o il worker testato solo in produzione.
   - Ancora aperto: esito dello stream di prova con AVPlay (solo in produzione) e quota IndexedDB con dati reali.
+- **2026-11-02 (sessione 3): nuovo controllo `workerIdb`** (`src/workers/ping.worker.js`, `src/services/diagnostics.js`): verifica che IndexedDB sia utilizzabile *dentro* un worker da file, requisito del catalog worker. Verificato solo in Chrome desktop headless (passa); **non provato su TV**.
+  - La Diagnostica ora scorre: il log è l'ultimo elemento focalizzabile (Giù porta in fondo) e mostra le ultime 40 righe. Verificato in Chrome headless (la pagina scorre, il log diventa visibile); non sulla TV.
+  - Durante la prova AVPlay il sync del catalogo viene messo in pausa e ripreso dopo.
 
 ## 1. Fondamenta
 core, InputService, FocusManager, Router, i18n, AppError, impostazioni.
@@ -49,15 +52,31 @@ Stato: `[x]` completata secondo la sessione precedente (lint, 78 test e build pa
 ### Note di avanzamento
 - Input del telecomando con tastiera desktop per debug in Chrome, focus basato sui dati, router, i18n en-US/it-IT, errori unificati, log che nascondono le credenziali.
 - Stack: webpack 5, Babel target Chromium 76, SCSS, ESLint che blocca API troppo nuove, Jest.
+- **2026-11-02 (sessione 3): correzioni segnalate dall'utente dopo la prova sulla TV** (verificate in sandbox: lint, 120 test, build; e in Chrome desktop headless da tastiera; **non riprovate sulla TV**):
+  - *Back dalla Home*: ora chiede conferma (dialog "Uscire?", focus di default su "Resta"). Regola (`src/ui/backHandler.js`): dialog aperto → lo chiude; pagina con cronologia → indietro; altra sezione → Home senza chiedere; Home o primo avvio → conferma e poi `exitApp()` (su desktop `window.close()`, può essere ignorato).
+  - *Pagine non scrollabili*: `.page` scorre (`overflow-y:auto`) e le zone di focus chiamano `ensureVisible()` (`src/ui/scroll.js`, logica pura testata). Applicato a Impostazioni, setup provider, Diagnostica.
+  - *Topbar*: la voce "attiva" era derivata dalla rotta, quindi tutte le sezioni segnaposto risultavano attive insieme. Ora ogni voce è una *sezione* (`params.section`, `sectionForEntry()`); il cursore della barra si posiziona sulla sezione corrente e cambiando sezione il focus **resta sulla barra** (Giù entra nella pagina, Su torna alla barra).
+  - `FocusManager.unregister()` elimina anche i collegamenti in ingresso alla zona rimossa. Nuovo `src/ui/components/dialog.js` (riusabile).
+  - Bug trovato col test in browser: Invio in un campo di testo (setup provider, URL Diagnostica) arrivava anche all'`InputService` e attivava subito il campo successivo; ora i campi fermano la propagazione. Sulla TV il tasto "Fatto" dell'IME non era noto come affetto; **non verificato su TV**.
+  - `ProviderStore`: `createdAt` strettamente crescente (test instabile per timestamp uguali).
 
 ## 2. Provider e catalogo
 XtreamClient, setup provider, DB, catalog worker, normalizer e grouping, sync progressivo.
 
-Stato: `[~]` parziale
+Stato: `[~]` catalog worker e sync progressivo fatti e testati in sandbox/Chrome desktop; **nessuna verifica su TV**.
 
 ### Note di avanzamento
 - Fatti (secondo la sessione precedente): database IndexedDB come da schema, `XtreamClient`, normalizzazione titoli, raggruppamento per tmdb, gestione provider e impostazioni, schermata di setup provider.
-- Mancano: catalog worker e sync progressivo del catalogo in worker.
+- **2026-11-02 (sessione 3): sync del catalogo**
+  - `src/services/catalogSync.js` (senza DOM): `syncType` (categorie → download → proiezione → scrittura `items` a lotti da 2000 → `entries`/`entry_cat` → pulizia righe sparite → `meta` con conteggi e tempi), `runSync` (ordine film → serie → live; un tipo che fallisce non ferma gli altri; TTL 12 h, `force`), `runSyncForProvider` (emette sempre `done`), `rebuildEntries` (ricostruisce dalle `items` salvate quando cambiano le categorie escluse, senza scaricare).
+  - Scrive prima le righe nuove e poi cancella le vecchie; una lista vuota non sostituisce un catalogo esistente.
+  - Worker `src/workers/catalog.worker.js` (involucro con annulla/pausa/riprendi), creato da file (`createCatalogWorker.js`, separato per Jest). `CatalogSyncService`: preferisce il worker; se non parte o non segnala `ready` entro 4 s esegue **lo stesso codice sul thread principale** (può bloccare la UI). `pause()/resume()` per la riproduzione, `cancel()`, `readStatus()`.
+  - Avvio all'apertura dell'app (se la lista ha più di 12 h) e dopo l'aggiunta di un provider (forzato). La Home mostra per film/serie/live avanzamento e ultimo risultato, motore usato, tempi (download/elementi/titoli) e il pulsante "Aggiorna il catalogo ora".
+  - Schema provider **v2**: `items` senza indici (un tipo = intervallo di chiavi primarie `movie:`…`movie:\uffff`), `entries` senza indice tmdb (chiave `type:t<tmdbId>`). Il DB provider è dato derivato: al cambio versione viene ricreato e ripopolato.
+  - `XtreamClient.getCategories/getStreams` accettano `signal`; timeout cataloghi 120 s.
+  - **Verifica in Chrome headless** con server Xtream finto (30.000 film, 3.000 serie, 2.000 canali): sync nel worker riuscito; con `Worker` bloccato il fallback riesce con gli stessi risultati. Tempi desktop (non rappresentano la TV): download ~0,1 s, scrittura film ~9,3 s (elementi 2,8 s + titoli 6,5 s), totale ~12 s. Il costo è dominato da IndexedDB per riga, non dal calcolo delle entries.
+  - **Ottimizzazione rimandata** (decidere dopo i numeri della TV): su refresh non riscrivere le righe invariate (firma) e/o alleggerire le righe di `entries`.
+  - Mancano: lettura di `entries` da parte delle griglie (milestone 3), UI per le categorie escluse (milestone 7; logica `rebuildEntries` testata), cambio provider a runtime.
 - Il dev server ha un proxy same-origin `/__proxy?u=<url>` per le chiamate al provider (solo sviluppo).
 
 ## 3. Navigazione
@@ -67,6 +86,7 @@ Stato: `[~]` parziale
 
 ### Note di avanzamento
 - Fatta la topbar in stile Netflix; le altre sezioni sono segnaposto "In arrivo".
+- 2026-11-02: la topbar ora distingue le sezioni e il dialog di uscita esiste (vedi note della milestone 1).
 - Mancano: griglie, pannello categorie, paginazione, ricerca.
 
 ## 4. Scheda e player
@@ -87,7 +107,7 @@ Stato: `[ ]` da fare
 ## 7. Home e impostazioni complete
 caroselli, continua a guardare.
 
-Stato: `[~]` parziale (impostazioni con cambio lingua presenti; home solo segnaposto).
+Stato: `[~]` parziale (impostazioni con cambio lingua presenti; la Home mostra per ora solo lo stato del sync del catalogo, senza caroselli).
 
 ## 8. Suggerimenti
 Stato: `[ ]` da fare
@@ -105,3 +125,17 @@ Stato: `[ ]` da fare
 - I privilegi in `tizen/config.xml` non sono verificati sulla TV.
 - Nessuna licenza scelta.
 - L'asset della release non è firmato (serve il certificato Samsung locale).
+- `style-loader` è ancora in `devDependencies` ma non usato.
+
+## Test da fare sulla TV (risultati richiesti)
+Con la **build di produzione** (.wgt), salvo dove indicato "dev". Riportare l'esito di ognuno.
+
+1. **Diagnostica, prod e dev**: righe `worker`, `workerFile`, **`workerIdb`** (nuova), `indexeddb`, `storage`, `provider`. In dev il log si raggiunge scorrendo con Giù?
+2. **Sync con il provider reale (prod)**: lasciare finire il sync; dalla Home riportare *Motore* (worker o thread principale), riga tempi (download/elementi/titoli), conteggi film/serie/live e tempo reale totale. L'interfaccia resta fluida durante il sync? Se si blocca o si chiude, a quale fase?
+3. **Aggiornamento forzato** ("Aggiorna il catalogo ora") a dati presenti: tempo totale, Home usabile? Poi chiudere e riaprire: il catalogo è ancora presente?
+4. **Storage** dopo il sync: riga `storage` della Diagnostica (usati/quota). Dopo un riavvio della TV i dati ci sono ancora?
+5. **AVPlay**: in Diagnostica stream di un film (.mkv/.mp4) e di un canale (.m3u8) → log, video e audio ok? Con sync in corso, dopo Stop il sync riprende?
+6. **Back dalla Home**: dialog con focus su "Resta"; "Resta" chiude il dialog, "Esci" chiude l'app; Back con dialog aperto lo chiude.
+7. **Back da altre sezioni**: da Impostazioni torna alla Home senza chiedere; da Diagnostica a Impostazioni.
+8. **Topbar**: cambiando sezione il focus resta sulla barra, una sola voce è attiva; Giù entra nella pagina, Su torna alla voce corrente.
+9. **Setup provider con IME**: "Fatto" sulla tastiera a schermo passa al campo successivo senza attivare subito anche quello.

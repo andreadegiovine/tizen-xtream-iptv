@@ -6,6 +6,7 @@ import { XtreamClient, normalizeBaseUrl } from '../../services/xtreamClient.js';
 import { AppError, ErrorCode, toAppError } from '../../core/errors.js';
 import { log } from '../../core/logger.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
+import { ensureVisible } from '../scroll.js';
 
 const ZONE_ID = 'providerSetup';
 // Samsung on-screen keyboard: "Done" and "Cancel" arrive as these key codes.
@@ -47,7 +48,8 @@ export function createProviderSetupPage(ctx, params = {}) {
       await new XtreamClient({ baseUrl, username: values.username, password: values.password }).authenticate();
       const provider = await ctx.providers.add({ name: values.name, baseUrl, username: values.username, password: values.password });
       await ctx.providers.setActiveId(provider.id);
-      if (!destroyed) ctx.router.reset('home');
+      ctx.catalog.start({ force: true });
+      if (!destroyed) ctx.router.reset('home', { section: 'home' });
     } catch (err) {
       const appError = toAppError(err);
       log.warn('Provider verification failed', appError.code, appError.message);
@@ -61,7 +63,10 @@ export function createProviderSetupPage(ctx, params = {}) {
   const zone = new FocusZone({
     id: ZONE_ID,
     model: new ListModel({ orientation: 'vertical', getCount: () => focusables.length }),
-    onFocus: (i) => focusables[i].classList.add('focused'),
+    onFocus: (i) => {
+      focusables[i].classList.add('focused');
+      ensureVisible(focusables[i], { first: i === 0 });
+    },
     onBlur: (i) => focusables[i].classList.remove('focused'),
     onActivate: (i) => {
       if (i < rows.length) rows[i].input.focus();
@@ -72,6 +77,8 @@ export function createProviderSetupPage(ctx, params = {}) {
 
   rows.forEach((r, i) => {
     r.input.addEventListener('keydown', (event) => {
+      // The field owns its keys: stop them before the global InputService turns Enter into "activate".
+      event.stopPropagation();
       if (event.keyCode === 13 || event.keyCode === IME_DONE) {
         event.preventDefault();
         r.input.blur();

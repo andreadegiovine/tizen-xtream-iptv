@@ -98,4 +98,16 @@ describe('FocusManager', () => {
     expect(manager.active).toBeNull();
     expect(manager.handle(Action.DOWN)).toBe(false);
   });
+
+  test('removing a zone also removes the links that pointed to it', () => {
+    const { manager, make } = setup();
+    manager.register(make('top', 3, 'horizontal'));
+    manager.register(make('page', 3));
+    manager.link('top', 'down', 'page');
+    manager.focus('top', 0);
+    manager.unregister('page');
+    manager.handle(Action.DOWN);
+    expect(manager.activeId).toBe('top');
+    expect(manager.links.get('top')).toEqual({});
+  });
 });

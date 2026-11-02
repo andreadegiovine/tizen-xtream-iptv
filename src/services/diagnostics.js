@@ -71,6 +71,33 @@ function checkFileWorker() {
   });
 }
 
+/** The catalog worker writes to IndexedDB itself, so this must work from a worker too. */
+function checkWorkerIdb() {
+  return new Promise((resolve) => {
+    try {
+      const worker = new Worker(new URL('../workers/ping.worker.js', import.meta.url));
+      const timer = setTimeout(() => {
+        worker.terminate();
+        resolve(fail('workerIdb', 'no answer within 5 s'));
+      }, 5000);
+      worker.onmessage = (event) => {
+        clearTimeout(timer);
+        worker.terminate();
+        const { ok: success, detail } = event.data || {};
+        resolve(success ? ok('workerIdb', detail) : fail('workerIdb', detail || 'failed'));
+      };
+      worker.onerror = () => {
+        clearTimeout(timer);
+        worker.terminate();
+        resolve(fail('workerIdb', 'worker error'));
+      };
+      worker.postMessage({ op: 'idb' });
+    } catch (err) {
+      resolve(fail('workerIdb', err.message));
+    }
+  });
+}
+
 async function checkIndexedDb() {
   const name = 'xtream-iptv-diagnostics';
   try {
@@ -113,6 +140,7 @@ export async function runDiagnostics({ provider } = {}) {
   const results = checkRuntime();
   results.push(await checkBlobWorker());
   results.push(await checkFileWorker());
+  results.push(await checkWorkerIdb());
   results.push(await checkIndexedDb());
   results.push(await checkStorage());
   results.push(await checkProvider(provider));

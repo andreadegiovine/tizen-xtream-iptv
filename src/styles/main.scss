@@ -84,7 +84,13 @@ h2 {
 }
 
 .page {
-  padding: 24px $safe-x;
+  height: 100%;
+  padding: 24px $safe-x 96px;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .form {
@@ -210,12 +216,57 @@ h2 {
 
 .diag-log {
   width: 100%;
-  max-height: 240px;
   margin: 0;
-  overflow: hidden;
+  padding: 12px;
+  border: 2px solid transparent;
+  border-radius: 6px;
   color: $text-muted;
   font-size: 16px;
   white-space: pre-wrap;
+  word-break: break-all;
+
+  &.focused {
+    border-color: $text;
+    background: $bg-raised;
+  }
+}
+
+.dialog-backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.dialog {
+  width: 720px;
+  padding: 40px 48px;
+  border-radius: 8px;
+  background: $bg-raised;
+
+  h2 {
+    margin-top: 0;
+  }
+
+  .dialog-actions {
+    display: flex;
+    margin-top: 32px;
+
+    .btn {
+      flex: 1;
+      margin: 0 8px 0 0;
+
+      &:last-child {
+        margin-right: 0;
+      }
+    }
+  }
 }
 
 #toast {
@@ -231,4 +282,35 @@ h2 {
   &.visible {
     opacity: 1;
   }
+}
+
+.sync {
+  width: 1200px;
+  margin-bottom: 16px;
+}
+
+.sync-row {
+  display: flex;
+  margin-bottom: 8px;
+  padding: 12px 20px;
+  border-radius: 6px;
+  background: $bg-raised;
+
+  .sync-name {
+    width: 200px;
+    font-weight: 700;
+  }
+
+  .sync-status {
+    color: $text-muted;
+  }
+}
+
+.sync-info {
+  min-height: 32px;
+  font-size: 20px;
+}
+
+.btn.disabled {
+  opacity: 0.5;
 }

@@ -4,6 +4,7 @@ import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
 import { LANGUAGE_OPTIONS } from '../../services/settings.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
+import { ensureVisible } from '../scroll.js';
 
 const ZONE_ID = 'settings';
 
@@ -28,7 +29,10 @@ export function createSettingsPage(ctx) {
   const zone = new FocusZone({
     id: ZONE_ID,
     model: new ListModel({ orientation: 'vertical', getCount: () => rows.length }),
-    onFocus: (i) => rows[i].classList.add('focused'),
+    onFocus: (i) => {
+      rows[i].classList.add('focused');
+      ensureVisible(rows[i], { first: i === 0 });
+    },
     onBlur: (i) => rows[i].classList.remove('focused'),
     onActivate: (i) => {
       if (i === 0) cycleLanguage();

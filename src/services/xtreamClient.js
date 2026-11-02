@@ -128,12 +128,13 @@ export class XtreamClient {
     return auth;
   }
 
-  async getCategories(type) {
-    return asArray(await this.request(CATEGORY_ACTIONS[type], {}, { timeoutMs: 30000 }));
+  async getCategories(type, { signal } = {}) {
+    return asArray(await this.request(CATEGORY_ACTIONS[type], {}, { timeoutMs: 30000, signal }));
   }
 
-  async getStreams(type, { categoryId } = {}) {
-    const data = await this.request(STREAM_ACTIONS[type], { category_id: categoryId }, { timeoutMs: 60000 });
+  async getStreams(type, { categoryId, signal } = {}) {
+    // Full catalogs can be tens of MB on a slow link: generous timeout, no retry storm.
+    const data = await this.request(STREAM_ACTIONS[type], { category_id: categoryId }, { timeoutMs: 120000, signal });
     return asArray(data);
   }
 

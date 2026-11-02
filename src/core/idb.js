@@ -71,12 +71,35 @@ export function dbPut(db, store, value) {
   return transactionDone(tx);
 }
 
-/** Writes in batches so one huge transaction never blocks the UI thread. */
-export async function dbPutMany(db, store, values, batchSize = 2000) {
+/**
+ * Writes in batches so one huge transaction never blocks the UI thread.
+ * `onBatch(done, total)` is awaited after each batch (progress, pausing, cancellation).
+ */
+export async function dbPutMany(db, store, values, batchSize = 2000, onBatch) {
   for (let i = 0; i < values.length; i += batchSize) {
     const tx = db.transaction(store, 'readwrite');
     const os = tx.objectStore(store);
     values.slice(i, i + batchSize).forEach((value) => os.put(value));
+    await transactionDone(tx);
+    if (onBatch) await onBatch(Math.min(i + batchSize, values.length), values.length);
+  }
+}
+
+/** Primary keys of a store (or of an index range), without reading the values. */
+export function dbGetAllKeys(db, store, { index, range } = {}) {
+  const os = db.transaction(store).objectStore(store);
+  return requestToPromise((index ? os.index(index) : os).getAllKeys(range));
+}
+
+export function dbGetAllRange(db, store, range) {
+  return requestToPromise(db.transaction(store).objectStore(store).getAll(range));
+}
+
+export async function dbDeleteMany(db, store, keys, batchSize = 2000) {
+  for (let i = 0; i < keys.length; i += batchSize) {
+    const tx = db.transaction(store, 'readwrite');
+    const os = tx.objectStore(store);
+    keys.slice(i, i + batchSize).forEach((key) => os.delete(key));
     await transactionDone(tx);
   }
 }

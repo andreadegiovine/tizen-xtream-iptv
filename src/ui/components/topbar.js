@@ -5,7 +5,9 @@ import { ListModel } from '../focus/models.js';
 
 export const TOPBAR_ZONE = 'topbar';
 
-const ITEMS = [
+// `id` is the section: it is what the bar highlights as "current", independently of the page
+// (several sections still share the same placeholder page).
+export const SECTIONS = [
   { id: 'search', labelKey: 'nav.search', route: 'comingSoon', params: { titleKey: 'nav.search' } },
   { id: 'home', labelKey: 'nav.home', route: 'home' },
   { id: 'live', labelKey: 'nav.live', route: 'comingSoon', params: { titleKey: 'nav.live' } },
@@ -16,19 +18,29 @@ const ITEMS = [
   { id: 'settings', labelKey: 'nav.settings', route: 'settings' },
 ];
 
+const SECTION_OF_ROUTE = { home: 'home', settings: 'settings', diagnostics: 'settings', providerSetup: 'provider' };
+
+/** Section a router entry belongs to: explicit `params.section`, otherwise derived from the route name. */
+export function sectionForEntry(entry) {
+  if (!entry) return 'home';
+  return (entry.params && entry.params.section) || SECTION_OF_ROUTE[entry.name] || 'home';
+}
+
 export function createTopbar(ctx) {
   const el = h('nav', { class: 'topbar', 'aria-label': 'Main' });
   let nodes = [];
-  let activeRoute = 'home';
+  let currentSection = 'home';
+  const indexOf = (id) => Math.max(0, SECTIONS.findIndex((s) => s.id === id));
 
   const zone = new FocusZone({
     id: TOPBAR_ZONE,
-    model: new ListModel({ orientation: 'horizontal', getCount: () => ITEMS.length }),
+    model: new ListModel({ orientation: 'horizontal', getCount: () => SECTIONS.length }),
     onFocus: (i) => nodes[i] && nodes[i].classList.add('focused'),
     onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
     onActivate: (i) => {
-      const item = ITEMS[i];
-      ctx.router.reset(item.route, item.params || {});
+      const section = SECTIONS[i];
+      // focusTopbar: after switching section the focus stays on the bar (press Down to enter the page).
+      ctx.router.reset(section.route, { ...(section.params || {}), section: section.id, focusTopbar: true });
     },
   });
   ctx.focus.register(zone);
@@ -36,11 +48,11 @@ export function createTopbar(ctx) {
   function render() {
     while (el.firstChild) el.removeChild(el.firstChild);
     el.appendChild(h('span', { class: 'brand', text: t('app.title') }));
-    nodes = ITEMS.map((item) =>
-      h('span', { class: `topbar-item${item.route === activeRoute ? ' current' : ''}`, text: t(item.labelKey) }),
+    nodes = SECTIONS.map((section) =>
+      h('span', { class: `topbar-item${section.id === currentSection ? ' current' : ''}`, text: t(section.labelKey) }),
     );
     nodes.forEach((node) => el.appendChild(node));
-    if (ctx.focus.activeId === TOPBAR_ZONE) nodes[zone.index].classList.add('focused');
+    if (ctx.focus.activeId === TOPBAR_ZONE && nodes[zone.index]) nodes[zone.index].classList.add('focused');
   }
 
   render();
@@ -51,13 +63,12 @@ export function createTopbar(ctx) {
     setVisible(visible) {
       el.style.display = visible ? '' : 'none';
     },
-    setCurrentRoute(route) {
-      activeRoute = route;
+    /** Marks the section as current and parks the bar's cursor on it (so coming back lands on it). */
+    setCurrentSection(id) {
+      currentSection = id;
+      zone.index = indexOf(id);
       render();
     },
-    indexForRoute(route) {
-      const index = ITEMS.findIndex((item) => item.route === route);
-      return index === -1 ? 1 : index;
-    },
+    indexOfSection: indexOf,
   };
 }

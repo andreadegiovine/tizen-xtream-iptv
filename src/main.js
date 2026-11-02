@@ -1,15 +1,20 @@
 import './styles/main.scss';
-import { i18n, detectLocale } from './i18n/index.js';
+import { i18n, t, detectLocale } from './i18n/index.js';
 import { openAppDb } from './db/appDb.js';
 import { InputService, Action } from './core/input.js';
 import { exitApp } from './core/env.js';
 import { log } from './core/logger.js';
 import { FocusManager } from './ui/focus/FocusManager.js';
 import { Router } from './ui/router.js';
-import { createTopbar, TOPBAR_ZONE } from './ui/components/topbar.js';
+import { createTopbar, TOPBAR_ZONE, sectionForEntry } from './ui/components/topbar.js';
+import { createDialogService } from './ui/components/dialog.js';
+import { createBackHandler } from './ui/backHandler.js';
 import { ProviderStore } from './services/providerStore.js';
 import { SettingsService } from './services/settings.js';
-import { createHomePage, createComingSoonPage } from './ui/pages/simplePages.js';
+import { createComingSoonPage } from './ui/pages/simplePages.js';
+import { createHomePage } from './ui/pages/homePage.js';
+import { CatalogSyncService } from './services/catalogSyncService.js';
+import { createCatalogWorker } from './services/createCatalogWorker.js';
 import { createProviderSetupPage } from './ui/pages/providerSetupPage.js';
 import { createSettingsPage } from './ui/pages/settingsPage.js';
 import { createDiagnosticsPage } from './ui/pages/diagnosticsPage.js';
@@ -23,7 +28,8 @@ async function boot() {
   i18n.setLocale(prefs.language === 'auto' ? detectLocale(navigator.language) : prefs.language);
 
   const focus = new FocusManager();
-  const ctx = { db, settings, providers, focus, router: null };
+  const catalog = new CatalogSyncService({ providers, settings, createWorker: createCatalogWorker });
+  const ctx = { db, settings, providers, catalog, focus, router: null };
 
   const topbar = createTopbar(ctx);
   document.getElementById('topbar').appendChild(topbar.el);
@@ -38,10 +44,12 @@ async function boot() {
       diagnostics: () => createDiagnosticsPage(ctx),
     },
     onChange: (entry) => {
+      const section = sectionForEntry(entry);
       topbar.setVisible(!(entry.name === 'providerSetup' && entry.params.firstRun));
-      topbar.setCurrentRoute(entry.name === 'diagnostics' ? 'settings' : entry.name);
-      // Pages with their own zone take focus in mount(); otherwise fall back to the topbar.
-      if (!focus.active) focus.focus(TOPBAR_ZONE, topbar.indexForRoute(entry.name));
+      topbar.setCurrentSection(section);
+      // Pages with their own zone take focus in mount(). When the user switched section from the bar,
+      // or the page has no zone, the focus stays on (or returns to) the bar, on the current section.
+      if (entry.params.focusTopbar || !focus.active) focus.focus(TOPBAR_ZONE, topbar.indexOfSection(section));
     },
   });
   ctx.router = router;
@@ -51,11 +59,26 @@ async function boot() {
     router.reload();
   });
 
+  const dialogs = createDialogService({ focus });
+  const onBack = createBackHandler({
+    dialogs,
+    router,
+    getSection: sectionForEntry,
+    goHome: () => router.reset('home', { section: 'home', focusTopbar: true }),
+    requestExit: exitApp,
+    texts: () => ({
+      title: t('exit.title'),
+      message: t('exit.message'),
+      confirmLabel: t('exit.confirm'),
+      cancelLabel: t('exit.cancel'),
+    }),
+  });
+
   const input = new InputService(document);
   input.registerTizenKeys();
   input.onAction((action) => {
     if (action === Action.BACK) {
-      if (!router.back()) exitApp();
+      onBack();
       return;
     }
     focus.handle(action);
@@ -64,8 +87,13 @@ async function boot() {
 
   log.info('Xtream IPTV started');
   const active = await providers.getActive();
-  if (active) router.reset('home');
-  else router.reset('providerSetup', { firstRun: true });
+  if (active) {
+    router.reset('home', { section: 'home' });
+    // Stale-while-revalidate: the cached catalog is usable at once, lists older than 12 h refresh in background.
+    catalog.start();
+  } else {
+    router.reset('providerSetup', { firstRun: true });
+  }
 }
 
 boot().catch((err) => {

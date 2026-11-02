@@ -5,6 +5,14 @@ import { AppError, ErrorCode } from '../core/errors.js';
 
 const ACTIVE_KEY = 'activeProviderId';
 
+let lastCreatedAt = 0;
+
+/** Strictly increasing, so providers added within the same millisecond keep their insertion order. */
+function nextCreatedAt() {
+  lastCreatedAt = Math.max(Date.now(), lastCreatedAt + 1);
+  return lastCreatedAt;
+}
+
 function generateId() {
   return `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -29,7 +37,7 @@ export class ProviderStore {
     if (!name || !baseUrl || !username || !password) {
       throw new AppError(ErrorCode.INVALID_INPUT, 'Missing provider fields');
     }
-    const provider = { id: generateId(), name, baseUrl, username, password, createdAt: Date.now() };
+    const provider = { id: generateId(), name, baseUrl, username, password, createdAt: nextCreatedAt() };
     await dbPut(this.db, 'providers', provider);
     return provider;
   }
