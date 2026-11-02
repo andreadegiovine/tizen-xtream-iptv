@@ -14,11 +14,11 @@ export const SECTIONS = [
   { id: 'movies', labelKey: 'nav.movies', route: 'comingSoon', params: { titleKey: 'nav.movies' } },
   { id: 'series', labelKey: 'nav.series', route: 'comingSoon', params: { titleKey: 'nav.series' } },
   { id: 'suggestions', labelKey: 'nav.suggestions', route: 'comingSoon', params: { titleKey: 'nav.suggestions' } },
-  { id: 'provider', labelKey: 'nav.provider', route: 'providerSetup' },
+  { id: 'provider', labelKey: 'nav.provider', route: 'providers' },
   { id: 'settings', labelKey: 'nav.settings', route: 'settings' },
 ];
 
-const SECTION_OF_ROUTE = { home: 'home', settings: 'settings', diagnostics: 'settings', providerSetup: 'provider' };
+const SECTION_OF_ROUTE = { home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
 
 /** Section a router entry belongs to: explicit `params.section`, otherwise derived from the route name. */
 export function sectionForEntry(entry) {

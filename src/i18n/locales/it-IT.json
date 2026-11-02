@@ -64,5 +64,14 @@
   "home.engine.main": "thread principale (senza worker)",
   "home.paused": "In pausa durante la riproduzione",
   "home.timing": "Ultimo aggiornamento: download {fetch} s · elementi {items} s · titoli {entries} s",
-  "diag.workerIdb": "IndexedDB dentro il worker"
+  "diag.workerIdb": "IndexedDB dentro il worker",
+  "providers.title": "Provider",
+  "providers.add": "Aggiungi un provider",
+  "providers.use": "Usa",
+  "providers.active": "Attivo",
+  "providers.edit": "Modifica",
+  "providers.remove": "Rimuovi",
+  "providers.removeTitle": "Rimuovere il provider?",
+  "providers.removeMessage": "“{name}” e il catalogo scaricato verranno eliminati da questa TV.",
+  "setup.editTitle": "Modifica provider"
 }

@@ -33,6 +33,8 @@ export function createProviderSetupPage(ctx, params = {}) {
   const submit = h('button', { class: 'btn primary', type: 'button', text: t('setup.verify') });
   const cancel = params.firstRun ? null : h('button', { class: 'btn', type: 'button', text: t('setup.cancel') });
   const focusables = [...rows.map((r) => r.row), submit, ...(cancel ? [cancel] : [])];
+  const editId = params.providerId || null;
+  let editing = null;
   let busy = false;
   let destroyed = false;
 
@@ -46,10 +48,22 @@ export function createProviderSetupPage(ctx, params = {}) {
       if (!values.name || !values.username || !values.password) throw new AppError(ErrorCode.INVALID_INPUT);
       const baseUrl = normalizeBaseUrl(values.url);
       await new XtreamClient({ baseUrl, username: values.username, password: values.password }).authenticate();
-      const provider = await ctx.providers.add({ name: values.name, baseUrl, username: values.username, password: values.password });
-      await ctx.providers.setActiveId(provider.id);
-      ctx.catalog.start({ force: true });
-      if (!destroyed) ctx.router.reset('home', { section: 'home' });
+      const data = { name: values.name, baseUrl, username: values.username, password: values.password };
+      if (editing) {
+        const changed = ['baseUrl', 'username', 'password'].some((key) => editing[key] !== data[key]);
+        await ctx.providers.update(editing.id, data);
+        // Different server or account: its catalog may differ, so refresh the active provider.
+        if (changed && (await ctx.providers.getActiveId()) === editing.id) ctx.catalog.start({ force: true });
+        if (!destroyed) ctx.router.reset('providers', { section: 'provider' });
+      } else {
+        const provider = await ctx.providers.add(data);
+        await ctx.providers.setActiveId(provider.id);
+        ctx.catalog.start({ force: true });
+        if (!destroyed) {
+          if (params.firstRun) ctx.router.reset('home', { section: 'home' });
+          else ctx.router.reset('providers', { section: 'provider' });
+        }
+      }
     } catch (err) {
       const appError = toAppError(err);
       log.warn('Provider verification failed', appError.code, appError.message);
@@ -92,7 +106,7 @@ export function createProviderSetupPage(ctx, params = {}) {
   const el = h(
     'section',
     { class: 'page setup' },
-    h('h1', { text: t('setup.title') }),
+    h('h1', { text: t(editId ? 'setup.editTitle' : 'setup.title') }),
     h('div', { class: 'form' }, rows.map((r) => r.row), submit, cancel, status),
   );
 
@@ -103,6 +117,16 @@ export function createProviderSetupPage(ctx, params = {}) {
       ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
       ctx.focus.link(TOPBAR_ZONE, 'down', ZONE_ID);
       ctx.focus.focus(ZONE_ID, 0);
+      if (editId) {
+        ctx.providers.get(editId).then((provider) => {
+          if (!provider || destroyed) return;
+          editing = provider;
+          rows[0].input.value = provider.name;
+          rows[1].input.value = provider.baseUrl;
+          rows[2].input.value = provider.username;
+          rows[3].input.value = provider.password;
+        });
+      }
     },
     destroy() {
       destroyed = true;

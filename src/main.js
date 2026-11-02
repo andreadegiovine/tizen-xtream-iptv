@@ -15,6 +15,7 @@ import { createComingSoonPage } from './ui/pages/simplePages.js';
 import { createHomePage } from './ui/pages/homePage.js';
 import { CatalogSyncService } from './services/catalogSyncService.js';
 import { createCatalogWorker } from './services/createCatalogWorker.js';
+import { createProvidersPage } from './ui/pages/providersPage.js';
 import { createProviderSetupPage } from './ui/pages/providerSetupPage.js';
 import { createSettingsPage } from './ui/pages/settingsPage.js';
 import { createDiagnosticsPage } from './ui/pages/diagnosticsPage.js';
@@ -39,6 +40,7 @@ async function boot() {
     routes: {
       home: () => createHomePage(ctx),
       comingSoon: (params) => createComingSoonPage(ctx, params),
+      providers: (params) => createProvidersPage(ctx, params),
       providerSetup: (params) => createProviderSetupPage(ctx, params),
       settings: () => createSettingsPage(ctx),
       diagnostics: () => createDiagnosticsPage(ctx),
@@ -60,6 +62,7 @@ async function boot() {
   });
 
   const dialogs = createDialogService({ focus });
+  ctx.dialogs = dialogs;
   const onBack = createBackHandler({
     dialogs,
     router,

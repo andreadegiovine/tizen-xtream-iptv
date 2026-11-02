@@ -57,3 +57,7 @@ Decisions agreed during the design phase. Update this file when a decision chang
 - Righe nuove prima, vecchie cancellate dopo; lista vuota non sostituisce un catalogo esistente.
 - Schema provider v2: `items` senza indici, `entries` senza indice tmdb (chiave `type:t<tmdbId>`).
 
+
+## Provider (2026-11-02)
+- Sezione Provider = elenco (`providers`) con Usa/Modifica/Rimuovi per riga e "Aggiungi"; il modulo (`providerSetup`) serve sia per aggiungere sia per modificare (`params.providerId`).
+- Cambiare provider attivo = `setActiveId` + `catalog.start()` (annulla il job in corso).

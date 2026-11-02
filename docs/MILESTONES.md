@@ -44,6 +44,12 @@ Stato: `[~]` parziale
   - La Diagnostica ora scorre: il log è l'ultimo elemento focalizzabile (Giù porta in fondo) e mostra le ultime 40 righe. Verificato in Chrome headless (la pagina scorre, il log diventa visibile); non sulla TV.
   - Durante la prova AVPlay il sync del catalogo viene messo in pausa e ripreso dopo.
 
+- **2026-11-02 (sera): risultati sulla TV (build di produzione, foto dell'utente)**
+  - Diagnostica: tizen/webapis/AVPlay presenti, schermo 1920x1080 @1x, `worker` (blob) ok, **`workerFile` ok**, **`workerIdb` ok** (IndexedDB dentro un worker da file funziona), `indexeddb` ok, provider autenticato (`Active`).
+  - **Storage dopo il sync completo: 28 MB usati su 263 MB** (34 MB riportati a voce dall'utente in un secondo momento), `persistent: true`. La quota non è un problema per questo catalogo.
+  - Il log della Diagnostica ora è raggiungibile; **AVPlay: lo stream parte** (log di buffering fino a "buffering complete", film riprodotto). Non ancora provato il sync durante la riproduzione (l'utente lo farà in seguito).
+  - Chiuso: `workerFile` in dev non era stato riportato; resta da confermare solo in dev se serve.
+
 ## 1. Fondamenta
 core, InputService, FocusManager, Router, i18n, AppError, impostazioni.
 
@@ -58,6 +64,7 @@ Stato: `[x]` completata secondo la sessione precedente (lint, 78 test e build pa
   - *Topbar*: la voce "attiva" era derivata dalla rotta, quindi tutte le sezioni segnaposto risultavano attive insieme. Ora ogni voce è una *sezione* (`params.section`, `sectionForEntry()`); il cursore della barra si posiziona sulla sezione corrente e cambiando sezione il focus **resta sulla barra** (Giù entra nella pagina, Su torna alla barra).
   - `FocusManager.unregister()` elimina anche i collegamenti in ingresso alla zona rimossa. Nuovo `src/ui/components/dialog.js` (riusabile).
   - Bug trovato col test in browser: Invio in un campo di testo (setup provider, URL Diagnostica) arrivava anche all'`InputService` e attivava subito il campo successivo; ora i campi fermano la propagazione. Sulla TV il tasto "Fatto" dell'IME non era noto come affetto; **non verificato su TV**.
+  - **Esito sulla TV (utente, 2026-11-02): Back dalla Home, Back dalle altre sezioni e topbar funzionano.** Nota dell'utente: premendo Giù dalla topbar si entra nella pagina *attiva* e non in quella selezionata col cursore; è il comportamento voluto.
   - `ProviderStore`: `createdAt` strettamente crescente (test instabile per timestamp uguali).
 
 ## 2. Provider e catalogo
@@ -76,6 +83,9 @@ Stato: `[~]` catalog worker e sync progressivo fatti e testati in sandbox/Chrome
   - `XtreamClient.getCategories/getStreams` accettano `signal`; timeout cataloghi 120 s.
   - **Verifica in Chrome headless** con server Xtream finto (30.000 film, 3.000 serie, 2.000 canali): sync nel worker riuscito; con `Worker` bloccato il fallback riesce con gli stessi risultati. Tempi desktop (non rappresentano la TV): download ~0,1 s, scrittura film ~9,3 s (elementi 2,8 s + titoli 6,5 s), totale ~12 s. Il costo è dominato da IndexedDB per riga, non dal calcolo delle entries.
   - **Ottimizzazione rimandata** (decidere dopo i numeri della TV): su refresh non riscrivere le righe invariate (firma) e/o alleggerire le righe di `entries`.
+  - **Esito sulla TV (utente, 2026-11-02, build di produzione, provider reale):** il sync gira con l'interfaccia fluida (dettagli dalle foto della Home); l'aggiornamento forzato funziona bene; chiudendo e riaprendo l'app il catalogo resta in memoria. Storage 28–34 MB su 263 MB. Il motore usato (worker/thread principale) e i tempi sono visibili nelle foto della Home dell'utente, non riportati in chat: chiedere se servono per decidere l'ottimizzazione delle scritture.
+  - **2026-11-02 (sera): pagina Provider** (richiesta dell'utente: la sezione "Provider" mostrava solo il modulo di aggiunta). Ora `src/ui/pages/providersPage.js` mostra l'elenco dei provider (nome, host, utente; barra colorata sull'attivo) con per ciascuno i pulsanti *Usa* / *Modifica* / *Rimuovi* e in fondo *Aggiungi un provider*; navigazione a griglia 3 colonne. *Usa* imposta il provider attivo e fa partire il sync (annulla quello in corso; salta se la lista ha meno di 12 h). *Rimuovi* chiede conferma, cancella provider e relativo DB; se era l'attivo passa al primo rimasto, e se non ne restano torna al primo avvio. *Modifica* riusa `providerSetupPage` con `params.providerId` (campi precompilati; verifica le credenziali prima di salvare; se cambiano URL/utente/password del provider attivo, forza un nuovo sync). Il modulo di aggiunta dal primo avvio porta alla Home, quello da questa pagina torna all'elenco. Il dialog di conferma è in `ctx.dialogs`.
+    Verificato in sandbox (125 test, lint, build) e in Chrome desktop headless con server Xtream finto: aggiunta di un secondo provider, passaggio dell'attivo, modifica con campi precompilati, rimozione con conferma. **Non ancora provato sulla TV.** Da decidere con l'utente: gestione di più provider con cataloghi diversi sulla Home (per ora la Home mostra solo l'attivo).
   - Mancano: lettura di `entries` da parte delle griglie (milestone 3), UI per le categorie escluse (milestone 7; logica `rebuildEntries` testata), cambio provider a runtime.
 - Il dev server ha un proxy same-origin `/__proxy?u=<url>` per le chiamate al provider (solo sviluppo).
 
@@ -128,6 +138,7 @@ Stato: `[ ]` da fare
 - `style-loader` è ancora in `devDependencies` ma non usato.
 
 ## Test da fare sulla TV (risultati richiesti)
+I punti 1–8 sono stati eseguiti dall'utente il 2026-11-02 (esito positivo, vedi note); restano aperti il 5 (sync dopo Stop durante la riproduzione) e i nuovi 9–10.
 Con la **build di produzione** (.wgt), salvo dove indicato "dev". Riportare l'esito di ognuno.
 
 1. **Diagnostica, prod e dev**: righe `worker`, `workerFile`, **`workerIdb`** (nuova), `indexeddb`, `storage`, `provider`. In dev il log si raggiunge scorrendo con Giù?
@@ -138,4 +149,5 @@ Con la **build di produzione** (.wgt), salvo dove indicato "dev". Riportare l'es
 6. **Back dalla Home**: dialog con focus su "Resta"; "Resta" chiude il dialog, "Esci" chiude l'app; Back con dialog aperto lo chiude.
 7. **Back da altre sezioni**: da Impostazioni torna alla Home senza chiedere; da Diagnostica a Impostazioni.
 8. **Topbar**: cambiando sezione il focus resta sulla barra, una sola voce è attiva; Giù entra nella pagina, Su torna alla voce corrente.
-9. **Setup provider con IME**: "Fatto" sulla tastiera a schermo passa al campo successivo senza attivare subito anche quello.
+9. **Pagina Provider (nuova)**: la sezione Provider mostra l'elenco; con 2 provider, *Usa* sul non attivo lo rende attivo (la Home cambia nome provider e avvia il sync); *Modifica* mostra i campi precompilati e salva dopo la verifica; *Rimuovi* chiede conferma; Back dal modulo torna all'elenco; le frecce si muovono bene tra i tre pulsanti e *Aggiungi*.
+10. **Setup provider con IME**: "Fatto" sulla tastiera a schermo passa al campo successivo senza attivare subito anche quello.

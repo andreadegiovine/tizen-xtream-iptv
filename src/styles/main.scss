@@ -314,3 +314,56 @@ h2 {
 .btn.disabled {
   opacity: 0.5;
 }
+
+.provider-list {
+  width: 1400px;
+}
+
+.provider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  border-left: 6px solid transparent;
+  border-radius: 6px;
+  background: $bg-raised;
+
+  &.is-active {
+    border-left-color: $accent;
+  }
+
+  .provider-info {
+    flex: 1;
+  }
+
+  .provider-name {
+    display: block;
+    font-size: 32px;
+    font-weight: 700;
+  }
+
+  .provider-meta {
+    display: block;
+    color: $text-muted;
+    font-size: 22px;
+  }
+
+  .provider-actions {
+    display: flex;
+    flex: none;
+
+    .btn {
+      width: 200px;
+      margin: 0 0 0 12px;
+    }
+  }
+}
+
+.provider-add {
+  width: 880px;
+}
+
+.btn.danger.focused {
+  background: $fail;
+}
