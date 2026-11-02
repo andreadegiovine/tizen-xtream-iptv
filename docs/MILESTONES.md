@@ -22,7 +22,6 @@ Stato: `[~]` parziale
   - Storage: usati 0 MB su 263 MB, `persistent: true`.
   - Provider: autenticazione riuscita, stato `Active`.
   - Non risulta dalla foto (log recente tagliato): esito della riproduzione di uno stream di prova con AVPlay.
-  - Ancora da verificare: build **dev** nel guscio remoto (webapis, CORS tramite proxy, worker, AVPlay) e quota IndexedDB con dati reali.
 - **2026-11-02: bug build dev sulla TV**: con il widget dev-shell gli stili non venivano applicati, rendendo impossibile la navigazione.
   - Osservato: in Chromium desktop (headless) il dev server applicava gli stili correttamente; il problema non era riproducibile fuori dalla TV.
   - Differenza tra dev e prod: in dev il CSS veniva iniettato via JS con `style-loader` (tag `<style>` inline), in prod è un file `css/main.css` collegato con `<link>` (funziona sulla TV).
@@ -30,6 +29,17 @@ Stato: `[~]` parziale
   - **Non verificato sulla TV**: la causa esatta non è confermata, la correzione è basata sull'unica differenza osservata tra dev e prod. Se gli stili mancano ancora, controllare nel guscio remoto la richiesta a `css/main.css` (risposta del dev server, eventuali restrizioni della TV sul contenuto remoto).
   - Nota: `style-loader` è rimasto in `devDependencies` ma non è più usato; si può rimuovere aggiornando `package-lock.json`.
   - Nota: nel dev server l'HTML include `<script src="$WEBAPIS/webapis/webapis.js">` con `--env webapis`; su una pagina remota il percorso `$WEBAPIS/...` viene richiesto al dev server e risponde 404 (visto in Chromium desktop). Se `webapis` risulta assente nel guscio remoto sulla TV, partire da qui.
+- **2026-11-02: correzione build dev confermata sulla TV (dall'utente)**: con il CSS come file `<link>` anche in dev, gli stili si applicano e l'app è navigabile nel guscio remoto.
+- **2026-11-02: risultati diagnostica build dev (guscio remoto, pagina servita da `http://<ip-pc>:8080`, da foto dell'utente)**
+  - `tizen`: assente (`not running inside Tizen`). `webapis`: risulta definito, ma `webapis.avplay` non è disponibile (AVPlay not available). Causa non nota: in sandbox `$WEBAPIS/webapis/webapis.js` risponde 404 dal dev server, quindi non è chiaro da dove arrivi l'oggetto `webapis`.
+  - Worker da blob: **fallisce** con `Access to the script at 'blob:http://...' is denied by the document's Content Security Policy`. Nella build di produzione (widget impacchettato) lo stesso test passa.
+  - IndexedDB lettura/scrittura: funziona. Provider: autenticato (il proxy di sviluppo funziona), stato `Active`. Schermo 1920x1080 @1x.
+  - Storage: `StorageManager not available`. Ipotesi non verificata: `navigator.storage` richiede un contesto sicuro e la pagina è su `http://`. Nella build di produzione funziona.
+  - Conseguenza: nel guscio remoto non si possono provare AVPlay né la quota di storage; per quelli serve la build di produzione installata come .wgt.
+- **2026-11-02: aggiunto controllo `workerFile` alla Diagnostica** (`src/services/diagnostics.js`, `src/workers/ping.worker.js`): crea un worker da file dello stesso origin con `new Worker(new URL('../workers/ping.worker.js', import.meta.url))`, emesso da webpack come chunk separato. Verificato in sandbox solo che build e dev server emettono il chunk e che lint e test passano; **non provato su TV né eseguito nel browser**.
+  - Da fare dall'utente: reinstallare nulla (basta ricaricare il guscio dev), aprire Diagnostica ed eseguire i controlli in dev e in produzione; riportare l'esito di `worker` e `workerFile`.
+  - Decisione rimandata alla milestone 2: se in dev `workerFile` funziona, il catalog worker va creato da file (non da blob), perché funziona in entrambi gli ambienti; se fallisce anche quello, la CSP del guscio remoto va aggirata o il worker testato solo in produzione.
+  - Ancora aperto: esito dello stream di prova con AVPlay (solo in produzione) e quota IndexedDB con dati reali.
 
 ## 1. Fondamenta
 core, InputService, FocusManager, Router, i18n, AppError, impostazioni.

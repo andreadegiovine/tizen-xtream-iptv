@@ -45,6 +45,32 @@ function checkBlobWorker() {
   });
 }
 
+/** Same-origin worker file, emitted by webpack: the alternative when blob workers are blocked by the CSP. */
+function checkFileWorker() {
+  return new Promise((resolve) => {
+    try {
+      const worker = new Worker(new URL('../workers/ping.worker.js', import.meta.url));
+      const timer = setTimeout(() => {
+        worker.terminate();
+        resolve(fail('workerFile', 'no answer within 3 s'));
+      }, 3000);
+      worker.onmessage = (event) => {
+        clearTimeout(timer);
+        worker.terminate();
+        resolve(event.data === 2 ? ok('workerFile', 'file worker runs') : fail('workerFile', 'unexpected answer'));
+      };
+      worker.onerror = () => {
+        clearTimeout(timer);
+        worker.terminate();
+        resolve(fail('workerFile', 'worker error'));
+      };
+      worker.postMessage(1);
+    } catch (err) {
+      resolve(fail('workerFile', err.message));
+    }
+  });
+}
+
 async function checkIndexedDb() {
   const name = 'xtream-iptv-diagnostics';
   try {
@@ -86,6 +112,7 @@ async function checkProvider(provider) {
 export async function runDiagnostics({ provider } = {}) {
   const results = checkRuntime();
   results.push(await checkBlobWorker());
+  results.push(await checkFileWorker());
   results.push(await checkIndexedDb());
   results.push(await checkStorage());
   results.push(await checkProvider(provider));
