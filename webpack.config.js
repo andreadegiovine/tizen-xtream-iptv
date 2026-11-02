@@ -26,7 +26,9 @@ module.exports = (env = {}, argv = {}) => {
         {
           test: /\.scss$/,
           use: [
-            isProd ? MiniCssExtractPlugin.loader : 'style-loader',
+            // Always an external stylesheet (<link>), also in dev: the prod build works on the TV,
+            // while the inline <style> tags injected by style-loader were not applied there.
+            MiniCssExtractPlugin.loader,
             { loader: 'css-loader', options: { url: false } },
             'postcss-loader',
             'sass-loader',
@@ -56,7 +58,7 @@ module.exports = (env = {}, argv = {}) => {
           { from: 'tizen/icon.png', to: 'icon.png' },
         ],
       }),
-      ...(isProd ? [new MiniCssExtractPlugin({ filename: 'css/[name].css' })] : []),
+      new MiniCssExtractPlugin({ filename: 'css/[name].css' }),
     ],
     optimization: { splitChunks: false, runtimeChunk: false },
     performance: { hints: false },
