@@ -106,6 +106,7 @@ export function createDetailPage(ctx, params) {
   let rows = []; // vertical chain of focus zones: { id, zone }
   let destroyed = false;
   let focusedOnce = false;
+  let autoFocus = null; // { id, index } of a row the page focused by itself before the play button existed
 
   let backdropUrl = '';
   const poster = h('div', { class: 'detail-poster loading' });
@@ -204,7 +205,10 @@ export function createDetailPage(ctx, params) {
   }
 
   function setRows(next) {
-    const keep = ctx.focus.activeId && rows.some((r) => r.id === ctx.focus.activeId) ? { id: ctx.focus.activeId, index: ctx.focus.active.index } : null;
+    let keep = ctx.focus.activeId && rows.some((r) => r.id === ctx.focus.activeId) ? { id: ctx.focus.activeId, index: ctx.focus.active.index } : null;
+    // The details of a series arrive after the first build: the focus the page chose on its own moves to the play button once it exists.
+    const hasActions = next.some((r) => r.id === 'detailActions');
+    if (keep && autoFocus && hasActions && keep.id === autoFocus.id && keep.index === autoFocus.index) keep = null;
     rows.forEach((r) => ctx.focus.unregister(r.id));
     rows = next;
     if (rows.length) {
@@ -224,9 +228,10 @@ export function createDetailPage(ctx, params) {
     if (rows.length) ctx.focus.link(TOPBAR_ZONE, 'down', rows[0].id);
     const target = keep && rows.find((r) => r.id === keep.id);
     if (target) ctx.focus.focus(target.id, keep.index);
-    else if (rows.length && !focusedOnce) {
+    else if (rows.length && (!focusedOnce || (autoFocus && hasActions))) {
       const actions = rows.find((r) => r.id === 'detailActions') || rows[0];
       focusedOnce = true;
+      autoFocus = actions.id === 'detailActions' ? null : { id: actions.id, index: actions.zone.index };
       ctx.focus.focus(actions.id, actions.zone.index);
     }
   }
@@ -430,8 +435,7 @@ export function createDetailPage(ctx, params) {
       buttons.push({ id: 'favorite', icon: 'heart', active: favorite, label: favorite ? t('detail.unfavorite') : t('detail.favorite'), run: toggleFavorite });
     }
     buttons.note = note;
-    const resumeAt = buttons.findIndex((b) => b.id === 'resume'); // resume is the natural default when it exists
-    if (buttons.length) next.push({ id: 'detailActions', zone: createActions(buttons, Math.max(0, resumeAt)) });
+    if (buttons.length) next.push({ id: 'detailActions', zone: createActions(buttons, 0) });
     else clear(actionsEl);
 
     renderCategories(next);

@@ -15,6 +15,7 @@ const NEXT_COUNTDOWN_S = 10;
 const SEEK_SHORT = 10;
 const SEEK_LONG = 30;
 const SCRUB_STEP = 30;
+const SCRUB_CONFIRM_MS = 2000; // the moved position is applied after this long without a key
 const SUBTITLE_FALLBACK_MS = 5000;
 
 /**
@@ -52,6 +53,7 @@ export function createPlayerPage(ctx, params) {
   let lastState = { position: 0, duration: 0 };
   let lastPosition = null; // previous polled position, to spot jumps (a seek)
   let tipTimer = null;
+  let scrubTimer = null;
 
   const titleEl = h('div', { class: 'player-title' });
   const statusEl = h('div', { class: 'player-status' });
@@ -94,6 +96,7 @@ export function createPlayerPage(ctx, params) {
     // Without a key press for a few seconds everything fades out, the button focus included.
     hideTimer = setTimeout(() => {
       focusMode = false;
+      barFocus = false;
       if (scrub !== null) endScrub(false);
       paintFocus();
       controls.classList.remove('visible');
@@ -125,6 +128,7 @@ export function createPlayerPage(ctx, params) {
   }
 
   function endScrub(commit) {
+    clearTimeout(scrubTimer);
     const target = scrub;
     scrub = null;
     seek.classList.remove('scrubbing');
@@ -137,6 +141,11 @@ export function createPlayerPage(ctx, params) {
   function stepScrub(delta) {
     if (!(lastState.duration > 0)) return;
     setScrub(scrubTarget(scrub === null ? lastState.position : scrub, delta, lastState.duration));
+    // OK applies at once; otherwise the position is applied by itself when the pointer stops moving.
+    clearTimeout(scrubTimer);
+    scrubTimer = setTimeout(() => {
+      if (!destroyed && scrub !== null) endScrub(true);
+    }, SCRUB_CONFIRM_MS);
   }
 
   // Pointer (Smart Remote / mouse): click or drag on the bar.
@@ -232,8 +241,13 @@ export function createPlayerPage(ctx, params) {
     if (value === null || destroyed) return;
     subtitle = value;
     showSubtitle('');
-    if (engine.setSubtitleTrack) engine.setSubtitleTrack(value < 0 ? null : value);
     showControls();
+    // The engine call can stall the picture for a moment: let the list close first.
+    const chosen = options.find((o) => o.value === value);
+    flash(`${t('player.subtitles')}: ${chosen ? chosen.label : ''}`);
+    setTimeout(() => {
+      if (!destroyed && engine.setSubtitleTrack) engine.setSubtitleTrack(value < 0 ? null : value);
+    }, 150);
   }
 
   function render(state) {
@@ -461,6 +475,7 @@ export function createPlayerPage(ctx, params) {
     destroy() {
       destroyed = true;
       clearTimeout(hideTimer);
+      clearTimeout(scrubTimer);
       clearTimeout(flashTimer);
       clearTimeout(subtitleTimer);
       clearInterval(saveTimer);
