@@ -1,91 +1,110 @@
 # Xtream IPTV
 
-A Netflix-style **Xtream Codes** client for **Samsung Tizen TVs**, written as a plain
-HTML/JS/SCSS web app (no UI framework) and bundled with webpack.
+A fast, TV-first **Xtream Codes** client for **Samsung Tizen TVs**. Browse your provider's
+movies, series and live channels with the remote control, pick up where you left off, and watch
+trailers, cast and guides, all in a clean, modern interface designed for a 1920x1080 screen.
 
-> **Status: early development (milestone 1 + part of milestone 2).**
-> The foundations are in place and unit-tested: tooling, remote-control input, focus
-> navigation, router, i18n, IndexedDB layer, Xtream API client, title normalisation and
-> tmdb grouping. Catalog sync, browsing pages, the player, EPG, TMDB and Trakt are **not
-> implemented yet** (see the [roadmap](#roadmap)). Nothing has been run on a real TV yet;
-> the built-in **Diagnostics** page exists precisely to do that first check.
+<p align="center"><img src="docs/screenshots/home.jpg" alt="Home screen" width="860"></p>
 
-This project does not provide, host or link to any content. You need your own Xtream Codes
-provider account.
+> This project does not provide, host or link to any content. You need your own Xtream Codes
+> provider account.
 
-## Features (target)
+## What makes it different
 
-- Multiple providers, switchable at runtime; provider configured on first launch
-- Home carousels: new movies, new series, continue watching, suggested movies/series
-- Live TV, Movies and TV Series pages with provider categories, paginated grids,
-  items ordered by date added
-- Titles sharing a provider tmdb id are grouped; a dropdown picks the stream id
-  (lowest id preselected). Titles without tmdb id are never merged
-- TMDB metadata (text only, cached) and provider-supplied images
-- EPG for live channels (now playing on the card, next 24 h on the channel page)
-- Settings: buffering time, carousel size, grid size, per-type category exclusion; device table, manual catalog/metadata refresh
-- Native Tizen player (AVPlay) and native on-screen keyboard
-- Local cache; Trakt sync planned as a second phase
-- English (`en-US`) and Italian (`it-IT`)
+- **One title, one card.** Provider catalogs are full of duplicates (4K, HD, dubbed, different
+  categories). Items that share the provider's TMDB id are merged into a single card, with a
+  dropdown to choose the exact version. Nothing is merged unless the provider says it is the same title.
+- **Built for huge catalogs.** Tens of thousands of titles are synced in a background worker,
+  stored locally and shown through virtualized grids, so navigation stays smooth on a TV processor.
+  The cached catalog opens instantly and refreshes itself in the background.
+- **Clean titles.** With a TMDB key configured, provider noise such as language prefixes, quality
+  tags and year suffixes is removed from movie and series titles. Without a key, titles are shown exactly as the provider sent them.
+- **Smart filtering.** Genres from the provider and from TMDB are merged into one list, categories
+  can be hidden per provider and per type, and every detail page links back to the matching genre or category.
+- **Trailers in the app's own player.** The trailer button plays the YouTube trailer with the same
+  controls as a movie, instead of launching the YouTube app. It works around the embedded-player
+  restriction of Tizen with a small on-TV service.
+- **A real player.** Back / forward 30 s, draggable progress bar, aspect ratio, subtitles, adjustable
+  buffering, resume from where you stopped and autoplay of the next episode.
+- **Live TV with a programme guide.** Now-playing on every channel card and the next 24 hours on the channel page.
+- **Trakt sync with a QR code.** Connect your account by scanning a code with your phone, import your
+  history and keep watched titles in sync, or remove everything with one button.
+- **Continue watching, favorites and suggestions.** Resume rows, a favorites page, watched marks and
+  recommendations based on what you watch (TMDB or Trakt).
+- **Local search.** Search movies, series and channels from the top bar, using the on-screen keyboard of the TV.
+- **Several providers.** Add as many as you like and switch at any time; each has its own database.
+- **Private by design.** No account, no analytics. TMDB and Trakt keys are typed in Settings and
+  stay on the TV; credentials are masked in logs.
+- **English and Italian**, following the TV language or chosen manually.
+- **Open and tested.** Plain HTML, JavaScript and SCSS (no UI framework) with an extensive unit test suite.
 
-## Optional API keys
+## Screenshots
 
-TMDB metadata/suggestions and Trakt are off until the keys are typed in **Settings** (nothing is compiled into the build):
-
-| Field | Used for |
+| | |
 |---|---|
-| TMDB API key | the v4 "API Read Access Token" (sent as `Authorization: Bearer`) or the v3 32-character API key |
-| Trakt Client ID / Secret | Trakt device login and history |
+| ![First run](docs/screenshots/first-run.jpg) **First run**: add your provider | ![Home](docs/screenshots/home.jpg) **Home**: new movies, new series, continue watching |
+| ![Movies](docs/screenshots/movies.jpg) **Movies**: genres, categories and filters | ![TV series](docs/screenshots/series.jpg) **TV series** |
+| ![Live TV](docs/screenshots/live-tv.jpg) **Live TV** with the programme now playing | ![Search](docs/screenshots/search.jpg) **Search** from the top bar |
+| ![Movie detail](docs/screenshots/movie-detail.jpg) **Movie**: play, trailer, watched, favorite | ![Series detail](docs/screenshots/series-detail.jpg) **Series**: seasons and episodes |
+| ![Player](docs/screenshots/player.jpg) **Player** | ![Favorites](docs/screenshots/favorites.jpg) **Favorites** |
+| ![Settings](docs/screenshots/settings.jpg) **Settings**: catalog, TMDB, Trakt, preferences | ![Providers](docs/screenshots/providers.jpg) **Providers** |
+| ![Visible categories](docs/screenshots/categories.jpg) **Visible categories** | |
 
-## Requirements
+The screenshots use a fictional demo provider.
 
-- Node.js 18 or newer
-- A Samsung TV with Tizen 6.0 or newer (developed against a 2021 QLED, Chromium ~76)
-- For installing on the TV: [Tizen Studio](https://developer.tizen.org/development/tizen-studio/download)
-  (or its CLI) and a Samsung certificate profile
+## Install on your TV
 
-## Getting started
+Requirements: a Samsung TV with **Tizen 6.0 or newer** (developed on a 2021 QLED) and an Xtream Codes provider account.
+
+1. Download the signed `xtream-iptv-<version>.wgt` from the [Releases](../../releases) page.
+2. Enable **Developer Mode** on the TV: open *Apps*, press `12345` on the remote, set Developer mode
+   to **On**, enter the IP address of the computer you will install from, and reboot the TV.
+3. Install the package with [**tizen-wgt-installer**](https://github.com/andreadegiovine/tizen-wgt-installer),
+   a one-command tool (it needs Docker on a computer in the same network as the TV). It can re-sign
+   the package with your own Samsung certificate, which recent TVs require; see its page for the exact
+   commands for Linux, macOS, WSL and Windows.
+4. Open **Xtream IPTV** from *Apps → Downloaded* and add your provider.
+
+Prefer to build it yourself? See [Building from source](#building-from-source).
+
+## First steps
+
+1. **Add a provider**: name, server URL, username and password. The catalog downloads in the background.
+2. *(Optional)* In **Settings** type a **TMDB** key to get posters, plots, cast, genres, trailers and suggestions.
+   Use the v4 "API Read Access Token" or the 32-character v3 key.
+3. *(Optional)* In **Settings** type your Trakt **Client ID** and **Client Secret**, then press connect and scan the QR code.
+
+Nothing about TMDB or Trakt is compiled into the app: both stay off until you add the keys.
+
+## Remote control
+
+| Key | Action |
+|---|---|
+| Arrows | Move the focus |
+| OK / Enter | Select |
+| Back | Go back / close |
+| Channel up / down | In the player: previous / next channel (live) or episode (series) |
+| Play / pause / rewind / forward | In the player |
+| Left / right in the player | Seek (after OK on the progress bar) |
+
+## Building from source
+
+Requirements: Node.js 18 or newer, and for installing, [Tizen Studio](https://developer.tizen.org/development/tizen-studio/download)
+(or its CLI) with a Samsung certificate profile.
 
 ```bash
 npm ci
-npm test          # unit tests
+npm test            # unit tests
 npm run lint
-npm run dev       # dev server on http://localhost:8080
+npm run dev         # desktop browser on http://localhost:8080
+npm run build       # Tizen widget in dist/
 ```
 
-The dev server also runs a same-origin proxy (`/__proxy`) for provider API calls, so the app
-works in a desktop browser without CORS problems. In a desktop browser the remote control is
-emulated with the keyboard: arrows, `Enter`, `Esc`/`Backspace` = Back, `PageUp`/`PageDown` =
-channel up/down.
+In the desktop browser the remote is emulated with the keyboard: arrows, `Enter`, `Esc` / `Backspace`
+for Back, `PageUp` / `PageDown` for channel up / down. The dev server proxies provider calls
+(`/__proxy`) to avoid CORS problems.
 
-### Developing on the TV (live reload from your PC)
-
-1. Enable Developer Mode on the TV (Apps panel → press `12345` → Developer mode **On**, enter
-   your PC's IP address) and connect Tizen Studio's Device Manager to the TV.
-2. Generate the small "dev shell" widget that opens your PC's dev server:
-
-   ```bash
-   DEV_HOST=<your-pc-ip> npm run tizen:dev-shell   # writes build/dev-shell/
-   ```
-
-3. Build, sign and install `build/dev-shell` once (Tizen Studio: *Build Signed Package*, then
-   *Run As*; or `tizen package -t wgt -s <profile> -- build/dev-shell` followed by
-   `tizen install -n <file>.wgt -t <tv-name>`).
-4. Run `npm run dev:tv` on the PC (it also injects Tizen's `webapis.js`) and launch the widget.
-   Saving a source file reloads the app on the TV.
-
-Notes: the dev shell loads a remote page, so the browser's CORS rules apply, which is why API
-calls go through the dev proxy. `webapis` (AVPlay) may behave differently in a remote page than
-in a packaged app; the Diagnostics page reports what is actually available.
-
-### Production build and installation
-
-```bash
-npm run build           # output in dist/
-```
-
-`dist/` is a complete Tizen widget (`config.xml`, `index.html`, `js/`, `css/`, icon). Sign and
-install it with your own certificate:
+`dist/` is a complete widget. Sign and install it with your own certificate:
 
 ```bash
 tizen package -t wgt -s <your-profile> -- dist
@@ -95,67 +114,32 @@ tizen install -n dist/XtreamIPTV.wgt -t <tv-name>
 
 ### Releases
 
-Publishing a GitHub release triggers `.github/workflows/release.yml`, which validates the tag
-(`v1.2.3` or `1.2.3`), stamps that version into the build, runs lint and tests, builds, and
-uploads `xtream-iptv-<version>.zip` (the contents of `dist/`) plus a `.sha256` file to the release.
+Publishing a GitHub release runs `.github/workflows/release.yml`: it validates the tag (`v1.2.3`),
+stamps the version, runs lint and tests, builds, and uploads the signed `.wgt` and an unsigned `.zip`
+of `dist/` with their checksums.
 
-The release asset is **unsigned**: Tizen requires your own author/distributor certificate, which
-should not live in a public repository. Unzip it and run the `tizen package` / `tizen install`
-commands above. Automated signing (certificate stored as encrypted secrets) can be added later.
-
-## Project layout
+## For developers
 
 ```
 src/
-  core/       env, errors, logger (masks credentials), http (timeout/retry), idb, input
-  db/         app database (settings, providers, watch state) and one database per provider
-  services/   Xtream client, item projection, title normalisation, grouping, settings, diagnostics
-  ui/         focus manager + navigation models, router, topbar, pages
-  i18n/       dictionaries (en-US, it-IT) and plural-aware t()
-  styles/     SCSS (Netflix-like dark theme, designed for a 1920x1080 space)
-tizen/        config.xml and icon copied into the build
-scripts/      dev proxy and dev-shell generator
-test/         Jest tests (jsdom + fake-indexeddb)
-docs/DESIGN.md  agreed design decisions
+  core/       env, errors, logger (masks credentials), http, idb, input
+  db/         app database and one database per provider
+  services/   Xtream client, sync, grouping, title normalisation, TMDB, Trakt, EPG, player engines
+  ui/         focus manager, router, top bar, pages, components
+  i18n/       en-US and it-IT dictionaries
+  styles/     SCSS
+tizen/        config.xml, icon and the YouTube service
+test/         Jest tests
+docs/         design decisions, milestones and screenshots
 ```
 
-Design rules worth knowing:
+Design decisions and the development history (with what has and has not been verified on a real
+TV) live in [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/MILESTONES.md`](docs/MILESTONES.md); read them before changing the code.
 
-- UI depends on services, services on core, never the other way round.
-- Logic that can be shared lives in one function/module (one URL builder, one query layer,
-  one focus manager, one error type).
-- Focus navigation works on data indices rather than on-screen geometry, so lists can be
-  virtualized.
-- Provider databases hold only derived data and are rebuilt on schema change; the app database
-  (providers, settings, watch history) uses real migrations.
-- The TV runs Chromium ~76: the build targets it, and ESLint blocks APIs such as
-  `String.replaceAll`, `.at()` and `structuredClone`. CSS must avoid flexbox `gap` and
-  `aspect-ratio`.
+The TV runs Chromium ~76: the build targets it and ESLint blocks newer APIs (`?.`, `??`,
+`String.replaceAll`, `.at()`, `structuredClone`). CSS must avoid flexbox `gap`, `aspect-ratio` and `inset`.
 
-## Roadmap
-
-| # | Milestone | State |
-|---|-----------|-------|
-| 0 | Spike on a real TV (CORS, `webapis`, workers, AVPlay, storage quota) | Diagnostics run on the TV (partial results in `docs/MILESTONES.md`) |
-| 1 | Foundations: input, focus, router, i18n, errors, settings | Done |
-| 2 | Provider and catalog: client, setup, databases, normalizer, grouping | Catalog sync (worker + fallback) done, not yet verified on the TV |
-| 3 | Navigation: topbar, grids, category panel, pagination, search | Done off-TV |
-| 4 | Detail page and player with custom controls, watch state | Done off-TV (new player not yet run on the TV) |
-| 5 | TMDB matching and metadata | Done, needs a TMDB key in the build |
-| 6 | EPG (XMLTV in a worker, now/next, 24 h on the channel page) | Done off-TV |
-| 7 | Home carousels, complete settings, hidden categories | Done off-TV |
-| 8 | Suggestions | Done, needs a TMDB key |
-| 9 | Trakt (second phase) | Done, needs Trakt keys; never run against Trakt |
-| 10 | Performance and memory pass on the TV | Open: needs the TV |
-| 11 | Final round of tests on the TV | Open (list in `docs/MILESTONES.md`) |
-| 12 | UI redesign: icons, search in the bar, full-width layout, new cards, detail and player | Done off-TV (2026-11-03) |
-
-## Application and package ids
-
-The widget uses package id `XtrmIptv01` and application id `XtrmIptv01.XtreamIPTV`
-(`tizen/config.xml`). Change them before creating your certificate profile if you prefer others.
-Declared privileges (internet, remote-control input, network info, product info) still need to be
-confirmed on a device during milestone 0.
+Package id `XtrmIptv01`, application id `XtrmIptv01.XtreamIPTV` (`tizen/config.xml`).
 
 ## License
 

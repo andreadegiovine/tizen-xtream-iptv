@@ -16,7 +16,7 @@ export function wrapApiUrl(url) {
 export function exitApp() {
   try {
     if (isTizen()) window.tizen.application.getCurrentApplication().exit();
-    else window.close(); // desktop browser / remote dev shell (may be ignored by the browser)
+    else window.close(); // desktop browser (may be ignored by the browser)
   } catch {
     /* nothing else to do */
   }

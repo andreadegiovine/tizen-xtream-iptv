@@ -5,7 +5,7 @@ Decisions agreed during the design phase. Update this file when a decision chang
 ## Platform and tooling
 - Target: Samsung QE75Q70AATXZT (2021, Tizen 6.0, Chromium ~76), installed by sideloading.
 - Vanilla ES6 (no UI library, no TypeScript), SCSS, webpack 5. Production output is a
-  Tizen widget with separate JS/CSS files. Development: the TV opens the dev server on the PC.
+  Tizen widget with separate JS/CSS files. Development: `npm run dev` in a desktop browser (keyboard as remote, dev proxy for the provider); the TV runs the signed build.
 - Unit tests (Jest) for pure logic.
 
 ## Data
@@ -89,6 +89,6 @@ Decisions agreed during the design phase. Update this file when a decision chang
 - Un solo `playerController` (macchina a stati) sopra un motore intercambiabile: AVPlay sulla TV, `<video>` in un browser desktop. I controlli sono HTML.
 - Stato di visione nel DB app, chiave `movie:t<tmdb>` (condivisa tra provider) o `<provider>:movie:i<id>`; serie per episodio. Trakt è un adattatore sopra lo store locale, che resta la fonte per la ripresa.
 - `activeProvider` è l'unico handle condiviso su DB e client del provider attivo.
-- Le chiavi TMDB/Trakt non stanno nel repository: sono compilate dalla build.
+- Le chiavi TMDB/Trakt non stanno nel repository né nella build: si digitano nelle Impostazioni.
 - EPG: XMLTV filtrato per i canali presenti, letto a blocchi in un worker, una volta al giorno dopo il sync del catalogo.
 - Suggerimenti: raccomandazioni TMDB dalla cronologia, intersecate per tmdb id con il catalogo.

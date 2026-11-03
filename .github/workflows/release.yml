@@ -6,10 +6,8 @@ name: Release
 # Assets attached to the release:
 #   - xtream-iptv-<version>.zip         unsigned contents of dist/ (+ .sha256)
 #   - xtream-iptv-<version>.wgt         signed production widget   (+ .sha256)
-#   - xtream-iptv-dev-<version>.wgt     signed dev-shell widget pointing to the LOCAL_PC_IP
-#                                       secret (npm run tizen:dev-shell) (+ .sha256)
 #
-# Required secrets: TIZEN_CERT_PASSWORD (password of ./tizencert.p12), LOCAL_PC_IP.
+# Required secret: TIZEN_CERT_PASSWORD (password of ./tizencert.p12).
 # TMDB and Trakt keys are not part of the build: they are typed in the app Settings.
 on:
   release:
@@ -47,14 +45,9 @@ jobs:
       - name: Validate secrets
         env:
           CERT_PASSWORD: ${{ secrets.TIZEN_CERT_PASSWORD }}
-          DEV_HOST: ${{ secrets.LOCAL_PC_IP }}
         run: |
           if [ -z "$CERT_PASSWORD" ]; then
             echo "::error::Secret TIZEN_CERT_PASSWORD is not set."
-            exit 1
-          fi
-          if [[ ! "$DEV_HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
-            echo "::error::Secret LOCAL_PC_IP is missing or not a valid IP/hostname."
             exit 1
           fi
           if [ ! -f tizencert.p12 ]; then
@@ -81,12 +74,6 @@ jobs:
           mkdir -p release
           (cd dist && zip -r "../release/xtream-iptv-${VERSION}.zip" .)
           (cd release && sha256sum "xtream-iptv-${VERSION}.zip" > "xtream-iptv-${VERSION}.zip.sha256")
-
-      # Dev shell -> build/dev-shell/ (tiny widget that opens the dev server on your PC)
-      - name: Generate dev shell
-        env:
-          DEV_HOST: ${{ secrets.LOCAL_PC_IP }}
-        run: npm run tizen:dev-shell
 
       - name: Install Tizen Studio CLI
         run: |
@@ -132,7 +119,7 @@ jobs:
           exit [lindex $result 3]
           EOF
 
-      - name: Sign production and dev widgets
+      - name: Sign the production widget
         env:
           CERT_PASSWORD: ${{ secrets.TIZEN_CERT_PASSWORD }}
           VERSION: ${{ steps.version.outputs.version }}
@@ -155,7 +142,6 @@ jobs:
           }
 
           sign dist "xtream-iptv-${VERSION}"
-          sign build/dev-shell "xtream-iptv-dev-${VERSION}"
 
       - name: Print Tizen CLI log
         if: failure()

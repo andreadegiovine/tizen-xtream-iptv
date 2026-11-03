@@ -48,8 +48,8 @@ module.exports = (env = {}, argv = {}) => {
         template: 'src/index.html',
         inject: 'body',
         scriptLoading: 'blocking',
-        // webapis.js only exists inside a packaged Tizen app (or when explicitly requested).
-        includeWebapis: isProd || Boolean(env.webapis),
+        // webapis.js only exists inside a packaged Tizen app.
+        includeWebapis: isProd,
       }),
       new CopyPlugin({
         patterns: [
