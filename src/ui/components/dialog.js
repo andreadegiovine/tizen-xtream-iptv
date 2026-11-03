@@ -21,7 +21,8 @@ export function createDialogService({ focus, root = document.body }) {
     resolve(result);
   }
 
-  function confirm({ title, message, confirmLabel, cancelLabel }) {
+  /** `content` (a DOM node) replaces the plain `message` paragraph. */
+  function confirm({ title, message, content = null, confirmLabel, cancelLabel }) {
     if (current) return current.promise;
     const previous = { id: focus.activeId, index: focus.active ? focus.active.index : 0 };
     const buttons = [
@@ -31,7 +32,7 @@ export function createDialogService({ focus, root = document.body }) {
     const overlay = h(
       'div',
       { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' },
-      h('div', { class: 'dialog' }, h('h2', { text: title }), h('p', { text: message }), h('div', { class: 'dialog-actions' }, buttons)),
+      h('div', { class: 'dialog' }, h('h2', { text: title }), content || h('p', { text: message }), h('div', { class: 'dialog-actions' }, buttons)),
     );
     root.appendChild(overlay);
 

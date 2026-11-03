@@ -96,7 +96,7 @@
   "settings.connected": "Connected",
   "settings.disconnect": "Disconnect",
   "settings.traktDisconnect": "Stop sending your history to Trakt?",
-  "settings.traktCode": "On any device open {url} and enter the code {code}. This window closes when you are connected.",
+  "settings.traktCode": "Scan the code or open the address on your phone or computer, sign in to Trakt and enter the code below. Trakt will link your account to this app, and this window closes by itself when you are connected.",
   "categories.type": "Type",
   "categories.apply": "Apply",
   "categories.busy": "Wait for the catalog update to finish.",

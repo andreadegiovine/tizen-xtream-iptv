@@ -418,6 +418,40 @@ h2 {
   }
 }
 
+.code-prompt {
+  .code-qr {
+    display: flex;
+    justify-content: center;
+    margin: 8px 0 12px;
+
+    .qr {
+      width: 220px;
+      height: 220px;
+      border-radius: 6px;
+    }
+  }
+
+  .code-url {
+    margin: 0 0 20px;
+    text-align: center;
+    color: $text-muted;
+    word-break: break-all;
+  }
+
+  .code-text {
+    margin: 0 0 20px;
+    text-align: left;
+  }
+
+  .code-value {
+    margin: 0;
+    text-align: center;
+    font-size: 64px;
+    font-weight: 800;
+    letter-spacing: 12px;
+  }
+}
+
 #toast {
   position: fixed;
   right: $safe-x;

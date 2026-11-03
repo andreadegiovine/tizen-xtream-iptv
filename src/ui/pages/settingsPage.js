@@ -1,3 +1,4 @@
+import { createCodePrompt } from '../components/codePrompt.js';
 import { resetApp } from '../../services/resetApp.js';
 import { h, toast } from '../dom.js';
 import { t, i18n, detectLocale } from '../../i18n/index.js';
@@ -116,7 +117,7 @@ export function createSettingsPage(ctx) {
       controller.abort();
       return;
     }
-    const dialog = ctx.dialogs.confirm({ title: 'Trakt', message: t('settings.traktCode', { url: shown.url, code: shown.code }), confirmLabel: t('common.ok'), cancelLabel: t('setup.cancel') });
+    const dialog = ctx.dialogs.confirm({ title: 'Trakt', content: createCodePrompt({ url: shown.url, description: t('settings.traktCode'), code: shown.code }), confirmLabel: t('common.ok'), cancelLabel: t('setup.cancel') });
     login.then((done) => { if (done) ctx.dialogs.dismiss(); });
     const answer = await dialog;
     if (!answer) controller.abort();

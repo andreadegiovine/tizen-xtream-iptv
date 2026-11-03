@@ -96,7 +96,7 @@
   "settings.connected": "Collegato",
   "settings.disconnect": "Scollega",
   "settings.traktDisconnect": "Smettere di inviare la cronologia a Trakt?",
-  "settings.traktCode": "Da un altro dispositivo apri {url} e inserisci il codice {code}. Questa finestra si chiude quando sei collegato.",
+  "settings.traktCode": "Inquadra il codice o apri l'indirizzo dal telefono o dal computer, accedi a Trakt e inserisci il codice qui sotto. Trakt collegherà il tuo account a questa app e questa finestra si chiude da sola quando sei collegato.",
   "categories.type": "Tipo",
   "categories.apply": "Applica",
   "categories.busy": "Attendi la fine dell'aggiornamento del catalogo.",
