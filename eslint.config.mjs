@@ -9,7 +9,8 @@ const appGlobals = {
 };
 
 export default [
-  { ignores: ['dist/**', 'build/**', 'coverage/**', 'node_modules/**'] },
+  // tizen/youtube/service.js is a template for the on-TV service (placeholders filled in by webpack), not app code.
+  { ignores: ['dist/**', 'build/**', 'coverage/**', 'node_modules/**', 'tizen/youtube/service.js'] },
   js.configs.recommended,
   {
     files: ['src/**/*.js'],
