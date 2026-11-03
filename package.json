@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "webpack serve --mode development",
     "build": "webpack --mode production",
+    "postbuild": "node scripts/check-dist.js",
     "test": "jest",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{js,scss,json}\" \"test/**/*.js\""

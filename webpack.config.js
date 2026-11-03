@@ -74,7 +74,12 @@ module.exports = (env = {}, argv = {}) => {
       }),
       new MiniCssExtractPlugin({ filename: 'css/[name].css' }),
     ],
-    optimization: { splitChunks: false, runtimeChunk: false },
+    // The TV runs Chromium ~76: the minifier must not write `??` / `?.` (it rewrites `x == null ? a : x` into `x ?? a` by default).
+    optimization: {
+      splitChunks: false,
+      runtimeChunk: false,
+      minimizeOptions: { javascript: { ecma: 2019, compress: { passes: 2, ecma: 2019 }, format: { ecma: 2019 } } },
+    },
     performance: { hints: false },
     devServer: {
       host: '0.0.0.0',
