@@ -136,7 +136,8 @@ export function createMetaPanel(ctx) {
     return { ...row, status, el: h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: row.label }), status) };
   });
   const button = refreshButton(t('settings.metaUpdate'));
-  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('meta.title') }), button), h('div', { class: 'sync' }, rows.map((r) => r.el)));
+  const removeButton = h('button', { class: 'btn danger icon-only panel-button', type: 'button', 'aria-label': t('settings.metaRemove'), title: t('settings.metaRemove') }, icon('remove'));
+  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('meta.title') }), h('div', { class: 'panel-buttons' }, removeButton, button)), h('div', { class: 'sync' }, rows.map((r) => r.el)));
 
   async function refresh() {
     const log = await ctx.syncLog.get();
@@ -154,6 +155,7 @@ export function createMetaPanel(ctx) {
   return {
     el,
     button,
+    removeButton,
     refresh,
     /** Follows the operations: a row says "running since…" while it works and shows the new result when it ends. */
     mount() {

@@ -18,6 +18,7 @@ Decisions agreed during the design phase. Update this file when a decision chang
 - Search runs on an in-memory list of normalized titles, not an IndexedDB index.
 - TTLs: provider lists 12 h, series details 24 h, TMDB metadata 30 days, TMDB "not found" 7 days.
 - TMDB metadata language follows the UI language.
+- TMDB metadata is stored in the app DB by tmdb id + language (`meta:<type>:<id>:<lang>`, `expiresAt`, index `byExpires`), independent of the provider. A worker downloads it for the whole catalog; requests for visible cards and the open page go first and pause the worker.
 
 ## Grouping and titles
 - Trust the provider's tmdb id. Items without one are never merged, even if TMDB matching finds an id.

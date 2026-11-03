@@ -105,3 +105,15 @@ describe('tmdb service', () => {
     expect(await svc.forEntry({ type: 'movie', tmdbId: 5 })).toBeNull();
   });
 });
+
+test('requests the user waits for report activity (the background download holds back) and records expire in 30 days', async () => {
+  const db = await appDb();
+  const seen = [];
+  const c = { enabled: true, details: jest.fn(async (type, id) => ({ id, title: 'X' })), search: jest.fn() };
+  const svc = createTmdbService({ db, client: c, getLanguage: () => 'it-IT', now: () => 5, onActivity: (count) => seen.push(count) });
+  await svc.forEntry({ type: 'movie', tmdbId: 4, name: 'X' });
+  expect(seen[0]).toBe(1);
+  expect(seen[seen.length - 1]).toBe(0);
+  const { dbGet } = await import('../../src/core/idb.js');
+  expect((await dbGet(db, 'tmdb', 'meta:movie:4:it-IT')).expiresAt).toBe(5 + META_TTL_MS);
+});

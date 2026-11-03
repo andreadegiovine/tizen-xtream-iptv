@@ -15,6 +15,8 @@ self.onmessage = function (event) {
         provider: message.provider,
         tmdbKey: message.tmdbKey,
         language: message.language,
+        phase: message.phase,
+        force: message.force,
         signal: controller.signal,
         gate: gate.wait,
         emit: (payload) => self.postMessage(payload),

@@ -6,6 +6,7 @@ import { log } from '../core/logger.js';
 
 const STORE = 'entry_genre_tmdb';
 const WATCH_MS = 4000;
+const UI_RELEASE_MS = 800;
 
 /**
  * Genres of the active provider's catalog. Provider genres come with the catalog sync. The rest is found in the
@@ -20,6 +21,9 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
   let sent = false;
   let stopRun = null;
   let controller = null;
+  let cancelled = false;
+  let releaseTimer = null;
+  const holds = { busy: false, ui: false };
   const gate = createGate();
 
   function setPaused(paused) {
@@ -29,9 +33,34 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     if (worker) worker.postMessage({ op: paused ? 'pause' : 'resume' });
   }
 
+  const refreshPause = () => setPaused(holds.busy || holds.ui);
+
   function watch() {
     clearInterval(watcher);
-    watcher = setInterval(() => setPaused(isBusy()), WATCH_MS);
+    holds.busy = isBusy();
+    refreshPause();
+    watcher = setInterval(() => {
+      holds.busy = isBusy();
+      refreshPause();
+    }, WATCH_MS);
+  }
+
+  /**
+   * Makes the background download wait while something else needs the network: `reason` "ui" is the user
+   * browsing (visible cards, an open page: asked from TMDB at once), released a moment after the last request.
+   */
+  function hold(reason, on) {
+    if (reason !== 'ui') return;
+    clearTimeout(releaseTimer);
+    if (on) {
+      holds.ui = true;
+      refreshPause();
+    } else {
+      releaseTimer = setTimeout(() => {
+        holds.ui = false;
+        refreshPause();
+      }, UI_RELEASE_MS);
+    }
   }
 
   function runInWorker(payload) {
@@ -79,22 +108,56 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
   /** Stops the search now (the titles found so far stay). */
   function stop() {
     again = false;
+    cancelled = true;
     if (controller) controller.abort();
     if (stopRun) stopRun();
   }
 
-  /** Starts (or queues) the background search for missing genres of the active provider. */
-  function backfill() {
+  /**
+   * Starts (or queues) the background work for the active provider: first the TMDB download of every title
+   * (`force` downloads again what is still fresh), then the provider's genres for what is still without.
+   */
+  function backfill({ force = false } = {}) {
     if (running) {
       again = true;
       return Promise.resolve(0);
     }
-    return syncLog ? syncLog.track('genres', () => run(), { cancel: stop }) : run();
+    return runPhases(force);
   }
 
-  async function run() {
+  /** One phase on its own (the "update metadata" operations). */
+  const download = (force = false) => phase('tmdb', force);
+  const findGenres = () => phase('genres', false);
+
+  function phase(name, force) {
+    if (running) return Promise.resolve(0);
+    cancelled = false;
+    return track(name, force);
+  }
+
+  const track = (name, force) => (syncLog ? syncLog.track(name, () => run(name, force), { cancel: stop }) : run(name, force));
+
+  async function runPhases(force) {
+    cancelled = false;
+    running = true;
+    let done = 0;
+    try {
+      if (getTmdbKey()) done += await track('tmdb', force);
+      if (!cancelled) done += await track('genres', false);
+    } finally {
+      running = false;
+    }
+    if (again && !cancelled) {
+      again = false;
+      done += await runPhases(false);
+    }
+    return done;
+  }
+
+  async function run(name, force) {
     const current = await active.get();
     if (!current) return 0;
+    const wasRunning = running;
     running = true;
     sent = false;
     let done = 0;
@@ -103,6 +166,8 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
       provider: { id: p.id, baseUrl: p.baseUrl, username: p.username, password: p.password },
       tmdbKey: getTmdbKey(),
       language: getLanguage(),
+      phase: name,
+      force,
     };
     watch();
     controller = new AbortController();
@@ -115,22 +180,21 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
         done = await runGenreBackfillForProvider({ ...payload, gate: gate.wait, signal: controller.signal });
       }
     } catch (err) {
-      log.warn('Genre backfill failed', err && err.message);
+      log.warn('Background metadata job failed', err && err.message);
     } finally {
-      running = false;
+      running = wasRunning;
       stopRun = null;
       controller = null;
       clearInterval(watcher);
-    }
-    if (again) {
-      again = false;
-      done += await run();
     }
     return done;
   }
 
   return {
     backfill,
+    download,
+    findGenres,
+    hold,
     stop,
     /** Genres for the sidebar: [{ key, name }], only those that still have at least one title. */
     async list(type) {

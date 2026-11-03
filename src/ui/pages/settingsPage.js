@@ -96,15 +96,12 @@ export function createSettingsPage(ctx) {
   };
 
 
-  const tmdbValue = h('span', { class: 'value', text: ctx.tmdb && ctx.tmdb.enabled ? t('common.on') : t('settings.notConfigured') });
-  const tmdbRow = { el: h('div', { class: 'row' }, h('span', { text: 'TMDB' }), tmdbValue), refresh: async () => undefined, activate: async () => undefined };
-
-  const traktValue = h('span', { class: 'value' });
+  // Connect / disconnect Trakt: the label says which of the two the button does (the state is in the Metadata table).
+  const traktLabel = h('span', { text: t('settings.traktConnect') });
   const trakt = {
-    el: h('div', { class: 'row' }, h('span', { text: 'Trakt' }), traktValue),
+    el: h('div', { class: 'row' }, traktLabel),
     async refresh() {
-      if (!ctx.trakt.enabled) traktValue.textContent = t('settings.notConfigured');
-      else traktValue.textContent = (await ctx.trakt.isConnected()) ? t('settings.connected') : t('settings.notConnected');
+      traktLabel.textContent = ctx.trakt.enabled && (await ctx.trakt.isConnected()) ? t('settings.traktDisconnectLabel') : t('settings.traktConnect');
     },
     async activate() {
       if (!ctx.trakt.enabled) return;
@@ -134,20 +131,6 @@ export function createSettingsPage(ctx) {
   };
 
 
-  /** Downloads again the TMDB data of what was watched and of the favourites; resolves with how many titles. */
-  async function refreshTmdb() {
-    const items = [];
-    (await ctx.watch.seeds(30)).forEach((seed) => items.push({ type: seed.type, tmdbId: seed.tmdbId }));
-    const current = await ctx.active.get();
-    if (current) {
-      for (const fav of await ctx.favorites.list(current.provider.id)) {
-        const match = /^(movie|series):t(\d+)$/.exec(fav.entryKey);
-        if (match) items.push({ type: match[1], tmdbId: Number(match[2]) });
-      }
-    }
-    return ctx.syncLog.track('tmdb', (signal) => ctx.tmdb.refresh(items, { signal }));
-  }
-
   /** "Update metadata now": TMDB data, the genre search and the Trakt watch state, whichever is available. */
   async function updateMetadata() {
     if (metaBusy) return;
@@ -156,7 +139,7 @@ export function createSettingsPage(ctx) {
     toast(t('settings.working'), 15000);
     // Every step that will run is listed at once ("queued"); each one becomes "running" on its turn.
     const steps = [];
-    if (ctx.tmdb && ctx.tmdb.enabled) steps.push({ id: 'tmdb', run: refreshTmdb });
+    if (ctx.tmdb && ctx.tmdb.enabled) steps.push({ id: 'tmdb', run: () => ctx.genres.download() });
     if (ctx.trakt.enabled && (await ctx.trakt.isConnected())) {
       steps.push({
         id: 'trakt',
@@ -166,7 +149,7 @@ export function createSettingsPage(ctx) {
         },
       });
     }
-    steps.push({ id: 'genres', run: () => ctx.genres.backfill() });
+    steps.push({ id: 'genres', run: () => ctx.genres.findGenres() });
     const skipped = new Set();
     const ends = steps.map((step) => ctx.operations.start(step.id, { queued: true, cancel: () => skipped.add(step.id) }));
     try {
@@ -185,23 +168,7 @@ export function createSettingsPage(ctx) {
     }
   }
 
-  const tmdbOn = ctx.tmdb && ctx.tmdb.enabled;
   const traktOn = ctx.trakt.enabled;
-
-  const tmdbRows = tmdbOn
-    ? [
-        actionRow({
-          ctx,
-          label: t('settings.tmdbSync'),
-          run: async () => {
-            toast(t('settings.working'), 8000);
-            toast(t('settings.tmdbSyncDone', { count: await refreshTmdb() }));
-            ctx.genres.backfill().catch(() => undefined); // genres of the rest of the catalog, in background
-          },
-        }),
-        actionRow({ ctx, label: t('settings.tmdbRemove'), confirm: t('settings.tmdbRemoveConfirm'), run: async () => { await ctx.tmdb.clearAll(); await ctx.genres.clearTmdb(); toast(t('settings.removed')); } }),
-      ]
-    : [];
 
   const traktRows = traktOn
     ? [
@@ -242,11 +209,26 @@ export function createSettingsPage(ctx) {
   let metaBusy = false;
   const syncRow = { el: panel.button, refresh: async () => undefined, activate: async () => panel.syncNow() };
   const metaRow = { el: metaPanel.button, refresh: async () => undefined, activate: updateMetadata };
+  const metaRemoveRow = {
+    el: metaPanel.removeButton,
+    refresh: async () => undefined,
+    async activate() {
+      const ok = await ctx.dialogs.confirm({ title: t('settings.metaRemove'), message: t('settings.metaRemoveConfirm'), confirmLabel: t('settings.confirmRemove'), cancelLabel: t('setup.cancel') });
+      if (!ok) return;
+      ctx.genres.stop();
+      await ctx.tmdb.clearAll();
+      await ctx.genres.clearTmdb();
+      await ctx.syncLog.clear('tmdb');
+      toast(t('settings.removed'));
+      metaPanel.refresh().catch(() => undefined);
+    },
+  };
   const prefsTitle = h('h2', { class: 'prefs-title', text: t('settings.preferences') });
 
   const rows = [
     syncRow,
     metaRow,
+    metaRemoveRow,
     optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
     optionRow({ ctx, labelKey: 'settings.gridItems', key: 'gridItems', options: GRID_OPTIONS }),
     optionRow({ ctx, labelKey: 'settings.carouselItems', key: 'carouselItems', options: CAROUSEL_OPTIONS }),
@@ -254,8 +236,6 @@ export function createSettingsPage(ctx) {
     autoplay,
     optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }),
     textRow({ ctx, label: t('settings.tmdbKey'), field: 'tmdbKey' }),
-    tmdbRow,
-    ...tmdbRows,
     textRow({ ctx, label: t('settings.traktId'), field: 'traktId' }),
     textRow({ ctx, label: t('settings.traktSecret'), field: 'traktSecret', secret: true }),
     trakt,
@@ -293,7 +273,7 @@ export function createSettingsPage(ctx) {
   };
 
   return {
-    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('settings.title') }), opsPanel.el, panel.el, metaPanel.el, devicePanel.el, prefsTitle, h('div', { class: 'list' }, rows.slice(2).map((r) => r.el)))),
+    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('settings.title') }), opsPanel.el, panel.el, metaPanel.el, devicePanel.el, prefsTitle, h('div', { class: 'list' }, rows.slice(3).map((r) => r.el)))),
     mount() {
       opsPanel.mount();
       metaPanel.mount();

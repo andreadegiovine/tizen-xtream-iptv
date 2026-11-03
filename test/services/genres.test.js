@@ -84,3 +84,32 @@ describe('genre index', () => {
     expect((await index.list('movie')).map((g) => g.key).sort()).toEqual(['horror', 'thriller']);
   });
 });
+
+describe('tmdb download', () => {
+  let m = 0;
+  test('downloads every title once per tmdb id, skips fresh records, writes genres for all its entries', async () => {
+    const { openAppDb } = await import('../../src/db/appDb.js');
+    const { runTmdbDownload } = await import('../../src/services/genreBackfill.js');
+    const db = await openProviderDb(`tmdb-dl-${(m += 1)}`);
+    const appDb = await openAppDb(`tmdb-dl-app-${m}`);
+    const item = (id, tmdbId, extra = {}) => ({ key: `movie:${id}`, type: 'movie', id, name: `Film ${id}`, categoryId: '1', added: 100 + id, tmdbId, ext: 'mkv', genre: '', ...extra });
+    await writeEntries(db, 'movie', buildEntries('movie', [item(1, 7), item(2, 8), item(3, 0)]));
+    const tmdb = { enabled: true, details: jest.fn(async (type, id) => ({ id, title: `T${id}`, genres: [{ id: 1, name: 'Dramma' }], production_companies: [{ id: 3, name: 'Acme', logo_path: '/a.png' }] })) };
+    let t = 1000;
+    const args = { db, appDb, tmdb, language: 'it-IT', now: () => t };
+    expect(await runTmdbDownload(args)).toBe(2);
+    expect(tmdb.details).toHaveBeenCalledTimes(2);
+    const { dbGet } = await import('../../src/core/idb.js');
+    const record = await dbGet(appDb, 'tmdb', 'meta:movie:7:it-IT');
+    expect(record.value).toMatchObject({ title: 'T7', companies: [{ id: 3, name: 'Acme' }] });
+    expect(record.expiresAt).toBe(1000 + 30 * 24 * 3600 * 1000);
+    expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['dramma']);
+    await runTmdbDownload(args); // fresh: nothing to do
+    expect(tmdb.details).toHaveBeenCalledTimes(2);
+    t += 31 * 24 * 3600 * 1000; // expired: downloaded again
+    await runTmdbDownload(args);
+    expect(tmdb.details).toHaveBeenCalledTimes(4);
+    await runTmdbDownload({ ...args, force: true });
+    expect(tmdb.details).toHaveBeenCalledTimes(6);
+  });
+});

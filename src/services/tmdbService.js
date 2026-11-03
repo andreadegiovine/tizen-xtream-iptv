@@ -6,6 +6,9 @@ export const META_TTL_MS = 30 * 24 * 3600 * 1000;
 export const NOT_FOUND_TTL_MS = 7 * 24 * 3600 * 1000;
 export const RECOMMENDATIONS_TTL_MS = 24 * 3600 * 1000;
 
+/** Cache key of the metadata of one title in one language: independent of the provider. */
+export const metaKey = (type, tmdbId, language) => `meta:${type}:${tmdbId}:${language}`;
+
 const yearOf = (date) => Number.parseInt(String(date || '').slice(0, 4), 10) || null;
 
 /** TMDB payload → what the UI needs. */
@@ -14,6 +17,7 @@ export function normalizeMeta(type, data) {
   return {
     tmdbId: data.id,
     title: (type === 'series' ? data.name : data.title) || '',
+    originalTitle: (type === 'series' ? data.original_name : data.original_title) || '',
     overview: data.overview || '',
     poster: posterUrl(data.poster_path),
     backdrop: posterUrl(data.backdrop_path, 'w1280'),
@@ -24,6 +28,9 @@ export function normalizeMeta(type, data) {
     year: yearOf(date),
     seasons: Number(data.number_of_seasons) || null,
     episodes: Number(data.number_of_episodes) || null,
+    companies: (Array.isArray(data.production_companies) ? data.production_companies : [])
+      .map((c) => ({ id: c.id, name: c.name || '', logo: posterUrl(c.logo_path, 'w185') }))
+      .filter((c) => c.name),
     castList: ((data.credits && data.credits.cast) || [])
       .slice(0, 20)
       .map((c) => ({ name: c.name || '', character: c.character || '', photo: posterUrl(c.profile_path, 'w185') }))
@@ -47,9 +54,10 @@ export function pickMatch(type, results, name, year) {
 }
 
 /** Runs async jobs with a concurrency cap; `clear()` drops jobs that have not started yet. */
-export function createQueue(concurrency = 3) {
+export function createQueue(concurrency = 3, onChange = null) {
   let running = 0;
   let waiting = [];
+  const changed = () => onChange && onChange(running + waiting.length);
   function pump() {
     while (running < concurrency && waiting.length) {
       const job = waiting.shift();
@@ -57,6 +65,7 @@ export function createQueue(concurrency = 3) {
       job().finally(() => {
         running -= 1;
         pump();
+        changed();
       });
     }
   }
@@ -65,38 +74,61 @@ export function createQueue(concurrency = 3) {
       return new Promise((resolve) => {
         waiting.push(() => Promise.resolve().then(fn).then(resolve, () => resolve(null)));
         pump();
+        changed();
       });
     },
     clear() {
       waiting = [];
+      changed();
     },
+    size: () => running + waiting.length,
   };
 }
 
-export function createTmdbService({ db, client, getLanguage, now = Date.now }) {
-  const queue = createQueue(3);
+/**
+ * TMDB metadata, cached by tmdb id and language (not by provider) for 30 days. A background job fills the
+ * cache for the whole catalog; what the user is looking at (visible cards, an open page) is requested at
+ * once by this service, and `onActivity(count)` tells the background job to wait while that goes on.
+ */
+export function createTmdbService({ db, client, getLanguage, now = Date.now, onActivity = null }) {
+  let inFlight = 0;
+  const report = () => onActivity && onActivity(inFlight + queue.size());
+  const queue = createQueue(3, report);
   const memory = new Map();
+
+  /** Runs a request the user is waiting for; while any is pending the background job holds back. */
+  async function priority(fn) {
+    inFlight += 1;
+    report();
+    try {
+      return await fn();
+    } finally {
+      inFlight -= 1;
+      report();
+    }
+  }
 
   async function cached(store, key, ttlFor, fetcher) {
     const hit = await dbGet(db, store, key);
-    if (hit && now() - hit.fetchedAt < ttlFor(hit)) return hit;
+    if (hit && (hit.expiresAt || 0) > now()) return hit;
     try {
       const value = await fetcher();
-      const record = { key, value, fetchedAt: now() };
+      const stamp = now();
+      const record = { key, value, fetchedAt: stamp, expiresAt: stamp + ttlFor(value) };
       await dbPut(db, store, record);
       return record;
     } catch (err) {
-      if (hit) return hit;
+      if (hit) return hit; // offline: an expired answer is better than none
       throw err;
     }
   }
 
-  const ttl = (record) => (record.value ? META_TTL_MS : NOT_FOUND_TTL_MS);
+  const ttl = (value) => (value ? META_TTL_MS : NOT_FOUND_TTL_MS);
 
   async function getMeta(type, tmdbId) {
     if (!client.enabled || !tmdbId) return null;
     const language = getLanguage();
-    const key = `${type}:${tmdbId}:${language}`;
+    const key = metaKey(type, tmdbId, language);
     if (memory.has(key)) return memory.get(key);
     const record = await cached('tmdb', key, ttl, async () => {
       try {
@@ -143,20 +175,15 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now }) {
       await dbClear(db, 'tmdb');
       await dbClear(db, 'tmdb_match');
     },
-    /** Drops cached metadata and downloads it again for `items` ([{ type, tmdbId }]); resolves with how many were refreshed. */
-    async refresh(items, { signal = null } = {}) {
-      memory.clear();
-      await dbClear(db, 'tmdb');
-      const done = await Promise.all(items.map((item) => queue.add(() => (signal && signal.aborted ? null : getMeta(item.type, item.tmdbId)))));
-      return done.filter(Boolean).length;
-    },
     recommendations,
     matchTmdbId,
     /** Metadata for a detail page: provider tmdb id first, otherwise a conservative title match. */
-    async forEntry(entry) {
-      if (!client.enabled || entry.type === 'live') return null;
-      const id = entry.tmdbId || (await matchTmdbId(entry.type, entry.name, entry.year));
-      return id ? getMeta(entry.type, id) : null;
+    forEntry(entry) {
+      if (!client.enabled || entry.type === 'live') return Promise.resolve(null);
+      return priority(async () => {
+        const id = entry.tmdbId || (await matchTmdbId(entry.type, entry.name, entry.year));
+        return id ? getMeta(entry.type, id) : null;
+      });
     },
     /** Fills visible cards with TMDB title / poster / series counts as the answers arrive. */
     enrich(entries, cards, type, onMeta, keepQueue = false) {
@@ -170,10 +197,10 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now }) {
           cards[i].update({
             title: meta.title || undefined,
             poster: meta.poster,
-            year: entry.year || meta.year || undefined,
+            year: meta.year || entry.year || undefined,
             seasons: type === 'series' ? meta.seasons : undefined,
             episodes: type === 'series' ? meta.episodes : undefined,
-            rating: entry.rating ? undefined : meta.rating,
+            rating: meta.rating || undefined,
           });
           if (onMeta) onMeta(entry, i, meta);
         });

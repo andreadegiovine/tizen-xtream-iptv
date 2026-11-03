@@ -1,8 +1,10 @@
-import { dbGetAllKeys, transactionDone } from '../core/idb.js';
+import { dbGetAllKeys, dbPut, transactionDone } from '../core/idb.js';
 import { openProviderDb } from '../db/providerDb.js';
 import { XtreamClient } from './xtreamClient.js';
 import { createTmdbClient } from './tmdbClient.js';
 import { mergeGenres } from './genres.js';
+import { openAppDb } from '../db/appDb.js';
+import { normalizeMeta, metaKey, META_TTL_MS, NOT_FOUND_TTL_MS } from './tmdbService.js';
 
 const STORE = 'entry_genre_tmdb';
 export const GENRE_BATCH = 60;
@@ -95,18 +97,94 @@ export async function runGenreBackfill({ db, xtream, tmdb, language, signal, gat
   return total;
 }
 
-/** Shared by the worker and the main-thread fallback. */
-export async function runGenreBackfillForProvider({ provider, tmdbKey, language, signal, gate, emit = () => {}, limit }) {
+/** Distinct titles of the provider that carry a tmdb id, newest first: [{ type, tmdbId, entries: [entry] }]. */
+export function collectTmdbTitles(db) {
+  return new Promise((resolve, reject) => {
+    const byId = new Map();
+    const tx = db.transaction('entries', 'readonly');
+    const request = tx.objectStore('entries').index('byTypeAdded').openCursor(null, 'prev');
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      const entry = cursor.value;
+      if ((entry.type === 'movie' || entry.type === 'series') && entry.tmdbId) {
+        const id = `${entry.type}:${entry.tmdbId}`;
+        const hit = byId.get(id);
+        const slim = { key: entry.key, type: entry.type, added: entry.added || 0 };
+        if (hit) hit.entries.push(slim);
+        else byId.set(id, { type: entry.type, tmdbId: entry.tmdbId, entries: [slim] });
+      }
+      cursor.continue();
+    };
+    tx.onerror = () => reject(tx.error);
+    tx.oncomplete = () => resolve(Array.from(byId.values()).sort((a, b) => b.entries[0].added - a.entries[0].added));
+  });
+}
+
+/**
+ * Downloads TMDB metadata for every title with a tmdb id (not only those without genres) into the app
+ * database, keyed by tmdb id and language. Fresh records are skipped (unless `force`), expired ones are
+ * downloaded again. The genres TMDB gives are written for every entry of the title.
+ */
+export async function runTmdbDownload({ db, appDb, tmdb, language, signal, gate = () => Promise.resolve(), emit = () => {}, force = false, concurrency = 3, now = Date.now }) {
+  const titles = await collectTmdbTitles(db);
+  const fresh = force
+    ? new Set()
+    : new Set(await dbGetAllKeys(appDb, 'tmdb', { index: 'byExpires', range: IDBKeyRange.lowerBound(now(), true) }));
+  const due = titles.filter((title) => !fresh.has(metaKey(title.type, title.tmdbId, language)));
+  const aborted = () => Boolean(signal && signal.aborted);
+  let done = 0;
+  emit({ event: 'progress', done, total: due.length });
+
+  async function download(title) {
+    let value = null;
+    try {
+      value = normalizeMeta(title.type, await tmdb.details(title.type, title.tmdbId, language));
+    } catch (err) {
+      if (!(err && err.details && err.details.status === 404)) return; // network / quota: the next run tries again
+    }
+    const stamp = now();
+    await dbPut(appDb, 'tmdb', { key: metaKey(title.type, title.tmdbId, language), value, fetchedAt: stamp, expiresAt: stamp + (value ? META_TTL_MS : NOT_FOUND_TTL_MS) });
+    if (value && value.genreList.length) {
+      const names = value.genreList.map((g) => g.name);
+      for (const entry of title.entries) await writeGenres(db, entry, names, 'tmdb');
+    }
+  }
+
+  for (let i = 0; i < due.length && !aborted(); i += concurrency) {
+    await gate();
+    if (aborted()) break;
+    await Promise.all(due.slice(i, i + concurrency).map(download));
+    done = Math.min(due.length, i + concurrency);
+    if (done % 30 < concurrency || done === due.length) emit({ event: 'progress', done, total: due.length });
+  }
+  return done;
+}
+
+/**
+ * Shared by the worker and the main-thread fallback. `phase`: "tmdb" downloads the metadata, "genres" asks the
+ * provider for the genres of titles still without any.
+ */
+export async function runGenreBackfillForProvider({ provider, tmdbKey, language, signal, gate, emit = () => {}, limit, phase = 'genres', force = false }) {
   let db = null;
+  let appDb = null;
   let done = 0;
   try {
     db = await openProviderDb(provider.id);
-    const xtream = new XtreamClient({ baseUrl: provider.baseUrl, username: provider.username, password: provider.password });
-    await xtream.authenticate().catch(() => undefined);
     const tmdb = createTmdbClient({ getApiKey: () => tmdbKey });
-    done = await runGenreBackfill({ db, xtream, tmdb, language, signal, gate, emit, limit });
+    if (phase === 'tmdb') {
+      if (tmdb.enabled) {
+        appDb = await openAppDb();
+        done = await runTmdbDownload({ db, appDb, tmdb, language, signal, gate, emit, force });
+      }
+    } else {
+      const xtream = new XtreamClient({ baseUrl: provider.baseUrl, username: provider.username, password: provider.password });
+      await xtream.authenticate().catch(() => undefined);
+      done = await runGenreBackfill({ db, xtream, tmdb: null, language, signal, gate, emit, limit });
+    }
   } finally {
     if (db) db.close();
+    if (appDb) appDb.close();
   }
   emit({ event: 'done', done });
   return done;

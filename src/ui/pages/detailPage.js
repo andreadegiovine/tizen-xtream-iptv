@@ -118,6 +118,7 @@ export function createDetailPage(ctx, params) {
   const actionsEl = h('div', { class: 'detail-actions' });
   const categoriesEl = h('div', { class: 'detail-categories' });
   const tagsEl = h('div', { class: 'detail-categories' });
+  const companiesEl = h('div', { class: 'detail-categories detail-companies' });
   const episodesEl = h('div', { class: 'detail-section' });
   const castEl = h('div', { class: 'detail-section' });
   const relatedEl = h('div', { class: 'detail-section' });
@@ -127,13 +128,13 @@ export function createDetailPage(ctx, params) {
     { class: 'page detail loading' },
     backdropEl,
     poster,
-    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, categoriesEl, tagsEl, epgEl, episodesEl, castEl, relatedEl),
+    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, categoriesEl, tagsEl, companiesEl, epgEl, episodesEl, castEl, relatedEl),
   );
 
   const data = () => ({
     title: (meta && meta.title) || (entry && entry.name) || '',
-    year: (entry && entry.year) || (meta && meta.year) || (info && info.year) || null,
-    rating: (entry && entry.rating) || (meta && meta.rating) || null,
+    year: (meta && meta.year) || (entry && entry.year) || (info && info.year) || null,
+    rating: (meta && meta.rating) || (entry && entry.rating) || null,
     runtime: (meta && meta.runtime) || (info && info.duration ? Math.round(info.duration / 60) : null),
     seasons: (info && info.seasons && info.seasons.length) || (meta && meta.seasons) || null,
     episodes: (info && info.episodeCount) || (meta && meta.episodes) || null,
@@ -232,12 +233,13 @@ export function createDetailPage(ctx, params) {
 
   /** Genres as [{ id, name }]: provider and TMDB spellings merged into the sidebar's keys, all clickable. */
   function genreItems() {
-    return mergeGenres(entry && entry.genres, info && info.genre, meta && meta.genreList).map((g) => ({ id: g.key, name: g.name }));
+    return mergeGenres(meta && meta.genreList, entry && entry.genres, info && info.genre).map((g) => ({ id: g.key, name: g.name }));
   }
 
   /** A row of chips; the clickable ones form a horizontal focus zone that opens the matching browse view. */
-  function renderChips(container, zoneId, chipItems, kind, next) {
+  function renderChips(container, zoneId, chipItems, kind, next, label) {
     clear(container);
+    if (chipItems.length) container.appendChild(h('span', { class: 'detail-label', text: label }));
     const nodes = chipItems.map((item) => h('span', { class: `chip${item.id !== undefined ? ' link' : ''}`, text: item.name }));
     nodes.forEach((node) => container.appendChild(node));
     const links = chipItems.map((item, i) => ({ item, node: nodes[i] })).filter(({ item }) => item.id !== undefined && item.id !== null);
@@ -259,8 +261,33 @@ export function createDetailPage(ctx, params) {
   }
 
   function renderCategories(next) {
-    renderChips(categoriesEl, 'detailCategories', categoryItems, 'category', next);
-    renderChips(tagsEl, 'detailGenres', entry.type === 'live' ? [] : genreItems(), 'genre', next);
+    renderChips(categoriesEl, 'detailCategories', categoryItems, 'category', next, t('detail.categories'));
+    renderChips(tagsEl, 'detailGenres', entry.type === 'live' ? [] : genreItems(), 'genre', next, t('detail.genres'));
+    renderCompanies();
+  }
+
+  /** Production companies: small logos (name when a company has none), a plain horizontal list. */
+  function renderCompanies() {
+    clear(companiesEl);
+    const list = entry.type === 'live' || !meta || !meta.companies ? [] : meta.companies;
+    if (!list.length) return;
+    companiesEl.appendChild(h('span', { class: 'detail-label', text: t('detail.companies') }));
+    list.forEach((company) => {
+      const item = h('span', { class: 'company', title: company.name });
+      if (company.logo) {
+        const img = h('img', { src: company.logo, alt: company.name });
+        img.addEventListener('error', () => {
+          clear(item);
+          item.classList.add('text');
+          item.textContent = company.name;
+        });
+        item.appendChild(img);
+      } else {
+        item.classList.add('text');
+        item.textContent = company.name;
+      }
+      companiesEl.appendChild(item);
+    });
   }
 
   function renderCast(next) {

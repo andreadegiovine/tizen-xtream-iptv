@@ -83,7 +83,7 @@ async function boot() {
   await ctx.apiKeys.load();
   ctx.trakt = createTraktService({ db, client: createTraktClient({ getCredentials: () => ({ clientId: ctx.apiKeys.get().traktId, clientSecret: ctx.apiKeys.get().traktSecret }) }) });
   ctx.watch = createWatchState({ store: new WatchStore(db), trakt: ctx.trakt });
-  const tmdb = createTmdbService({ db, client: createTmdbClient({ getApiKey: () => ctx.apiKeys.get().tmdbKey }), getLanguage: () => i18n.getLocale() });
+  const tmdb = createTmdbService({ db, client: createTmdbClient({ getApiKey: () => ctx.apiKeys.get().tmdbKey }), getLanguage: () => i18n.getLocale(), onActivity: (count) => ctx.genres && ctx.genres.hold('ui', count > 0) });
   ctx.tmdb = tmdb;
   ctx.operations = createOperations();
   ctx.syncLog = createSyncLog({ db, operations: ctx.operations });
@@ -203,6 +203,7 @@ async function boot() {
   i18n.onChange(() => {
     topbar.render();
     router.reload();
+    ctx.genres.backfill().catch(() => undefined); // metadata and genres in the new language
   });
 
   const dialogs = createDialogService({ focus });
