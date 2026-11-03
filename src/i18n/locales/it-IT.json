@@ -64,7 +64,7 @@
   "providers.removeMessage": "“{name}” e il catalogo scaricato verranno eliminati da questa TV.",
   "setup.editTitle": "Modifica provider",
   "browse.all": "Mostra tutto",
-  "browse.page": "Pagina {page} di {pages}",
+  "browse.page": "pagina {page} di {pages}",
   "search.placeholder": "Inizia a digitare...",
   "search.type.movie": "Film",
   "search.type.series": "Serie TV",

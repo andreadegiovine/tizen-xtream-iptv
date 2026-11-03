@@ -90,7 +90,7 @@ export function createBrowsePage(ctx, params = {}) {
   const count = h('span', { class: 'muted browse-count' });
   const sepA = h('span', { class: 'browse-sep', text: '·' });
   const sepB = h('span', { class: 'browse-sep', text: '·' });
-  const favBtn = h('span', { class: 'browse-fav' }, icon('heart'));
+  const favBtn = h('span', { class: 'icon-btn browse-fav' }, icon('heart'));
   const head = h('div', { class: 'browse-head sticky-head' }, titleEl, sepA, count, sepB, favBtn);
   let favState = null; // { active, onToggle } while a category / genre is open
   function renderHead() {

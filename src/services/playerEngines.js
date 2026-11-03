@@ -112,6 +112,11 @@ export function createAvPlayEngine() {
           return;
         }
         subtitlesOn = true;
+        try {
+          av().setSilentSubtitle(false); // before the selection: some firmwares only draw tracks chosen while visible
+        } catch (err) {
+          log.warn('avplay setSilentSubtitle failed', err && err.message);
+        }
         av().setSelectTrack('TEXT', index);
         // The player draws the track itself (the app-drawn text from the events never showed on the TV).
         // Events are still logged, and shown by the app only if the native rendering could not be switched on.

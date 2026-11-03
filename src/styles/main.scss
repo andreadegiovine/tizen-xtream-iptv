@@ -818,33 +818,20 @@ h2 {
   font-size: 30px;
 }
 
-// Heart of the sticky head: add / remove the open category or genre from the favourites.
-.browse-fav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 40px;
-  border-radius: 6px;
-  color: $text-muted;
+// Heart of the sticky head: the .icon-btn look of the title page, a bit smaller to fit the head.
+.browse-fav.icon-btn {
   align-self: center;
+  width: 84px;
+  height: 46px;
+  margin-right: 0;
 
   .icon {
     width: 28px;
     height: 28px;
   }
 
-  &.active {
-    color: $accent;
-  }
-
   &.focused {
-    background: $text;
-    color: $bg;
-  }
-
-  &.active.focused {
-    color: $accent;
+    transform: none;
   }
 }
 
