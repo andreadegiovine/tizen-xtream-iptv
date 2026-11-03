@@ -3,6 +3,7 @@ import { t } from '../../i18n/index.js';
 import { icon } from '../icons.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
+import { createLogo } from './logo.js';
 
 export const TOPBAR_ZONE = 'topbar';
 export const SEARCH_BAR_ZONE = 'topbarSearch';
@@ -82,6 +83,7 @@ export function createTopbar(ctx, handlers = {}) {
     while (el.firstChild) el.removeChild(el.firstChild);
     nodes = [];
     let spacerAdded = false;
+    el.appendChild(createLogo());
     SECTIONS.forEach((section) => {
       if (section.end && !spacerAdded) {
         el.appendChild(h('span', { class: 'topbar-spacer' }));

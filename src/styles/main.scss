@@ -68,6 +68,32 @@ h2 {
   }
 }
 
+.logo {
+  display: flex;
+  align-items: center;
+  margin-right: 40px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #fff;
+
+  b {
+    color: #e5202f;
+  }
+
+  .logo-mark {
+    display: flex;
+    width: 44px;
+    height: 44px;
+    margin-right: 10px;
+  }
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
 .topbar-item {
   display: flex;
   align-items: center;
@@ -1223,10 +1249,7 @@ h2 {
   border-radius: 20px;
   color: $text-muted;
   font-size: 22px;
-
-  &.link {
-    color: $text;
-  }
+  color: $text;
 
   &.focused {
     border-color: $text;
