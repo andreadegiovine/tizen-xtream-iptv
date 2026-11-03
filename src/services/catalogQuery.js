@@ -98,6 +98,21 @@ export async function genreEntryKeys(db, type, genreKey) {
   return Array.from(byKey.keys()).sort((a, b) => byKey.get(b) - byKey.get(a) || (a < b ? -1 : 1));
 }
 
+/** Titles per genre key of one type (both sources, no duplicates): Map(genreKey → count). */
+export async function genreCounts(db, type) {
+  const range = IDBKeyRange.bound([type], [type, []]);
+  const lists = await Promise.all(GENRE_STORES.map((name) => requestToPromise(db.transaction(name, 'readonly').objectStore(name).index('byGenreAdded').getAll(range))));
+  const sets = new Map();
+  lists.forEach((rows) =>
+    rows.forEach((row) => {
+      if (!row.genreKey) return;
+      if (!sets.has(row.genreKey)) sets.set(row.genreKey, new Set());
+      sets.get(row.genreKey).add(row.entryKey);
+    }),
+  );
+  return new Map(Array.from(sets, ([key, set]) => [key, set.size]));
+}
+
 /** How many entries a browse view holds (for "page X of Y"): all of a type, or one category. */
 export function countEntries(db, { type, categoryId = null }) {
   const useCategory = categoryId !== null && categoryId !== undefined;

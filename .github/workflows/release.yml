@@ -10,7 +10,7 @@ name: Release
 #                                       secret (npm run tizen:dev-shell) (+ .sha256)
 #
 # Required secrets: TIZEN_CERT_PASSWORD (password of ./tizencert.p12), LOCAL_PC_IP.
-# Optional secrets (features stay off when missing): TMDB_API_KEY, TRAKT_CLIENT_ID, TRAKT_CLIENT_SECRET.
+# TMDB and Trakt keys are not part of the build: they are typed in the app Settings.
 on:
   release:
     types: [published]
@@ -70,12 +70,8 @@ jobs:
       - run: npm run lint
       - run: npm test
 
-      # Production build -> dist/. Optional API keys are compiled in; leave the secrets unset to disable the feature.
+      # Production build -> dist/.
       - run: npm run build
-        env:
-          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
-          TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
-          TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
 
       # Zip the unsigned dist/ BEFORE signing: `tizen package` adds signature files to the folder.
       - name: Package build output (unsigned zip)

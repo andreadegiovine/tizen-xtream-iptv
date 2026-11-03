@@ -30,15 +30,12 @@ provider account.
 
 ## Optional API keys
 
-TMDB metadata/suggestions and Trakt are compiled in at build time and stay off when the keys are missing:
+TMDB metadata/suggestions and Trakt are off until the keys are typed in **Settings** (nothing is compiled into the build):
 
-| Variable | Used for |
+| Field | Used for |
 |---|---|
-| `TMDB_API_KEY` | TMDB v3 API key (titles, posters, suggestions) |
-| `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET` | Trakt device login and history |
-
-The keys can also be typed in Settings (they override the build values). Locally: `TMDB_API_KEY=... npm start`. For releases add them as repository secrets with the same names.
-Keys that are compiled into an app can be extracted from the package: use dedicated, revocable keys.
+| TMDB API key | the v4 "API Read Access Token" (sent as `Authorization: Bearer`) or the v3 32-character API key |
+| Trakt Client ID / Secret | Trakt device login and history |
 
 ## Requirements
 

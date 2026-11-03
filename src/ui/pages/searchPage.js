@@ -1,6 +1,7 @@
 import { h } from '../dom.js';
 import { t } from '../../i18n/index.js';
 import { createTypedRows } from '../components/typedRows.js';
+import { createSkeletonCard } from '../components/card.js';
 import { log } from '../../core/logger.js';
 
 const PER_TYPE = 20;
@@ -12,32 +13,41 @@ const PER_TYPE = 20;
 export function createSearchPage(ctx, params = {}) {
   const status = h('p', { class: 'muted search-status' });
   const rows = createTypedRows(ctx, { prefix: 'search', limit: PER_TYPE, onOpen: (entry) => ctx.openEntry(entry, { section: 'search' }) });
+  const skeleton = h('div', { class: 'search-skeleton' }, h('div', { class: 'skeleton-line title' }), h('div', { class: 'skeleton-row' }, [0, 1, 2, 3, 4, 5].map(() => createSkeletonCard())));
+  skeleton.style.display = 'none';
   let query = '';
   let token = 0;
   let destroyed = false;
 
   async function run() {
     const mine = (token += 1);
+    if (query.length >= 2) skeleton.style.display = '';
     try {
       const found = query.length < 2 ? [] : await ctx.search.search(query, { limit: PER_TYPE * 6 });
       if (destroyed || mine !== token) return;
       rows.set(found);
-      status.textContent = query.length < 2 ? t('search.hint') : found.length ? '' : t('search.none');
+      skeleton.style.display = 'none';
+      status.textContent = query.length >= 2 && !found.length ? t('common.empty') : '';
     } catch (err) {
+      skeleton.style.display = 'none';
       log.warn('Search failed', err && err.message);
     }
   }
 
   return {
-    el: h('section', { class: 'page search' }, status, rows.el),
+    el: h('section', { class: 'page search' }, status, skeleton, rows.el),
     mount() {
-      status.textContent = t('search.hint');
       query = String(params.query || '').trim();
       if (query) run();
     },
     destroy() {
       destroyed = true;
       rows.destroy();
+    },
+    /** Called at every keystroke (before the debounce): placeholders until the results arrive. */
+    showSkeleton() {
+      status.textContent = '';
+      skeleton.style.display = '';
     },
     /** Called by the top bar while typing. */
     setQuery(text) {

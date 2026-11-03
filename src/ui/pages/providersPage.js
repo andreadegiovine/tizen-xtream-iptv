@@ -146,7 +146,7 @@ export function createProvidersPage(ctx, params = {}) {
   });
 
   return {
-    el: h('section', { class: 'page providers' }, h('h1', { text: t('providers.title') }), list),
+    el: h('section', { class: 'page framed providers' }, h('h1', { text: t('providers.title') }), list),
     mount() {
       ctx.focus.register(zone);
       ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);

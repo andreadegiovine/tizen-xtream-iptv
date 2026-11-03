@@ -4,15 +4,22 @@ import { AppError, ErrorCode } from '../core/errors.js';
 const API = 'https://api.themoviedb.org/3';
 export const IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
-export const TMDB_API_KEY = typeof __TMDB_API_KEY__ !== 'undefined' ? __TMDB_API_KEY__ : '';
+/**
+ * The v4 "API Read Access Token" is a JWT sent as a Bearer header; the older v3 "API Key" is 32 hex characters
+ * and goes in the query string. Both are accepted in the same settings field.
+ */
+export const isBearerToken = (key) => key.includes('.') || key.length > 40;
 
-/** Thin TMDB v3 wrapper. `apiKey` comes from the build (see README); without it the feature is simply off. */
-export function createTmdbClient({ apiKey = TMDB_API_KEY, getApiKey = () => apiKey, fetcher = fetchJson } = {}) {
+/** Thin TMDB wrapper. The key is typed in the settings; without it the feature is simply off. */
+export function createTmdbClient({ getApiKey = () => '', fetcher = fetchJson } = {}) {
   async function get(path, params = {}) {
     const key = getApiKey();
     if (!key) throw new AppError(ErrorCode.UNKNOWN, 'TMDB is not configured');
-    const query = new URLSearchParams({ api_key: key, ...params });
-    return fetcher(`${API}${path}?${query.toString()}`, { timeoutMs: 15000 });
+    const bearer = isBearerToken(key);
+    const query = new URLSearchParams({ ...(bearer ? {} : { api_key: key }), ...params });
+    const options = { timeoutMs: 15000 };
+    if (bearer) options.headers = { accept: 'application/json', Authorization: `Bearer ${key}` };
+    return fetcher(`${API}${path}?${query.toString()}`, options);
   }
 
   const kind = (type) => (type === 'series' ? 'tv' : 'movie');

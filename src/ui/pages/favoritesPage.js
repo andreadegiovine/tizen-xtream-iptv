@@ -21,7 +21,7 @@ export function createFavoritesPage(ctx) {
     }
     if (destroyed) return;
     rows.set(entries);
-    status.textContent = entries.length ? '' : t('favorites.none');
+    status.textContent = entries.length ? '' : t('common.empty');
     rows.focusFirst();
   }
 

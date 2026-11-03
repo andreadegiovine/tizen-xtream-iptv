@@ -129,7 +129,7 @@ Stato: `[x]` fatta e testata con risposte finte; **la chiave TMDB non c'era, qui
 
 ### Note di avanzamento
 - **2026-11-02 (notte, patch 3)**
-  - `tmdbClient.js`: chiave **inserita in fase di build** (`TMDB_API_KEY`, vedi README); senza chiave tutto resta spento senza errori. `tmdbService.js`: cache persistente nel DB app (store `tmdb`) per lingua dell'interfaccia (30 giorni; "non trovato" 7 giorni; in caso di errore di rete vale la cache scaduta), coda con 3 richieste in parallelo che si svuota a ogni cambio pagina.
+  - `tmdbClient.js`: chiave inserita nelle Impostazioni (token "Read Access Token" come `Authorization: Bearer`, oppure la chiave v3 nella query); senza chiave tutto resta spento senza errori. `tmdbService.js`: cache persistente nel DB app (store `tmdb`) per lingua dell'interfaccia (30 giorni; "non trovato" 7 giorni; in caso di errore di rete vale la cache scaduta), coda con 3 richieste in parallelo che si svuota a ogni cambio pagina.
   - Titoli delle card: titolo TMDB e locandina quando disponibili (solo per i titoli con tmdb id del provider; carica a mano a mano), per le serie anche "N stagioni · M ep." (dai dati TMDB, nessuna chiamata al provider). Il voto resta quello del provider.
   - Abbinamento senza tmdb id (solo nella scheda, mai nelle griglie): ricerca per titolo, accettata solo se **un solo** risultato ha titolo identico (o titolo originale) e, se noto, lo stesso anno; altrimenti nessun metadato. Il risultato non unisce mai i gruppi (decisione di design).
   - Scheda: i dati TMDB sovrascrivono quelli del provider ma non li svuotano mai.
@@ -163,7 +163,7 @@ Stato: `[x]` fatta e testata con risposte finte; senza chiave TMDB mostra un mes
 - **2026-11-02 (notte, patch 3)** `suggestions.js`: raccomandazioni TMDB per gli ultimi 6 titoli guardati (con tmdb id), unite e ordinate per numero di titoli di partenza che le raccomandano e per popolarità, tenute solo se il catalogo del provider ha lo stesso tmdb id (`entries.get('movie:t<id>')`) e non già guardate; se meno di 12, completate con i titoli di tendenza. Cache 24 h. Pagina `suggestionsPage.js` (griglia, Invio apre la scheda).
 
 ## 9. Trakt (fase 2)
-Stato: `[x]` codice e test con risposte finte; **mai provato contro Trakt reale** (servono `TRAKT_CLIENT_ID` e `TRAKT_CLIENT_SECRET` in fase di build).
+Stato: `[x]` codice e test con risposte finte; **mai provato contro Trakt reale** (servono Client ID e Secret, inseriti nelle Impostazioni).
 
 ### Note di avanzamento
 - **2026-11-02 (notte, patch 3)** Dietro l'adattatore dello stato di visione (`createWatchState` in `traktService.js`: stessa interfaccia di `WatchStore`, le pagine non sanno se Trakt è collegato). Accesso con codice dispositivo (Impostazioni → Trakt: la TV mostra indirizzo e codice, il sondaggio rispetta intervallo e "rallenta"); token nel DB app con rinnovo. Al passaggio a "visto" di un titolo con tmdb id viene inviata la cronologia (film, o episodio per le serie); se fallisce con errore del server resta in coda e riparte all'avvio. Dopo il collegamento importa gli ultimi film visti su Trakt come cronologia locale (aiuta i suggerimenti), senza sovrascrivere i progressi locali. Non importa le serie e non sincronizza le posizioni di riproduzione.
@@ -201,6 +201,7 @@ Da fare:
 15. **Preferiti, visto, trailer (nuovo)**: cuore e occhio nella scheda e pagina Preferiti; il trailer si apre nell'app YouTube (serve un titolo con `youtube_trailer`; se non si apre dire cosa appare nel log); il tasto visto su una serie segna tutti gli episodi.
 18. **Patch 7**: Impostazioni con tabelle Catalogo/Metadata e pulsante di aggiornamento; Provider senza tabella e con "Attivo" verde; card di ricerca con voto e visto; generi trovati dal worker in background (quanto ci mette con il provider reale? il traffico verso il provider è accettabile?); testata sticky delle griglie senza sovrapposizioni (prima riga, scorrendo su e giù); bordo del focus staccato dal contenuto.
 19. **Patch 8**: tabella Dispositivo (valori plausibili? la risoluzione è quella del pannello?), pulsanti di aggiornamento catalogo/metadata, data di scadenza nei provider, sidebar con icone e Suggerimenti, sfondo backdrop nella scheda, skeleton e lazyload su TV (fluidità, nessun salto di scorrimento), topbar delle griglie senza sovrapposizioni.
+20. **Patch 9**: con il token TMDB le richieste funzionano (generi, locandine, suggerimenti)? numeri della sidebar corretti e non lenti con il catalogo vero; skeleton visibile su griglia/scheda/ricerca; Home con i caroselli suggeriti.
 17. **Patch 5/6 (generi)**: senza chiave TMDB la sidebar mostra i generi del provider (dopo il nuovo sync automatico); con la chiave se ne aggiungono altri col tempo; lo stesso genere compare una volta sola; clic su un genere nella scheda apre il filtro giusto.
 16. **Patch 4**: player su una riga (barra: OK poi ←/→, e trascinamento con puntatore), sidebar con generi/categorie, chip cliccabili, chiavi nelle impostazioni, pulsanti sync/rimozione, provider suggerimenti, "Potrebbe interessarti".
 14. **Player (nuovo)**: Giù porta il cursore sui pulsanti; indietro/avanti 10 s e play/pausa con OK; **formato**: i tre modi (AVPlay `setDisplayMethod`) cambiano davvero l'immagine? **sottotitoli**: l'elenco mostra le tracce del file e la scelta le attiva/disattiva (`getTotalTrackInfo`/`setSelectTrack`/`setSilentSubtitle`: da verificare se AVPlay li disegna da solo o se serve mostrare il testo dall'evento `onsubtitlechange`).
@@ -260,12 +261,21 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
   - *Sidebar*: icone per Mostra tutto, Continua a guardare, Preferiti, Categorie; nuova voce "Suggerimenti" sotto Preferiti (film o serie).
   - *Scheda*: sfondo a tutta larghezza con `backdrop_path` del provider (o TMDB), velo e sfumatura in basso fino al colore di fondo.
   - *Caricamento*: immagini in lazyload (IntersectionObserver) e skeleton pulsante su card, poster e scheda.
-## Questioni aperte
+- **2026-11-03 (patch 9)** (**non provata su TV**):
+  - *TMDB*: il token "Read Access Token" (JWT) viaggia in `Authorization: Bearer`, la chiave v3 a 32 caratteri resta nella query; il campo delle Impostazioni accetta entrambi. Era la causa di "Invalid API key". Le chiavi TMDB/Trakt non sono più compilate nella build (`DefinePlugin`, workflow e README aggiornati): arrivano solo dalle Impostazioni.
+  - *Prima sincronizzazione*: salvando una chiave TMDB nuova si dimenticano i marcatori "nessun genere trovato" e parte subito la ricerca dei generi (worker).
+  - *Messaggio unico*: "Nessun contenuto disponibile..." per griglie, Preferiti, Suggerimenti, ricerca e Home vuoti.
+  - *Ricerca*: segnaposto "Inizia a digitare..."; alla prima lettera si apre la pagina dei risultati con lo skeleton, che sparisce all'arrivo dei risultati.
+  - *Skeleton*: ora una banda luminosa scorre su card, poster della scheda e righe (prima solo una pulsazione quasi invisibile); verificato in browser con le immagini rallentate di 6 s.
+  - *Sidebar*: a destra di ogni voce il numero di titoli (tutti, in corso, preferiti, suggerimenti, generi, categorie; arrivano in background); le voci senza icona non hanno più lo spazio a sinistra; le categorie sotto "Categorie" hanno il carattere più piccolo.
+  - *Impostazioni/Provider*: contenitore con più margine in alto e in basso e tutti gli elementi a tutta larghezza; i pulsanti di aggiornamento catalogo e metadata sono icone a destra del titolo della tabella.
+  - *Home*: "Nuovi film", "Nuove serie TV", poi "Film suggeriti" e "Serie TV suggerite" (compaiono quando i suggerimenti sono pronti); "Continua a guardare" resta in cima quando c'è qualcosa da riprendere.
+
 - Package id `XtrmIptv01` e app id `XtrmIptv01.XtreamIPTV` sono una proposta, da confermare prima di creare il profilo del certificato.
 - I privilegi in `tizen/config.xml` non sono verificati sulla TV.
 - Nessuna licenza scelta.
 - L'asset della release non è firmato (serve il certificato Samsung locale).
 - `style-loader` è ancora in `devDependencies` ma non usato.
-- La chiave TMDB e le credenziali Trakt non sono nel repository: vanno aggiunte come secret `TMDB_API_KEY`, `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET` della repo (la release le compila nell'app) e, per lo sviluppo, come variabili d'ambiente prima di `npm start`.
+- Le chiavi TMDB e Trakt non sono nel repository né nella build: si inseriscono solo nelle Impostazioni (le chiavi di una build si potrebbero estrarre dal pacchetto).
 - Una chiave compilata nell'app è estraibile da chi ha il .wgt: usare chiavi dedicate, revocabili.
 - I formati (mkv/ts) dipendono dal decoder della TV: fa fede la prova sul campo.

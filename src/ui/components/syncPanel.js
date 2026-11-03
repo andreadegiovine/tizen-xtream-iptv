@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { icon } from '../icons.js';
 import { t, i18n } from '../../i18n/index.js';
 import { MediaType } from '../../services/mediaType.js';
 import { formatNumber, formatDateTime, formatSeconds } from '../../core/format.js';
@@ -24,6 +25,11 @@ export function describeType(state, meta, locale) {
   });
 }
 
+/** Round icon button at the right of a table title (the label stays as aria-label). */
+function refreshButton(label) {
+  return h('button', { class: 'btn primary icon-only panel-button', type: 'button', 'aria-label': label, title: label }, icon('refresh'));
+}
+
 /**
  * Catalog sync status (per type rows, engine, timings) and the manual "update now" button, for the
  * active provider. The page that hosts it owns the focus zone of `button`.
@@ -34,8 +40,8 @@ export function createSyncPanel(ctx) {
     return { type, status, el: h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t(LABEL_KEY[type]) }), status) };
   });
   const info = h('p', { class: 'muted sync-info' });
-  const button = h('button', { class: 'btn primary sync-button', type: 'button', text: t('home.update') });
-  const el = h('div', { class: 'sync-panel' }, h('h2', { text: t('home.catalog') }), h('div', { class: 'sync' }, rows.map((r) => r.el)), info, button);
+  const button = refreshButton(t('home.update'));
+  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('home.catalog') }), button), h('div', { class: 'sync' }, rows.map((r) => r.el)), info);
   let persisted = {};
   let providerId = null;
   let wasRunning = false;
@@ -123,8 +129,8 @@ export function createMetaPanel(ctx) {
     const status = h('span', { class: 'sync-status' });
     return { ...row, status, el: h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: row.label }), status) };
   });
-  const button = h('button', { class: 'btn primary sync-button', type: 'button', text: t('settings.metaUpdate') });
-  const el = h('div', { class: 'sync-panel' }, h('h2', { text: t('meta.title') }), h('div', { class: 'sync' }, rows.map((r) => r.el)), button);
+  const button = refreshButton(t('settings.metaUpdate'));
+  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('meta.title') }), button), h('div', { class: 'sync' }, rows.map((r) => r.el)));
 
   async function refresh() {
     const log = await ctx.syncLog.get();

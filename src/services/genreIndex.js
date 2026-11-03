@@ -1,5 +1,5 @@
 import { dbGetAllKeys, dbDeleteMany } from '../core/idb.js';
-import { listGenres, genreEntryKeys } from './catalogQuery.js';
+import { listGenres, genreEntryKeys, genreCounts } from './catalogQuery.js';
 import { runGenreBackfillForProvider } from './genreBackfill.js';
 import { createGate } from '../core/gate.js';
 import { log } from '../core/logger.js';
@@ -119,9 +119,20 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
       const current = await active.get();
       return current ? listGenres(current.db, type) : [];
     },
+    async counts(type) {
+      const current = await active.get();
+      return current ? genreCounts(current.db, type) : new Map();
+    },
     async entryKeys(type, genreKey) {
       const current = await active.get();
       return current ? genreEntryKeys(current.db, type, genreKey) : [];
+    },
+    /** A new TMDB key makes the "nothing found" markers stale: forget them so the next run asks TMDB again. */
+    async forgetMisses() {
+      const current = await active.get();
+      if (!current) return;
+      const keys = await dbGetAllKeys(current.db, STORE);
+      await dbDeleteMany(current.db, STORE, keys.filter((key) => key.endsWith('|none')));
     },
     /** "Remove all TMDB data" also forgets the genres it provided (provider ones stay). */
     async clearTmdb() {

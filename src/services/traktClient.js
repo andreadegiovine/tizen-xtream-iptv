@@ -1,11 +1,9 @@
 import { AppError, ErrorCode } from '../core/errors.js';
 
 const API = 'https://api.trakt.tv';
-export const TRAKT_CLIENT_ID = typeof __TRAKT_CLIENT_ID__ !== 'undefined' ? __TRAKT_CLIENT_ID__ : '';
-export const TRAKT_CLIENT_SECRET = typeof __TRAKT_CLIENT_SECRET__ !== 'undefined' ? __TRAKT_CLIENT_SECRET__ : '';
 
 /** Trakt REST wrapper (device-code OAuth + history). Without a client id the whole feature is off. */
-export function createTraktClient({ clientId = TRAKT_CLIENT_ID, clientSecret = TRAKT_CLIENT_SECRET, getCredentials = () => ({ clientId, clientSecret }), doFetch = (...args) => fetch(...args) } = {}) {
+export function createTraktClient({ clientId = '', clientSecret = '', getCredentials = () => ({ clientId, clientSecret }), doFetch = (...args) => fetch(...args) } = {}) {
   const isEnabled = () => {
     const c = getCredentials();
     return Boolean(c.clientId && c.clientSecret);

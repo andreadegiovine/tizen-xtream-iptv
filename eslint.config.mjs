@@ -4,9 +4,6 @@ import globals from 'globals';
 const appGlobals = {
   __DEV__: 'readonly',
   __APP_VERSION__: 'readonly',
-        __TMDB_API_KEY__: 'readonly',
-        __TRAKT_CLIENT_ID__: 'readonly',
-        __TRAKT_CLIENT_SECRET__: 'readonly',
   tizen: 'readonly',
   webapis: 'readonly',
 };

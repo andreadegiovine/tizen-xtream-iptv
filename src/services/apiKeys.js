@@ -3,14 +3,11 @@ import { kvGet, kvSet } from '../db/kv.js';
 const KEY = 'apiKeys';
 const FIELDS = ['tmdbKey', 'traktId', 'traktSecret'];
 
-/**
- * API keys can be typed in the settings. A value typed by the user wins over the one compiled into the
- * build (`defaults`); clearing the field falls back to the build value again.
- */
-export function createApiKeys({ db, defaults = {} }) {
+/** API keys come only from the settings (nothing is compiled into the build). */
+export function createApiKeys({ db }) {
   let stored = {};
   const clean = (value) => String(value || '').trim();
-  const current = () => Object.fromEntries(FIELDS.map((field) => [field, clean(stored[field]) || clean(defaults[field])]));
+  const current = () => Object.fromEntries(FIELDS.map((field) => [field, clean(stored[field])]));
 
   return {
     async load() {
@@ -19,7 +16,7 @@ export function createApiKeys({ db, defaults = {} }) {
     },
     /** Synchronous: the clients read it on every request. */
     get: current,
-    /** The value the user typed (not the build default), for the settings screen. */
+    /** The value the user typed, for the settings screen. */
     getStored: (field) => clean(stored[field]),
     async set(patch) {
       const next = { ...stored };

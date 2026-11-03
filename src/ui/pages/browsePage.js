@@ -84,7 +84,7 @@ export function createBrowsePage(ctx, params = {}) {
   let pages = 1;
   const catList = h('div', { class: 'browse-cats' });
   const gridEl = h('div', { class: `browse-grid ${type}` });
-  const empty = h('p', { class: 'muted browse-empty', text: t('browse.empty') });
+  const empty = h('p', { class: 'muted browse-empty', text: t('common.empty') });
   let db = null;
   let providerId = null;
   let destroyed = false;
@@ -101,18 +101,63 @@ export function createBrowsePage(ctx, params = {}) {
   let cardNodes = [];
   let cards = [];
   let loadToken = 0;
+  const counts = new Map(); // sidebar numbers: 'kind:id' → how many titles
 
   const labels = () => ({ all: t('browse.all'), continue: t('browse.continue'), favorites: t('browse.favorites'), suggestions: t('browse.suggestions'), categories: t('browse.categories') });
 
   function renderCategories() {
     while (catList.firstChild) catList.removeChild(catList.firstChild);
     catNodes = items.map((item, i) => {
-      const slot = h('span', { class: 'browse-cat-icon' }, SIDEBAR_ICON[item.kind] ? icon(SIDEBAR_ICON[item.kind]) : null);
-      const node = h('div', { class: `browse-cat${i === selected ? ' current' : ''}${item.depth ? ' sub' : ''}` }, slot, h('span', { class: 'browse-cat-name', text: item.name }));
+      const node = h('div', { class: `browse-cat${i === selected ? ' current' : ''}${item.depth ? ' sub' : ''}` });
+      // Only entries with an icon get the icon slot: the others start at the left edge.
+      if (SIDEBAR_ICON[item.kind]) node.appendChild(h('span', { class: 'browse-cat-icon' }, icon(SIDEBAR_ICON[item.kind])));
+      node.appendChild(h('span', { class: 'browse-cat-name', text: item.name }));
+      node.appendChild(h('span', { class: 'browse-cat-count', text: countText(item) }));
       if (item.kind === 'toggle') node.appendChild(icon('chevron', item.expanded ? 'open' : ''));
       catList.appendChild(node);
       return node;
     });
+  }
+
+  const countKey = (item) => `${item.kind}:${item.id === undefined ? '' : item.id}`;
+  const countText = (item) => {
+    const n = item.kind === 'toggle' ? categories.length : counts.get(countKey(item));
+    return n === undefined ? '' : formatNumber(n, i18n.getLocale());
+  };
+  function showCounts() {
+    items.forEach((item, i) => {
+      const slot = catNodes[i] && catNodes[i].querySelector('.browse-cat-count');
+      if (slot) slot.textContent = countText(item);
+    });
+  }
+
+  /** Fills the numbers on the right of the sidebar entries, one source at a time (none of them blocks the page). */
+  async function loadCounts() {
+    const set = (key, n) => {
+      counts.set(key, n);
+      if (!destroyed) showCounts();
+    };
+    const safe = (job) => job().catch(() => undefined);
+    await safe(async () => set('all:', await countEntries(db, { type })));
+    if (type === 'live') {
+      await Promise.all(categories.map((c) => safe(async () => set(`category:${c.id}`, await countEntries(db, { type, categoryId: c.id })))));
+      return;
+    }
+    await safe(async () => set('continue:', (await ctx.watch.recent({ providerId, limit: 200, onlyUnfinished: true })).filter((r) => r.type === type).length));
+    await safe(async () => set('favorites:', (await ctx.favorites.list(providerId)).filter((f) => f.type === type).length));
+    await safe(async () => set('suggestions:', (await suggestionEntries()).length));
+    const genreTotals = await safe(() => ctx.genres.counts(type));
+    if (genreTotals) genreTotals.forEach((n, key) => set(`genre:${key}`, n));
+    for (const c of categories) {
+      if (destroyed) return;
+      await safe(async () => set(`category:${c.id}`, await countEntries(db, { type, categoryId: c.id })));
+    }
+  }
+
+  let suggestionsCache = null;
+  async function suggestionEntries(fresh = false) {
+    if (!suggestionsCache || fresh) suggestionsCache = ctx.suggestions.build({ limit: 120 }).then((result) => result.entries.filter((entry) => entry.type === type));
+    return suggestionsCache;
   }
 
   /** Rebuilds the sidebar keeping the same entry selected (genres arrive late, categories expand). */
@@ -140,8 +185,6 @@ export function createBrowsePage(ctx, params = {}) {
     const name = items[selected] ? items[selected].name : '';
     titleEl.textContent = name;
     count.textContent = entries.length ? t('browse.page', { page: formatNumber(page + 1, i18n.getLocale()), pages: formatNumber(Math.max(pages, page + 1), i18n.getLocale()) }) : '';
-    const kind = items[selected] && items[selected].kind;
-    empty.textContent = kind === 'continue' ? t('browse.emptyContinue') : kind === 'favorites' ? t('browse.emptyFavorites') : kind === 'suggestions' ? t('browse.emptySuggestions') : kind === 'genre' ? t('browse.emptyGenre') : t('browse.empty');
     empty.style.display = entries.length ? 'none' : '';
   }
 
@@ -158,8 +201,7 @@ export function createBrowsePage(ctx, params = {}) {
       return byKeys(saved.filter((f) => f.type === type).map((f) => f.entryKey));
     }
     if (item.kind === 'suggestions') {
-      const result = await ctx.suggestions.build({ limit: 120 });
-      return result.entries.filter((entry) => entry.type === type);
+      return suggestionEntries(true);
     }
     if (item.kind === 'genre') {
       return byKeys(await ctx.genres.entryKeys(type, item.id));
@@ -267,6 +309,7 @@ export function createBrowsePage(ctx, params = {}) {
       await loadGenres();
       if (!destroyed && genres.length) rebuildSidebar();
     }
+    loadCounts().catch((err) => log.warn('Sidebar counts failed', err && err.message));
   }
 
   return {

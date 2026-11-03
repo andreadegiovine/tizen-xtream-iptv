@@ -17,7 +17,7 @@ import { CatalogSyncService } from './services/catalogSyncService.js';
 import { createCatalogWorker } from './services/createCatalogWorker.js';
 import { createEpgService } from './services/epgService.js';
 import { createEpgWorker } from './services/createEpgWorker.js';
-import { createTmdbClient, TMDB_API_KEY } from './services/tmdbClient.js';
+import { createTmdbClient } from './services/tmdbClient.js';
 import { createApiKeys } from './services/apiKeys.js';
 import { createTmdbService } from './services/tmdbService.js';
 import { createActiveProvider } from './services/activeProvider.js';
@@ -40,7 +40,7 @@ import { createBrowsePage } from './ui/pages/browsePage.js';
 import { createProvidersPage } from './ui/pages/providersPage.js';
 import { createProviderSetupPage } from './ui/pages/providerSetupPage.js';
 import { createCategoriesPage } from './ui/pages/categoriesPage.js';
-import { createTraktClient, TRAKT_CLIENT_ID, TRAKT_CLIENT_SECRET } from './services/traktClient.js';
+import { createTraktClient } from './services/traktClient.js';
 import { createTraktService, createWatchState } from './services/traktService.js';
 import { createSettingsPage } from './ui/pages/settingsPage.js';
 import { createDiagnosticsPage } from './ui/pages/diagnosticsPage.js';
@@ -78,7 +78,7 @@ async function boot() {
     meta: null,
   };
   ctx.favorites = createFavoritesService({ db });
-  ctx.apiKeys = createApiKeys({ db, defaults: { tmdbKey: TMDB_API_KEY, traktId: TRAKT_CLIENT_ID, traktSecret: TRAKT_CLIENT_SECRET } });
+  ctx.apiKeys = createApiKeys({ db });
   await ctx.apiKeys.load();
   ctx.trakt = createTraktService({ db, client: createTraktClient({ getCredentials: () => ({ clientId: ctx.apiKeys.get().traktId, clientSecret: ctx.apiKeys.get().traktSecret }) }) });
   ctx.watch = createWatchState({ store: new WatchStore(db), trakt: ctx.trakt });
@@ -124,6 +124,15 @@ async function boot() {
   ctx.openEntry = (entry, extra = {}) => ctx.router.push('detail', { entryKey: entry.key, type: entry.type, ...extra });
 
   const topbar = createTopbar(ctx, {
+    onTyping: () => {
+      // First keystroke: open the results page right away, with placeholders instead of an empty screen.
+      if (router.current && router.current.name === 'search') {
+        if (router.page && router.page.showSkeleton) router.page.showSkeleton();
+      } else {
+        router.push('search', { query: '', section: 'search' });
+        if (router.page && router.page.showSkeleton) router.page.showSkeleton();
+      }
+    },
     onQuery: (text) => {
       if (router.current && router.current.name === 'search') {
         if (router.page && router.page.setQuery) router.page.setQuery(isSearchable(text) ? text : '');

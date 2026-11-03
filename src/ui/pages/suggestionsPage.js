@@ -13,8 +13,7 @@ export function createSuggestionsPage(ctx) {
     const result = await ctx.suggestions.build({ limit: 60 });
     if (destroyed) return;
     rows.set(result.entries);
-    if (result.source === 'disabled') status.textContent = t('suggestions.disabled');
-    else if (!result.entries.length) status.textContent = t('suggestions.none');
+    if (!result.entries.length) status.textContent = t('common.empty');
     else status.textContent = result.source === 'history' ? t('suggestions.fromHistory') : t('suggestions.trending');
     rows.focusFirst();
   }

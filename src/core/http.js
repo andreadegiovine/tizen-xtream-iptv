@@ -10,7 +10,7 @@ function isRetryable(err) {
   return false;
 }
 
-async function fetchJsonOnce(url, { timeoutMs, signal, doFetch }) {
+async function fetchJsonOnce(url, { timeoutMs, signal, doFetch, headers }) {
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
@@ -25,7 +25,7 @@ async function fetchJsonOnce(url, { timeoutMs, signal, doFetch }) {
   const safeUrl = maskSecrets(url);
 
   try {
-    const res = await doFetch(url, { signal: controller.signal });
+    const res = await doFetch(url, headers ? { signal: controller.signal, headers } : { signal: controller.signal });
     if (!res.ok) {
       throw new AppError(ErrorCode.HTTP, `HTTP ${res.status}`, {
         details: { status: res.status, url: safeUrl },
@@ -55,12 +55,12 @@ async function fetchJsonOnce(url, { timeoutMs, signal, doFetch }) {
 /** fetch + timeout + abort + retry/backoff, always rejecting with an AppError. */
 export async function fetchJson(
   url,
-  { timeoutMs = 15000, retries = 1, retryDelayMs = 500, signal, fetchImpl } = {},
+  { timeoutMs = 15000, retries = 1, retryDelayMs = 500, signal, fetchImpl, headers } = {},
 ) {
   const doFetch = fetchImpl || ((...args) => fetch(...args));
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await fetchJsonOnce(url, { timeoutMs, signal, doFetch });
+      return await fetchJsonOnce(url, { timeoutMs, signal, doFetch, headers });
     } catch (err) {
       const canRetry = isRetryable(err) && attempt < retries && !(signal && signal.aborted);
       if (!canRetry) throw err;

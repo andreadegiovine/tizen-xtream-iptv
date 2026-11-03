@@ -106,6 +106,7 @@ export function createTopbar(ctx, handlers = {}) {
     el.append(field, closeBtn);
     input.addEventListener('input', () => {
       clearTimeout(timer);
+      if (handlers.onTyping && input.value.trim()) handlers.onTyping(input.value);
       timer = setTimeout(() => handlers.onQuery && handlers.onQuery(input.value), DEBOUNCE_MS);
     });
     input.addEventListener('keydown', (event) => {

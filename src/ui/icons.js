@@ -58,6 +58,7 @@ const ICONS = {
   edit: faPen,
   remove: faTrash,
   add: faPlus,
+  refresh: faRotateRight,
 };
 
 export const iconNames = Object.keys(ICONS);

@@ -10,12 +10,13 @@ import { log } from '../../core/logger.js';
 export const episodeLabel = (episodeKey) => (episodeKey ? episodeKey.toUpperCase() : '');
 
 /**
- * Home: "Continue watching", latest movies and latest series as carousels.
- * Sync details and the manual update button live in the Provider section.
+ * Home: "Continue watching" (when there is something to resume), new movies, new series, then the suggested
+ * movies and series. Sync details and the manual update buttons live in the Settings.
  */
 export function createHomePage(ctx) {
   const rowsEl = h('div', { class: 'home-rows' });
-  const hint = h('p', { class: 'muted sync-info', text: t('home.hint') });
+  const hint = h('p', { class: 'muted sync-info', text: t('common.empty') });
+  hint.style.display = 'none'; // shown only once the rows are known to be empty
   let carousels = [];
   let providerId = null;
   let unsubscribe = null;
@@ -39,6 +40,26 @@ export function createHomePage(ctx) {
     if (ctx.enrich) Object.entries(byType).forEach(([type, group]) => ctx.enrich(group.entries, group.cards, type));
   }
 
+  function render(definitions) {
+    const hadFocus = ctx.focus.activeId && ctx.focus.activeId.indexOf('home') === 0 ? { id: ctx.focus.activeId, index: ctx.focus.active.index } : null;
+    clearRows();
+    carousels = definitions
+      .filter((d) => d.items.length)
+      .map((d) => createCarousel({ ...d, onOpen: (item) => ctx.openEntry(item.entry, { section: 'home' }) }));
+    carousels.forEach((c, i) => {
+      rowsEl.appendChild(c.el);
+      ctx.focus.register(c.zone);
+      ctx.focus.link(c.zone.id, 'up', i === 0 ? TOPBAR_ZONE : carousels[i - 1].zone.id);
+      if (i < carousels.length - 1) ctx.focus.link(c.zone.id, 'down', carousels[i + 1].zone.id);
+      enrich(c);
+    });
+    if (carousels.length) {
+      ctx.focus.link(TOPBAR_ZONE, 'down', carousels[0].zone.id);
+      if (hadFocus && ctx.focus.zones.has(hadFocus.id)) ctx.focus.focus(hadFocus.id, hadFocus.index);
+    }
+    hint.style.display = carousels.length ? 'none' : '';
+  }
+
   async function loadRows() {
     const mine = (building += 1);
     const current = await ctx.active.get();
@@ -57,27 +78,17 @@ export function createHomePage(ctx) {
     definitions.push({ id: 'homeContinue', title: t('home.continue'), items: resumed });
     for (const type of [MediaType.MOVIE, MediaType.SERIES]) {
       const page = await pageEntries(current.db, { type, offset: 0, limit: carouselItems });
-      definitions.push({ id: `homeLatest-${type}`, title: t(`home.latest.${type}`), items: page.entries.map((entry) => ({ entry, type })) });
+      definitions.push({ id: `homeLatest-${type}`, title: t(`home.new.${type}`), items: page.entries.map((entry) => ({ entry, type })) });
     }
     if (destroyed || mine !== building) return;
 
-    const hadFocus = ctx.focus.activeId && ctx.focus.activeId.indexOf('home') === 0 ? { id: ctx.focus.activeId, index: ctx.focus.active.index } : null;
-    clearRows();
-    carousels = definitions
-      .filter((d) => d.items.length)
-      .map((d) => createCarousel({ ...d, onOpen: (item) => ctx.openEntry(item.entry, { section: 'home' }) }));
-    carousels.forEach((c, i) => {
-      rowsEl.appendChild(c.el);
-      ctx.focus.register(c.zone);
-      ctx.focus.link(c.zone.id, 'up', i === 0 ? TOPBAR_ZONE : carousels[i - 1].zone.id);
-      if (i < carousels.length - 1) ctx.focus.link(c.zone.id, 'down', carousels[i + 1].zone.id);
-      enrich(c);
-    });
-    if (carousels.length) {
-      ctx.focus.link(TOPBAR_ZONE, 'down', carousels[0].zone.id);
-      if (hadFocus && ctx.focus.zones.has(hadFocus.id)) ctx.focus.focus(hadFocus.id, hadFocus.index);
-    }
-    hint.style.display = carousels.length ? 'none' : '';
+    render(definitions);
+
+    // Suggestions come from TMDB / Trakt: they can take a while (or fail), so they never hold the other rows back.
+    const suggested = await ctx.suggestions.build({ limit: carouselItems * 4 }).then((result) => result.entries, () => []);
+    if (destroyed || mine !== building || !suggested.length) return;
+    const more = [MediaType.MOVIE, MediaType.SERIES].map((type) => ({ id: `homeSuggested-${type}`, title: t(`home.suggested.${type}`), items: suggested.filter((entry) => entry.type === type).slice(0, carouselItems).map((entry) => ({ entry, type })) }));
+    render(definitions.concat(more));
   }
 
   return {

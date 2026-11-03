@@ -24,8 +24,16 @@ export function textRow({ label, field, secret = false, ctx }) {
     if (event.keyCode === 13 || event.keyCode === IME_DONE) {
       event.preventDefault();
       input.blur();
+      const before = ctx.apiKeys.getStored(field);
       ctx.apiKeys.set({ [field]: input.value }).then(() => {
         toast(t('settings.saved'));
+        // A new TMDB key starts the first metadata run at once (genres and TMDB data of what was watched).
+        if (field === 'tmdbKey' && input.value.trim() && input.value.trim() !== before && ctx.genres) {
+          ctx.genres
+            .forgetMisses()
+            .then(() => ctx.genres.backfill())
+            .catch(() => undefined);
+        }
         ctx.router.reload(); // rows that depend on the keys appear or disappear
       });
     } else if (event.keyCode === IME_CANCEL) {
@@ -258,7 +266,7 @@ export function createSettingsPage(ctx) {
   });
 
   return {
-    el: h('section', { class: 'page' }, h('h1', { text: t('settings.title') }), panel.el, metaPanel.el, devicePanel.el, prefsTitle, h('div', { class: 'list' }, rows.slice(2).map((r) => r.el))),
+    el: h('section', { class: 'page framed' }, h('h1', { text: t('settings.title') }), panel.el, metaPanel.el, devicePanel.el, prefsTitle, h('div', { class: 'list' }, rows.slice(2).map((r) => r.el))),
     mount() {
       panel.mount();
       ctx.providers.getActiveId().then((id) => {
