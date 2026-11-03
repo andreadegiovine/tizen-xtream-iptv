@@ -728,8 +728,8 @@ h2 {
   // Wide hit area around the thin bar (pointer and D-pad focus).
   .player-seek {
     flex: 1;
-    padding: 26px 0;
-    margin: 0 20px;
+    padding: 26px 20px;
+    margin: 0;
     cursor: pointer;
     border: 2px solid transparent;
     border-radius: 8px;
@@ -1028,8 +1028,8 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 96px;
-  height: 76px;
+  width: 120px;
+  height: 65px;
   margin-right: 14px;
   padding: 0;
   border: 2px solid rgba(255, 255, 255, 0.35);
