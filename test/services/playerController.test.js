@@ -1,4 +1,4 @@
-import { createPlayerController, formatClock, neighborEpisode, subtitleLabel, nextAspect } from '../../src/services/playerController.js';
+import { createPlayerController, cleanSubtitle, formatClock, neighborEpisode, subtitleLabel, nextAspect } from '../../src/services/playerController.js';
 import { parseAvPlayTracks, ASPECT_MODES } from '../../src/services/playerEngines.js';
 
 function fakeEngine() {
@@ -181,5 +181,14 @@ describe('subtitles and aspect helpers', () => {
     ];
     expect(parseAvPlayTracks(list)).toEqual([{ index: 2, language: 'eng' }, { index: 3, language: '' }]);
     expect(parseAvPlayTracks(undefined)).toEqual([]);
+  });
+});
+
+describe('cleanSubtitle', () => {
+  test('removes markup and ASS overrides, keeps line breaks', () => {
+    expect(cleanSubtitle('<i>Hello</i>\\NWorld')).toBe('Hello\nWorld');
+    expect(cleanSubtitle('{\\an8}Top line<br/>Second')).toBe('Top line\nSecond');
+    expect(cleanSubtitle(null)).toBe('');
+    expect(cleanSubtitle('  Plain &nbsp;text ')).toBe('Plain  text');
   });
 });

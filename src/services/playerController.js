@@ -181,6 +181,17 @@ export function neighborEpisode(list, index, delta) {
 
 const LANGUAGE_NAMES = { ita: 'Italiano', eng: 'English', spa: 'Español', fre: 'Français', fra: 'Français', ger: 'Deutsch', deu: 'Deutsch', por: 'Português', rus: 'Русский', ara: 'العربية', tur: 'Türkçe', rum: 'Română', ron: 'Română', alb: 'Shqip', sqi: 'Shqip' };
 
+/** Subtitle text from the engine → plain lines: no markup (<i>, ASS overrides like {\\an8}), line breaks as \n. */
+export function cleanSubtitle(text) {
+  return String(text == null ? '' : text)
+    .replace(/\\N|\\n|<br\s*\/?>/gi, '\n')
+    .replace(/\{[^}]*\}/g, '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\r/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .trim();
+}
+
 /** Name shown in the subtitle list; `position` (1-based) names tracks that carry no language. */
 export function subtitleLabel(track, position, fallback) {
   const code = String(track.language || '').toLowerCase();

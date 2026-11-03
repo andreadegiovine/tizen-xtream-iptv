@@ -3,7 +3,7 @@ import { t } from '../../i18n/index.js';
 import { Action } from '../../core/input.js';
 import { log } from '../../core/logger.js';
 import { icon } from '../icons.js';
-import { createPlayerController, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer } from '../../services/playerController.js';
+import { createPlayerController, cleanSubtitle, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer } from '../../services/playerController.js';
 import { ASPECT_MODES } from '../../services/playerEngines.js';
 import { youtubeStreamUrl } from '../../services/youtubeEngine.js';
 import { watchKey, shouldResume } from '../../services/watchStore.js';
@@ -15,6 +15,7 @@ const NEXT_COUNTDOWN_S = 10;
 const SEEK_SHORT = 10;
 const SEEK_LONG = 30;
 const SCRUB_STEP = 30;
+const SUBTITLE_FALLBACK_MS = 5000;
 
 /**
  * Full-screen player. All controls are HTML on top of the video plane; keys arrive through
@@ -41,13 +42,13 @@ export function createPlayerPage(ctx, params) {
   let aspect = 'fit';
   let subtitle = -1; // -1 = off
   let appliedFor = 0; // load token the aspect mode was last applied to
-  let focusMode = false; // the D-pad moves over the control buttons instead of seeking
+  let focusMode = false; // the D-pad moves over the controls (progress pointer + buttons) instead of seeking
+  let barFocus = false; // focus on the progress pointer (otherwise on a button)
   let focusIndex = 0;
   let flashTimer = null;
   let lastStatus = '';
   let subtitleTimer = null;
   let scrub = null; // seconds while the user drags / steps the progress bar, otherwise null
-  let scrubMode = false; // OK on the bar: left/right move the position instead of the button focus
   let lastState = { position: 0, duration: 0 };
   let lastPosition = null; // previous polled position, to spot jumps (a seek)
   let tipTimer = null;
@@ -65,24 +66,22 @@ export function createPlayerPage(ctx, params) {
   const flashEl = h('div', { class: 'player-flash' });
   const subtitleEl = h('div', { class: 'player-subtitle' });
 
-  // Control buttons: transport in the middle (not for live), aspect ratio + subtitles on the right.
+  // Control buttons: transport at the bottom left (not for live), aspect ratio + subtitles at the bottom right.
   const buttonDefs = [
-    { id: 'back', icon: 'backward', label: () => t('player.back'), vodOnly: true, group: 'center', run: () => controller.seekBy(-SEEK_LONG) },
-    { id: 'toggle', icon: 'pause', label: () => t('player.pause'), vodOnly: true, group: 'center', run: () => controller.togglePause() },
-    { id: 'forward', icon: 'forward', label: () => t('player.forward'), vodOnly: true, group: 'center', run: () => controller.seekBy(SEEK_LONG) },
-    { id: 'seek', vodOnly: true, group: 'bar', el: seek, run: () => toggleScrub() },
+    { id: 'back', icon: 'backward', label: () => t('player.back'), vodOnly: true, group: 'start', run: () => controller.seekBy(-SEEK_LONG) },
+    { id: 'toggle', icon: 'pause', label: () => t('player.pause'), vodOnly: true, group: 'start', run: () => controller.togglePause() },
+    { id: 'forward', icon: 'forward', label: () => t('player.forward'), vodOnly: true, group: 'start', run: () => controller.seekBy(SEEK_LONG) },
     { id: 'aspect', icon: 'aspect', label: () => t('player.aspect'), group: 'end', run: () => cycleAspect() },
     { id: 'subtitles', icon: 'subtitles', label: () => t('player.subtitles'), group: 'end', run: () => openSubtitles() },
   ].filter((def) => !(isLive && def.vodOnly) && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles')));
   buttonDefs.forEach((def) => {
-    if (def.el) return;
     def.el = h('button', { class: 'player-btn', type: 'button', 'aria-label': def.label() }, icon(def.icon));
   });
   const buttonEl = (id) => (buttonDefs.find((d) => d.id === id) || {}).el;
-  // One row: back, play/pause, forward, progress bar, time, aspect ratio, subtitles.
-  const row = h('div', { class: 'player-row' }, buttonEl('back'), buttonEl('toggle'), buttonEl('forward'), isLive ? h('div', { class: 'player-bar-gap' }) : seek, timeEl, buttonEl('aspect'), buttonEl('subtitles'));
+  // Full-width progress bar, then one row: back, play/pause, forward and the time on the left, aspect ratio and subtitles on the right.
+  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('back'), buttonEl('toggle'), buttonEl('forward'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles')));
   const top = h('div', { class: 'player-top' }, titleEl, nowEl);
-  const controls = h('div', { class: 'player-controls' }, row);
+  const controls = h('div', { class: 'player-controls' }, ...(isLive ? [] : [seek]), row);
   const el = h('section', { class: 'player' }, top, controls, statusEl, nextEl, flashEl, subtitleEl);
 
   const current = () => playlist[index];
@@ -95,7 +94,7 @@ export function createPlayerPage(ctx, params) {
     // Without a key press for a few seconds everything fades out, the button focus included.
     hideTimer = setTimeout(() => {
       focusMode = false;
-      if (scrubMode) endScrub(false);
+      if (scrub !== null) endScrub(false);
       paintFocus();
       controls.classList.remove('visible');
       top.classList.remove('visible');
@@ -128,20 +127,16 @@ export function createPlayerPage(ctx, params) {
   function endScrub(commit) {
     const target = scrub;
     scrub = null;
-    scrubMode = false;
     seek.classList.remove('scrubbing');
     tip.classList.remove('visible');
     if (commit && target !== null) controller.seekTo(target);
     drawProgress(commit && target !== null ? target : lastState.position, lastState.duration);
   }
 
-  /** OK on the bar: start moving the position, OK again applies it. */
-  function toggleScrub() {
-    if (scrubMode) endScrub(true);
-    else if (lastState.duration > 0) {
-      scrubMode = true;
-      setScrub(lastState.position);
-    }
+  /** Left / right on the progress pointer: move the target position (applied with OK). */
+  function stepScrub(delta) {
+    if (!(lastState.duration > 0)) return;
+    setScrub(scrubTarget(scrub === null ? lastState.position : scrub, delta, lastState.duration));
   }
 
   // Pointer (Smart Remote / mouse): click or drag on the bar.
@@ -173,19 +168,36 @@ export function createPlayerPage(ctx, params) {
   }
 
   function paintFocus() {
-    buttonDefs.forEach((def, i) => def.el.classList.toggle('focused', focusMode && i === focusIndex));
+    buttonDefs.forEach((def, i) => def.el.classList.toggle('focused', focusMode && !barFocus && i === focusIndex));
+    seek.classList.toggle('focused', focusMode && barFocus);
   }
 
+  /** Position of play / pause among the buttons (the first button for live channels). */
+  const startIndex = () => Math.max(0, buttonDefs.findIndex((d) => d.id === 'toggle'));
+
+  /** Controls get the focus on play / pause. */
   function enterFocus() {
-    const start = buttonDefs.findIndex((d) => d.id === 'toggle');
     focusMode = true;
-    focusIndex = start >= 0 ? start : 0;
+    barFocus = false;
+    focusIndex = startIndex();
+    paintFocus();
+    showControls();
+  }
+
+  /** Up from the player (or from the buttons): the focus goes to the progress pointer. */
+  function focusBar() {
+    if (isLive) return;
+    if (!focusMode) focusIndex = startIndex();
+    focusMode = true;
+    barFocus = true;
     paintFocus();
     showControls();
   }
 
   function exitFocus() {
+    if (scrub !== null) endScrub(false);
     focusMode = false;
+    barFocus = false;
     paintFocus();
     showControls();
   }
@@ -193,9 +205,11 @@ export function createPlayerPage(ctx, params) {
   /** Subtitle text delivered by the engine: shown by the app for the time the engine gives. */
   function showSubtitle(text, durationMs) {
     clearTimeout(subtitleTimer);
-    subtitleEl.textContent = text || '';
-    subtitleEl.classList.toggle('visible', Boolean(text));
-    if (text && durationMs > 0) subtitleTimer = setTimeout(() => subtitleEl.classList.remove('visible'), durationMs);
+    const clean = cleanSubtitle(text);
+    subtitleEl.textContent = clean;
+    subtitleEl.classList.toggle('visible', Boolean(clean));
+    // The engine says for how long; without a usable duration the line is replaced by the next one or cleared after a while.
+    if (clean) subtitleTimer = setTimeout(() => subtitleEl.classList.remove('visible'), durationMs > 0 ? durationMs : SUBTITLE_FALLBACK_MS);
   }
 
   function cycleAspect() {
@@ -377,37 +391,48 @@ export function createPlayerPage(ctx, params) {
     [Action.RIGHT]: () => controller.seekBy(SEEK_SHORT),
     [Action.REWIND]: () => controller.seekBy(-SEEK_LONG),
     [Action.FAST_FORWARD]: () => controller.seekBy(SEEK_LONG),
-    [Action.UP]: () => (isLive ? changeChannel(-1) : null),
+    [Action.UP]: () => (isLive ? changeChannel(-1) : focusBar()),
     [Action.DOWN]: () => (isLive ? changeChannel(1) : enterFocus()),
     [Action.CHANNEL_UP]: () => (isLive ? changeChannel(1) : stepEpisode(1)),
     [Action.CHANNEL_DOWN]: () => (isLive ? changeChannel(-1) : stepEpisode(-1)),
     [Action.STOP]: () => ctx.router.back(),
   };
 
-  // Same keys while the buttons have the focus: left/right walk over them, OK presses, Up goes back to seeking.
-  const buttonHandlers = {
+  // Same keys while the controls have the focus: left/right walk over the buttons (or move the pointer),
+  // OK presses, Up goes to the progress pointer, Down comes back to the buttons.
+  const controlHandlers = {
     [Action.LEFT]: () => {
-      if (scrubMode) {
-        setScrub(scrubTarget(scrub, -SCRUB_STEP, lastState.duration));
+      if (barFocus) {
+        stepScrub(-SCRUB_STEP);
         return;
       }
       focusIndex = Math.max(0, focusIndex - 1);
       paintFocus();
     },
     [Action.RIGHT]: () => {
-      if (scrubMode) {
-        setScrub(scrubTarget(scrub, SCRUB_STEP, lastState.duration));
+      if (barFocus) {
+        stepScrub(SCRUB_STEP);
         return;
       }
       focusIndex = Math.min(buttonDefs.length - 1, focusIndex + 1);
       paintFocus();
     },
-    [Action.ENTER]: () => buttonDefs[focusIndex].run(),
-    [Action.UP]: () => {
-      if (scrubMode) endScrub(false);
-      exitFocus();
+    [Action.ENTER]: () => {
+      if (!barFocus) buttonDefs[focusIndex].run();
+      else if (scrub !== null) endScrub(true);
+      else controller.togglePause();
     },
-    [Action.DOWN]: () => undefined,
+    [Action.UP]: () => {
+      if (barFocus) return;
+      if (isLive) exitFocus();
+      else focusBar();
+    },
+    [Action.DOWN]: () => {
+      if (!barFocus) return;
+      if (scrub !== null) endScrub(false);
+      barFocus = false;
+      paintFocus();
+    },
   };
 
   return {
@@ -415,16 +440,15 @@ export function createPlayerPage(ctx, params) {
     /** Called by main.js before the focus manager: the player owns every key except Back. */
     onAction(action) {
       if (ctx.dialogs && ctx.dialogs.isOpen()) return false; // an open list (subtitles) takes the keys
-      const handler = (focusMode && buttonHandlers[action]) || handlers[action];
+      const handler = (focusMode && controlHandlers[action]) || handlers[action];
       if (!handler) return false;
       showControls();
       handler();
       return true;
     },
-    /** Back first leaves the button row; a second Back leaves the player. */
+    /** Back first leaves the controls; a second Back leaves the player. */
     onBack() {
       if (!focusMode) return false;
-      if (scrubMode) endScrub(false);
       exitFocus();
       return true;
     },

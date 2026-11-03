@@ -990,38 +990,33 @@ h2 {
   .player-row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
   }
 
-  .player-bar-gap {
-    flex: 1;
+  .player-group {
+    display: flex;
+    align-items: center;
   }
 
-  // Wide hit area around the thin bar (pointer and D-pad focus).
+  // Full-width progress bar: tall hit area (pointer), no frame; the D-pad focus sits on the knob.
   .player-seek {
-    flex: 1;
-    padding: 26px 20px;
-    margin: 0;
+    padding: 22px 0;
+    margin-bottom: 8px;
     cursor: pointer;
-    border: 2px solid transparent;
-    border-radius: 8px;
 
-    &.focused {
-      border-color: $text;
-      background: rgba(255, 255, 255, 0.18);
-    }
-
+    &.focused .player-knob,
     &.scrubbing .player-knob {
-      width: 30px;
-      height: 30px;
+      width: 34px;
+      height: 34px;
+      margin: -17px 0 0 -17px;
+      box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.35);
     }
   }
 
   .player-time {
     flex: none;
-    min-width: 230px;
-    margin-right: 12px;
+    margin-left: 20px;
     font-size: 26px;
-    text-align: right;
   }
 
   .player-bar {
