@@ -57,6 +57,7 @@ export function projectItem(type, raw) {
     year: type === MediaType.LIVE ? null : readYear(raw),
     icon: String(raw.stream_icon || raw.cover || ''),
     ext: String(raw.container_extension || ''),
+    genre: type === MediaType.LIVE ? '' : String(raw.genre || ''),
     epgChannelId: raw.epg_channel_id ? String(raw.epg_channel_id) : null,
   };
 }

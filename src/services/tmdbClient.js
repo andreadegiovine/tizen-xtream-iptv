@@ -26,9 +26,6 @@ export function createTmdbClient({ apiKey = TMDB_API_KEY, getApiKey = () => apiK
       get(`/search/${kind(type)}`, { query, language, ...(year ? { [type === 'series' ? 'first_air_date_year' : 'year']: year } : {}) }),
     recommendations: (type, id, language) => get(`/${kind(type)}/${id}/recommendations`, { language }),
     trending: (type, language) => get(`/trending/${kind(type)}/week`, { language }),
-    genres: (type, language) => get(`/genre/${kind(type)}/list`, { language }),
-    discover: (type, genreId, page, language) =>
-      get(`/discover/${kind(type)}`, { with_genres: genreId, sort_by: 'popularity.desc', page, language, 'vote_count.gte': 50 }),
   };
 }
 

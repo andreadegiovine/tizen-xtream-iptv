@@ -199,6 +199,7 @@ Da fare:
 12. **Tempi con il provider reale**: motore e tempi di sync (download/elementi/titoli) mostrati nella pagina Provider, per decidere se ottimizzare le scritture.
 13. **Ridisegno (nuovo)**: icone della topbar visibili e leggibili; Provider e Impostazioni a destra; sidebar ferma durante lo scorrimento della griglia e alta fino al bordo inferiore; card uguali per film/serie/canali; stella del voto e badge ✓/clessidra; scheda: menu Versione, categorie, menu Stagione + episodi, cast; scorrimento del carosello.
 15. **Preferiti, visto, trailer (nuovo)**: cuore e occhio nella scheda e pagina Preferiti; il trailer si apre nell'app YouTube (serve un titolo con `youtube_trailer`; se non si apre dire cosa appare nel log); il tasto visto su una serie segna tutti gli episodi.
+17. **Patch 5 (generi)**: dopo un aggiornamento forzato la sidebar mostra i generi del provider; con la chiave TMDB se ne aggiungono altri col tempo; "Animazione" compare una sola volta; clic su un genere nella scheda apre il filtro giusto.
 16. **Patch 4**: player su una riga (barra: OK poi ←/→, e trascinamento con puntatore), sidebar con generi/categorie, chip cliccabili, chiavi nelle impostazioni, pulsanti sync/rimozione, provider suggerimenti, "Potrebbe interessarti".
 14. **Player (nuovo)**: Giù porta il cursore sui pulsanti; indietro/avanti 10 s e play/pausa con OK; **formato**: i tre modi (AVPlay `setDisplayMethod`) cambiano davvero l'immagine? **sottotitoli**: l'elenco mostra le tracce del file e la scelta le attiva/disattiva (`getTotalTrackInfo`/`setSelectTrack`/`setSilentSubtitle`: da verificare se AVPlay li disegna da solo o se serve mostrare il testo dall'evento `onsubtitlechange`).
 
@@ -228,6 +229,13 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
   - *Scheda*: categorie e generi cliccabili, aprono la pagina del tipo con l'elemento della sidebar attivo.
   - *Impostazioni*: chiavi TMDB e Trakt (id, secret) digitabili (prevalgono su quelle di build, vuoto = chiave di build); con TMDB: sync manuale e rimozione dati; con Trakt: sync dello stato di visione (film + episodi, marcati `source:'trakt'`) e rimozione dei soli dati importati; menu del provider dei suggerimenti (TMDB/Trakt, con ripiego sull'altro se non utilizzabile).
   - *Scheda*: carosello "Potrebbe interessarti" (20 suggerimenti) dopo il cast.
+
+- **2026-11-03 (patch 5)** Generi normalizzati (**non provato su TV**):
+  - Sostituisce l'approccio TMDB `discover` (rimosso, con `genres`/`discover` del client). `genres.js` porta ogni grafia (provider o TMDB, italiano o inglese: "Animazione"/"Animation", "Sci-Fi & Fantasy" → fantascienza + fantasy) su una chiave unica; i generi canonici sono tradotti nella lingua dell'app (`genre.*`), gli altri restano come li scrive il provider.
+  - Fonti: il campo `genre` delle liste del provider (riscritto a ogni sync, store `entry_genre`) e i generi TMDB (store `entry_genre_tmdb`, scritti man mano che arrivano i metadati: card visibili, scheda e un passaggio in background — `genreIndex.backfill`, a blocchi da 60, fino a 2000 titoli per volta, in pausa durante la riproduzione — dopo ogni sync e all'avvio). Un titolo con più fonti conta una volta.
+  - La sidebar mostra solo i generi con almeno un titolo; chi esce dal catalogo (sync, categorie escluse) toglie anche i suoi generi TMDB. "Rimuovi dati TMDB" cancella anche i generi TMDB; "Sync TMDB" avvia il passaggio in background.
+  - DB provider v3: aggiunge gli store senza riscaricare il catalogo, ma i generi del provider compaiono dopo il prossimo sync (aggiornamento forzato dalla pagina Provider). Limite: molti provider non mandano `genre` nelle liste film, quindi lì i generi arrivano solo da TMDB (richiede la chiave) e si riempiono gradualmente.
+  - Scheda: i generi mostrati sono gli stessi della sidebar (uniti e tradotti) e portano al filtro corrispondente. Etichetta "Mostra tutto" già presente (nel codice non c'era più "Tutti").
 
 ## Questioni aperte
 - Package id `XtrmIptv01` e app id `XtrmIptv01.XtreamIPTV` sono una proposta, da confermare prima di creare il profilo del certificato.

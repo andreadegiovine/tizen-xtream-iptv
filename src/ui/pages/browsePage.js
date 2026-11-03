@@ -8,6 +8,7 @@ import { ensureVisible } from '../scroll.js';
 import { listCategories, pageEntries, getEntry } from '../../services/catalogQuery.js';
 import { icon } from '../icons.js';
 import { formatNumber } from '../../core/format.js';
+import { genreLabel } from '../../services/genres.js';
 import { log } from '../../core/logger.js';
 
 const CATS_ZONE = 'browseCategories';
@@ -54,7 +55,7 @@ export function sidebarItems({ type, genres = [], categories = [], expanded = fa
   const items = [{ kind: 'all', name: labels.all }];
   if (type === 'live') return items.concat(categories.map((c) => ({ kind: 'category', id: c.id, name: c.name })));
   items.push({ kind: 'continue', name: labels.continue }, { kind: 'favorites', name: labels.favorites });
-  genres.forEach((g) => items.push({ kind: 'genre', id: String(g.id), name: g.name }));
+  genres.forEach((g) => items.push({ kind: 'genre', id: String(g.key), name: g.name }));
   if (categories.length) {
     items.push({ kind: 'toggle', name: labels.categories, expanded });
     if (expanded) categories.forEach((c) => items.push({ kind: 'category', id: c.id, name: c.name, depth: 1 }));
@@ -149,8 +150,7 @@ export function createBrowsePage(ctx, params = {}) {
       return byKeys(saved.filter((f) => f.type === type).map((f) => f.entryKey));
     }
     if (item.kind === 'genre') {
-      const ids = await ctx.tmdb.discoverIds(type, item.id);
-      return byKeys(ids.map((id) => `${type}:t${id}`));
+      return byKeys(await ctx.genres.entryKeys(type, item.id));
     }
     return null;
   }
@@ -231,8 +231,9 @@ export function createBrowsePage(ctx, params = {}) {
     const filter = params.filter || null;
     const wantsGenre = filter && filter.kind === 'genre';
     const loadGenres = async () => {
-      if (type === 'live' || !ctx.tmdb || !ctx.tmdb.enabled) return;
-      genres = await ctx.tmdb.genres(type).catch(() => []);
+      if (type === 'live') return;
+      const found = await ctx.genres.list(type).catch(() => []);
+      genres = found.map((g) => ({ key: g.key, name: genreLabel(g, t) })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     };
     if (wantsGenre) await loadGenres();
     expanded = Boolean(filter && filter.kind === 'category');

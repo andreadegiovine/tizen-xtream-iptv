@@ -12,6 +12,7 @@ import { watchKey, shouldResume, isWatched } from '../../services/watchStore.js'
 import { formatClock } from '../../services/playerController.js';
 import { formatRating } from '../components/card.js';
 import { openTrailer, youtubeId } from '../../services/trailer.js';
+import { mergeGenres, genreLabel } from '../../services/genres.js';
 import { log } from '../../core/logger.js';
 
 /** Label of one stream choice: "#123 · mkv". */
@@ -226,10 +227,9 @@ export function createDetailPage(ctx, params) {
     while (node.firstChild) node.removeChild(node.firstChild);
   }
 
-  /** Genres as [{ id?, name }]: TMDB ones carry an id (clickable), the provider's text does not. */
+  /** Genres as [{ id, name }]: provider and TMDB spellings merged into the sidebar's keys, all clickable. */
   function genreItems() {
-    if (meta && meta.genreList && meta.genreList.length) return meta.genreList;
-    return tagsFrom(meta, info).map((name) => ({ name }));
+    return mergeGenres(meta && meta.genreList, tagsFrom(meta, info)).map((g) => ({ id: g.key, name: genreLabel(g, t) }));
   }
 
   /** A row of chips; the clickable ones form a horizontal focus zone that opens the matching browse view. */
@@ -481,6 +481,7 @@ export function createDetailPage(ctx, params) {
         log.warn('Metadata failed', err && err.message);
       }
       if (destroyed) return;
+      if (meta && ctx.genres && meta.genreList) ctx.genres.recordFor(entry, meta.genreList).catch(() => undefined);
       if (meta) {
         fillText();
         build();

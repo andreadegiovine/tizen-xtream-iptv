@@ -145,9 +145,10 @@ export function createSettingsPage(ctx) {
               }
             }
             toast(t('settings.tmdbSyncDone', { count: await ctx.tmdb.refresh(items) }));
+            ctx.genres.backfill().catch(() => undefined); // genres of the rest of the catalog, in background
           },
         }),
-        actionRow({ ctx, label: t('settings.tmdbRemove'), confirm: t('settings.tmdbRemoveConfirm'), run: async () => { await ctx.tmdb.clearAll(); toast(t('settings.removed')); } }),
+        actionRow({ ctx, label: t('settings.tmdbRemove'), confirm: t('settings.tmdbRemoveConfirm'), run: async () => { await ctx.tmdb.clearAll(); await ctx.genres.clearTmdb(); toast(t('settings.removed')); } }),
       ]
     : [];
 

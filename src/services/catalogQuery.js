@@ -64,3 +64,36 @@ export function pageEntries(db, { type, categoryId = null, offset = 0, limit = 2
 export async function getEntry(db, key) {
   return requestToPromise(db.transaction('entries', 'readonly').objectStore('entries').get(key));
 }
+
+const GENRE_STORES = ['entry_genre', 'entry_genre_tmdb'];
+
+/** Distinct genres of one type present in the catalog (provider and TMDB spellings already merged): [{ key, name }]. */
+export function listGenres(db, type) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(GENRE_STORES, 'readonly');
+    const found = new Map();
+    GENRE_STORES.forEach((storeName) => {
+      const request = tx.objectStore(storeName).index('byGenreAdded').openCursor(IDBKeyRange.bound([type], [type, []]));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        const row = cursor.value;
+        if (!found.has(row.genreKey)) found.set(row.genreKey, { key: row.genreKey, name: row.name });
+        cursor.continue([type, `${row.genreKey}\u0000`]); // jump to the next genre
+      };
+    });
+    tx.onerror = () => reject(tx.error);
+    tx.oncomplete = () => resolve(Array.from(found.values()));
+  });
+}
+
+/** Entry keys of a genre, newest first, from both sources without duplicates. */
+export async function genreEntryKeys(db, type, genreKey) {
+  const range = IDBKeyRange.bound([type, genreKey, 0], [type, genreKey, MAX_ADDED]);
+  const lists = await Promise.all(
+    GENRE_STORES.map((name) => requestToPromise(db.transaction(name, 'readonly').objectStore(name).index('byGenreAdded').getAll(range))),
+  );
+  const byKey = new Map();
+  lists.forEach((rows) => rows.forEach((row) => byKey.set(row.entryKey, row.added)));
+  return Array.from(byKey.keys()).sort((a, b) => byKey.get(b) - byKey.get(a) || (a < b ? -1 : 1));
+}

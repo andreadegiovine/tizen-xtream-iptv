@@ -11,7 +11,7 @@ import { AppError, ErrorCode, Severity, toAppError } from '../core/errors.js';
 import { MediaType } from './mediaType.js';
 import { XtreamClient } from './xtreamClient.js';
 import { projectItem } from './itemProjector.js';
-import { buildEntries, buildEntryCategoryRows } from './grouping.js';
+import { buildEntries, buildEntryCategoryRows, buildEntryGenreRows } from './grouping.js';
 
 export const LIST_TTL_MS = 12 * 60 * 60 * 1000;
 export const BATCH_SIZE = 2000;
@@ -44,6 +44,8 @@ const ranges = {
   items: (type) => ({ range: IDBKeyRange.bound(`${type}:`, `${type}:\uffff`) }),
   entries: (type) => ({ index: 'byTypeAdded', range: IDBKeyRange.bound([type, -Infinity], [type, Infinity]) }),
   entry_cat: (type) => ({ index: 'byCatAdded', range: IDBKeyRange.bound([type], [type, []]) }),
+  entry_genre: (type) => ({ index: 'byGenreAdded', range: IDBKeyRange.bound([type], [type, []]) }),
+  entry_genre_tmdb: (type) => ({ index: 'byGenreAdded', range: IDBKeyRange.bound([type], [type, []]) }),
   categories: (type) => ({ range: IDBKeyRange.bound(`${type}:`, `${type}:￿`) }),
 };
 
@@ -59,6 +61,11 @@ async function replaceRows(db, store, type, rows, { onBatch } = {}) {
 export async function writeEntries(db, type, entries, { onBatch } = {}) {
   await replaceRows(db, 'entries', type, entries, { onBatch });
   await replaceRows(db, 'entry_cat', type, buildEntryCategoryRows(entries));
+  await replaceRows(db, 'entry_genre', type, buildEntryGenreRows(entries));
+  // TMDB genres follow the metadata, not the sync: only forget the ones of titles that left the catalog.
+  const present = new Set(entries.map((entry) => entry.key));
+  const known = await dbGetAllKeys(db, 'entry_genre_tmdb', ranges.entry_genre_tmdb(type));
+  await dbDeleteMany(db, 'entry_genre_tmdb', known.filter((key) => !present.has(key.slice(0, key.lastIndexOf('|')))));
 }
 
 /** Rebuilds the grid entries from the stored items (used when the excluded categories change). */

@@ -1,4 +1,5 @@
 import { MediaType } from './mediaType.js';
+import { mergeGenres } from './genres.js';
 import { normalizeTitle, normalizeChannelName } from './titleNormalizer.js';
 
 /**
@@ -40,6 +41,7 @@ export function buildEntries(type, items, { excludedCategories = new Set() } = {
       members: members.map((m) => ({ id: m.item.id, ext: m.item.ext, categoryId: m.item.categoryId })),
       categoryIds: Array.from(new Set(members.map((m) => m.item.categoryId))),
       searchKeys: Array.from(new Set(members.map((m) => m.norm.searchKey))),
+      genres: type === MediaType.LIVE ? [] : mergeGenres(members.map((m) => m.item.genre)),
       icon: base.item.icon,
       epgChannelId: base.item.epgChannelId,
     });
@@ -61,6 +63,17 @@ export function buildEntryCategoryRows(entries) {
         categoryId,
         added: entry.added,
       });
+    }
+  }
+  return rows;
+}
+
+/** One row per (entry, genre) so a genre can be paged "newest first" with a single index. */
+export function buildEntryGenreRows(entries) {
+  const rows = [];
+  for (const entry of entries) {
+    for (const genre of entry.genres || []) {
+      rows.push({ key: `${entry.key}|${genre.key}`, entryKey: entry.key, type: entry.type, genreKey: genre.key, name: genre.name, added: entry.added });
     }
   }
   return rows;
