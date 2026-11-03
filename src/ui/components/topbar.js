@@ -10,7 +10,7 @@ export const SEARCH_BAR_ZONE = 'topbarSearch';
 export const MIN_QUERY_LENGTH = 2;
 const IME_DONE = 65376;
 const IME_CANCEL = 65385;
-const DEBOUNCE_MS = 300;
+const DEBOUNCE_MS = 3000; // search starts after 3 s without typing (Enter starts it at once)
 
 // `id` is the section: it is what the bar highlights as "current". `icon` items show only the icon
 // (the label stays as aria-label); `end` items are pushed to the right edge of the screen.
