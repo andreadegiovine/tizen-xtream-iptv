@@ -117,3 +117,14 @@ test('requests the user waits for report activity (the background download holds
   const { dbGet } = await import('../../src/core/idb.js');
   expect((await dbGet(db, 'tmdb', 'meta:movie:4:it-IT')).expiresAt).toBe(5 + META_TTL_MS);
 });
+
+test('counts the titles whose metadata is stored', async () => {
+  const db = await appDb();
+  const c = { enabled: true, details: jest.fn(async (type, id) => ({ id, title: `T${id}` })), search: jest.fn() };
+  const svc = createTmdbService({ db, client: c, getLanguage: () => 'it-IT', now: () => 1 });
+  await svc.getMeta('movie', 1);
+  await svc.getMeta('series', 2);
+  expect(await svc.countMeta()).toBe(2);
+  await svc.clearAll();
+  expect(await svc.countMeta()).toBe(0);
+});

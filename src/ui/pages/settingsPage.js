@@ -6,7 +6,7 @@ import { ListModel } from '../focus/models.js';
 import { LANGUAGE_OPTIONS, GRID_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SUGGESTION_SOURCE_OPTIONS } from '../../services/settings.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
-import { createSyncPanel, createMetaPanel, createDevicePanel, createOperationsPanel } from '../components/syncPanel.js';
+import { createSyncPanel, createTmdbPanel, createTraktPanel, createDevicePanel, createOperationsPanel } from '../components/syncPanel.js';
 import { log } from '../../core/logger.js';
 
 const ZONE_ID = 'settings';
@@ -97,59 +97,60 @@ export function createSettingsPage(ctx) {
   };
 
 
-  // Connect / disconnect Trakt: the label says which of the two the button does (the state is in the Metadata table).
-  const traktLabel = h('span', { text: t('settings.traktConnect') });
-  const trakt = {
-    el: h('div', { class: 'row' }, traktLabel),
-    async refresh() {
-      traktLabel.textContent = ctx.trakt.enabled && (await ctx.trakt.isConnected()) ? t('settings.traktDisconnectLabel') : t('settings.traktConnect');
-    },
-    async activate() {
-      if (!ctx.trakt.enabled) return;
-      if (await ctx.trakt.isConnected()) {
-        const ok = await ctx.dialogs.confirm({ title: 'Trakt', message: t('settings.traktDisconnect'), confirmLabel: t('settings.disconnect'), cancelLabel: t('setup.cancel') });
-        if (ok) await ctx.trakt.disconnect();
-        await trakt.refresh();
-        return;
-      }
-      const controller = new AbortController();
-      let shown = null;
-      const login = ctx.trakt.connect({ onCode: (c) => { shown = c; }, signal: controller.signal });
-      // The dialog needs the code, which arrives asynchronously: wait for it a moment.
-      for (let i = 0; i < 50 && !shown; i += 1) await new Promise((r) => setTimeout(r, 100));
-      if (!shown) {
-        controller.abort();
-        return;
-      }
-      const dialog = ctx.dialogs.confirm({ title: 'Trakt', message: t('settings.traktCode', { url: shown.url, code: shown.code }), confirmLabel: t('common.ok'), cancelLabel: t('setup.cancel') });
-      login.then((done) => { if (done) ctx.dialogs.dismiss(); });
-      const answer = await dialog;
-      if (!answer) controller.abort();
-      const connected = await login.catch(() => false);
-      if (connected) ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal })).catch((err) => log.warn('Trakt import failed', err && err.message));
-      await trakt.refresh();
-    },
-  };
+  /** Trakt device-code login: shows the code, waits for the approval on another device, then imports the history. */
+  async function connectTrakt() {
+    if (!ctx.trakt.enabled) {
+      toast(t('trakt.needKeys'));
+      return;
+    }
+    if (await ctx.trakt.isConnected()) {
+      toast(t('settings.connected'));
+      return;
+    }
+    const controller = new AbortController();
+    let shown = null;
+    const login = ctx.trakt.connect({ onCode: (c) => { shown = c; }, signal: controller.signal });
+    // The dialog needs the code, which arrives asynchronously: wait for it a moment.
+    for (let i = 0; i < 50 && !shown; i += 1) await new Promise((r) => setTimeout(r, 100));
+    if (!shown) {
+      controller.abort();
+      return;
+    }
+    const dialog = ctx.dialogs.confirm({ title: 'Trakt', message: t('settings.traktCode', { url: shown.url, code: shown.code }), confirmLabel: t('common.ok'), cancelLabel: t('setup.cancel') });
+    login.then((done) => { if (done) ctx.dialogs.dismiss(); });
+    const answer = await dialog;
+    if (!answer) controller.abort();
+    const connected = await login.catch(() => false);
+    if (connected) ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal })).catch((err) => log.warn('Trakt import failed', err && err.message));
+    await traktPanel.refresh();
+  }
 
+  async function syncTrakt() {
+    toast(t('settings.working'), 15000);
+    await ctx.trakt.flush();
+    toast(t('settings.traktSyncDone', { count: await ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal })) }));
+    traktPanel.refresh().catch(() => undefined);
+  }
 
-  /** "Update metadata now": TMDB data, the genre search and the Trakt watch state, whichever is available. */
+  async function removeTrakt() {
+    const ok = await ctx.dialogs.confirm({ title: t('settings.traktRemove'), message: t('settings.traktRemoveConfirm'), confirmLabel: t('settings.confirmRemove'), cancelLabel: t('setup.cancel') });
+    if (!ok) return;
+    await ctx.trakt.disconnect();
+    await ctx.watch.removeTraktData();
+    toast(t('settings.removed'));
+    await traktPanel.refresh();
+    ctx.focus.focus(ZONE_ID, visibleRows().indexOf(traktConnectRow) + opsPanel.rows.length); // the remove / sync buttons are gone
+  }
+
+  /** "Update": the TMDB download of the titles that are missing or expired, then the genre search. */
   async function updateMetadata() {
     if (metaBusy) return;
     metaBusy = true;
-    metaPanel.button.classList.add('disabled');
+    tmdbPanel.button.classList.add('disabled');
     toast(t('settings.working'), 15000);
     // Every step that will run is listed at once ("queued"); each one becomes "running" on its turn.
     const steps = [];
     if (ctx.tmdb && ctx.tmdb.enabled) steps.push({ id: 'tmdb', run: () => ctx.genres.download() });
-    if (ctx.trakt.enabled && (await ctx.trakt.isConnected())) {
-      steps.push({
-        id: 'trakt',
-        run: async () => {
-          await ctx.trakt.flush();
-          await ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal }));
-        },
-      });
-    }
     steps.push({ id: 'genres', run: () => ctx.genres.findGenres() });
     const skipped = new Set();
     const ends = steps.map((step) => ctx.operations.start(step.id, { queued: true, cancel: () => skipped.add(step.id) }));
@@ -163,55 +164,25 @@ export function createSettingsPage(ctx) {
     } finally {
       ends.forEach((end) => end());
       metaBusy = false;
-      metaPanel.button.classList.remove('disabled');
-      metaPanel.refresh().catch(() => undefined);
+      tmdbPanel.button.classList.remove('disabled');
+      tmdbPanel.refresh().catch(() => undefined);
       devicePanel.refresh().catch(() => undefined);
     }
   }
-
-  const traktOn = ctx.trakt.enabled;
-
-  const traktRows = traktOn
-    ? [
-        actionRow({
-          ctx,
-          label: t('settings.traktSync'),
-          run: async () => {
-            if (!(await ctx.trakt.isConnected())) {
-              toast(t('settings.traktNeedLogin'));
-              return;
-            }
-            toast(t('settings.working'), 15000);
-            await ctx.trakt.flush();
-            toast(t('settings.traktSyncDone', { count: await ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal })) }));
-          },
-        }),
-        actionRow({
-          ctx,
-          label: t('settings.traktRemove'),
-          confirm: t('settings.traktRemoveConfirm'),
-          run: async () => {
-            await ctx.trakt.disconnect();
-            await ctx.watch.removeTraktData();
-            toast(t('settings.removed'));
-            ctx.router.reload();
-          },
-        }),
-      ]
-    : [];
 
   const diagnostics = { el: h('div', { class: 'row' }, h('span', { text: t('settings.diagnostics') })), refresh: async () => undefined, activate: async () => ctx.router.push('diagnostics') };
 
   // Catalog and metadata tables at the top; the "update the catalog" button is the first row of the list.
   const panel = createSyncPanel(ctx);
-  const metaPanel = createMetaPanel(ctx);
+  const tmdbPanel = createTmdbPanel(ctx);
+  const traktPanel = createTraktPanel(ctx);
   const devicePanel = createDevicePanel();
   const opsPanel = createOperationsPanel(ctx);
   let metaBusy = false;
   const syncRow = { el: panel.button, refresh: async () => undefined, activate: async () => panel.syncNow() };
-  const metaRow = { el: metaPanel.button, refresh: async () => undefined, activate: updateMetadata };
+  const metaRow = { el: tmdbPanel.button, refresh: async () => undefined, activate: updateMetadata };
   const metaRemoveRow = {
-    el: metaPanel.removeButton,
+    el: tmdbPanel.removeButton,
     refresh: async () => undefined,
     async activate() {
       const ok = await ctx.dialogs.confirm({ title: t('settings.metaRemove'), message: t('settings.metaRemoveConfirm'), confirmLabel: t('settings.confirmRemove'), cancelLabel: t('setup.cancel') });
@@ -221,26 +192,24 @@ export function createSettingsPage(ctx) {
       await ctx.genres.clearTmdb();
       await ctx.syncLog.clear('tmdb');
       toast(t('settings.removed'));
-      metaPanel.refresh().catch(() => undefined);
+      tmdbPanel.refresh().catch(() => undefined);
     },
   };
+  const traktConnectRow = { el: traktPanel.connectButton, refresh: async () => undefined, activate: connectTrakt };
+  const traktSyncRow = { el: traktPanel.syncButton, refresh: async () => undefined, activate: syncTrakt };
+  const traktRemoveRow = { el: traktPanel.removeButton, refresh: async () => undefined, activate: removeTrakt };
+  const tmdbTokenRow = textRow({ ctx, label: t('settings.tmdbKey'), field: 'tmdbKey' });
+  const traktIdRow = textRow({ ctx, label: t('settings.traktId'), field: 'traktId' });
+  const traktSecretRow = textRow({ ctx, label: t('settings.traktSecret'), field: 'traktSecret', secret: true });
   const prefsTitle = h('h2', { class: 'prefs-title', text: t('settings.preferences') });
 
-  const rows = [
-    syncRow,
-    metaRow,
-    metaRemoveRow,
+  const prefs = [
     optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
     optionRow({ ctx, labelKey: 'settings.gridItems', key: 'gridItems', options: GRID_OPTIONS }),
     optionRow({ ctx, labelKey: 'settings.carouselItems', key: 'carouselItems', options: CAROUSEL_OPTIONS }),
     optionRow({ ctx, labelKey: 'settings.buffer', key: 'bufferSeconds', options: BUFFER_OPTIONS, format: seconds }),
     autoplay,
     optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }),
-    textRow({ ctx, label: t('settings.tmdbKey'), field: 'tmdbKey' }),
-    textRow({ ctx, label: t('settings.traktId'), field: 'traktId' }),
-    textRow({ ctx, label: t('settings.traktSecret'), field: 'traktSecret', secret: true }),
-    trakt,
-    ...traktRows,
     diagnostics,
     actionRow({
       ctx,
@@ -252,10 +221,14 @@ export function createSettingsPage(ctx) {
       },
     }),
   ];
+  // Focus order follows the page: catalog, TMDB, Trakt, preferences.
+  const rows = [syncRow, metaRow, metaRemoveRow, tmdbTokenRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktSecretRow, ...prefs];
+  // The Trakt sync / remove buttons exist only while an account is connected.
+  const visibleRows = () => rows.filter((row) => row.el.style.display !== 'none');
   rows.forEach((row) => row.refresh());
 
   // Stop buttons of the running operations come first, then the fixed rows; the list changes while the page is open.
-  const all = () => opsPanel.rows.concat(rows);
+  const all = () => opsPanel.rows.concat(visibleRows());
   let focusedEl = null;
   const zone = new FocusZone({
     id: ZONE_ID,
@@ -283,10 +256,11 @@ export function createSettingsPage(ctx) {
   };
 
   return {
-    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('settings.title') }), opsPanel.el, panel.el, metaPanel.el, devicePanel.el, prefsTitle, h('div', { class: 'list' }, rows.slice(3).map((r) => r.el)))),
+    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('settings.title') }), opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'list' }, tmdbTokenRow.el), traktPanel.el, h('div', { class: 'list' }, traktIdRow.el, traktSecretRow.el), devicePanel.el, prefsTitle, h('div', { class: 'list' }, prefs.map((r) => r.el)))),
     mount() {
       opsPanel.mount();
-      metaPanel.mount();
+      tmdbPanel.mount();
+      traktPanel.mount();
       panel.mount();
       ctx.providers.getActive().then((provider) => {
         const id = provider && provider.id;
@@ -295,7 +269,8 @@ export function createSettingsPage(ctx) {
         syncRow.el.style.display = id ? '' : 'none';
         if (id) panel.setProvider(id);
       });
-      metaPanel.refresh().catch(() => undefined);
+      tmdbPanel.refresh().catch(() => undefined);
+      traktPanel.refresh().catch(() => undefined);
       devicePanel.refresh().catch(() => undefined);
       ctx.focus.register(zone);
       ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
@@ -304,7 +279,8 @@ export function createSettingsPage(ctx) {
     },
     destroy() {
       opsPanel.destroy();
-      metaPanel.destroy();
+      tmdbPanel.destroy();
+      traktPanel.destroy();
       panel.destroy();
       ctx.focus.unregister(ZONE_ID);
     },

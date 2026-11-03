@@ -110,3 +110,18 @@ describe('watch-state adapter', () => {
   });
 
 });
+
+test('the connected account name is looked up once and forgotten on disconnect', async () => {
+  const { openAppDb } = await import('../../src/db/appDb.js');
+  const { createTraktService } = await import('../../src/services/traktService.js');
+  const { kvSet } = await import('../../src/db/kv.js');
+  const db = await openAppDb('trakt-account-test');
+  await kvSet(db, 'trakt.token', { accessToken: 'a', refreshToken: 'r', expiresAt: Date.now() + 90 * 24 * 3600 * 1000 });
+  const profile = jest.fn(async () => ({ ok: true, status: 200, data: { user: { username: 'andrea' } } }));
+  const service = createTraktService({ db, client: { enabled: true, profile } });
+  expect(await service.account()).toBe('andrea');
+  expect(await service.account()).toBe('andrea');
+  expect(profile).toHaveBeenCalledTimes(1);
+  await service.disconnect();
+  expect(await service.account()).toBe('');
+});

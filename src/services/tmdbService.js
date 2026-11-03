@@ -1,4 +1,4 @@
-import { dbGet, dbPut, dbClear } from '../core/idb.js';
+import { dbGet, dbPut, dbClear, dbGetAllKeys } from '../core/idb.js';
 import { makeSearchKey } from './titleNormalizer.js';
 import { posterUrl } from './tmdbClient.js';
 
@@ -179,6 +179,10 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
       return client.enabled;
     },
     getMeta,
+    /** How many titles have their metadata downloaded (all languages). */
+    async countMeta() {
+      return (await dbGetAllKeys(db, 'tmdb', { range: IDBKeyRange.bound('meta:', 'meta:\uffff') })).length;
+    },
     /** Forgets every cached answer (metadata, matches, genres, recommendations). */
     async clearAll() {
       memory.clear();

@@ -3,6 +3,7 @@ import { log } from '../core/logger.js';
 
 const TOKEN_KEY = 'trakt.token';
 const QUEUE_KEY = 'trakt.queue';
+const ACCOUNT_KEY = 'trakt.account';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** History payload for one finished title (movie, or one episode of a show). */
@@ -61,6 +62,22 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
     async disconnect() {
       await kvDelete(db, TOKEN_KEY);
       await kvDelete(db, QUEUE_KEY);
+      await kvDelete(db, ACCOUNT_KEY);
+    },
+    /** Username of the connected account (kept after the first lookup), or '' when unknown. */
+    async account() {
+      const stored = await kvGet(db, ACCOUNT_KEY, '');
+      if (stored) return stored;
+      try {
+        const access = await token();
+        if (!access) return '';
+        const res = await client.profile(access);
+        const name = res.ok && res.data && res.data.user ? String(res.data.user.username || '') : '';
+        if (name) await kvSet(db, ACCOUNT_KEY, name);
+        return name;
+      } catch {
+        return '';
+      }
     },
     /**
      * Device-code login. `onCode({ code, url })` shows the code to the user; resolves true when the

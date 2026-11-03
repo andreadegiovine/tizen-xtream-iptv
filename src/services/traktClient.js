@@ -43,6 +43,8 @@ export function createTraktClient({ clientId = '', clientSecret = '', getCredent
         method: 'POST',
         body: { refresh_token: refreshToken, client_id: getCredentials().clientId, client_secret: getCredentials().clientSecret, redirect_uri: 'urn:ietf:wg:oauth:2.0:oob', grant_type: 'refresh_token' },
       }),
+    /** Signed-in user (username) for the settings page. */
+    profile: (token) => call('/users/settings', { token }),
     addHistory: (token, payload) => call('/sync/history', { method: 'POST', body: payload, token }),
     watchedMovies: (token) => call('/sync/watched/movies', { token }),
     watchedShows: (token) => call('/sync/watched/shows', { token }),

@@ -125,39 +125,94 @@ export function describeMeta(entry, locale, ready, running = null) {
   });
 }
 
-/** "Metadata" table in the same style as the catalog one: TMDB, genres and Trakt, with state and timings. */
-export function createMetaPanel(ctx) {
-  const rows = [
-    { name: 'tmdb', label: 'TMDB', ready: () => Boolean(ctx.tmdb && ctx.tmdb.enabled) },
-    { name: 'genres', label: t('meta.genres'), ready: () => true },
-    { name: 'trakt', label: 'Trakt', ready: () => Boolean(ctx.trakt && ctx.trakt.enabled) },
-  ].map((row) => {
-    const status = h('span', { class: 'sync-status' });
-    return { ...row, status, el: h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: row.label }), status) };
+/** Table with a title, icon buttons at the right of the title and text rows: `{ el, rows, buttons }`. */
+function createTable(title, buttons, rows) {
+  const status = rows.map((row) => ({ ...row, status: h('span', { class: 'sync-status' }) }));
+  status.forEach((row) => {
+    row.el = h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: row.label }), row.status);
   });
+  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: title }), h('div', { class: 'panel-buttons' }, buttons)), h('div', { class: 'sync' }, status.map((r) => r.el)));
+  return { el, rows: status };
+}
+
+/** "TMDB" table: download state, genre search, titles in the database; remove and update buttons. */
+export function createTmdbPanel(ctx) {
   const button = refreshButton(t('settings.metaUpdate'));
   const removeButton = h('button', { class: 'btn danger icon-only panel-button', type: 'button', 'aria-label': t('settings.metaRemove'), title: t('settings.metaRemove') }, icon('remove'));
-  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('meta.title') }), h('div', { class: 'panel-buttons' }, removeButton, button)), h('div', { class: 'sync' }, rows.map((r) => r.el)));
+  const ready = () => Boolean(ctx.tmdb && ctx.tmdb.enabled);
+  const table = createTable(t('tmdb.title'), [removeButton, button], [
+    { name: 'tmdb', label: t('tmdb.download') },
+    { name: 'genres', label: t('meta.genres') },
+    { name: 'count', label: t('tmdb.count') },
+  ]);
 
   async function refresh() {
     const log = await ctx.syncLog.get();
     const locale = i18n.getLocale();
-    const connected = ctx.trakt && ctx.trakt.enabled ? await ctx.trakt.isConnected().catch(() => false) : false;
     const active = new Map(ctx.operations.list().map((op) => [op.id, op]));
-    rows.forEach((row) => {
-      let text = describeMeta(log[row.name], locale, row.ready(), active.get(row.name));
-      if (row.name === 'trakt' && row.ready() && !connected && !active.has('trakt')) text = t('settings.notConnected');
+    for (const row of table.rows) {
+      if (row.name === 'count') {
+        row.status.textContent = ready() ? formatNumber(await ctx.tmdb.countMeta(), locale) : t('settings.notConfigured');
+        continue;
+      }
       row.status.classList.toggle('in-progress', active.has(row.name));
-      row.status.textContent = text;
-    });
+      row.status.textContent = describeMeta(log[row.name], locale, row.name === 'genres' || ready(), active.get(row.name));
+    }
   }
   let unsubscribe = null;
   return {
-    el,
+    el: table.el,
     button,
     removeButton,
     refresh,
     /** Follows the operations: a row says "running since…" while it works and shows the new result when it ends. */
+    mount() {
+      unsubscribe = ctx.operations.onChange(() => refresh().catch(() => undefined));
+    },
+    destroy() {
+      if (unsubscribe) unsubscribe();
+    },
+  };
+}
+
+/** "Trakt" table: connected account and sync state; connect, remove and sync buttons (the last two only when connected). */
+export function createTraktPanel(ctx) {
+  const mk = (cls, name, label) => h('button', { class: `btn ${cls} icon-only panel-button`, type: 'button', 'aria-label': label, title: label }, icon(name));
+  const connectButton = mk('primary', 'user', t('settings.traktConnect'));
+  const removeButton = mk('danger', 'remove', t('settings.traktRemove'));
+  const syncButton = mk('primary', 'refresh', t('settings.traktSync'));
+  const table = createTable('Trakt', [removeButton, syncButton, connectButton], [
+    { name: 'account', label: t('trakt.account') },
+    { name: 'trakt', label: t('trakt.sync') },
+  ]);
+  let connected = false;
+  removeButton.style.display = 'none'; // shown once an account is known to be connected
+  syncButton.style.display = 'none';
+
+  async function refresh() {
+    const log = await ctx.syncLog.get();
+    const locale = i18n.getLocale();
+    const enabled = Boolean(ctx.trakt && ctx.trakt.enabled);
+    connected = enabled ? await ctx.trakt.isConnected().catch(() => false) : false;
+    const active = new Map(ctx.operations.list().map((op) => [op.id, op]));
+    const [account, sync] = table.rows;
+    if (!enabled) account.status.textContent = t('settings.notConfigured');
+    else if (!connected) account.status.textContent = t('settings.notConnected');
+    else account.status.textContent = (await ctx.trakt.account().catch(() => '')) || t('settings.connected');
+    sync.status.classList.toggle('in-progress', active.has('trakt'));
+    sync.status.textContent = describeMeta(log.trakt, locale, enabled && connected, active.get('trakt'));
+    if (enabled && !connected && !active.has('trakt')) sync.status.textContent = t('settings.notConnected');
+    removeButton.style.display = connected ? '' : 'none';
+    syncButton.style.display = connected ? '' : 'none';
+  }
+  let unsubscribe = null;
+  return {
+    el: table.el,
+    connectButton,
+    removeButton,
+    syncButton,
+    isConnected: () => connected,
+    refresh,
     mount() {
       unsubscribe = ctx.operations.onChange(() => refresh().catch(() => undefined));
     },
