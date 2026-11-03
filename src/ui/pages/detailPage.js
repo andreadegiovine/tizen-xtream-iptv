@@ -472,7 +472,6 @@ export function createDetailPage(ctx, params) {
     if (entry.type === 'series' && info.seasons && info.seasons.length && !seasonChosen) {
       seasonIndex = seasonIndexOf(info.seasons, pickNextEpisode(flattenEpisodes(info.seasons), records).episode);
     }
-    if (info && info.genre && ctx.genres) ctx.genres.recordFor(entry, info.genre, 'info').catch(() => undefined); // provider genres for titles whose list row has none
     fillText();
     build();
     if (ctx.meta) {
@@ -482,7 +481,6 @@ export function createDetailPage(ctx, params) {
         log.warn('Metadata failed', err && err.message);
       }
       if (destroyed) return;
-      if (meta && ctx.genres && meta.genreList) ctx.genres.recordFor(entry, meta.genreList).catch(() => undefined);
       if (meta) {
         fillText();
         build();

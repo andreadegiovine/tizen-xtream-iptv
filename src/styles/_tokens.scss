@@ -17,5 +17,7 @@ $topbar-item-height: 48px;
 $page-top: ($gutter - ($topbar-height - $topbar-item-height) * 0.5);
 $card-w: 224px;
 $card-gap: 18px;
+// Room between a card's content and its focus border: taken from the margin, so the footprint stays the same.
+$card-pad: 6px;
 $focus-scale: 1.06;
 $font: 'Netflix Sans', 'Helvetica Neue', Roboto, Arial, sans-serif;

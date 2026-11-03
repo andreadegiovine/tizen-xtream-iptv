@@ -80,7 +80,7 @@ Decisions agreed during the design phase. Update this file when a decision chang
 
 ## Sfoglia il catalogo (2026-11-02)
 - Una pagina `browse` per film/serie/live: categorie a sinistra, griglia paginata a destra (21 titoli per pagina). Le pagine si leggono con cursori sugli indici `byTypeAdded` / `byCatAdded`; nessuna lista intera viene caricata in memoria.
-- Dettagli del sync e aggiornamento manuale: sezione Provider. La Home è un riepilogo.
+- Dettagli del sync e aggiornamento manuale: in cima alle Impostazioni (tabelle Catalogo e Metadata). La sezione Provider ha solo l'elenco.
 
 ## Riproduzione, stato di visione e metadati (2026-11-02, notte)
 - Un solo `playerController` (macchina a stati) sopra un motore intercambiabile: AVPlay sulla TV, `<video>` in un browser desktop. I controlli sono HTML.

@@ -78,7 +78,7 @@ export function listGenres(db, type) {
         const cursor = request.result;
         if (!cursor) return;
         const row = cursor.value;
-        if (!found.has(row.genreKey)) found.set(row.genreKey, { key: row.genreKey, name: row.name });
+        if (row.genreKey && !found.has(row.genreKey)) found.set(row.genreKey, { key: row.genreKey, name: row.name });
         cursor.continue([type, `${row.genreKey}\u0000`]); // jump to the next genre
       };
     });

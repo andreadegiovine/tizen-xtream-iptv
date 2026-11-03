@@ -8,7 +8,7 @@ export async function loadSearchRows(db, types) {
     const tx = db.transaction('entries', 'readonly');
     const all = await requestToPromise(tx.objectStore('entries').index('byTypeAdded').getAll(IDBKeyRange.bound([type, 0], [type, Number.MAX_SAFE_INTEGER])));
     for (const entry of all) {
-      rows.push({ key: entry.key, type, name: entry.name, year: entry.year, icon: entry.icon, keys: entry.searchKeys || [makeSearchKey(entry.name)], added: entry.added });
+      rows.push({ key: entry.key, type, name: entry.name, year: entry.year, icon: entry.icon, rating: entry.rating, tmdbId: entry.tmdbId, defaultId: entry.defaultId, members: entry.members, categoryIds: entry.categoryIds, keys: entry.searchKeys || [makeSearchKey(entry.name)], added: entry.added });
     }
   }
   return rows;

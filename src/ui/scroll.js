@@ -21,12 +21,15 @@ export function ensureVisible(el, { margin = 32, first = false } = {}) {
   }
   const pageRect = page.getBoundingClientRect();
   const rect = el.getBoundingClientRect();
+  // A sticky head (title + page number) covers the top of the viewport: keep the element below it.
+  const sticky = page.querySelector('.sticky-head');
+  const inset = sticky ? sticky.getBoundingClientRect().height : 0;
   page.scrollTop = Math.max(
     0,
     computeScrollTop({
       elTop: rect.top,
       elBottom: rect.bottom,
-      viewTop: pageRect.top,
+      viewTop: pageRect.top + inset,
       viewBottom: pageRect.bottom,
       scrollTop: page.scrollTop,
       margin,

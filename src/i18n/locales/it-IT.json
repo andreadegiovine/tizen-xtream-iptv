@@ -176,5 +176,10 @@
   "browse.categories": "Categorie",
   "browse.emptyContinue": "Niente da riprendere.",
   "browse.emptyFavorites": "Nessun preferito in questa sezione.",
-  "browse.emptyGenre": "Nessun titolo di questo genere nel catalogo."
+  "browse.emptyGenre": "Nessun titolo di questo genere nel catalogo.",
+  "meta.title": "Metadata",
+  "meta.genres": "Generi",
+  "meta.never": "mai eseguito",
+  "meta.ran": "{count} elementi · aggiornato {time} · {seconds}",
+  "meta.failed": "errore · tentato {time} · {seconds}"
 }

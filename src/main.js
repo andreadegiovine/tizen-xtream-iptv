@@ -26,7 +26,9 @@ import { createDetailsService } from './services/details.js';
 import { WatchStore, watchKey } from './services/watchStore.js';
 import { summarizeWatch, watchStatus } from './services/watchStatus.js';
 import { createDefaultEngine } from './services/playerEngines.js';
+import { createSyncLog } from './services/syncLog.js';
 import { createGenreIndex } from './services/genreIndex.js';
+import { createGenreWorker } from './services/createGenreWorker.js';
 import { createSuggestionsService } from './services/suggestions.js';
 import { createSuggestionsPage } from './ui/pages/suggestionsPage.js';
 import { createFavoritesPage } from './ui/pages/favoritesPage.js';
@@ -82,8 +84,15 @@ async function boot() {
   ctx.watch = createWatchState({ store: new WatchStore(db), trakt: ctx.trakt });
   const tmdb = createTmdbService({ db, client: createTmdbClient({ getApiKey: () => ctx.apiKeys.get().tmdbKey }), getLanguage: () => i18n.getLocale() });
   ctx.tmdb = tmdb;
-  ctx.genres = createGenreIndex({ active, tmdb, isBusy: () => Boolean(router.current && router.current.name === 'player') });
-  tmdb.setMetaListener((type, tmdbId, value) => ctx.genres.onMeta(type, tmdbId, value));
+  ctx.syncLog = createSyncLog({ db });
+  ctx.genres = createGenreIndex({
+    active,
+    syncLog: ctx.syncLog,
+    getTmdbKey: () => ctx.apiKeys.get().tmdbKey,
+    getLanguage: () => i18n.getLocale(),
+    createWorker: createGenreWorker,
+    isBusy: () => Boolean(catalog.getState().running || (router.current && router.current.name === 'player')),
+  });
   ctx.suggestions = createSuggestionsService({ active, watch: ctx.watch, tmdb, trakt: ctx.trakt, getSource: async () => (await settings.get()).suggestionSource });
   ctx.meta = { forEntry: (entry) => tmdb.forEntry(entry) };
   const epg = createEpgService({ active, providers, createWorker: createEpgWorker });
@@ -170,7 +179,7 @@ async function boot() {
   catalog.onChange((state) => {
     if (wasSyncing && !state.running) {
       ctx.search.invalidate();
-      ctx.genres.backfill().catch(() => undefined); // fills in TMDB genres a few titles at a time
+      ctx.genres.backfill().catch(() => undefined); // the genre worker finds genres the lists did not carry
       // The guide only matters once the channel list is in place; at most once a day.
       if (!state.error) epg.maybeSync().catch(() => undefined);
     }

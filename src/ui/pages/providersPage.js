@@ -1,14 +1,12 @@
 import { h } from '../dom.js';
 import { t } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
-import { GridModel, ListModel } from '../focus/models.js';
+import { GridModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { log } from '../../core/logger.js';
-import { createSyncPanel } from '../components/syncPanel.js';
 
 const ZONE_ID = 'providers';
-const SYNC_ZONE = 'providerSync';
 const COLUMNS = 3;
 export const ProviderAction = Object.freeze({ USE: 'use', EDIT: 'edit', REMOVE: 'remove', ADD: 'add' });
 
@@ -35,8 +33,6 @@ export function buildCells(providers, activeId) {
 
 export function createProvidersPage(ctx, params = {}) {
   const list = h('div', { class: 'provider-list' });
-  const panel = createSyncPanel(ctx);
-  let hasActive = false;
   let cells = [];
   let nodes = [];
   let destroyed = false;
@@ -45,19 +41,13 @@ export function createProvidersPage(ctx, params = {}) {
     return Promise.all([ctx.providers.list(), ctx.providers.getActiveId()]).then(([providers, activeId]) => {
       if (destroyed) return;
       cells = buildCells(providers, activeId);
-      hasActive = Boolean(activeId) && providers.some((p) => p.id === activeId);
-      panel.el.style.display = hasActive ? '' : 'none';
-      if (hasActive && panel.providerId !== activeId) {
-        panel.providerId = activeId;
-        panel.setProvider(activeId);
-      }
       nodes = cells.map((cell) => {
         if (cell.action === ProviderAction.ADD) {
           return h('button', { class: 'btn primary provider-add', type: 'button', text: t('providers.add') });
         }
         const labelKey = cell.action === ProviderAction.USE && cell.disabled ? 'providers.active' : `providers.${cell.action}`;
         return h('button', {
-          class: `btn provider-action${cell.disabled ? ' disabled' : ''}${cell.action === ProviderAction.REMOVE ? ' danger' : ''}`,
+          class: `btn provider-action${cell.disabled ? ' is-current' : ''}${cell.action === ProviderAction.REMOVE ? ' danger' : ''}`,
           type: 'button',
           text: t(labelKey),
         });
@@ -124,17 +114,6 @@ export function createProvidersPage(ctx, params = {}) {
     }
   }
 
-  const syncZone = new FocusZone({
-    id: SYNC_ZONE,
-    model: new ListModel({ orientation: 'vertical', getCount: () => (hasActive ? 1 : 0) }),
-    onFocus: () => {
-      panel.button.classList.add('focused');
-      ensureVisible(panel.button, { first: true });
-    },
-    onBlur: () => panel.button.classList.remove('focused'),
-    onActivate: () => panel.syncNow(),
-  });
-
   const zone = new FocusZone({
     id: ZONE_ID,
     model: new GridModel({ columns: COLUMNS, getCount: () => cells.length }),
@@ -150,23 +129,16 @@ export function createProvidersPage(ctx, params = {}) {
   });
 
   return {
-    el: h('section', { class: 'page providers' }, h('h1', { text: t('providers.title') }), panel.el, list),
+    el: h('section', { class: 'page providers' }, h('h1', { text: t('providers.title') }), list),
     mount() {
-      ctx.focus.register(syncZone);
       ctx.focus.register(zone);
-      // Top bar → sync button → provider list (the sync zone is skipped while there is no active provider).
-      ctx.focus.link(SYNC_ZONE, 'up', TOPBAR_ZONE);
-      ctx.focus.link(SYNC_ZONE, 'down', ZONE_ID);
-      ctx.focus.link(ZONE_ID, 'up', SYNC_ZONE);
-      ctx.focus.link(TOPBAR_ZONE, 'down', SYNC_ZONE);
-      panel.mount();
+      ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
+      ctx.focus.link(TOPBAR_ZONE, 'down', ZONE_ID);
       // Opens on the provider list: the first thing to do here is pick or edit a provider.
       render(params.focusIndex || 0);
     },
     destroy() {
       destroyed = true;
-      panel.destroy();
-      ctx.focus.unregister(SYNC_ZONE);
       ctx.focus.unregister(ZONE_ID);
     },
   };

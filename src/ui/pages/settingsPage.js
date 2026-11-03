@@ -5,6 +5,7 @@ import { ListModel } from '../focus/models.js';
 import { LANGUAGE_OPTIONS, GRID_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SUGGESTION_SOURCE_OPTIONS } from '../../services/settings.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
+import { createSyncPanel, createMetaPanel } from '../components/syncPanel.js';
 import { log } from '../../core/logger.js';
 
 const ZONE_ID = 'settings';
@@ -120,7 +121,7 @@ export function createSettingsPage(ctx) {
       const answer = await dialog;
       if (!answer) controller.abort();
       const connected = await login.catch(() => false);
-      if (connected) ctx.watch.importFromTrakt().catch((err) => log.warn('Trakt import failed', err && err.message));
+      if (connected) ctx.syncLog.track('trakt', () => ctx.watch.importFromTrakt()).catch((err) => log.warn('Trakt import failed', err && err.message));
       await trakt.refresh();
     },
   };
@@ -144,7 +145,7 @@ export function createSettingsPage(ctx) {
                 if (match) items.push({ type: match[1], tmdbId: Number(match[2]) });
               }
             }
-            toast(t('settings.tmdbSyncDone', { count: await ctx.tmdb.refresh(items) }));
+            toast(t('settings.tmdbSyncDone', { count: await ctx.syncLog.track('tmdb', () => ctx.tmdb.refresh(items)) }));
             ctx.genres.backfill().catch(() => undefined); // genres of the rest of the catalog, in background
           },
         }),
@@ -164,7 +165,7 @@ export function createSettingsPage(ctx) {
             }
             toast(t('settings.working'), 15000);
             await ctx.trakt.flush();
-            toast(t('settings.traktSyncDone', { count: await ctx.watch.importFromTrakt() }));
+            toast(t('settings.traktSyncDone', { count: await ctx.syncLog.track('trakt', () => ctx.watch.importFromTrakt()) }));
           },
         }),
         actionRow({
@@ -183,7 +184,13 @@ export function createSettingsPage(ctx) {
 
   const diagnostics = { el: h('div', { class: 'row' }, h('span', { text: t('settings.diagnostics') })), refresh: async () => undefined, activate: async () => ctx.router.push('diagnostics') };
 
+  // Catalog and metadata tables at the top; the "update the catalog" button is the first row of the list.
+  const panel = createSyncPanel(ctx);
+  const metaPanel = createMetaPanel(ctx);
+  const syncRow = { el: panel.button, refresh: async () => undefined, activate: async () => panel.syncNow() };
+
   const rows = [
+    syncRow,
     optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
     optionRow({ ctx, labelKey: 'settings.gridItems', key: 'gridItems', options: GRID_OPTIONS }),
     optionRow({ ctx, labelKey: 'settings.carouselItems', key: 'carouselItems', options: CAROUSEL_OPTIONS }),
@@ -216,14 +223,22 @@ export function createSettingsPage(ctx) {
   });
 
   return {
-    el: h('section', { class: 'page' }, h('h1', { text: t('settings.title') }), h('div', { class: 'list' }, rows.map((r) => r.el))),
+    el: h('section', { class: 'page' }, h('h1', { text: t('settings.title') }), panel.el, metaPanel.el, h('div', { class: 'list' }, rows.map((r) => r.el))),
     mount() {
+      panel.mount();
+      ctx.providers.getActiveId().then((id) => {
+        panel.el.style.display = id ? '' : 'none';
+        syncRow.el.style.display = id ? '' : 'none';
+        if (id) panel.setProvider(id);
+      });
+      metaPanel.refresh().catch(() => undefined);
       ctx.focus.register(zone);
       ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
       ctx.focus.link(TOPBAR_ZONE, 'down', ZONE_ID);
       ctx.focus.focus(ZONE_ID, 0);
     },
     destroy() {
+      panel.destroy();
       ctx.focus.unregister(ZONE_ID);
     },
     saveState: () => ({ index: zone.index }),

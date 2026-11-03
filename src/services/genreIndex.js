@@ -1,102 +1,118 @@
-import { dbGet, dbGetAllKeys, dbDeleteMany, transactionDone } from '../core/idb.js';
-import { mergeGenres } from './genres.js';
+import { dbGetAllKeys, dbDeleteMany } from '../core/idb.js';
 import { listGenres, genreEntryKeys } from './catalogQuery.js';
+import { runGenreBackfillForProvider } from './genreBackfill.js';
+import { createGate } from '../core/gate.js';
 import { log } from '../core/logger.js';
 
 const STORE = 'entry_genre_tmdb';
-const BATCH = 60;
-const MAX_PER_RUN = 2000;
+const WATCH_MS = 4000;
 
 /**
- * Genres of the active provider's catalog. Provider genres are written by the sync; TMDB genres are added here
- * as TMDB metadata arrives (visible cards, detail pages and a background pass after each sync). Both feed the
- * same normalised keys, so "Animazione" from the provider and "Animation" from TMDB are one sidebar entry.
+ * Genres of the active provider's catalog. Provider genres come with the catalog sync. The rest is found in the
+ * background by a worker (TMDB or the provider's detail call) and never depends on which titles are opened.
+ * Every spelling is normalised (not translated) so the same genre is one sidebar entry.
  */
-export function createGenreIndex({ active, tmdb, isBusy = () => false, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
+export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => '', getLanguage = () => 'en', createWorker = null, isBusy = () => false }) {
+  let worker = null;
   let running = false;
   let again = false;
+  let watcher = null;
+  let sent = false;
+  const gate = createGate();
 
-  /** Stores the TMDB genres of one entry; skips the write when nothing changed. */
-  async function record(db, entry, genreNames, source = 'tmdb') {
-    const genres = mergeGenres(genreNames);
-    const prefix = `${entry.key}|`;
-    const suffix = `|${source}`;
-    const existing = (await dbGetAllKeys(db, STORE, { range: IDBKeyRange.bound(prefix, `${prefix}￿`) })).filter((key) => key.endsWith(suffix));
-    const wanted = genres.map((g) => `${prefix}${g.key}${suffix}`);
-    if (existing.length === wanted.length && wanted.every((key) => existing.indexOf(key) >= 0)) return false;
-    const tx = db.transaction(STORE, 'readwrite');
-    const store = tx.objectStore(STORE);
-    existing.forEach((key) => store.delete(key));
-    genres.forEach((g) => store.put({ key: `${prefix}${g.key}${suffix}`, entryKey: entry.key, type: entry.type, genreKey: g.key, name: g.name, added: entry.added || 0 }));
-    await transactionDone(tx);
-    return true;
+  function setPaused(paused) {
+    if (paused === gate.isPaused()) return;
+    if (paused) gate.pause();
+    else gate.resume();
+    if (worker) worker.postMessage({ op: paused ? 'pause' : 'resume' });
   }
 
-  /** Called with every TMDB metadata answer: `${type}:t${tmdbId}` is the grouped entry's key. */
-  async function onMeta(type, tmdbId, meta) {
-    if (!meta || !meta.genreList || !meta.genreList.length) return;
-    const current = await active.get();
-    if (!current) return;
-    const entry = await dbGet(current.db, 'entries', `${type}:t${tmdbId}`);
-    if (entry) await record(current.db, entry, meta.genreList);
+  function watch() {
+    clearInterval(watcher);
+    watcher = setInterval(() => setPaused(isBusy()), WATCH_MS);
   }
 
-  /** Entries that have a tmdb id but no TMDB genre yet, newest first. */
-  async function missing(db, type, limit, tried) {
-    const done = new Set((await dbGetAllKeys(db, STORE)).filter((key) => key.endsWith('|tmdb')).map((key) => key.slice(0, key.indexOf('|'))));
+  function runInWorker(payload) {
     return new Promise((resolve, reject) => {
-      const out = [];
-      const tx = db.transaction('entries', 'readonly');
-      const request = tx.objectStore('entries').index('byTypeAdded').openCursor(IDBKeyRange.bound([type, 0], [type, Number.MAX_SAFE_INTEGER]), 'prev');
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (!cursor) return;
-        const entry = cursor.value;
-        if (entry.tmdbId && !done.has(entry.key) && !tried.has(entry.key)) out.push(entry);
-        if (out.length < limit) cursor.continue();
+      let instance;
+      try {
+        instance = createWorker();
+      } catch (err) {
+        reject(err);
+        return;
+      }
+      worker = instance;
+      const timer = setTimeout(() => {
+        instance.terminate();
+        worker = null;
+        reject(new Error('worker did not report ready'));
+      }, 4000);
+      instance.onmessage = (event) => {
+        const message = event.data || {};
+        if (message.event === 'ready') {
+          clearTimeout(timer);
+          sent = true;
+          instance.postMessage({ op: 'start', ...payload });
+          if (gate.isPaused()) instance.postMessage({ op: 'pause' });
+        } else if (message.event === 'done') {
+          instance.terminate();
+          worker = null;
+          resolve(message.done || 0);
+        }
       };
-      tx.onerror = () => reject(tx.error);
-      tx.oncomplete = () => resolve(out);
+      instance.onerror = (event) => {
+        clearTimeout(timer);
+        instance.terminate();
+        worker = null;
+        reject(new Error((event && event.message) || 'worker error'));
+      };
     });
   }
 
-  /** Downloads metadata (which records the genres through `onMeta`) for titles that lack TMDB genres. */
-  async function backfill() {
-    if (!tmdb.enabled) return 0;
+  /** Starts (or queues) the background search for missing genres of the active provider. */
+  function backfill() {
     if (running) {
       again = true;
-      return 0;
+      return Promise.resolve(0);
     }
+    return syncLog ? syncLog.track('genres', run) : run();
+  }
+
+  async function run() {
+    const current = await active.get();
+    if (!current) return 0;
     running = true;
-    let total = 0;
+    sent = false;
+    let done = 0;
+    const p = current.provider;
+    const payload = {
+      provider: { id: p.id, baseUrl: p.baseUrl, username: p.username, password: p.password },
+      tmdbKey: getTmdbKey(),
+      language: getLanguage(),
+    };
+    watch();
     try {
-      const current = await active.get();
-      if (!current) return 0;
-      for (const type of ['movie', 'series']) {
-        const tried = new Set(); // titles TMDB has no genres for stay "missing": try each only once per run
-        let list = await missing(current.db, type, BATCH, tried);
-        while (list.length && total < MAX_PER_RUN) {
-          while (isBusy()) await wait(30000); // never compete with playback
-          await Promise.all(list.map((entry) => tmdb.getMeta(type, entry.tmdbId).catch(() => null)));
-          total += list.length;
-          list.forEach((entry) => tried.add(entry.key));
-          list = await missing(current.db, type, BATCH, tried);
-        }
+      try {
+        done = createWorker ? await runInWorker(payload) : await runGenreBackfillForProvider({ ...payload, gate: gate.wait });
+      } catch (err) {
+        if (sent) throw err; // the worker was running: do not start it twice
+        log.warn('Genre worker unavailable, using the main thread:', err.message);
+        done = await runGenreBackfillForProvider({ ...payload, gate: gate.wait });
       }
     } catch (err) {
       log.warn('Genre backfill failed', err && err.message);
     } finally {
       running = false;
+      clearInterval(watcher);
     }
     if (again) {
       again = false;
-      return total + (await backfill());
+      done += await run();
     }
-    return total;
+    return done;
   }
 
   return {
-    onMeta,
     backfill,
     /** Genres for the sidebar: [{ key, name }], only those that still have at least one title. */
     async list(type) {
@@ -107,12 +123,7 @@ export function createGenreIndex({ active, tmdb, isBusy = () => false, wait = (m
       const current = await active.get();
       return current ? genreEntryKeys(current.db, type, genreKey) : [];
     },
-    /** Detail pages know the exact entry (also when TMDB was found by title match). */
-    async recordFor(entry, genreNames, source = 'tmdb') {
-      const current = await active.get();
-      if (current && entry && entry.type !== 'live') await record(current.db, entry, genreNames, source);
-    },
-    /** "Remove all TMDB data" also forgets the genres it provided. */
+    /** "Remove all TMDB data" also forgets the genres it provided (provider ones stay). */
     async clearTmdb() {
       const current = await active.get();
       if (!current) return;

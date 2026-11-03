@@ -176,5 +176,10 @@
   "browse.categories": "Categories",
   "browse.emptyContinue": "Nothing to resume.",
   "browse.emptyFavorites": "No favorites in this section.",
-  "browse.emptyGenre": "No title of this genre in the catalog."
+  "browse.emptyGenre": "No title of this genre in the catalog.",
+  "meta.title": "Metadata",
+  "meta.genres": "Genres",
+  "meta.never": "never run",
+  "meta.ran": "{count} items · updated {time} · {seconds}",
+  "meta.failed": "failed · tried {time} · {seconds}"
 }

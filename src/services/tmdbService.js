@@ -76,7 +76,6 @@ export function createQueue(concurrency = 3) {
 export function createTmdbService({ db, client, getLanguage, now = Date.now }) {
   const queue = createQueue(3);
   const memory = new Map();
-  let metaListener = null;
 
   async function cached(store, key, ttlFor, fetcher) {
     const hit = await dbGet(db, store, key);
@@ -108,7 +107,6 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now }) {
       }
     });
     memory.set(key, record.value);
-    if (metaListener && record.value) Promise.resolve(metaListener(type, tmdbId, record.value)).catch(() => undefined);
     return record.value;
   }
 
@@ -139,10 +137,6 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now }) {
       return client.enabled;
     },
     getMeta,
-    /** Called with (type, tmdbId, meta) for every metadata answer; used to index genres. */
-    setMetaListener(fn) {
-      metaListener = fn;
-    },
     /** Forgets every cached answer (metadata, matches, genres, recommendations). */
     async clearAll() {
       memory.clear();

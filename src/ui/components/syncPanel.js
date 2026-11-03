@@ -100,3 +100,39 @@ export function createSyncPanel(ctx) {
     },
   };
 }
+
+/** One line of the Metadata table: "ready · last run <time> · N items · 3.2 s". */
+export function describeMeta(entry, locale, ready) {
+  if (!ready) return t('settings.notConfigured');
+  if (!entry) return t('meta.never');
+  return t(entry.failed ? 'meta.failed' : 'meta.ran', {
+    time: formatDateTime(entry.lastSync, locale),
+    count: formatNumber(entry.count, locale),
+    seconds: `${formatSeconds(entry.durationMs)} s`,
+  });
+}
+
+/** "Metadata" table in the same style as the catalog one: TMDB, genres and Trakt, with state and timings. */
+export function createMetaPanel(ctx) {
+  const rows = [
+    { name: 'tmdb', label: 'TMDB', ready: () => Boolean(ctx.tmdb && ctx.tmdb.enabled) },
+    { name: 'genres', label: t('meta.genres'), ready: () => true },
+    { name: 'trakt', label: 'Trakt', ready: () => Boolean(ctx.trakt && ctx.trakt.enabled) },
+  ].map((row) => {
+    const status = h('span', { class: 'sync-status' });
+    return { ...row, status, el: h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: row.label }), status) };
+  });
+  const el = h('div', { class: 'sync-panel' }, h('h2', { text: t('meta.title') }), h('div', { class: 'sync' }, rows.map((r) => r.el)));
+
+  async function refresh() {
+    const log = await ctx.syncLog.get();
+    const locale = i18n.getLocale();
+    const connected = ctx.trakt && ctx.trakt.enabled ? await ctx.trakt.isConnected().catch(() => false) : false;
+    rows.forEach((row) => {
+      let text = describeMeta(log[row.name], locale, row.ready());
+      if (row.name === 'trakt' && row.ready() && !connected) text = t('settings.notConnected');
+      row.status.textContent = text;
+    });
+  }
+  return { el, refresh };
+}

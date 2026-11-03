@@ -449,8 +449,18 @@ h2 {
   background: $fail;
 }
 
+// The provider that is in use: green, with the same focus look as the red "Remove".
+.btn.is-current,
+.btn.is-current.focused {
+  background: #2fa84f;
+}
+
+.list .sync-button {
+  width: 880px;
+}
+
 .page.browse {
-  padding-top: $page-top;
+  padding-top: 0; // the sticky head starts at the very top, nothing can show above it
 }
 
 .browse-body {
@@ -461,9 +471,10 @@ h2 {
 // Sticky and exactly as tall as the visible area under the bar (page padding included).
 .browse-cats {
   position: sticky;
-  top: 0;
+  top: $page-top;
   flex: none;
   width: 340px;
+  margin-top: $page-top;
   height: calc(100vh - #{$topbar-height} - #{$page-top} - #{$gutter});
   margin-right: $gutter;
   overflow-y: auto;
@@ -533,7 +544,7 @@ h2 {
   display: flex;
   align-items: baseline;
   min-height: 56px;
-  padding: 8px 0;
+  padding: $page-top 0 20px; // the padding is part of the opaque head, so cards never show above or around it
   background: $bg;
 }
 
@@ -557,8 +568,9 @@ h2 {
 .card {
   box-sizing: border-box;
   position: relative;
-  width: $card-w;
-  margin: 0 $card-gap 18px 0;
+  width: $card-w + 2 * $card-pad;
+  margin: 0 ($card-gap - 2 * $card-pad) (18px - 2 * $card-pad) 0;
+  padding: $card-pad;
   border: 3px solid transparent;
   border-radius: 0;
   background: transparent;
