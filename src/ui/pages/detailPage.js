@@ -118,7 +118,7 @@ export function createDetailPage(ctx, params) {
   const actionsEl = h('div', { class: 'detail-actions' });
   const categoriesEl = h('div', { class: 'detail-categories' });
   const tagsEl = h('div', { class: 'detail-categories' });
-  const companiesEl = h('div', { class: 'detail-categories detail-companies' });
+  const companiesEl = h('div', { class: 'detail-categories' });
   const episodesEl = h('div', { class: 'detail-section' });
   const castEl = h('div', { class: 'detail-section' });
   const relatedEl = h('div', { class: 'detail-section' });
@@ -266,28 +266,13 @@ export function createDetailPage(ctx, params) {
     renderCompanies();
   }
 
-  /** Production companies: small logos (name when a company has none), a plain horizontal list. */
+  /** Production companies: names as chips, same style as categories and genres but not clickable. */
   function renderCompanies() {
     clear(companiesEl);
     const list = entry.type === 'live' || !meta || !meta.companies ? [] : meta.companies;
     if (!list.length) return;
     companiesEl.appendChild(h('span', { class: 'detail-label', text: t('detail.companies') }));
-    list.forEach((company) => {
-      const item = h('span', { class: 'company', title: company.name });
-      if (company.logo) {
-        const img = h('img', { src: company.logo, alt: company.name });
-        img.addEventListener('error', () => {
-          clear(item);
-          item.classList.add('text');
-          item.textContent = company.name;
-        });
-        item.appendChild(img);
-      } else {
-        item.classList.add('text');
-        item.textContent = company.name;
-      }
-      companiesEl.appendChild(item);
-    });
+    list.forEach((company) => companiesEl.appendChild(h('span', { class: 'chip', text: company.name })));
   }
 
   function renderCast(next) {
