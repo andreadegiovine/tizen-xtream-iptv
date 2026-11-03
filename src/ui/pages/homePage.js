@@ -1,35 +1,20 @@
 import { h } from '../dom.js';
-import { t, i18n } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js';
 import { MediaType } from '../../services/mediaType.js';
-import { formatNumber } from '../../core/format.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { createCarousel } from '../components/carousel.js';
 import { getEntry, pageEntries } from '../../services/catalogQuery.js';
 import { log } from '../../core/logger.js';
 
-const TYPES = [MediaType.MOVIE, MediaType.SERIES, MediaType.LIVE];
-const LABEL_KEY = { movie: 'nav.movies', series: 'nav.series', live: 'nav.live' };
-
-/** One-line summary of what is stored for a type: "12,345 titles" or "Not synced yet". */
-export function summarizeType(meta, locale) {
-  if (!meta) return t('home.never');
-  return t('home.titles', { entries: formatNumber(meta.entryCount, locale) });
-}
-
 /** "s1e2" → "S1E2". */
 export const episodeLabel = (episodeKey) => (episodeKey ? episodeKey.toUpperCase() : '');
 
 /**
- * Home: "Continue watching", latest movies and latest series as carousels, then a catalog summary.
+ * Home: "Continue watching", latest movies and latest series as carousels.
  * Sync details and the manual update button live in the Provider section.
  */
 export function createHomePage(ctx) {
   const rowsEl = h('div', { class: 'home-rows' });
-  const providerLine = h('p', { class: 'muted' });
-  const summaryRows = TYPES.map((type) => {
-    const value = h('span', { class: 'sync-status' });
-    return { type, value, el: h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t(LABEL_KEY[type]) }), value) };
-  });
   const hint = h('p', { class: 'muted sync-info', text: t('home.hint') });
   let carousels = [];
   let providerId = null;
@@ -60,7 +45,6 @@ export function createHomePage(ctx) {
     if (!current || destroyed) return;
     const { carouselItems } = await ctx.settings.get();
     providerId = current.provider.id;
-    providerLine.textContent = `${t('home.provider')}: ${current.provider.name}`;
 
     const definitions = [];
     const recent = await ctx.watch.recent({ providerId, limit: carouselItems });
@@ -94,22 +78,10 @@ export function createHomePage(ctx) {
       if (hadFocus && ctx.focus.zones.has(hadFocus.id)) ctx.focus.focus(hadFocus.id, hadFocus.index);
     }
     hint.style.display = carousels.length ? 'none' : '';
-    refreshSummary();
-  }
-
-  function refreshSummary() {
-    if (!providerId) return;
-    ctx.catalog.readStatus(providerId).then((status) => {
-      if (destroyed) return;
-      const locale = i18n.getLocale();
-      summaryRows.forEach((row) => {
-        row.value.textContent = summarizeType(status[row.type], locale);
-      });
-    });
   }
 
   return {
-    el: h('section', { class: 'page home' }, rowsEl, providerLine, h('div', { class: 'sync' }, summaryRows.map((r) => r.el)), hint),
+    el: h('section', { class: 'page home' }, rowsEl, hint),
     mount() {
       loadRows().catch((err) => log.warn('Home failed', err && err.message));
       wasRunning = ctx.catalog.getState().running;

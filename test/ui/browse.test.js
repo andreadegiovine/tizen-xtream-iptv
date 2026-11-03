@@ -1,5 +1,4 @@
 import { createPagedGridModel, indexAfterPageChange, columnsFor } from '../../src/ui/pages/browsePage.js';
-import { summarizeType } from '../../src/ui/pages/homePage.js';
 
 const GRID_COLUMNS = 6;
 const PAGE_SIZE = 24;
@@ -51,9 +50,3 @@ describe('paged grid', () => {
   });
 });
 
-describe('home summary', () => {
-  test('shows title count or "not synced"', () => {
-    expect(summarizeType(null, 'en-US')).toBe('Not synced yet');
-    expect(summarizeType({ entryCount: 12345 }, 'en-US')).toBe('12,345 titles');
-  });
-});

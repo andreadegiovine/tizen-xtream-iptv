@@ -460,20 +460,21 @@ h2 {
 .browse-cat {
   margin-bottom: 4px;
   padding: 10px 16px;
-  border-left: 5px solid transparent;
   border-radius: 4px;
   font-size: 26px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 
-  &.current {
-    border-left-color: $accent;
-    font-weight: 700;
-  }
-
   &.focused {
     background: $bg-focus;
+  }
+
+  // Selected category: white box, black text.
+  &.current {
+    background: $text;
+    color: $bg;
+    font-weight: 700;
   }
 }
 
@@ -534,7 +535,10 @@ h2 {
     z-index: 1;
     display: none;
     align-items: center;
-    padding: 4px 10px;
+    justify-content: center;
+    height: 38px;
+    min-width: 38px;
+    padding: 0 10px;
     border-radius: 0;
     background: rgba(0, 0, 0, 0.72);
     font-size: 22px;
@@ -545,8 +549,8 @@ h2 {
     }
 
     .icon {
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
     }
   }
 
@@ -948,9 +952,6 @@ h2 {
     color: $bg;
   }
 
-  &.active.focused {
-    box-shadow: 0 0 0 3px $accent;
-  }
 }
 
 // Labelled dropdown input.
@@ -1084,5 +1085,12 @@ h2 {
 
   .card {
     flex: none;
+  }
+
+  // Padding at the end of a scrolling flex row is ignored by the TV browser: a spacer keeps the last card off the edge.
+  &::after {
+    content: '';
+    flex: none;
+    width: $gutter;
   }
 }

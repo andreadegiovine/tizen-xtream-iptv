@@ -362,7 +362,7 @@ export function createDetailPage(ctx, params) {
     }
     const watched = isEntryWatched(episodes);
     if (buttons.length && entry.type !== 'live') {
-      buttons.push({ id: 'watched', icon: 'seen', active: watched, label: watched ? t('detail.unwatched') : t('detail.watched'), run: () => toggleWatched(episodes, watched) });
+      buttons.push({ id: 'watched', icon: 'check', active: watched, label: watched ? t('detail.unwatched') : t('detail.watched'), run: () => toggleWatched(episodes, watched) });
     }
     if (buttons.length) {
       buttons.push({ id: 'favorite', icon: 'heart', active: favorite, label: favorite ? t('detail.unfavorite') : t('detail.favorite'), run: toggleFavorite });
