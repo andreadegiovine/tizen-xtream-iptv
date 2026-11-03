@@ -284,6 +284,7 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
 - **2026-11-03 (patch 14)** (**non provata su TV**): in Impostazioni, dopo Diagnostica, "Elimina tutti i dati" (con conferma): ferma i lavori in background, cancella i database dei provider e svuota quello dell'app (provider, impostazioni, chiavi, cronologia, preferiti, cache), svuota localStorage/sessionStorage e ricarica l'app come al primo avvio.
 - **2026-11-03 (patch 15)** (**non provata su TV**): logo (marchio X + "XTREAM IPTV", senza motto) a sinistra della barra superiore, non focalizzabile; nuova icona dell'app (`tizen/icon.png`, 117×117, X a nastri su fondo scuro) usata dalla build e dal widget sulla TV.
 - **2026-11-03 (patch 16)**: la ricerca parte dopo 3 s senza digitare (prima 300 ms); Invio/Giù la avviano subito; lo skeleton compare alla prima lettera.
+- **2026-11-03 (patch 17)** (**non provata su TV**): primo avvio con il logo in alto e il modulo in un riquadro senza angoli arrotondati, su uno sfondo che è la Home in versione skeleton; nel modulo provider "Verifica e salva" diventa "Conferma" ("Confirm") e "Nome" diventa "Nome del provider" ("Provider name").
 
 - Package id `XtrmIptv01` e app id `XtrmIptv01.XtreamIPTV` sono una proposta, da confermare prima di creare il profilo del certificato.
 - I privilegi in `tizen/config.xml` non sono verificati sulla TV.
