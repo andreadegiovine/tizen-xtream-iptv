@@ -1,3 +1,4 @@
+import { resetApp } from '../../services/resetApp.js';
 import { h, toast } from '../dom.js';
 import { t, i18n, detectLocale } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
@@ -241,6 +242,15 @@ export function createSettingsPage(ctx) {
     trakt,
     ...traktRows,
     diagnostics,
+    actionRow({
+      ctx,
+      label: t('settings.resetAll'),
+      confirm: t('settings.resetAllConfirm'),
+      run: async () => {
+        await resetApp({ db: ctx.db, providers: ctx.providers, stopWork: () => { ctx.genres.stop(); ctx.catalog.cancel(); }, storages: [localStorage, sessionStorage] });
+        window.location.reload();
+      },
+    }),
   ];
   rows.forEach((row) => row.refresh());
 

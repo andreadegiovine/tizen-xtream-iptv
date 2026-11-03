@@ -122,6 +122,8 @@
   "settings.metaRemoveConfirm": "Delete the metadata downloaded from TMDB (titles, posters, cast, genres)? It will be downloaded again in the background.",
   "settings.traktConnect": "Connect Trakt",
   "settings.traktDisconnectLabel": "Disconnect Trakt",
+  "settings.resetAll": "Delete all data",
+  "settings.resetAllConfirm": "Delete all data? Providers, catalogs, favourites, history, keys and settings will be erased and the app returns to its first-start state.",
   "detail.cast": "Cast",
   "detail.categories": "Categories",
   "detail.seasons.one": "{count} season",
