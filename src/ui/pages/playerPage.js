@@ -47,6 +47,8 @@ export function createPlayerPage(ctx, params) {
   let scrub = null; // seconds while the user drags / steps the progress bar, otherwise null
   let scrubMode = false; // OK on the bar: left/right move the position instead of the button focus
   let lastState = { position: 0, duration: 0 };
+  let lastPosition = null; // previous polled position, to spot jumps (a seek)
+  let tipTimer = null;
 
   const titleEl = h('div', { class: 'player-title' });
   const statusEl = h('div', { class: 'player-status' });
@@ -54,7 +56,8 @@ export function createPlayerPage(ctx, params) {
   const timeEl = h('span', { class: 'player-time' });
   const fill = h('div', { class: 'player-fill' });
   const knob = h('div', { class: 'player-knob' });
-  const bar = h('div', { class: 'player-bar' }, fill, knob);
+  const tip = h('div', { class: 'player-tip' });
+  const bar = h('div', { class: 'player-bar' }, fill, knob, tip);
   const seek = h('div', { class: 'player-seek' }, bar);
   const nextEl = h('div', { class: 'player-next' });
   const flashEl = h('div', { class: 'player-flash' });
@@ -101,12 +104,22 @@ export function createPlayerPage(ctx, params) {
     const pct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0;
     fill.style.width = `${pct}%`;
     knob.style.left = `${pct}%`;
+    tip.style.left = `${pct}%`;
+    tip.textContent = formatClock(position);
     timeEl.textContent = isLive ? t('player.live') : `${formatClock(position)} / ${formatClock(duration)}`;
+  }
+
+  /** The minute the picture now starts from, shown above the knob for a moment after a jump. */
+  function flashTip() {
+    tip.classList.add('visible');
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => tip.classList.remove('visible'), 2500);
   }
 
   function setScrub(seconds) {
     scrub = scrubTarget(seconds, 0, lastState.duration);
     seek.classList.add('scrubbing');
+    tip.classList.add('visible');
     drawProgress(scrub, lastState.duration);
   }
 
@@ -115,6 +128,7 @@ export function createPlayerPage(ctx, params) {
     scrub = null;
     scrubMode = false;
     seek.classList.remove('scrubbing');
+    tip.classList.remove('visible');
     if (commit && target !== null) controller.seekTo(target);
     drawProgress(commit && target !== null ? target : lastState.position, lastState.duration);
   }
@@ -209,7 +223,14 @@ export function createPlayerPage(ctx, params) {
   function render(state) {
     if (destroyed) return;
     lastState = state;
-    if (scrub === null) drawProgress(state.position, state.duration);
+    if (scrub === null) {
+      drawProgress(state.position, state.duration);
+      if (!isLive && lastPosition !== null && Math.abs(state.position - lastPosition) > 3) {
+        showControls();
+        flashTip();
+      }
+    }
+    lastPosition = state.position;
     let status = '';
     if (state.status === 'loading') status = t('player.loading');
     else if (state.status === 'paused') status = t('player.paused');

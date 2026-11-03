@@ -133,7 +133,8 @@ describe('runSync / runSyncForProvider', () => {
 
   test('shouldSync honours the 12 h TTL', () => {
     expect(shouldSync(null)).toBe(true);
-    expect(shouldSync({ lastSync: 1000 }, 1000 + LIST_TTL_MS - 1)).toBe(false);
+    expect(shouldSync({ lastSync: 1000, genres: true }, 1000 + LIST_TTL_MS - 1)).toBe(false);
+    expect(shouldSync({ lastSync: 1000 }, 1001)).toBe(true); // synced before genres existed
     expect(shouldSync({ lastSync: 1000 }, 1000 + LIST_TTL_MS + 1)).toBe(true);
   });
 

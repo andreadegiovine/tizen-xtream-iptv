@@ -199,7 +199,7 @@ Da fare:
 12. **Tempi con il provider reale**: motore e tempi di sync (download/elementi/titoli) mostrati nella pagina Provider, per decidere se ottimizzare le scritture.
 13. **Ridisegno (nuovo)**: icone della topbar visibili e leggibili; Provider e Impostazioni a destra; sidebar ferma durante lo scorrimento della griglia e alta fino al bordo inferiore; card uguali per film/serie/canali; stella del voto e badge ✓/clessidra; scheda: menu Versione, categorie, menu Stagione + episodi, cast; scorrimento del carosello.
 15. **Preferiti, visto, trailer (nuovo)**: cuore e occhio nella scheda e pagina Preferiti; il trailer si apre nell'app YouTube (serve un titolo con `youtube_trailer`; se non si apre dire cosa appare nel log); il tasto visto su una serie segna tutti gli episodi.
-17. **Patch 5 (generi)**: dopo un aggiornamento forzato la sidebar mostra i generi del provider; con la chiave TMDB se ne aggiungono altri col tempo; "Animazione" compare una sola volta; clic su un genere nella scheda apre il filtro giusto.
+17. **Patch 5/6 (generi)**: senza chiave TMDB la sidebar mostra i generi del provider (dopo il nuovo sync automatico); con la chiave se ne aggiungono altri col tempo; lo stesso genere compare una volta sola; clic su un genere nella scheda apre il filtro giusto.
 16. **Patch 4**: player su una riga (barra: OK poi ←/→, e trascinamento con puntatore), sidebar con generi/categorie, chip cliccabili, chiavi nelle impostazioni, pulsanti sync/rimozione, provider suggerimenti, "Potrebbe interessarti".
 14. **Player (nuovo)**: Giù porta il cursore sui pulsanti; indietro/avanti 10 s e play/pausa con OK; **formato**: i tre modi (AVPlay `setDisplayMethod`) cambiano davvero l'immagine? **sottotitoli**: l'elenco mostra le tracce del file e la scelta le attiva/disattiva (`getTotalTrackInfo`/`setSelectTrack`/`setSilentSubtitle`: da verificare se AVPlay li disegna da solo o se serve mostrare il testo dall'evento `onsubtitlechange`).
 
@@ -236,6 +236,12 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
   - La sidebar mostra solo i generi con almeno un titolo; chi esce dal catalogo (sync, categorie escluse) toglie anche i suoi generi TMDB. "Rimuovi dati TMDB" cancella anche i generi TMDB; "Sync TMDB" avvia il passaggio in background.
   - DB provider v3: aggiunge gli store senza riscaricare il catalogo, ma i generi del provider compaiono dopo il prossimo sync (aggiornamento forzato dalla pagina Provider). Limite: molti provider non mandano `genre` nelle liste film, quindi lì i generi arrivano solo da TMDB (richiede la chiave) e si riempiono gradualmente.
   - Scheda: i generi mostrati sono gli stessi della sidebar (uniti e tradotti) e portano al filtro corrispondente. Etichetta "Mostra tutto" già presente (nel codice non c'era più "Tutti").
+
+- **2026-11-03 (patch 6)** Correzioni dopo la prova (**non provate su TV**):
+  - *Generi*: normalizzati ma non tradotti (chiave = nome senza maiuscole/accenti/spazi, nome mostrato = prima grafia trovata; niente più tabella di sinonimi né `genre.*` nelle traduzioni). Senza chiave TMDB si usano i generi del provider: dalle liste (campo `genre`), e dalle schede aperte (campo `genre` di `get_vod_info`/`get_series_info`, store `entry_genre_tmdb` con fonte `info`). Le liste sincronizzate prima dei generi vengono riscaricate una volta (`meta.genres`). DB provider v4 (ricrea solo gli store dei generi). I chip della scheda uniscono generi della lista, dettagli del provider e TMDB.
+  - *Player*: ripristinati stile, dimensioni e focus dei pulsanti (80×64, icona 30 px, bordo + sfondo + scala 1.1 al focus; la barra ha lo stesso focus); a ogni salto (frecce, ◀◀/▶▶, scorrimento) sopra il cursore compare per 2,5 s il minuto da cui parte la visione.
+  - *Paginazione* (Film/Serie/Live): titolo e "Pagina X di Y" sticky e più grandi; totale pagine da `count()` sull'indice (o dalla lunghezza della lista in memoria).
+  - *Scheda*: tolta l'etichetta del menu *Versione*.
 
 ## Questioni aperte
 - Package id `XtrmIptv01` e app id `XtrmIptv01.XtreamIPTV` sono una proposta, da confermare prima di creare il profilo del certificato.

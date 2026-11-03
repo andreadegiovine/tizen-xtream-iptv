@@ -525,10 +525,26 @@ h2 {
   min-width: 0;
 }
 
+// Title and page number stay in view while the grid scrolls underneath.
+.browse-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: baseline;
+  min-height: 56px;
+  padding: 8px 0;
+  background: $bg;
+}
+
+.browse-title {
+  margin-right: 24px;
+  font-size: 38px;
+  font-weight: 600;
+}
+
 .browse-count {
-  min-height: 30px;
-  margin: 0 0 8px;
-  font-size: 22px;
+  font-size: 30px;
 }
 
 .browse-grid,
@@ -720,7 +736,7 @@ h2 {
 
     &.focused {
       border-color: $text;
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.18);
     }
 
     &.scrubbing .player-knob {
@@ -751,6 +767,24 @@ h2 {
     background: $accent;
   }
 
+  .player-tip {
+    position: absolute;
+    bottom: 26px;
+    left: 0;
+    padding: 4px 14px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.8);
+    font-size: 26px;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateX(-50%);
+    transition: opacity 0.15s;
+
+    &.visible {
+      opacity: 1;
+    }
+  }
+
   .player-knob {
     position: absolute;
     top: 50%;
@@ -762,6 +796,33 @@ h2 {
     background: $text;
     transition: width 0.1s, height 0.1s;
   }
+
+  .player-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 64px;
+    margin: 0 8px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: $text;
+    transition: transform 0.12s ease-out;
+
+    .icon {
+      width: 30px;
+      height: 30px;
+    }
+
+    &.focused {
+      border-color: $text;
+      background: rgba(255, 255, 255, 0.18);
+      transform: scale(1.1);
+    }
+  }
+
 
   .player-status {
     position: absolute;

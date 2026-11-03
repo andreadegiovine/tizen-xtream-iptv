@@ -1,4 +1,4 @@
-import { dbGet, dbGetAllKeys, dbClear, transactionDone } from '../core/idb.js';
+import { dbGet, dbGetAllKeys, dbDeleteMany, transactionDone } from '../core/idb.js';
 import { mergeGenres } from './genres.js';
 import { listGenres, genreEntryKeys } from './catalogQuery.js';
 import { log } from '../core/logger.js';
@@ -17,16 +17,17 @@ export function createGenreIndex({ active, tmdb, isBusy = () => false, wait = (m
   let again = false;
 
   /** Stores the TMDB genres of one entry; skips the write when nothing changed. */
-  async function record(db, entry, genreNames) {
+  async function record(db, entry, genreNames, source = 'tmdb') {
     const genres = mergeGenres(genreNames);
     const prefix = `${entry.key}|`;
-    const existing = await dbGetAllKeys(db, STORE, { range: IDBKeyRange.bound(prefix, `${prefix}￿`) });
-    const wanted = genres.map((g) => `${prefix}${g.key}`);
+    const suffix = `|${source}`;
+    const existing = (await dbGetAllKeys(db, STORE, { range: IDBKeyRange.bound(prefix, `${prefix}￿`) })).filter((key) => key.endsWith(suffix));
+    const wanted = genres.map((g) => `${prefix}${g.key}${suffix}`);
     if (existing.length === wanted.length && wanted.every((key) => existing.indexOf(key) >= 0)) return false;
     const tx = db.transaction(STORE, 'readwrite');
     const store = tx.objectStore(STORE);
     existing.forEach((key) => store.delete(key));
-    genres.forEach((g) => store.put({ key: `${prefix}${g.key}`, entryKey: entry.key, type: entry.type, genreKey: g.key, name: g.name, added: entry.added || 0 }));
+    genres.forEach((g) => store.put({ key: `${prefix}${g.key}${suffix}`, entryKey: entry.key, type: entry.type, genreKey: g.key, name: g.name, added: entry.added || 0 }));
     await transactionDone(tx);
     return true;
   }
@@ -42,7 +43,7 @@ export function createGenreIndex({ active, tmdb, isBusy = () => false, wait = (m
 
   /** Entries that have a tmdb id but no TMDB genre yet, newest first. */
   async function missing(db, type, limit, tried) {
-    const done = new Set((await dbGetAllKeys(db, STORE)).map((key) => key.slice(0, key.lastIndexOf('|'))));
+    const done = new Set((await dbGetAllKeys(db, STORE)).filter((key) => key.endsWith('|tmdb')).map((key) => key.slice(0, key.indexOf('|'))));
     return new Promise((resolve, reject) => {
       const out = [];
       const tx = db.transaction('entries', 'readonly');
@@ -107,14 +108,16 @@ export function createGenreIndex({ active, tmdb, isBusy = () => false, wait = (m
       return current ? genreEntryKeys(current.db, type, genreKey) : [];
     },
     /** Detail pages know the exact entry (also when TMDB was found by title match). */
-    async recordFor(entry, genreNames) {
+    async recordFor(entry, genreNames, source = 'tmdb') {
       const current = await active.get();
-      if (current && entry && entry.type !== 'live') await record(current.db, entry, genreNames);
+      if (current && entry && entry.type !== 'live') await record(current.db, entry, genreNames, source);
     },
     /** "Remove all TMDB data" also forgets the genres it provided. */
     async clearTmdb() {
       const current = await active.get();
-      if (current) await dbClear(current.db, STORE);
+      if (!current) return;
+      const keys = await dbGetAllKeys(current.db, STORE);
+      await dbDeleteMany(current.db, STORE, keys.filter((key) => key.endsWith('|tmdb')));
     },
   };
 }

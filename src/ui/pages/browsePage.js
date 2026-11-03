@@ -5,10 +5,9 @@ import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel, ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
-import { listCategories, pageEntries, getEntry } from '../../services/catalogQuery.js';
+import { listCategories, pageEntries, getEntry, countEntries } from '../../services/catalogQuery.js';
 import { icon } from '../icons.js';
 import { formatNumber } from '../../core/format.js';
-import { genreLabel } from '../../services/genres.js';
 import { log } from '../../core/logger.js';
 
 const CATS_ZONE = 'browseCategories';
@@ -75,7 +74,10 @@ export function createBrowsePage(ctx, params = {}) {
   const type = params.type;
   const columns = columnsFor(type);
   let pageSize = 24;
-  const count = h('p', { class: 'muted browse-count' });
+  const titleEl = h('span', { class: 'browse-title' });
+  const count = h('span', { class: 'muted browse-count' });
+  const head = h('div', { class: 'browse-head' }, titleEl, count);
+  let pages = 1;
   const catList = h('div', { class: 'browse-cats' });
   const gridEl = h('div', { class: `browse-grid ${type}` });
   const empty = h('p', { class: 'muted browse-empty', text: t('browse.empty') });
@@ -131,7 +133,8 @@ export function createBrowsePage(ctx, params = {}) {
     cardNodes = cards.map((card) => card.el);
     if (ctx.enrich) ctx.enrich(entries, cards, type);
     const name = items[selected] ? items[selected].name : '';
-    count.textContent = entries.length ? t('browse.page', { page: formatNumber(page + 1, i18n.getLocale()), category: name }) : '';
+    titleEl.textContent = name;
+    count.textContent = entries.length ? t('browse.page', { page: formatNumber(page + 1, i18n.getLocale()), pages: formatNumber(Math.max(pages, page + 1), i18n.getLocale()) }) : '';
     const kind = items[selected] && items[selected].kind;
     empty.textContent = kind === 'continue' ? t('browse.emptyContinue') : kind === 'favorites' ? t('browse.emptyFavorites') : kind === 'genre' ? t('browse.emptyGenre') : t('browse.empty');
     empty.style.display = entries.length ? 'none' : '';
@@ -163,6 +166,8 @@ export function createBrowsePage(ctx, params = {}) {
     else if (!['continue', 'favorites', 'genre'].includes(item.kind)) list = null;
     if (list) result = { entries: list.slice(nextPage * pageSize, (nextPage + 1) * pageSize), hasMore: list.length > (nextPage + 1) * pageSize };
     else result = await pageEntries(db, { type, categoryId: item.kind === 'category' ? item.id : null, offset: nextPage * pageSize, limit: pageSize });
+    if (destroyed || token !== loadToken) return;
+    if (nextPage === 0) pages = Math.max(1, Math.ceil((list ? list.length : await countEntries(db, { type, categoryId: item.kind === 'category' ? item.id : null }).catch(() => 0)) / pageSize));
     if (destroyed || token !== loadToken) return;
     page = nextPage;
     hasMore = result.hasMore;
@@ -233,7 +238,7 @@ export function createBrowsePage(ctx, params = {}) {
     const loadGenres = async () => {
       if (type === 'live') return;
       const found = await ctx.genres.list(type).catch(() => []);
-      genres = found.map((g) => ({ key: g.key, name: genreLabel(g, t) })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      genres = found.map((g) => ({ key: g.key, name: g.name })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     };
     if (wantsGenre) await loadGenres();
     expanded = Boolean(filter && filter.kind === 'category');
@@ -251,7 +256,7 @@ export function createBrowsePage(ctx, params = {}) {
   }
 
   return {
-    el: h('section', { class: 'page browse' }, h('div', { class: 'browse-body' }, catList, h('div', { class: 'browse-main' }, count, gridEl, empty))),
+    el: h('section', { class: 'page browse' }, h('div', { class: 'browse-body' }, catList, h('div', { class: 'browse-main' }, head, gridEl, empty))),
     mount() {
       ctx.focus.register(catsZone);
       ctx.focus.register(gridZone);

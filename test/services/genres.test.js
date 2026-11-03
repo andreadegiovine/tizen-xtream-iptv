@@ -1,35 +1,26 @@
 import { openProviderDb } from '../../src/db/providerDb.js';
 import { writeEntries } from '../../src/services/catalogSync.js';
 import { buildEntries } from '../../src/services/grouping.js';
-import { normalizeGenre, splitGenres, mergeGenres, genreLabel } from '../../src/services/genres.js';
+import { normalizeGenre, splitGenres, mergeGenres } from '../../src/services/genres.js';
 import { createGenreIndex } from '../../src/services/genreIndex.js';
 import { listGenres } from '../../src/services/catalogQuery.js';
 
 describe('genre normalisation', () => {
-  test('same genre in any language or spelling gives one key', () => {
-    expect(normalizeGenre('Animazione')[0].key).toBe('animation');
-    expect(normalizeGenre('Animation')[0].key).toBe('animation');
-    expect(normalizeGenre('  ANIMAZIONE ')[0].key).toBe('animation');
-    expect(normalizeGenre('Sci-Fi')[0].key).toBe('scifi');
-    expect(normalizeGenre('Fantascienza')[0].key).toBe('scifi');
+  test('case, accents, spacing and separators are ignored; names are not translated', () => {
+    expect(normalizeGenre('Animazione')).toEqual({ key: 'animazione', name: 'Animazione' });
+    expect(normalizeGenre('  ANIMAZIONE ').key).toBe('animazione');
+    expect(normalizeGenre('Sci-Fi').key).toBe('sci-fi');
+    expect(normalizeGenre('Fantascienza').key).not.toBe(normalizeGenre('Sci-Fi').key);
+    expect(normalizeGenre('Città')).toEqual({ key: 'citta', name: 'Città' });
+    expect(normalizeGenre('')).toBeNull();
   });
 
-  test('combined TMDB names become two genres; unknown ones keep their own key', () => {
-    expect(normalizeGenre('Action & Adventure').map((g) => g.key)).toEqual(['action', 'adventure']);
-    expect(normalizeGenre('Sci-Fi & Fantasy').map((g) => g.key)).toEqual(['scifi', 'fantasy']);
-    expect(normalizeGenre('Eroico')).toEqual([{ key: 'x:eroico', name: 'Eroico' }]);
-    expect(normalizeGenre('')).toEqual([]);
-  });
-
-  test('lists are split, merged and deduplicated across sources', () => {
-    expect(splitGenres('Azione, Commedia / Azione').map((g) => g.key)).toEqual(['action', 'comedy']);
-    expect(mergeGenres('Animazione', [{ name: 'Animation' }, { name: 'Comedy' }], ['Commedia']).map((g) => g.key)).toEqual(['animation', 'comedy']);
-  });
-
-  test('canonical genres use the app language, others their own name', () => {
-    const tr = (k) => ({ 'genre.animation': 'Animazione' })[k];
-    expect(genreLabel({ key: 'animation', name: 'animation' }, tr)).toBe('Animazione');
-    expect(genreLabel({ key: 'x:eroico', name: 'Eroico' }, tr)).toBe('Eroico');
+  test('lists are split, merged and deduplicated across sources; the first spelling wins', () => {
+    expect(splitGenres('Azione, Commedia / azione').map((g) => g.key)).toEqual(['azione', 'commedia']);
+    expect(mergeGenres('animazione', [{ name: 'Animazione' }, { name: 'Commedia' }], ['COMMEDIA'])).toEqual([
+      { key: 'animazione', name: 'Animazione' },
+      { key: 'commedia', name: 'Commedia' },
+    ]);
   });
 });
 
@@ -46,25 +37,34 @@ describe('genre index', () => {
 
   test('provider and TMDB spellings are one sidebar entry; titles are newest first, without duplicates', async () => {
     const { index } = await setup([item(1, 'Animazione, Commedia', { tmdbId: 10 }), item(2, 'Azione'), item(3, '')]);
-    await index.onMeta('movie', 10, { genreList: [{ id: 16, name: 'Animation' }, { id: 12, name: 'Adventure' }] });
+    await index.onMeta('movie', 10, { genreList: [{ id: 16, name: 'animazione' }, { id: 12, name: 'Avventura' }] });
     const keys = (await index.list('movie')).map((g) => g.key).sort();
-    expect(keys).toEqual(['action', 'adventure', 'animation', 'comedy']);
-    expect(await index.entryKeys('movie', 'animation')).toEqual(['movie:t10']);
+    expect(keys).toEqual(['animazione', 'avventura', 'azione', 'commedia']);
+    expect(await index.entryKeys('movie', 'animazione')).toEqual(['movie:t10']);
   });
 
   test('a genre disappears when no title has it any more', async () => {
     const { db, index } = await setup([item(1, 'Azione', { tmdbId: 10 }), item(2, 'Azione')]);
-    await index.onMeta('movie', 10, { genreList: [{ name: 'War' }] });
-    expect((await listGenres(db, 'movie')).map((g) => g.key).sort()).toEqual(['action', 'war']);
+    await index.onMeta('movie', 10, { genreList: [{ name: 'Guerra' }] });
+    expect((await listGenres(db, 'movie')).map((g) => g.key).sort()).toEqual(['azione', 'guerra']);
     await writeEntries(db, 'movie', buildEntries('movie', [item(2, 'Azione')])); // title 10 left the catalog
-    expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['action']);
+    expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['azione']);
   });
 
   test('clearing TMDB data keeps provider genres', async () => {
     const { db, index } = await setup([item(1, 'Azione', { tmdbId: 10 })]);
-    await index.onMeta('movie', 10, { genreList: [{ name: 'War' }] });
+    await index.onMeta('movie', 10, { genreList: [{ name: 'Guerra' }] });
     await index.clearTmdb();
-    expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['action']);
+    expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['azione']);
+  });
+
+  test('genres from provider details work without TMDB and are kept when TMDB data is removed', async () => {
+    const { index } = await setup([item(1, '')]);
+    await index.recordFor({ key: 'movie:1', type: 'movie', added: 101 }, 'Thriller, Horror', 'info');
+    await index.recordFor({ key: 'movie:1', type: 'movie', added: 101 }, [{ name: 'Horror' }], 'tmdb');
+    await index.clearTmdb();
+    expect((await index.list('movie')).map((g) => g.key).sort()).toEqual(['horror', 'thriller']);
+    expect(await index.entryKeys('movie', 'horror')).toEqual(['movie:1']);
   });
 
   test('backfill asks TMDB only for titles without genres and tries each once', async () => {

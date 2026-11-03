@@ -21,7 +21,7 @@ export const SYNC_ORDER = [MediaType.MOVIE, MediaType.SERIES, MediaType.LIVE];
 const metaKey = (type) => `sync:${type}`;
 
 export function shouldSync(meta, now = Date.now(), ttlMs = LIST_TTL_MS) {
-  return !meta || !meta.lastSync || now - meta.lastSync > ttlMs;
+  return !meta || !meta.lastSync || !meta.genres || now - meta.lastSync > ttlMs; // `genres`: lists synced before genres existed are refreshed once
 }
 
 export function getSyncMeta(db, type) {
@@ -65,7 +65,7 @@ export async function writeEntries(db, type, entries, { onBatch } = {}) {
   // TMDB genres follow the metadata, not the sync: only forget the ones of titles that left the catalog.
   const present = new Set(entries.map((entry) => entry.key));
   const known = await dbGetAllKeys(db, 'entry_genre_tmdb', ranges.entry_genre_tmdb(type));
-  await dbDeleteMany(db, 'entry_genre_tmdb', known.filter((key) => !present.has(key.slice(0, key.lastIndexOf('|')))));
+  await dbDeleteMany(db, 'entry_genre_tmdb', known.filter((key) => !present.has(key.slice(0, key.indexOf('|')))));
 }
 
 /** Rebuilds the grid entries from the stored items (used when the excluded categories change). */
@@ -154,6 +154,7 @@ export async function syncType({
     key: metaKey(type),
     type,
     lastSync: now(),
+    genres: true,
     itemCount: items.length,
     entryCount: entries.length,
     categoryCount: categories.length,

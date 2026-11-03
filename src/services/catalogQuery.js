@@ -97,3 +97,12 @@ export async function genreEntryKeys(db, type, genreKey) {
   lists.forEach((rows) => rows.forEach((row) => byKey.set(row.entryKey, row.added)));
   return Array.from(byKey.keys()).sort((a, b) => byKey.get(b) - byKey.get(a) || (a < b ? -1 : 1));
 }
+
+/** How many entries a browse view holds (for "page X of Y"): all of a type, or one category. */
+export function countEntries(db, { type, categoryId = null }) {
+  const useCategory = categoryId !== null && categoryId !== undefined;
+  const store = useCategory ? 'entry_cat' : 'entries';
+  const index = db.transaction(store, 'readonly').objectStore(store).index(useCategory ? 'byCatAdded' : 'byTypeAdded');
+  const range = useCategory ? IDBKeyRange.bound([type, String(categoryId), 0], [type, String(categoryId), MAX_ADDED]) : IDBKeyRange.bound([type, 0], [type, MAX_ADDED]);
+  return requestToPromise(index.count(range));
+}

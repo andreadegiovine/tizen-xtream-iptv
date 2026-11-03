@@ -46,7 +46,7 @@ Decisions agreed during the design phase. Update this file when a decision chang
   dropdown (no label) + episode carousel (series), cast carousel (TMDB credits, placeholder when no photo; not clickable yet).
   Buttons: play, trailer (only when the provider sends `youtube_trailer`), resume, watched, favourite.
 - Player: title at the top; one control row: back 30 s, play-pause, forward 30 s, draggable progress bar (OK then left/right to scrub, or pointer drag), time, aspect ratio, subtitles (drawn by the app from AVPlay events).
-- Browse sidebar (Movies/Series): Show all, Continue watching, Favorites, genres (provider + TMDB merged under one normalised key, only those with titles), Categories (expandable). Detail chips link back to the matching filter. API keys can be typed in Settings; suggestions come from TMDB or Trakt (setting).
+- Browse sidebar (Movies/Series): Show all, Continue watching, Favorites, genres (provider + TMDB merged under one normalised, untranslated key; only those with titles), Categories (expandable). Detail chips link back to the matching filter. API keys can be typed in Settings; suggestions come from TMDB or Trakt (setting).
   Down (or OK on live) puts the D-pad on the buttons, Back leaves that mode first.
 - AVPlay is the engine; all player controls are built in HTML. On-screen keyboard is the native IME.
 - Settings: grid sizes are multiples of 12 (12/24/36), carousels 10/15/20/30, buffering 2/5/10/20/30 s.

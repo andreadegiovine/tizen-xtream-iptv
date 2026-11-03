@@ -12,7 +12,7 @@ import { watchKey, shouldResume, isWatched } from '../../services/watchStore.js'
 import { formatClock } from '../../services/playerController.js';
 import { formatRating } from '../components/card.js';
 import { openTrailer, youtubeId } from '../../services/trailer.js';
-import { mergeGenres, genreLabel } from '../../services/genres.js';
+import { mergeGenres } from '../../services/genres.js';
 import { log } from '../../core/logger.js';
 
 /** Label of one stream choice: "#123 · mkv". */
@@ -229,7 +229,7 @@ export function createDetailPage(ctx, params) {
 
   /** Genres as [{ id, name }]: provider and TMDB spellings merged into the sidebar's keys, all clickable. */
   function genreItems() {
-    return mergeGenres(meta && meta.genreList, tagsFrom(meta, info)).map((g) => ({ id: g.key, name: genreLabel(g, t) }));
+    return mergeGenres(entry && entry.genres, info && info.genre, meta && meta.genreList).map((g) => ({ id: g.key, name: g.name }));
   }
 
   /** A row of chips; the clickable ones form a horizontal focus zone that opens the matching browse view. */
@@ -373,7 +373,7 @@ export function createDetailPage(ctx, params) {
     // Version dropdown, right under the subtitle and before the plot.
     clear(versionEl);
     if (entry.type === 'movie' && entry.members.length > 1) {
-      const select = createSelectField({ id: 'detailVersion', label: t('detail.version'), text: `${streamLabel(selectedMember)} (${entry.members.length})`, onOpen: chooseStream });
+      const select = createSelectField({ id: 'detailVersion', label: '', text: `${streamLabel(selectedMember)} (${entry.members.length})`, onOpen: chooseStream });
       versionEl.appendChild(select.el);
       next.push({ id: 'detailVersion', zone: select.zone });
     }
@@ -472,6 +472,7 @@ export function createDetailPage(ctx, params) {
     if (entry.type === 'series' && info.seasons && info.seasons.length && !seasonChosen) {
       seasonIndex = seasonIndexOf(info.seasons, pickNextEpisode(flattenEpisodes(info.seasons), records).episode);
     }
+    if (info && info.genre && ctx.genres) ctx.genres.recordFor(entry, info.genre, 'info').catch(() => undefined); // provider genres for titles whose list row has none
     fillText();
     build();
     if (ctx.meta) {
