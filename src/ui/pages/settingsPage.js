@@ -5,7 +5,7 @@ import { ListModel } from '../focus/models.js';
 import { LANGUAGE_OPTIONS, GRID_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SUGGESTION_SOURCE_OPTIONS } from '../../services/settings.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
-import { createSyncPanel, createMetaPanel, createDevicePanel } from '../components/syncPanel.js';
+import { createSyncPanel, createMetaPanel, createDevicePanel, createOperationsPanel } from '../components/syncPanel.js';
 import { log } from '../../core/logger.js';
 
 const ZONE_ID = 'settings';
@@ -95,7 +95,6 @@ export function createSettingsPage(ctx) {
     },
   };
 
-  const categories = { el: h('div', { class: 'row' }, h('span', { text: t('settings.categories') })), refresh: async () => undefined, activate: async () => ctx.router.push('categories', { section: 'settings' }) };
 
   const tmdbValue = h('span', { class: 'value', text: ctx.tmdb && ctx.tmdb.enabled ? t('common.on') : t('settings.notConfigured') });
   const tmdbRow = { el: h('div', { class: 'row' }, h('span', { text: 'TMDB' }), tmdbValue), refresh: async () => undefined, activate: async () => undefined };
@@ -129,7 +128,7 @@ export function createSettingsPage(ctx) {
       const answer = await dialog;
       if (!answer) controller.abort();
       const connected = await login.catch(() => false);
-      if (connected) ctx.syncLog.track('trakt', () => ctx.watch.importFromTrakt()).catch((err) => log.warn('Trakt import failed', err && err.message));
+      if (connected) ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal })).catch((err) => log.warn('Trakt import failed', err && err.message));
       await trakt.refresh();
     },
   };
@@ -146,7 +145,7 @@ export function createSettingsPage(ctx) {
         if (match) items.push({ type: match[1], tmdbId: Number(match[2]) });
       }
     }
-    return ctx.syncLog.track('tmdb', () => ctx.tmdb.refresh(items));
+    return ctx.syncLog.track('tmdb', (signal) => ctx.tmdb.refresh(items, { signal }));
   }
 
   /** "Update metadata now": TMDB data, the genre search and the Trakt watch state, whichever is available. */
@@ -159,7 +158,7 @@ export function createSettingsPage(ctx) {
       if (ctx.tmdb && ctx.tmdb.enabled) await refreshTmdb();
       if (ctx.trakt.enabled && (await ctx.trakt.isConnected())) {
         await ctx.trakt.flush();
-        await ctx.syncLog.track('trakt', () => ctx.watch.importFromTrakt());
+        await ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal }));
       }
       await ctx.genres.backfill();
       toast(t('settings.metaDone'));
@@ -203,7 +202,7 @@ export function createSettingsPage(ctx) {
             }
             toast(t('settings.working'), 15000);
             await ctx.trakt.flush();
-            toast(t('settings.traktSyncDone', { count: await ctx.syncLog.track('trakt', () => ctx.watch.importFromTrakt()) }));
+            toast(t('settings.traktSyncDone', { count: await ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal })) }));
           },
         }),
         actionRow({
@@ -226,6 +225,7 @@ export function createSettingsPage(ctx) {
   const panel = createSyncPanel(ctx);
   const metaPanel = createMetaPanel(ctx);
   const devicePanel = createDevicePanel();
+  const opsPanel = createOperationsPanel(ctx);
   let metaBusy = false;
   const syncRow = { el: panel.button, refresh: async () => undefined, activate: async () => panel.syncNow() };
   const metaRow = { el: metaPanel.button, refresh: async () => undefined, activate: updateMetadata };
@@ -239,7 +239,6 @@ export function createSettingsPage(ctx) {
     optionRow({ ctx, labelKey: 'settings.carouselItems', key: 'carouselItems', options: CAROUSEL_OPTIONS }),
     optionRow({ ctx, labelKey: 'settings.buffer', key: 'bufferSeconds', options: BUFFER_OPTIONS, format: seconds }),
     autoplay,
-    categories,
     optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }),
     textRow({ ctx, label: t('settings.tmdbKey'), field: 'tmdbKey' }),
     tmdbRow,
@@ -252,22 +251,38 @@ export function createSettingsPage(ctx) {
   ];
   rows.forEach((row) => row.refresh());
 
+  // Stop buttons of the running operations come first, then the fixed rows; the list changes while the page is open.
+  const all = () => opsPanel.rows.concat(rows);
+  let focusedEl = null;
   const zone = new FocusZone({
     id: ZONE_ID,
-    model: new ListModel({ orientation: 'vertical', getCount: () => rows.length }),
+    model: new ListModel({ orientation: 'vertical', getCount: () => all().length }),
     onFocus: (i) => {
-      rows[i].el.classList.add('focused');
-      ensureVisible(rows[i].el, { first: i === 0 });
+      const row = all()[i];
+      focusedEl = row.el;
+      row.el.classList.add('focused');
+      ensureVisible(row.el, { first: i === 0 });
     },
-    onBlur: (i) => rows[i].el.classList.remove('focused'),
+    onBlur: () => {
+      if (focusedEl) focusedEl.classList.remove('focused');
+      focusedEl = null;
+    },
     onActivate: (i) => {
-      rows[i].activate().catch((err) => log.warn('Setting failed', err && err.message));
+      all()[i].activate().catch((err) => log.warn('Setting failed', err && err.message));
     },
   });
+  // An operation ended (or started): the rows shift, keep the cursor on the same row.
+  opsPanel.onChange = () => {
+    if (ctx.focus.activeId !== ZONE_ID) return;
+    const rowsNow = all();
+    const same = rowsNow.findIndex((row) => row.el === focusedEl);
+    ctx.focus.focus(ZONE_ID, same >= 0 ? same : Math.min(opsPanel.rows.length, rowsNow.length - 1));
+  };
 
   return {
-    el: h('section', { class: 'page framed' }, h('h1', { text: t('settings.title') }), panel.el, metaPanel.el, devicePanel.el, prefsTitle, h('div', { class: 'list' }, rows.slice(2).map((r) => r.el))),
+    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('settings.title') }), opsPanel.el, panel.el, metaPanel.el, devicePanel.el, prefsTitle, h('div', { class: 'list' }, rows.slice(2).map((r) => r.el)))),
     mount() {
+      opsPanel.mount();
       panel.mount();
       ctx.providers.getActiveId().then((id) => {
         panel.el.style.display = id ? '' : 'none';
@@ -279,9 +294,10 @@ export function createSettingsPage(ctx) {
       ctx.focus.register(zone);
       ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
       ctx.focus.link(TOPBAR_ZONE, 'down', ZONE_ID);
-      ctx.focus.focus(ZONE_ID, 0);
+      ctx.focus.focus(ZONE_ID, opsPanel.rows.length); // never on a stop button by accident
     },
     destroy() {
+      opsPanel.destroy();
       panel.destroy();
       ctx.focus.unregister(ZONE_ID);
     },

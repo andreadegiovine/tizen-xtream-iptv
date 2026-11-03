@@ -6,6 +6,8 @@ import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { listCategories } from '../../services/catalogQuery.js';
 import { rebuildEntries } from '../../services/catalogSync.js';
+import { openProviderDb } from '../../db/providerDb.js';
+import { icon } from '../icons.js';
 import { log } from '../../core/logger.js';
 
 const ZONE_ID = 'categories';
@@ -21,7 +23,7 @@ export function toggleId(set, id) {
 }
 
 /** Choose the categories to hide per media type; applying rebuilds the grids without re-downloading. */
-export function createCategoriesPage(ctx) {
+export function createCategoriesPage(ctx, params = {}) {
   const status = h('p', { class: 'muted search-status' });
   const list = h('div', { class: 'list categories-list' });
   let type = 'movie';
@@ -30,6 +32,8 @@ export function createCategoriesPage(ctx) {
   let original = new Set();
   let rows = []; // { el, activate }
   let providerId = null;
+  let db = null; // database of the provider being edited
+  let ownDb = false; // opened here (not the active provider's shared handle): closed on leave
   let destroyed = false;
   let busy = false;
 
@@ -44,18 +48,26 @@ export function createCategoriesPage(ctx) {
     onActivate: (i) => rows[i] && rows[i].activate(),
   });
 
-  const mark = (id) => (excluded.has(id) ? '✕ ' : '✓ ');
 
   function build(focusIndex = 0) {
     while (list.firstChild) list.removeChild(list.firstChild);
     const typeRow = { el: h('div', { class: 'row' }, h('span', { text: t('categories.type') }), h('span', { class: 'value', text: t(TYPE_LABEL[type]) })), activate: chooseType };
     const catRows = categories.map((c) => {
-      const label = h('span', { text: `${mark(c.id)}${c.name}` });
+      // Eye = shown in the app, crossed-out eye = hidden (row dimmed).
+      const mark = h('span', { class: 'cat-mark' });
+      const el = h('div', { class: 'row cat-row' }, mark, h('span', { class: 'cat-name', text: c.name }));
+      const show = () => {
+        const hidden = excluded.has(c.id);
+        el.classList.toggle('hidden', hidden);
+        while (mark.firstChild) mark.removeChild(mark.firstChild);
+        mark.appendChild(icon(hidden ? 'hidden' : 'seen'));
+      };
+      show();
       return {
-        el: h('div', { class: 'row' }, label),
+        el,
         activate() {
           excluded = toggleId(excluded, c.id);
-          label.textContent = `${mark(c.id)}${c.name}`;
+          show();
           status.textContent = '';
         },
       };
@@ -68,10 +80,19 @@ export function createCategoriesPage(ctx) {
 
   async function loadType(nextType) {
     type = nextType;
-    const current = await ctx.active.get();
-    if (!current || destroyed) return;
-    providerId = current.provider.id;
-    categories = (await listCategories(current.db, type)).map((c) => ({ id: c.id, name: c.name }));
+    if (!db) {
+      const activeProvider = await ctx.active.get();
+      const wanted = params.providerId || (activeProvider && activeProvider.provider.id);
+      if (!wanted || destroyed) return;
+      if (activeProvider && activeProvider.provider.id === wanted) db = activeProvider.db;
+      else {
+        db = await openProviderDb(wanted);
+        ownDb = true;
+      }
+      providerId = wanted;
+    }
+    if (destroyed) return;
+    categories = (await listCategories(db, type)).map((c) => ({ id: c.id, name: c.name }));
     excluded = await ctx.settings.getExcluded(providerId, type);
     original = new Set(excluded);
     build(0);
@@ -84,17 +105,16 @@ export function createCategoriesPage(ctx) {
 
   async function applyChanges() {
     if (busy) return;
-    if (ctx.catalog.getState().running) {
+    if (ctx.catalog.getState().running && ctx.catalog.getState().providerId === providerId) {
       status.textContent = t('categories.busy');
       return;
     }
     busy = true;
     status.textContent = t('categories.applying');
     try {
-      const current = await ctx.active.get();
       await ctx.settings.setExcluded(providerId, type, Array.from(excluded));
       if (excluded.size !== original.size || Array.from(excluded).some((id) => !original.has(id))) {
-        await rebuildEntries({ db: current.db, type, excludedCategories: excluded });
+        await rebuildEntries({ db, type, excludedCategories: excluded });
         ctx.search.invalidate();
       }
       original = new Set(excluded);
@@ -108,7 +128,7 @@ export function createCategoriesPage(ctx) {
   }
 
   return {
-    el: h('section', { class: 'page' }, h('h1', { text: t('settings.categories') }), status, list),
+    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('settings.categories') }), status, list)),
     mount() {
       ctx.focus.register(zone);
       ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
@@ -118,6 +138,7 @@ export function createCategoriesPage(ctx) {
     destroy() {
       destroyed = true;
       ctx.focus.unregister(ZONE_ID);
+      if (ownDb && db) db.close();
     },
   };
 }

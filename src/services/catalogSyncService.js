@@ -7,6 +7,7 @@ import { SYNC_ORDER, runSyncForProvider, getSyncStatus } from './catalogSync.js'
 
 const emptyState = () => ({
   running: false,
+  startedAt: 0,
   paused: false,
   mode: null, // 'worker' | 'main'
   providerId: null,
@@ -65,7 +66,7 @@ export class CatalogSyncService {
     }
     const job = {};
     this.job = job;
-    this.state = { ...emptyState(), running: true, paused: this.gate.isPaused(), providerId: provider.id };
+    this.state = { ...emptyState(), running: true, startedAt: Date.now(), paused: this.gate.isPaused(), providerId: provider.id };
     types.forEach((type) => {
       this.state.types[type] = { phase: 'queued' };
     });
@@ -200,7 +201,7 @@ export class CatalogSyncService {
       this.worker = null;
     }
     this.gate.release();
-    this.state = { ...this.state, running: false };
+    this.state = { ...this.state, running: false, cancelled: true };
     this.notify();
   }
 

@@ -12,8 +12,9 @@ async function programmesFor(db, channelId, now) {
   return all.filter((p) => p.stop > now).sort((a, b) => a.start - b.start);
 }
 
-export function createEpgService({ active, providers, createWorker, runLocal = runEpgForProvider, now = Date.now, readyTimeoutMs = 4000 }) {
+export function createEpgService({ active, providers, createWorker, runLocal = runEpgForProvider, now = Date.now, readyTimeoutMs = 4000, operations = null }) {
   let running = false;
+  let cancelJob = null;
 
   async function nowNext(channelId) {
     if (!channelId) return { now: null, next: null };
@@ -46,6 +47,10 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
       };
       const local = () => runLocal({ provider, force, emit: (m) => m.event === 'done' && finish(m) }).then(finish);
       let worker = null;
+      cancelJob = () => {
+        if (worker) worker.terminate();
+        finish({ event: 'done', cancelled: true });
+      };
       try {
         worker = createWorker();
       } catch {
@@ -100,12 +105,15 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
       }
       if (!due) return null;
       running = true;
+      const end = operations ? operations.start('epg', { cancel: () => cancelJob && cancelJob() }) : () => undefined;
       try {
         const outcome = await runJob(provider, force);
         if (outcome.error) log.warn('EPG sync failed', outcome.error.code);
         return outcome;
       } finally {
         running = false;
+        cancelJob = null;
+        end();
       }
     },
   };

@@ -93,7 +93,7 @@
   "home.continue": "Continua a guardare",
   "suggestions.loading": "Cerco suggerimenti…",
   "suggestions.fromHistory": "In base a ciò che hai guardato",
-  "suggestions.trending": "Di tendenza ora e disponibili sul tuo provider",
+  "suggestions.trending": "Contenuti di tendenza",
   "common.on": "Attivo",
   "common.off": "Disattivo",
   "common.ok": "OK",
@@ -187,5 +187,15 @@
   "home.new.movie": "Nuovi film",
   "home.new.series": "Nuove serie TV",
   "home.suggested.movie": "Film suggeriti",
-  "home.suggested.series": "Serie TV suggerite"
+  "home.suggested.series": "Serie TV suggerite",
+  "operations.title": "Operazioni in corso",
+  "operations.none": "Nessuna operazione in corso",
+  "operations.stop": "Ferma",
+  "operations.since": "Dal {time}",
+  "operations.catalog": "Aggiornamento del catalogo",
+  "operations.genres": "Ricerca dei generi",
+  "operations.epg": "Guida TV (EPG)",
+  "operations.tmdb": "Aggiornamento TMDB",
+  "operations.trakt": "Sincronizzazione Trakt",
+  "providers.categories": "Categorie visibili"
 }

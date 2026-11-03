@@ -45,7 +45,7 @@ export function createHomePage(ctx) {
     clearRows();
     carousels = definitions
       .filter((d) => d.items.length)
-      .map((d) => createCarousel({ ...d, onOpen: (item) => ctx.openEntry(item.entry, { section: 'home' }) }));
+      .map((d, index) => createCarousel({ ...d, revealTop: index === 0, onOpen: (item) => ctx.openEntry(item.entry, { section: 'home' }) }));
     carousels.forEach((c, i) => {
       rowsEl.appendChild(c.el);
       ctx.focus.register(c.zone);

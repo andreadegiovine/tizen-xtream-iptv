@@ -29,12 +29,13 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 20 }) {
     el,
     set(entries) {
       clear();
-      carousels = groupByType(entries, limit).map((group) => {
+      carousels = groupByType(entries, limit).map((group, index) => {
         const carousel = createCarousel({
           id: `${prefix}-${group.type}`,
           title: t(LABEL[group.type]),
           items: group.entries.map((entry) => ({ entry, type: group.type })),
           onOpen: (item) => onOpen(item.entry),
+          revealTop: index === 0,
         });
         carousel.type = group.type;
         return carousel;

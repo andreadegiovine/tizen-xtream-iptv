@@ -9,8 +9,8 @@ import { ensureVisible } from '../scroll.js';
 import { log } from '../../core/logger.js';
 
 const ZONE_ID = 'providers';
-const COLUMNS = 3;
-export const ProviderAction = Object.freeze({ USE: 'use', EDIT: 'edit', REMOVE: 'remove', ADD: 'add' });
+const COLUMNS = 4;
+export const ProviderAction = Object.freeze({ USE: 'use', CATEGORIES: 'categories', EDIT: 'edit', REMOVE: 'remove', ADD: 'add' });
 
 /** Host part of a server URL, for display (never shows credentials). */
 export function hostOf(baseUrl) {
@@ -18,14 +18,15 @@ export function hostOf(baseUrl) {
 }
 
 /**
- * Flat list of focusable cells: three actions per provider (use, edit, remove) followed by the
- * "add provider" cell. Cell index = row * 3 + column, which is what GridModel expects.
+ * Flat list of focusable cells: four actions per provider (use, categories, edit, remove) followed by the
+ * "add provider" cell. Cell index = row * 4 + column, which is what GridModel expects.
  */
 export function buildCells(providers, activeId) {
   const cells = [];
   providers.forEach((provider) => {
     const active = provider.id === activeId;
     cells.push({ action: ProviderAction.USE, provider, disabled: active });
+    cells.push({ action: ProviderAction.CATEGORIES, provider });
     cells.push({ action: ProviderAction.EDIT, provider });
     cells.push({ action: ProviderAction.REMOVE, provider });
   });
@@ -57,8 +58,8 @@ export function createProvidersPage(ctx, params = {}) {
           return h('button', { class: 'btn primary provider-add icon-only', type: 'button', 'aria-label': t('providers.add') }, icon('add'));
         }
         const labelKey = cell.action === ProviderAction.USE && cell.disabled ? 'providers.active' : `providers.${cell.action}`;
-        // Use / Active keep their label; Edit and Remove are icons only.
-        const iconName = { [ProviderAction.EDIT]: 'edit', [ProviderAction.REMOVE]: 'remove' }[cell.action];
+        // Use / Active keep their label; the others are icons only (categories: the one of the sidebar).
+        const iconName = { [ProviderAction.CATEGORIES]: 'categories', [ProviderAction.EDIT]: 'edit', [ProviderAction.REMOVE]: 'remove' }[cell.action];
         return h(
           'button',
           {
@@ -80,7 +81,7 @@ export function createProvidersPage(ctx, params = {}) {
             h('div', { class: 'provider-info' },
               h('span', { class: 'provider-name', text: provider.name }, validity(provider) ? h('span', { class: `provider-valid${validity(provider).expired ? ' expired' : ''}`, text: validity(provider).text }) : null),
               h('span', { class: 'provider-meta', text: `${hostOf(provider.baseUrl)} · ${provider.username}` })),
-            h('div', { class: 'provider-actions' }, nodes[cursor], nodes[cursor + 1], nodes[cursor + 2]),
+            h('div', { class: 'provider-actions' }, nodes[cursor], nodes[cursor + 1], nodes[cursor + 2], nodes[cursor + 3]),
           ),
         );
         cursor += COLUMNS;
@@ -98,6 +99,9 @@ export function createProvidersPage(ctx, params = {}) {
         await ctx.providers.setActiveId(provider.id);
         ctx.catalog.start(); // cancels the running job and syncs the new provider if its list is stale
         await render(cells.indexOf(cell));
+        break;
+      case ProviderAction.CATEGORIES:
+        ctx.router.push('categories', { providerId: provider.id, section: 'provider' });
         break;
       case ProviderAction.EDIT:
         ctx.router.push('providerSetup', { providerId: provider.id, section: 'provider' });
@@ -146,7 +150,7 @@ export function createProvidersPage(ctx, params = {}) {
   });
 
   return {
-    el: h('section', { class: 'page framed providers' }, h('h1', { text: t('providers.title') }), list),
+    el: h('section', { class: 'page framed providers' }, h('div', { class: 'page-container' }, h('h1', { text: t('providers.title') }), list)),
     mount() {
       ctx.focus.register(zone);
       ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);

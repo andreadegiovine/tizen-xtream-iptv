@@ -49,6 +49,7 @@ Decisions agreed during the design phase. Update this file when a decision chang
 - Browse sidebar (Movies/Series): Show all, Continue watching, Favorites, Suggestions, genres (provider + TMDB merged under one normalised, untranslated key; only those with titles), Categories (expandable). Detail chips link back to the matching filter. API keys can be typed in Settings; suggestions come from TMDB or Trakt (setting). Fixed entries have an icon (genres and categories do not, and have no empty slot); every entry shows its title count on the right; categories under the toggle use a smaller font.
   Down (or OK on live) puts the D-pad on the buttons, Back leaves that mode first.
 - AVPlay is the engine; all player controls are built in HTML. On-screen keyboard is the native IME.
+- Settings, Providers and Categories use a centred 1400 px container (`.page-container`) whose content is full width. Settings starts with "Operations in progress" (stop button per operation); the visible-categories chooser opens from an icon on each provider.
 - Settings: grid sizes are multiples of 12 (12/24/36), carousels 10/15/20/30, buffering 2/5/10/20/30 s.
 
 ## Flows

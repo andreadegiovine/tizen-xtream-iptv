@@ -27,6 +27,7 @@ import { WatchStore, watchKey } from './services/watchStore.js';
 import { summarizeWatch, watchStatus } from './services/watchStatus.js';
 import { createDefaultEngine } from './services/playerEngines.js';
 import { createSyncLog } from './services/syncLog.js';
+import { createOperations } from './services/operations.js';
 import { createGenreIndex } from './services/genreIndex.js';
 import { createGenreWorker } from './services/createGenreWorker.js';
 import { createSuggestionsService } from './services/suggestions.js';
@@ -84,7 +85,8 @@ async function boot() {
   ctx.watch = createWatchState({ store: new WatchStore(db), trakt: ctx.trakt });
   const tmdb = createTmdbService({ db, client: createTmdbClient({ getApiKey: () => ctx.apiKeys.get().tmdbKey }), getLanguage: () => i18n.getLocale() });
   ctx.tmdb = tmdb;
-  ctx.syncLog = createSyncLog({ db });
+  ctx.operations = createOperations();
+  ctx.syncLog = createSyncLog({ db, operations: ctx.operations });
   ctx.genres = createGenreIndex({
     active,
     syncLog: ctx.syncLog,
@@ -95,7 +97,7 @@ async function boot() {
   });
   ctx.suggestions = createSuggestionsService({ active, watch: ctx.watch, tmdb, trakt: ctx.trakt, getSource: async () => (await settings.get()).suggestionSource });
   ctx.meta = { forEntry: (entry) => tmdb.forEntry(entry) };
-  const epg = createEpgService({ active, providers, createWorker: createEpgWorker });
+  const epg = createEpgService({ active, providers, createWorker: createEpgWorker, operations: ctx.operations });
   ctx.epg = epg;
   ctx.enrich = (entries, cards, type, keepQueue = false) => {
     const totals = new Map();
@@ -185,8 +187,11 @@ async function boot() {
   ctx.router = router;
 
   let wasSyncing = false;
+  let endCatalogOp = () => undefined;
   catalog.onChange((state) => {
-    if (wasSyncing && !state.running) {
+    if (state.running && !wasSyncing) endCatalogOp = ctx.operations.start('catalog', { startedAt: state.startedAt, cancel: () => catalog.cancel() });
+    if (!state.running) endCatalogOp();
+    if (wasSyncing && !state.running && !state.cancelled) {
       ctx.search.invalidate();
       ctx.genres.backfill().catch(() => undefined); // the genre worker finds genres the lists did not carry
       // The guide only matters once the channel list is in place; at most once a day.

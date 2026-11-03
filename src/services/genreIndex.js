@@ -18,6 +18,8 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
   let again = false;
   let watcher = null;
   let sent = false;
+  let stopRun = null;
+  let controller = null;
   const gate = createGate();
 
   function setPaused(paused) {
@@ -42,6 +44,11 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
         return;
       }
       worker = instance;
+      stopRun = () => {
+        instance.terminate();
+        worker = null;
+        resolve(0);
+      };
       const timer = setTimeout(() => {
         instance.terminate();
         worker = null;
@@ -69,13 +76,20 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     });
   }
 
+  /** Stops the search now (the titles found so far stay). */
+  function stop() {
+    again = false;
+    if (controller) controller.abort();
+    if (stopRun) stopRun();
+  }
+
   /** Starts (or queues) the background search for missing genres of the active provider. */
   function backfill() {
     if (running) {
       again = true;
       return Promise.resolve(0);
     }
-    return syncLog ? syncLog.track('genres', run) : run();
+    return syncLog ? syncLog.track('genres', () => run(), { cancel: stop }) : run();
   }
 
   async function run() {
@@ -91,18 +105,21 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
       language: getLanguage(),
     };
     watch();
+    controller = new AbortController();
     try {
       try {
-        done = createWorker ? await runInWorker(payload) : await runGenreBackfillForProvider({ ...payload, gate: gate.wait });
+        done = createWorker ? await runInWorker(payload) : await runGenreBackfillForProvider({ ...payload, gate: gate.wait, signal: controller.signal });
       } catch (err) {
         if (sent) throw err; // the worker was running: do not start it twice
         log.warn('Genre worker unavailable, using the main thread:', err.message);
-        done = await runGenreBackfillForProvider({ ...payload, gate: gate.wait });
+        done = await runGenreBackfillForProvider({ ...payload, gate: gate.wait, signal: controller.signal });
       }
     } catch (err) {
       log.warn('Genre backfill failed', err && err.message);
     } finally {
       running = false;
+      stopRun = null;
+      controller = null;
       clearInterval(watcher);
     }
     if (again) {
@@ -114,6 +131,7 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
 
   return {
     backfill,
+    stop,
     /** Genres for the sidebar: [{ key, name }], only those that still have at least one title. */
     async list(type) {
       const current = await active.get();

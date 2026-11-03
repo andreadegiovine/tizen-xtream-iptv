@@ -144,10 +144,10 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now }) {
       await dbClear(db, 'tmdb_match');
     },
     /** Drops cached metadata and downloads it again for `items` ([{ type, tmdbId }]); resolves with how many were refreshed. */
-    async refresh(items) {
+    async refresh(items, { signal = null } = {}) {
       memory.clear();
       await dbClear(db, 'tmdb');
-      const done = await Promise.all(items.map((item) => queue.add(() => getMeta(item.type, item.tmdbId))));
+      const done = await Promise.all(items.map((item) => queue.add(() => (signal && signal.aborted ? null : getMeta(item.type, item.tmdbId)))));
       return done.filter(Boolean).length;
     },
     recommendations,

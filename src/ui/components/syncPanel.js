@@ -170,3 +170,43 @@ export function createDevicePanel() {
   }
   return { el, refresh };
 }
+
+/**
+ * "Operations in progress" table: what runs in the background now, since when, and a stop button for each.
+ * `rows` are the focusable entries (the stop buttons); `onChange` is called when the list changes.
+ */
+export function createOperationsPanel(ctx) {
+  const body = h('div', { class: 'sync' });
+  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('operations.title') })), body);
+  const api = { el, rows: [], onChange: null, mount, destroy };
+  let unsubscribe = null;
+
+  function render() {
+    while (body.firstChild) body.removeChild(body.firstChild);
+    const list = ctx.operations.list();
+    if (!list.length) body.appendChild(h('div', { class: 'sync-row' }, h('span', { class: 'sync-status', text: t('operations.none') })));
+    api.rows = list.map((op) => {
+      const stop = h('button', { class: 'btn danger icon-only op-stop', type: 'button', 'aria-label': t('operations.stop'), title: t('operations.stop') }, icon('stop'));
+      body.appendChild(
+        h(
+          'div',
+          { class: 'sync-row op-row' },
+          h('span', { class: 'sync-name', text: t(`operations.${op.id}`) }),
+          h('span', { class: 'sync-status', text: t('operations.since', { time: formatDateTime(op.startedAt, i18n.getLocale()) }) }),
+          stop,
+        ),
+      );
+      return { el: stop, refresh: async () => undefined, activate: async () => ctx.operations.cancel(op.id) };
+    });
+    if (api.onChange) api.onChange();
+  }
+
+  function mount() {
+    unsubscribe = ctx.operations.onChange(render);
+    render();
+  }
+  function destroy() {
+    if (unsubscribe) unsubscribe();
+  }
+  return api;
+}

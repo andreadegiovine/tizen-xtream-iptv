@@ -399,7 +399,7 @@ h2 {
 }
 
 .provider-list {
-  width: 1400px;
+  width: 100%;
 }
 
 .provider-row {
@@ -503,9 +503,15 @@ h2 {
 }
 
 // Settings and Provider: a frame that leaves the screen edges free (less height) and stretches every element.
+// The page keeps a fixed-width container (centred); what is inside it stretches to the container.
 .page.framed {
   padding-top: $page-top + 24px;
   padding-bottom: $gutter * 2;
+
+  .page-container {
+    width: 1400px;
+    margin: 0 auto;
+  }
 
   .sync,
   .provider-list,
@@ -513,6 +519,55 @@ h2 {
   .list .row,
   .form {
     width: 100%;
+  }
+}
+
+.sync-row.op-row {
+  align-items: center;
+
+  .sync-status {
+    flex: 1;
+  }
+
+  .op-stop {
+    flex: none;
+    background: #8a1c1f;
+    width: 72px;
+    margin: 0;
+    padding: 6px 0;
+  }
+}
+
+// Category chooser: an eye per category, crossed out and dimmed when hidden.
+.list .row.cat-row {
+  justify-content: flex-start;
+  align-items: center;
+
+  .cat-mark {
+    flex: none;
+    width: 40px;
+    color: $ok;
+
+    .icon {
+      width: 28px;
+      height: 28px;
+    }
+  }
+
+  &.hidden {
+    color: $text-muted;
+
+    .cat-mark {
+      color: $text-muted;
+    }
+
+    .cat-name {
+      text-decoration: line-through;
+    }
+  }
+
+  &.focused .cat-mark {
+    color: inherit;
   }
 }
 

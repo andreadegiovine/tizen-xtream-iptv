@@ -26,6 +26,8 @@ import { faLightbulb } from '@fortawesome/free-solid-svg-icons/faLightbulb';
 import { faPen } from '@fortawesome/free-solid-svg-icons/faPen';
 import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash';
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
+import { faStop } from '@fortawesome/free-solid-svg-icons/faStop';
+import { faEyeSlash } from '@fortawesome/free-solid-svg-icons/faEyeSlash';
 
 // Font Awesome Free (CC BY 4.0 / SIL OFL): only the icons listed here end up in the bundle.
 // They are inlined as SVG, so there are no font files to ship or load on the TV.
@@ -59,6 +61,8 @@ const ICONS = {
   remove: faTrash,
   add: faPlus,
   refresh: faRotateRight,
+  stop: faStop,
+  hidden: faEyeSlash,
 };
 
 export const iconNames = Object.keys(ICONS);

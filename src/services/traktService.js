@@ -189,11 +189,12 @@ export function createWatchState({ store, trakt }) {
      * Imports what Trakt knows as watched (movies and episodes) without overwriting local records.
      * Imported records carry `source: 'trakt'`, so they can be removed again on their own.
      */
-    async importFromTrakt() {
+    async importFromTrakt({ signal = null } = {}) {
       if (!trakt) return 0;
       let count = 0;
       for (const movie of await trakt.recentMovies(500)) {
         const key = `movie:t${movie.tmdbId}`;
+        if (signal && signal.aborted) return count;
         if (await store.get(key)) continue;
         await store.save({ key, entryKey: key, type: 'movie', providerId: null, title: movie.title, icon: '', position: 1, duration: 1, source: 'trakt' }, movie.watchedAt);
         count += 1;
@@ -202,6 +203,7 @@ export function createWatchState({ store, trakt }) {
         const entryKey = `series:t${ep.tmdbId}`;
         const episodeKey = `s${ep.season}e${ep.episode}`;
         const key = `${entryKey}|${episodeKey}`;
+        if (signal && signal.aborted) return count;
         if (await store.get(key)) continue;
         await store.save({ key, entryKey, episodeKey, type: 'series', providerId: null, title: ep.title, icon: '', position: 1, duration: 1, source: 'trakt' }, ep.watchedAt);
         count += 1;

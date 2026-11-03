@@ -93,7 +93,7 @@
   "home.continue": "Continue watching",
   "suggestions.loading": "Looking for suggestions…",
   "suggestions.fromHistory": "Because of what you watched",
-  "suggestions.trending": "Trending now, available on your provider",
+  "suggestions.trending": "Trending content",
   "common.on": "On",
   "common.off": "Off",
   "common.ok": "OK",
@@ -187,5 +187,15 @@
   "home.new.movie": "New movies",
   "home.new.series": "New TV series",
   "home.suggested.movie": "Suggested movies",
-  "home.suggested.series": "Suggested TV series"
+  "home.suggested.series": "Suggested TV series",
+  "operations.title": "Operations in progress",
+  "operations.none": "No operation in progress",
+  "operations.stop": "Stop",
+  "operations.since": "Since {time}",
+  "operations.catalog": "Catalog update",
+  "operations.genres": "Genre search",
+  "operations.epg": "TV guide (EPG)",
+  "operations.tmdb": "TMDB update",
+  "operations.trakt": "Trakt sync",
+  "providers.categories": "Visible categories"
 }
