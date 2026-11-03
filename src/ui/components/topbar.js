@@ -48,6 +48,7 @@ export function createTopbar(ctx, handlers = {}) {
   let nodes = [];
   let currentSection = 'home';
   let searching = false;
+  let skeleton = false; // first start: logo and placeholder items, nothing to focus
   let input = null;
   let field = null;
   let closeBtn = null;
@@ -56,7 +57,7 @@ export function createTopbar(ctx, handlers = {}) {
 
   const zone = new FocusZone({
     id: TOPBAR_ZONE,
-    model: new ListModel({ orientation: 'horizontal', getCount: () => (searching ? 0 : SECTIONS.length) }),
+    model: new ListModel({ orientation: 'horizontal', getCount: () => (searching || skeleton ? 0 : SECTIONS.length) }),
     onFocus: (i) => nodes[i] && nodes[i].classList.add('focused'),
     onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
     onActivate: (i) => {
@@ -88,6 +89,10 @@ export function createTopbar(ctx, handlers = {}) {
       if (section.end && !spacerAdded) {
         el.appendChild(h('span', { class: 'topbar-spacer' }));
         spacerAdded = true;
+      }
+      if (skeleton) {
+        el.appendChild(h('span', { class: 'topbar-item' }, h('span', { class: `skeleton-line${section.iconOnly ? ' icon' : ''}` })));
+        return;
       }
       const label = t(section.labelKey);
       const node = h('span', { class: `topbar-item${section.id === currentSection ? ' current' : ''}${section.iconOnly ? ' icon-only' : ''}`, 'aria-label': label });
@@ -134,6 +139,12 @@ export function createTopbar(ctx, handlers = {}) {
     zone,
     searchZone,
     render() {
+      if (!searching) renderNav();
+    },
+    /** Placeholder items (same sections, no labels, not focusable) while there is no provider yet. */
+    setSkeleton(on) {
+      if (skeleton === on) return;
+      skeleton = on;
       if (!searching) renderNav();
     },
     setVisible(visible) {

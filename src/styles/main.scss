@@ -189,7 +189,7 @@ h2 {
   width: 880px;
 }
 
-// First start: skeleton Home as background, logo on top, form in a square box.
+// First start: the Home skeleton as background, the form at the left in a square box above it.
 .page.setup.first-run {
   position: relative;
   overflow: hidden;
@@ -201,56 +201,15 @@ h2 {
     right: 0;
     bottom: 0;
     left: 0;
-    padding: $gutter;
+    padding: $page-top $gutter $gutter;
     opacity: 0.45;
     overflow: hidden;
   }
 
-  .skeleton-carousel {
-    margin-bottom: 36px;
-
-    .skeleton-line.title {
-      width: 260px;
-      height: 28px;
-      margin-bottom: 16px;
-    }
-  }
-
-  .skeleton-row-cards {
-    display: flex;
-    overflow: hidden;
-
-    .card {
-      flex: none;
-      margin-right: 24px;
-    }
-  }
-
-  .setup-center {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    height: 100%;
-    padding-top: 56px;
-    overflow-y: auto;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  }
-
-  .setup-logo .logo {
-    margin: 0 0 28px;
-    font-size: 48px;
-
-    .logo-mark {
-      width: 84px;
-      height: 84px;
-    }
-  }
-
   .setup-box {
+    position: absolute;
+    top: 24px;
+    left: $gutter;
     padding: 36px 48px 24px;
     border-radius: 0;
     background: rgba(12, 12, 18, 0.94);
@@ -258,6 +217,15 @@ h2 {
     h1 {
       margin-top: 0;
     }
+  }
+}
+
+.topbar .topbar-item .skeleton-line {
+  width: 90px;
+  height: 22px;
+
+  &.icon {
+    width: 28px;
   }
 }
 

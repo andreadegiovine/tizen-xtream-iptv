@@ -7,20 +7,12 @@ import { AppError, ErrorCode, toAppError } from '../../core/errors.js';
 import { log } from '../../core/logger.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
-import { createLogo } from '../components/logo.js';
-import { createSkeletonCard } from '../components/card.js';
+import { createHomeSkeleton } from './homePage.js';
 
 const ZONE_ID = 'providerSetup';
 // Samsung on-screen keyboard: "Done" and "Cancel" arrive as these key codes.
 const IME_DONE = 65376;
 const IME_CANCEL = 65385;
-
-/** Home page drawn as skeleton placeholders (hero line, three carousels): a calm background for the first start. */
-function skeletonHome() {
-  const row = () => h('div', { class: 'skeleton-row-cards' }, Array.from({ length: 9 }, () => createSkeletonCard()));
-  const section = () => h('div', { class: 'skeleton-carousel' }, h('div', { class: 'skeleton-line title' }), row());
-  return h('div', { class: 'setup-backdrop', 'aria-hidden': 'true' }, section(), section(), section());
-}
 
 export function createProviderSetupPage(ctx, params = {}) {
   const fields = [
@@ -114,9 +106,9 @@ export function createProviderSetupPage(ctx, params = {}) {
 
   const form = h('div', { class: 'form' }, rows.map((r) => r.row), submit, cancel, status);
   const title = h('h1', { text: t(editId ? 'setup.editTitle' : 'setup.title') });
-  // First start: the logo on top, the form in a square-cornered box over a skeleton of the Home page.
+  // First start: the bar (logo + placeholders) is above; the form sits at the left, in a square box, over the Home skeleton.
   const el = params.firstRun
-    ? h('section', { class: 'page setup first-run' }, skeletonHome(), h('div', { class: 'setup-center' }, h('div', { class: 'setup-logo' }, createLogo()), h('div', { class: 'setup-box' }, title, form)))
+    ? h('section', { class: 'page setup first-run' }, h('div', { class: 'setup-backdrop home-skeleton', 'aria-hidden': 'true' }, createHomeSkeleton()), h('div', { class: 'setup-box' }, title, form))
     : h('section', { class: 'page setup' }, title, form);
 
   return {

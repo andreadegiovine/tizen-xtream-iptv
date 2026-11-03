@@ -3,16 +3,23 @@ import { t } from '../../i18n/index.js';
 import { MediaType } from '../../services/mediaType.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { createCarousel } from '../components/carousel.js';
+import { createSkeletonCard } from '../components/card.js';
 import { getEntry, pageEntries } from '../../services/catalogQuery.js';
 import { log } from '../../core/logger.js';
 
 /** "s1e2" → "S1E2". */
 export const episodeLabel = (episodeKey) => (episodeKey ? episodeKey.toUpperCase() : '');
 
+/** The Home layout drawn with placeholders (same wrappers and classes as the real rows): used behind the first-start form. */
 /**
  * Home: "Continue watching" (when there is something to resume), new movies, new series, then the suggested
  * movies and series. Sync details and the manual update buttons live in the Settings.
  */
+export function createHomeSkeleton(rows = 3, cards = 9) {
+  const carousel = () => h('div', { class: 'carousel' }, h('h2', { class: 'carousel-title skeleton-line' }), h('div', { class: 'carousel-track' }, Array.from({ length: cards }, () => createSkeletonCard())));
+  return h('div', { class: 'home-rows' }, Array.from({ length: rows }, carousel));
+}
+
 export function createHomePage(ctx) {
   const rowsEl = h('div', { class: 'home-rows' });
   const hint = h('p', { class: 'muted sync-info', text: t('common.empty') });

@@ -177,7 +177,8 @@ async function boot() {
       if (entry.name === 'search' && !topbar.isSearching()) topbar.openSearch({ query: (page && page.getQuery && page.getQuery()) || '', silent: true });
       else if (entry.name !== 'search' && topbar.isSearching()) topbar.closeSearch({ notify: false });
       topbar.syncSearchLinks();
-      topbar.setVisible(!(entry.name === 'providerSetup' && entry.params.firstRun) && entry.name !== 'player');
+      topbar.setSkeleton(entry.name === 'providerSetup' && Boolean(entry.params.firstRun));
+      topbar.setVisible(entry.name !== 'player');
       topbar.setCurrentSection(section);
       // Pages with their own zone take focus in mount(). When the user switched section from the bar,
       // or the page has no zone, the focus stays on (or returns to) the bar, on the current section.
