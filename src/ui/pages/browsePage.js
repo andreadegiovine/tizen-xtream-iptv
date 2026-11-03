@@ -1,3 +1,4 @@
+import { continueWatching } from '../../services/continueWatching.js';
 import { h } from '../dom.js';
 import { createCard, createSkeletonCard } from '../components/card.js';
 import { t, i18n } from '../../i18n/index.js';
@@ -176,7 +177,7 @@ export function createBrowsePage(ctx, params = {}) {
       await Promise.all(categories.map((c) => safe(async () => set(`category:${c.id}`, await countEntries(db, { type, categoryId: c.id })))));
       return;
     }
-    await safe(async () => set('continue:', (await ctx.watch.recent({ providerId, limit: 200, onlyUnfinished: true })).filter((r) => r.type === type).length));
+    await safe(async () => set('continue:', (await continueWatching(ctx, { providerId, limit: 200 })).filter((r) => r.type === type).length));
     await safe(async () => set('favorites:', (await ctx.favorites.list(providerId)).filter((f) => f.type === type).length));
     await safe(async () => set('suggestions:', (await suggestionEntries()).length));
     const genreTotals = await safe(() => ctx.genres.counts(type));
@@ -262,7 +263,7 @@ export function createBrowsePage(ctx, params = {}) {
   /** Entries of the views that are not a plain catalog walk. */
   async function loadList(item) {
     if (item.kind === 'continue') {
-      const recent = await ctx.watch.recent({ providerId, limit: 200, onlyUnfinished: true });
+      const recent = await continueWatching(ctx, { providerId, limit: 200 });
       return byKeys(recent.filter((r) => r.type === type).map((r) => r.entryKey));
     }
     if (item.kind === 'favorites') {

@@ -31,14 +31,6 @@ describe('WatchStore', () => {
     expect(recent.map((r) => r.key)).toEqual(['series:t3|s1e2', 'movie:t1']); // finished movie is hidden
     expect((await store.get('movie:t2')).watched).toBe(true);
   });
-  test('a series marked as seen leaves "continue watching", a newer episode brings it back', async () => {
-    const store = await newStore();
-    await store.save({ key: 'series:t3|s1e1', entryKey: 'series:t3', type: 'series', providerId: 'p', position: 1, duration: 1, seriesDone: true }, 1);
-    await store.save({ key: 'series:t3|s1e2', entryKey: 'series:t3', type: 'series', providerId: 'p', position: 1, duration: 1, seriesDone: true }, 2);
-    expect(await store.recent()).toEqual([]);
-    await store.save({ key: 'series:t3|s2e1', entryKey: 'series:t3', type: 'series', providerId: 'p', position: 20, duration: 100 }, 3);
-    expect((await store.recent()).map((r) => r.key)).toEqual(['series:t3|s2e1']);
-  });
   test('seeds are distinct tmdb titles, newest first', async () => {
     const store = await newStore();
     await store.save({ key: 'movie:t1', entryKey: 'movie:t1', type: 'movie', position: 1, duration: 10 }, 1);

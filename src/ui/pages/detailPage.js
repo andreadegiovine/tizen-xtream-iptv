@@ -380,7 +380,7 @@ export function createDetailPage(ctx, params) {
       else {
         const base = { providerId, entryKey: entry.key, type: entry.type, title: data().title, icon: entry.icon || '' };
         const list = entry.type === 'series'
-          ? episodes.map((ep) => ({ ...base, key: watchKey(providerId, entry.key, `s${ep.season}e${ep.number}`), episodeKey: `s${ep.season}e${ep.number}`, episodeTitle: ep.title, seriesDone: true }))
+          ? episodes.map((ep) => ({ ...base, key: watchKey(providerId, entry.key, `s${ep.season}e${ep.number}`), episodeKey: `s${ep.season}e${ep.number}`, episodeTitle: ep.title, seriesDone: (meta && meta.episodes) || 1 }))
           : [{ ...base, key: watchKey(providerId, entry.key) }];
         await ctx.watch.markWatched(list);
       }

@@ -1,3 +1,4 @@
+import { continueWatching } from '../../services/continueWatching.js';
 import { h } from '../dom.js';
 import { t } from '../../i18n/index.js';
 import { MediaType } from '../../services/mediaType.js';
@@ -75,7 +76,7 @@ export function createHomePage(ctx) {
     providerId = current.provider.id;
 
     const definitions = [];
-    const recent = await ctx.watch.recent({ providerId, limit: carouselItems });
+    const recent = await continueWatching(ctx, { providerId, limit: carouselItems });
     const resumed = [];
     for (const rec of recent) {
       const entry = await getEntry(current.db, rec.entryKey);
