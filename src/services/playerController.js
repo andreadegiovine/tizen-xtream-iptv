@@ -84,6 +84,17 @@ export function createPlayerController({ engine, poll = (fn, ms) => setInterval(
         /* seek not supported for this stream */
       }
     },
+    /** Absolute seek (progress bar), clamped to the stream; no-op while loading and on live streams. */
+    seekTo(seconds) {
+      if ((state.status !== 'playing' && state.status !== 'paused') || !(state.duration > 0)) return;
+      const target = Math.min(Math.max(0, seconds), Math.max(0, state.duration - 1));
+      try {
+        engine.seekTo(target * 1000);
+        set({ position: target });
+      } catch {
+        /* seek not supported for this stream */
+      }
+    },
     stop() {
       if (timer !== null) unpoll(timer);
       timer = null;
@@ -123,3 +134,12 @@ export function subtitleLabel(track, position, fallback) {
 
 /** Next aspect mode in the cycle. */
 export const nextAspect = (modes, current) => modes[(modes.indexOf(current) + 1) % modes.length];
+
+/** New scrub position after pressing left/right on the progress bar. */
+export const scrubTarget = (position, delta, duration) => Math.min(Math.max(0, position + delta), Math.max(0, duration));
+
+/** Position (seconds) under a pointer on the bar: `x` and `left` in the same coordinate space. */
+export function positionFromPointer(x, left, width, duration) {
+  if (!(width > 0) || !(duration > 0)) return 0;
+  return Math.min(1, Math.max(0, (x - left) / width)) * duration;
+}

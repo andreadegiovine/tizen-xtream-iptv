@@ -72,6 +72,15 @@ export class WatchStore {
     return mine.length;
   }
 
+  /** Deletes the records that were imported from an external service. */
+  async removeBySource(source) {
+    await this.writes;
+    const all = await dbGetAll(this.db, 'watch');
+    const mine = all.filter((r) => r.source === source);
+    await Promise.all(mine.map((r) => dbDelete(this.db, 'watch', r.key)));
+    return mine.length;
+  }
+
   /** Every record, for badges (one read per rendered page). */
   async all() {
     await this.writes;

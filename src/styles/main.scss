@@ -248,6 +248,23 @@ h2 {
   }
 }
 
+.list .row .value-input {
+  flex: 1;
+  min-width: 0;
+  margin-left: 24px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: $text-muted;
+  font: inherit;
+  text-align: right;
+}
+
+.list .row.focused .value-input {
+  color: $bg;
+}
+
 .diag-results {
   margin-bottom: 16px;
 }
@@ -458,6 +475,9 @@ h2 {
 }
 
 .browse-cat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 4px;
   padding: 10px 16px;
   border-radius: 4px;
@@ -468,6 +488,28 @@ h2 {
 
   &.focused {
     background: $bg-focus;
+  }
+
+  &.sub {
+    margin-left: 20px;
+    font-size: 24px;
+  }
+
+  .browse-cat-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .icon {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin-left: 12px;
+    transition: transform 0.12s ease-out;
+
+    &.open {
+      transform: rotate(180deg);
+    }
   }
 
   // Selected category: white box, black text.
@@ -658,74 +700,67 @@ h2 {
     font-size: 26px;
   }
 
-  .player-progress {
+  .player-row {
     display: flex;
     align-items: center;
   }
 
+  .player-bar-gap {
+    flex: 1;
+  }
+
+  // Wide hit area around the thin bar (pointer and D-pad focus).
+  .player-seek {
+    flex: 1;
+    padding: 26px 0;
+    margin: 0 20px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: 8px;
+
+    &.focused {
+      border-color: $text;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    &.scrubbing .player-knob {
+      width: 30px;
+      height: 30px;
+    }
+  }
+
   .player-time {
     flex: none;
-    width: 240px;
+    min-width: 230px;
+    margin-right: 12px;
     font-size: 26px;
+    text-align: right;
   }
 
   .player-bar {
-    flex: 1;
-    height: 8px;
-    border-radius: 4px;
+    position: relative;
+    height: 10px;
+    border-radius: 5px;
     background: rgba(255, 255, 255, 0.25);
   }
 
   .player-fill {
     width: 0;
     height: 100%;
-    border-radius: 4px;
+    border-radius: 5px;
     background: $accent;
   }
 
-  .player-buttons {
-    display: flex;
-    align-items: center;
-    margin-top: 20px;
-  }
-
-  .player-group {
-    display: flex;
-    align-items: center;
-
-    &.side {
-      flex: 1;
-    }
-
-    &.end {
-      justify-content: flex-end;
-    }
-  }
-
-  .player-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 80px;
-    height: 64px;
-    margin: 0 8px;
-    padding: 0;
-    border: 2px solid transparent;
-    border-radius: 8px;
-    background: transparent;
-    color: $text;
-    transition: transform 0.12s ease-out;
-
-    .icon {
-      width: 30px;
-      height: 30px;
-    }
-
-    &.focused {
-      border-color: $text;
-      background: rgba(255, 255, 255, 0.18);
-      transform: scale(1.1);
-    }
+  .player-knob {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+    border-radius: 50%;
+    background: $text;
+    transition: width 0.1s, height 0.1s;
   }
 
   .player-status {
@@ -916,6 +951,16 @@ h2 {
   border-radius: 20px;
   color: $text-muted;
   font-size: 22px;
+
+  &.link {
+    color: $text;
+  }
+
+  &.focused {
+    border-color: $text;
+    background: $text;
+    color: $bg;
+  }
 }
 
 .icon-btn {

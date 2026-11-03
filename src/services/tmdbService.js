@@ -1,9 +1,11 @@
-import { dbGet, dbPut } from '../core/idb.js';
+import { dbGet, dbPut, dbClear } from '../core/idb.js';
 import { makeSearchKey } from './titleNormalizer.js';
 import { posterUrl } from './tmdbClient.js';
 
 export const META_TTL_MS = 30 * 24 * 3600 * 1000;
 export const NOT_FOUND_TTL_MS = 7 * 24 * 3600 * 1000;
+export const GENRES_TTL_MS = 30 * 24 * 3600 * 1000;
+export const DISCOVER_PAGES = 5;
 export const RECOMMENDATIONS_TTL_MS = 24 * 3600 * 1000;
 
 const yearOf = (date) => Number.parseInt(String(date || '').slice(0, 4), 10) || null;
@@ -19,6 +21,7 @@ export function normalizeMeta(type, data) {
     backdrop: posterUrl(data.backdrop_path, 'w780'),
     rating: Number(data.vote_average) || null,
     genre: Array.isArray(data.genres) ? data.genres.map((g) => g.name).join(', ') : '',
+    genreList: Array.isArray(data.genres) ? data.genres.map((g) => ({ id: g.id, name: g.name })) : [],
     runtime: type === 'movie' ? Number(data.runtime) || null : (Array.isArray(data.episode_run_time) && data.episode_run_time[0]) || null,
     year: yearOf(date),
     seasons: Number(data.number_of_seasons) || null,
@@ -131,9 +134,48 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now }) {
     return record.value || [];
   }
 
+  /** Genres TMDB knows for a type, in the app language: [{ id, name }]. */
+  async function genres(type) {
+    if (!client.enabled || type === 'live') return [];
+    const language = getLanguage();
+    const record = await cached('tmdb', `genres:${type}:${language}`, () => GENRES_TTL_MS, async () => {
+      const data = await client.genres(type, language);
+      return ((data && data.genres) || []).map((g) => ({ id: g.id, name: g.name }));
+    });
+    return record.value || [];
+  }
+
+  /** Popular tmdb ids of a genre (first pages of "discover"), cached for a day. */
+  async function discoverIds(type, genreId) {
+    if (!client.enabled || type === 'live') return [];
+    const language = getLanguage();
+    const record = await cached('tmdb', `discover:${type}:${genreId}:${language}`, () => RECOMMENDATIONS_TTL_MS, async () => {
+      const pages = await Promise.all(Array.from({ length: DISCOVER_PAGES }, (_, i) => client.discover(type, genreId, i + 1, language).catch(() => null)));
+      return pages.flatMap((page) => ((page && page.results) || []).map((r) => r.id));
+    });
+    return record.value || [];
+  }
+
   return {
-    enabled: client.enabled,
+    get enabled() {
+      return client.enabled;
+    },
     getMeta,
+    genres,
+    discoverIds,
+    /** Forgets every cached answer (metadata, matches, genres, recommendations). */
+    async clearAll() {
+      memory.clear();
+      await dbClear(db, 'tmdb');
+      await dbClear(db, 'tmdb_match');
+    },
+    /** Drops cached metadata and downloads it again for `items` ([{ type, tmdbId }]); resolves with how many were refreshed. */
+    async refresh(items) {
+      memory.clear();
+      await dbClear(db, 'tmdb');
+      const done = await Promise.all(items.map((item) => queue.add(() => getMeta(item.type, item.tmdbId))));
+      return done.filter(Boolean).length;
+    },
     recommendations,
     matchTmdbId,
     /** Metadata for a detail page: provider tmdb id first, otherwise a conservative title match. */

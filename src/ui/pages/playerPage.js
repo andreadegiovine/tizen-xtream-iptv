@@ -3,7 +3,7 @@ import { t } from '../../i18n/index.js';
 import { Action } from '../../core/input.js';
 import { log } from '../../core/logger.js';
 import { icon } from '../icons.js';
-import { createPlayerController, formatClock, neighborEpisode, subtitleLabel, nextAspect } from '../../services/playerController.js';
+import { createPlayerController, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer } from '../../services/playerController.js';
 import { ASPECT_MODES } from '../../services/playerEngines.js';
 import { watchKey, shouldResume } from '../../services/watchStore.js';
 import { pageEntries } from '../../services/catalogQuery.js';
@@ -13,6 +13,7 @@ const SAVE_EVERY_MS = 10000;
 const NEXT_COUNTDOWN_S = 10;
 const SEEK_SHORT = 10;
 const SEEK_LONG = 30;
+const SCRUB_STEP = 30;
 
 /**
  * Full-screen player. All controls are HTML on top of the video plane; keys arrive through
@@ -43,13 +44,18 @@ export function createPlayerPage(ctx, params) {
   let flashTimer = null;
   let lastStatus = '';
   let subtitleTimer = null;
+  let scrub = null; // seconds while the user drags / steps the progress bar, otherwise null
+  let scrubMode = false; // OK on the bar: left/right move the position instead of the button focus
+  let lastState = { position: 0, duration: 0 };
 
   const titleEl = h('div', { class: 'player-title' });
   const statusEl = h('div', { class: 'player-status' });
   const nowEl = h('div', { class: 'player-now' });
   const timeEl = h('span', { class: 'player-time' });
   const fill = h('div', { class: 'player-fill' });
-  const bar = h('div', { class: 'player-bar' }, fill);
+  const knob = h('div', { class: 'player-knob' });
+  const bar = h('div', { class: 'player-bar' }, fill, knob);
+  const seek = h('div', { class: 'player-seek' }, bar);
   const nextEl = h('div', { class: 'player-next' });
   const flashEl = h('div', { class: 'player-flash' });
   const subtitleEl = h('div', { class: 'player-subtitle' });
@@ -59,16 +65,19 @@ export function createPlayerPage(ctx, params) {
     { id: 'back', icon: 'backward', label: () => t('player.back'), vodOnly: true, group: 'center', run: () => controller.seekBy(-SEEK_LONG) },
     { id: 'toggle', icon: 'pause', label: () => t('player.pause'), vodOnly: true, group: 'center', run: () => controller.togglePause() },
     { id: 'forward', icon: 'forward', label: () => t('player.forward'), vodOnly: true, group: 'center', run: () => controller.seekBy(SEEK_LONG) },
+    { id: 'seek', vodOnly: true, group: 'bar', el: seek, run: () => toggleScrub() },
     { id: 'aspect', icon: 'aspect', label: () => t('player.aspect'), group: 'end', run: () => cycleAspect() },
     { id: 'subtitles', icon: 'subtitles', label: () => t('player.subtitles'), group: 'end', run: () => openSubtitles() },
   ].filter((def) => !(isLive && def.vodOnly));
   buttonDefs.forEach((def) => {
+    if (def.el) return;
     def.el = h('button', { class: 'player-btn', type: 'button', 'aria-label': def.label() }, icon(def.icon));
   });
-  const groupOf = (name) => buttonDefs.filter((d) => d.group === name).map((d) => d.el);
-  const buttonsRow = h('div', { class: 'player-buttons' }, h('div', { class: 'player-group side' }), h('div', { class: 'player-group' }, groupOf('center')), h('div', { class: 'player-group side end' }, groupOf('end')));
+  const buttonEl = (id) => (buttonDefs.find((d) => d.id === id) || {}).el;
+  // One row: back, play/pause, forward, progress bar, time, aspect ratio, subtitles.
+  const row = h('div', { class: 'player-row' }, buttonEl('back'), buttonEl('toggle'), buttonEl('forward'), isLive ? h('div', { class: 'player-bar-gap' }) : seek, timeEl, buttonEl('aspect'), buttonEl('subtitles'));
   const top = h('div', { class: 'player-top' }, titleEl, nowEl);
-  const controls = h('div', { class: 'player-controls' }, h('div', { class: 'player-progress' }, timeEl, bar), buttonsRow);
+  const controls = h('div', { class: 'player-controls' }, row);
   const el = h('section', { class: 'player' }, top, controls, statusEl, nextEl, flashEl, subtitleEl);
 
   const current = () => playlist[index];
@@ -81,11 +90,64 @@ export function createPlayerPage(ctx, params) {
     // Without a key press for a few seconds everything fades out, the button focus included.
     hideTimer = setTimeout(() => {
       focusMode = false;
+      if (scrubMode) endScrub(false);
       paintFocus();
       controls.classList.remove('visible');
       top.classList.remove('visible');
     }, CONTROLS_MS);
   }
+
+  function drawProgress(position, duration) {
+    const pct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0;
+    fill.style.width = `${pct}%`;
+    knob.style.left = `${pct}%`;
+    timeEl.textContent = isLive ? t('player.live') : `${formatClock(position)} / ${formatClock(duration)}`;
+  }
+
+  function setScrub(seconds) {
+    scrub = scrubTarget(seconds, 0, lastState.duration);
+    seek.classList.add('scrubbing');
+    drawProgress(scrub, lastState.duration);
+  }
+
+  function endScrub(commit) {
+    const target = scrub;
+    scrub = null;
+    scrubMode = false;
+    seek.classList.remove('scrubbing');
+    if (commit && target !== null) controller.seekTo(target);
+    drawProgress(commit && target !== null ? target : lastState.position, lastState.duration);
+  }
+
+  /** OK on the bar: start moving the position, OK again applies it. */
+  function toggleScrub() {
+    if (scrubMode) endScrub(true);
+    else if (lastState.duration > 0) {
+      scrubMode = true;
+      setScrub(lastState.position);
+    }
+  }
+
+  // Pointer (Smart Remote / mouse): click or drag on the bar.
+  const pointerPosition = (event) => {
+    const rect = bar.getBoundingClientRect();
+    return positionFromPointer(event.clientX, rect.left, rect.width, lastState.duration);
+  };
+  seek.addEventListener('mousedown', (event) => {
+    if (!(lastState.duration > 0)) return;
+    event.preventDefault();
+    setScrub(pointerPosition(event));
+    showControls();
+    const move = (e) => setScrub(pointerPosition(e));
+    const up = (e) => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      setScrub(pointerPosition(e));
+      endScrub(true);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
 
   function flash(text) {
     flashEl.textContent = text;
@@ -146,10 +208,8 @@ export function createPlayerPage(ctx, params) {
 
   function render(state) {
     if (destroyed) return;
-    const pct = state.duration > 0 ? (state.position / state.duration) * 100 : 0;
-    fill.style.width = `${Math.min(100, pct)}%`;
-    bar.style.visibility = isLive ? 'hidden' : '';
-    timeEl.textContent = isLive ? t('player.live') : `${formatClock(state.position)} / ${formatClock(state.duration)}`;
+    lastState = state;
+    if (scrub === null) drawProgress(state.position, state.duration);
     let status = '';
     if (state.status === 'loading') status = t('player.loading');
     else if (state.status === 'paused') status = t('player.paused');
@@ -295,15 +355,26 @@ export function createPlayerPage(ctx, params) {
   // Same keys while the buttons have the focus: left/right walk over them, OK presses, Up goes back to seeking.
   const buttonHandlers = {
     [Action.LEFT]: () => {
+      if (scrubMode) {
+        setScrub(scrubTarget(scrub, -SCRUB_STEP, lastState.duration));
+        return;
+      }
       focusIndex = Math.max(0, focusIndex - 1);
       paintFocus();
     },
     [Action.RIGHT]: () => {
+      if (scrubMode) {
+        setScrub(scrubTarget(scrub, SCRUB_STEP, lastState.duration));
+        return;
+      }
       focusIndex = Math.min(buttonDefs.length - 1, focusIndex + 1);
       paintFocus();
     },
     [Action.ENTER]: () => buttonDefs[focusIndex].run(),
-    [Action.UP]: exitFocus,
+    [Action.UP]: () => {
+      if (scrubMode) endScrub(false);
+      exitFocus();
+    },
     [Action.DOWN]: () => undefined,
   };
 
@@ -321,6 +392,7 @@ export function createPlayerPage(ctx, params) {
     /** Back first leaves the button row; a second Back leaves the player. */
     onBack() {
       if (!focusMode) return false;
+      if (scrubMode) endScrub(false);
       exitFocus();
       return true;
     },

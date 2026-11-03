@@ -17,11 +17,14 @@ export function rankCandidates(lists) {
   return Array.from(scores.values()).sort((a, b) => b.score - a.score || b.popularity - a.popularity);
 }
 
+export const SUGGESTION_SOURCES = ['tmdb', 'trakt'];
+
 /**
- * "Suggestions": TMDB recommendations for what was watched recently (trending as the fallback),
- * kept only when the provider catalog has the title (same tmdb id) and it has not been watched yet.
+ * "Suggestions": recommendations for what was watched recently (trending as the fallback), kept only when
+ * the provider catalog has the title (same tmdb id) and it has not been watched yet.
+ * The source is a setting (`getSource()` → 'tmdb' | 'trakt'); when the chosen one is not usable the other is tried.
  */
-export function createSuggestionsService({ active, watch, tmdb, seedCount = 6 }) {
+export function createSuggestionsService({ active, watch, tmdb, trakt = null, getSource = async () => 'tmdb', seedCount = 6 }) {
   async function inCatalog(db, candidates, exclude, limit) {
     const out = [];
     for (const candidate of candidates) {
@@ -34,27 +37,59 @@ export function createSuggestionsService({ active, watch, tmdb, seedCount = 6 })
     return out;
   }
 
+  /** Source to use: the preferred one if usable (Trakt for personal picks also needs a login), otherwise the other, otherwise null. */
+  async function resolveSource({ needsLogin }) {
+    const preferred = await getSource();
+    const usable = {
+      tmdb: Boolean(tmdb.enabled),
+      trakt: Boolean(trakt && trakt.enabled && (!needsLogin || (await trakt.isConnected()))),
+    };
+    if (usable[preferred]) return preferred;
+    const other = preferred === 'tmdb' ? 'trakt' : 'tmdb';
+    return usable[other] ? other : null;
+  }
+
   return {
-    enabled: tmdb.enabled,
+    get enabled() {
+      return Boolean(tmdb.enabled || (trakt && trakt.enabled));
+    },
+    resolveSource,
     async build({ limit = 36 } = {}) {
-      if (!tmdb.enabled) return { entries: [], source: 'disabled' };
+      const source = await resolveSource({ needsLogin: true });
+      if (!source) return { entries: [], source: 'disabled' };
       const current = await active.get();
       if (!current) return { entries: [], source: 'none' };
       const seeds = await watch.seeds(seedCount);
       const exclude = new Set(seeds.map((s) => `${s.type}:t${s.tmdbId}`));
+      if (source === 'trakt') {
+        const entries = await inCatalog(current.db, rankCandidates(await trakt.recommendations().catch(() => [])), exclude, limit);
+        if (entries.length || !tmdb.enabled) return { entries, source: 'trakt' };
+      }
       const lists = [];
       for (const seed of seeds) lists.push({ type: seed.type, items: await tmdb.recommendations(seed.type, seed.tmdbId).catch(() => []) });
       let entries = await inCatalog(current.db, rankCandidates(lists), exclude, limit);
-      let source = seeds.length ? 'history' : 'trending';
+      let from = seeds.length ? 'history' : 'trending';
       if (entries.length < Math.min(12, limit)) {
         const trending = [];
         for (const type of TYPES) trending.push({ type, items: await tmdb.recommendations(type, null).catch(() => []) });
         const seen = new Set(entries.map((e) => e.key));
         const more = await inCatalog(current.db, rankCandidates(trending), new Set([...exclude, ...seen]), limit - entries.length);
         entries = entries.concat(more);
-        if (!seeds.length || !entries.length) source = 'trending';
+        if (!seeds.length || !entries.length) from = 'trending';
       }
-      return { entries, source };
+      return { entries, source: from };
+    },
+    /** "You might also like" for one title: up to `limit` catalog entries related to it. */
+    async forEntry(entry, { tmdbId = null, limit = 20 } = {}) {
+      if (!entry || entry.type === 'live') return [];
+      const id = tmdbId || entry.tmdbId;
+      if (!id) return [];
+      const source = await resolveSource({ needsLogin: false });
+      if (!source) return [];
+      const current = await active.get();
+      if (!current) return [];
+      const items = source === 'trakt' ? await trakt.related(entry.type, id).catch(() => []) : await tmdb.recommendations(entry.type, id).catch(() => []);
+      return inCatalog(current.db, items.map((item) => ({ type: entry.type, id: item.id })), new Set([`${entry.type}:t${id}`, entry.key]), limit);
     },
   };
 }

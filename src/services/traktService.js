@@ -16,6 +16,24 @@ export function historyPayload(record, watchedAt = new Date().toISOString()) {
   return { shows: [{ ids: { tmdb }, seasons: [{ number: Number(ep[1]), episodes: [{ number: Number(ep[2]), watched_at: watchedAt }] }] }] };
 }
 
+/** Trakt "watched shows" payload → flat episode list, newest shows first. */
+export function flattenWatchedShows(data, limit = 3000, fallbackAt = Date.now()) {
+  const out = [];
+  const shows = data
+    .filter((entry) => entry.show && entry.show.ids && entry.show.ids.tmdb)
+    .sort((a, b) => String(b.last_watched_at).localeCompare(String(a.last_watched_at)));
+  for (const entry of shows) {
+    const watchedAt = Date.parse(entry.last_watched_at) || fallbackAt;
+    for (const season of entry.seasons || []) {
+      for (const episode of season.episodes || []) {
+        if (out.length >= limit) return out;
+        out.push({ tmdbId: entry.show.ids.tmdb, title: entry.show.title || '', season: season.number, episode: episode.number, watchedAt });
+      }
+    }
+  }
+  return out;
+}
+
 export function createTraktService({ db, client, now = Date.now, wait = sleep }) {
   async function token() {
     const stored = await kvGet(db, TOKEN_KEY, null);
@@ -34,7 +52,9 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
   }
 
   const service = {
-    enabled: client.enabled,
+    get enabled() {
+      return client.enabled;
+    },
     async isConnected() {
       return Boolean(await kvGet(db, TOKEN_KEY, null));
     },
@@ -89,6 +109,44 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
         log.warn('Trakt flush failed', err && err.message);
       }
     },
+    /** Personalised recommendations as ranked lists [{ type, items: [{ id (tmdb), popularity }] }]. */
+    async recommendations() {
+      const access = await token();
+      if (!access) return [];
+      const lists = [];
+      for (const [kind, type] of [['movies', 'movie'], ['shows', 'series']]) {
+        const res = await client.recommendations(access, kind);
+        if (!res.ok || !Array.isArray(res.data)) continue;
+        const ids = res.data.map((item) => item.ids && item.ids.tmdb).filter(Boolean);
+        lists.push({ type, items: ids.map((id, i) => ({ id, popularity: ids.length - i })) });
+      }
+      return lists;
+    },
+    /** Titles related to one tmdb title: [{ id, popularity }] (cached for a day). */
+    async related(type, tmdbId) {
+      const cacheKey = `trakt.related:${type}:${tmdbId}`;
+      const hit = await kvGet(db, cacheKey, null);
+      if (hit && now() - hit.savedAt < 24 * 3600 * 1000) return hit.items;
+      const kind = type === 'series' ? 'shows' : 'movies';
+      const found = await client.lookupTmdb(kind, tmdbId);
+      const node = found.ok && Array.isArray(found.data) && found.data[0] && (found.data[0].movie || found.data[0].show);
+      const slug = node && node.ids && node.ids.slug;
+      if (!slug) return [];
+      const res = await client.related(kind, slug);
+      if (!res.ok || !Array.isArray(res.data)) return [];
+      const ids = res.data.map((item) => item.ids && item.ids.tmdb).filter(Boolean);
+      const items = ids.map((id, i) => ({ id, popularity: ids.length - i }));
+      await kvSet(db, cacheKey, { savedAt: now(), items });
+      return items;
+    },
+    /** Every watched episode on Trakt (tmdb show id + season/episode), capped. */
+    async watchedEpisodes(limit = 3000) {
+      const access = await token();
+      if (!access) return [];
+      const res = await client.watchedShows(access);
+      if (!res.ok || !Array.isArray(res.data)) return [];
+      return flattenWatchedShows(res.data, limit, now());
+    },
     /** Most recently watched movies (tmdb ids), used to seed local history and suggestions. */
     async recentMovies(limit = 30) {
       const access = await token();
@@ -127,17 +185,30 @@ export function createWatchState({ store, trakt }) {
       if (saved.watched && !(before && before.watched) && trakt) trakt.reportWatched(saved).catch(() => undefined);
       return saved;
     },
-    /** Imports Trakt's recent movies as watched history (without overwriting what exists locally). */
+    /**
+     * Imports what Trakt knows as watched (movies and episodes) without overwriting local records.
+     * Imported records carry `source: 'trakt'`, so they can be removed again on their own.
+     */
     async importFromTrakt() {
       if (!trakt) return 0;
       let count = 0;
-      for (const movie of await trakt.recentMovies()) {
+      for (const movie of await trakt.recentMovies(500)) {
         const key = `movie:t${movie.tmdbId}`;
         if (await store.get(key)) continue;
-        await store.save({ key, entryKey: key, type: 'movie', providerId: null, title: movie.title, icon: '', position: 1, duration: 1 }, movie.watchedAt);
+        await store.save({ key, entryKey: key, type: 'movie', providerId: null, title: movie.title, icon: '', position: 1, duration: 1, source: 'trakt' }, movie.watchedAt);
+        count += 1;
+      }
+      for (const ep of await trakt.watchedEpisodes()) {
+        const entryKey = `series:t${ep.tmdbId}`;
+        const episodeKey = `s${ep.season}e${ep.episode}`;
+        const key = `${entryKey}|${episodeKey}`;
+        if (await store.get(key)) continue;
+        await store.save({ key, entryKey, episodeKey, type: 'series', providerId: null, title: ep.title, icon: '', position: 1, duration: 1, source: 'trakt' }, ep.watchedAt);
         count += 1;
       }
       return count;
     },
+    /** Forgets everything that came from Trakt (local history stays). */
+    removeTraktData: () => store.removeBySource('trakt'),
   };
 }

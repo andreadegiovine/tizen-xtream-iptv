@@ -1,13 +1,54 @@
-import { h } from '../dom.js';
+import { h, toast } from '../dom.js';
 import { t, i18n, detectLocale } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
-import { LANGUAGE_OPTIONS, GRID_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS } from '../../services/settings.js';
+import { LANGUAGE_OPTIONS, GRID_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SUGGESTION_SOURCE_OPTIONS } from '../../services/settings.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { log } from '../../core/logger.js';
 
 const ZONE_ID = 'settings';
+const IME_DONE = 65376;
+const IME_CANCEL = 65385;
+
+/** A row with an editable text value (API keys). OK opens the on-screen keyboard; Done saves. */
+export function textRow({ label, field, secret = false, ctx }) {
+  const input = h('input', { class: 'value-input', type: secret ? 'password' : 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: '—' });
+  const el = h('div', { class: 'row' }, h('span', { text: label }), input);
+  const show = () => {
+    input.value = ctx.apiKeys.getStored(field);
+  };
+  input.addEventListener('keydown', (event) => {
+    event.stopPropagation(); // the text field owns its keys
+    if (event.keyCode === 13 || event.keyCode === IME_DONE) {
+      event.preventDefault();
+      input.blur();
+      ctx.apiKeys.set({ [field]: input.value }).then(() => {
+        toast(t('settings.saved'));
+        ctx.router.reload(); // rows that depend on the keys appear or disappear
+      });
+    } else if (event.keyCode === IME_CANCEL) {
+      input.blur();
+      show();
+    }
+  });
+  return { el, refresh: async () => show(), activate: async () => input.focus() };
+}
+
+/** A row that runs an action (optionally after a confirmation). */
+export function actionRow({ label, run, confirm = null, ctx }) {
+  return {
+    el: h('div', { class: 'row' }, h('span', { text: label })),
+    refresh: async () => undefined,
+    async activate() {
+      if (confirm) {
+        const ok = await ctx.dialogs.confirm({ title: label, message: confirm, confirmLabel: t('settings.confirmRemove'), cancelLabel: t('setup.cancel') });
+        if (!ok) return;
+      }
+      await run();
+    },
+  };
+}
 
 /** A setting that is picked from a fixed list: shows the current value, OK opens the list. */
 export function optionRow({ labelKey, key, options, format = String, ctx }) {
@@ -84,6 +125,61 @@ export function createSettingsPage(ctx) {
     },
   };
 
+  const tmdbOn = ctx.tmdb && ctx.tmdb.enabled;
+  const traktOn = ctx.trakt.enabled;
+
+  const tmdbRows = tmdbOn
+    ? [
+        actionRow({
+          ctx,
+          label: t('settings.tmdbSync'),
+          run: async () => {
+            toast(t('settings.working'), 8000);
+            const items = [];
+            (await ctx.watch.seeds(30)).forEach((seed) => items.push({ type: seed.type, tmdbId: seed.tmdbId }));
+            const current = await ctx.active.get();
+            if (current) {
+              for (const fav of await ctx.favorites.list(current.provider.id)) {
+                const match = /^(movie|series):t(\d+)$/.exec(fav.entryKey);
+                if (match) items.push({ type: match[1], tmdbId: Number(match[2]) });
+              }
+            }
+            toast(t('settings.tmdbSyncDone', { count: await ctx.tmdb.refresh(items) }));
+          },
+        }),
+        actionRow({ ctx, label: t('settings.tmdbRemove'), confirm: t('settings.tmdbRemoveConfirm'), run: async () => { await ctx.tmdb.clearAll(); toast(t('settings.removed')); } }),
+      ]
+    : [];
+
+  const traktRows = traktOn
+    ? [
+        actionRow({
+          ctx,
+          label: t('settings.traktSync'),
+          run: async () => {
+            if (!(await ctx.trakt.isConnected())) {
+              toast(t('settings.traktNeedLogin'));
+              return;
+            }
+            toast(t('settings.working'), 15000);
+            await ctx.trakt.flush();
+            toast(t('settings.traktSyncDone', { count: await ctx.watch.importFromTrakt() }));
+          },
+        }),
+        actionRow({
+          ctx,
+          label: t('settings.traktRemove'),
+          confirm: t('settings.traktRemoveConfirm'),
+          run: async () => {
+            await ctx.trakt.disconnect();
+            await ctx.watch.removeTraktData();
+            toast(t('settings.removed'));
+            ctx.router.reload();
+          },
+        }),
+      ]
+    : [];
+
   const diagnostics = { el: h('div', { class: 'row' }, h('span', { text: t('settings.diagnostics') })), refresh: async () => undefined, activate: async () => ctx.router.push('diagnostics') };
 
   const rows = [
@@ -93,8 +189,14 @@ export function createSettingsPage(ctx) {
     optionRow({ ctx, labelKey: 'settings.buffer', key: 'bufferSeconds', options: BUFFER_OPTIONS, format: seconds }),
     autoplay,
     categories,
+    optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }),
+    textRow({ ctx, label: t('settings.tmdbKey'), field: 'tmdbKey' }),
     tmdbRow,
+    ...tmdbRows,
+    textRow({ ctx, label: t('settings.traktId'), field: 'traktId' }),
+    textRow({ ctx, label: t('settings.traktSecret'), field: 'traktSecret', secret: true }),
     trakt,
+    ...traktRows,
     diagnostics,
   ];
   rows.forEach((row) => row.refresh());

@@ -37,7 +37,7 @@ TMDB metadata/suggestions and Trakt are compiled in at build time and stay off w
 | `TMDB_API_KEY` | TMDB v3 API key (titles, posters, suggestions) |
 | `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET` | Trakt device login and history |
 
-Locally: `TMDB_API_KEY=... npm start`. For releases add them as repository secrets with the same names.
+The keys can also be typed in Settings (they override the build values). Locally: `TMDB_API_KEY=... npm start`. For releases add them as repository secrets with the same names.
 Keys that are compiled into an app can be extracted from the package: use dedicated, revocable keys.
 
 ## Requirements

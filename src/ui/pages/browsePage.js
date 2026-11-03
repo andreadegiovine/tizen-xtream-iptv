@@ -5,7 +5,8 @@ import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel, ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
-import { listCategories, pageEntries } from '../../services/catalogQuery.js';
+import { listCategories, pageEntries, getEntry } from '../../services/catalogQuery.js';
+import { icon } from '../icons.js';
 import { formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
 
@@ -45,7 +46,30 @@ export function createPagedGridModel({ columns, getCount, hasNext, hasPrevious, 
   };
 }
 
-/** Movies / Series / Live: category panel on the left, paged grid of grouped titles on the right. */
+/**
+ * Sidebar entries. Movies and series: show all, continue watching, favourites, the genres, then a
+ * "Categories" entry that expands into the provider categories. Channels: show all + the categories.
+ */
+export function sidebarItems({ type, genres = [], categories = [], expanded = false, labels }) {
+  const items = [{ kind: 'all', name: labels.all }];
+  if (type === 'live') return items.concat(categories.map((c) => ({ kind: 'category', id: c.id, name: c.name })));
+  items.push({ kind: 'continue', name: labels.continue }, { kind: 'favorites', name: labels.favorites });
+  genres.forEach((g) => items.push({ kind: 'genre', id: String(g.id), name: g.name }));
+  if (categories.length) {
+    items.push({ kind: 'toggle', name: labels.categories, expanded });
+    if (expanded) categories.forEach((c) => items.push({ kind: 'category', id: c.id, name: c.name, depth: 1 }));
+  }
+  return items;
+}
+
+/** Index of the entry matching a filter ({ kind, id }); 0 ("show all") when it is not there. */
+export function indexOfFilter(items, filter) {
+  if (!filter) return 0;
+  const index = items.findIndex((item) => item.kind === filter.kind && String(item.id) === String(filter.id));
+  return Math.max(0, index);
+}
+
+/** Movies / Series / Live: sidebar on the left, paged grid of grouped titles on the right. */
 export function createBrowsePage(ctx, params = {}) {
   const type = params.type;
   const columns = columnsFor(type);
@@ -55,10 +79,15 @@ export function createBrowsePage(ctx, params = {}) {
   const gridEl = h('div', { class: `browse-grid ${type}` });
   const empty = h('p', { class: 'muted browse-empty', text: t('browse.empty') });
   let db = null;
+  let providerId = null;
   let destroyed = false;
-  let categories = []; // [{ id: null, name: 'All' }, ...]
+  let genres = [];
+  let categories = []; // visible provider categories [{ id, name }]
+  let expanded = false;
+  let items = []; // sidebar entries
   let catNodes = [];
-  let selected = 0; // index into `categories` currently shown in the grid
+  let selected = 0; // index into `items` currently shown in the grid
+  let list = null; // fully loaded entries for continue / favourites / genre views (paged in memory)
   let page = 0;
   let hasMore = false;
   let entries = [];
@@ -66,13 +95,29 @@ export function createBrowsePage(ctx, params = {}) {
   let cards = [];
   let loadToken = 0;
 
+  const labels = () => ({ all: t('browse.all'), continue: t('browse.continue'), favorites: t('browse.favorites'), categories: t('browse.categories') });
+
   function renderCategories() {
     while (catList.firstChild) catList.removeChild(catList.firstChild);
-    catNodes = categories.map((category, i) => {
-      const node = h('div', { class: `browse-cat${i === selected ? ' current' : ''}`, text: category.name });
+    catNodes = items.map((item, i) => {
+      const node = h('div', { class: `browse-cat${i === selected ? ' current' : ''}${item.depth ? ' sub' : ''}` }, h('span', { class: 'browse-cat-name', text: item.name }));
+      if (item.kind === 'toggle') node.appendChild(icon('chevron', item.expanded ? 'open' : ''));
       catList.appendChild(node);
       return node;
     });
+  }
+
+  /** Rebuilds the sidebar keeping the same entry selected (genres arrive late, categories expand). */
+  function rebuildSidebar(focusKey) {
+    const keep = items[selected];
+    items = sidebarItems({ type, genres, categories, expanded, labels: labels() });
+    const same = keep ? items.findIndex((item) => item.kind === keep.kind && String(item.id) === String(keep.id)) : -1;
+    selected = same >= 0 ? same : 0;
+    renderCategories();
+    if (focusKey !== undefined && ctx.focus.activeId === CATS_ZONE) {
+      const at = items.findIndex((item) => item.kind === focusKey);
+      if (at >= 0) ctx.focus.focus(CATS_ZONE, at);
+    }
   }
 
   function renderGrid() {
@@ -84,17 +129,40 @@ export function createBrowsePage(ctx, params = {}) {
     });
     cardNodes = cards.map((card) => card.el);
     if (ctx.enrich) ctx.enrich(entries, cards, type);
-    const name = categories[selected] ? categories[selected].name : '';
-    count.textContent = entries.length
-      ? t('browse.page', { page: formatNumber(page + 1, i18n.getLocale()), category: name })
-      : '';
+    const name = items[selected] ? items[selected].name : '';
+    count.textContent = entries.length ? t('browse.page', { page: formatNumber(page + 1, i18n.getLocale()), category: name }) : '';
+    const kind = items[selected] && items[selected].kind;
+    empty.textContent = kind === 'continue' ? t('browse.emptyContinue') : kind === 'favorites' ? t('browse.emptyFavorites') : kind === 'genre' ? t('browse.emptyGenre') : t('browse.empty');
     empty.style.display = entries.length ? 'none' : '';
+  }
+
+  const byKeys = async (keys) => (await Promise.all(keys.map((key) => getEntry(db, key)))).filter(Boolean);
+
+  /** Entries of the views that are not a plain catalog walk. */
+  async function loadList(item) {
+    if (item.kind === 'continue') {
+      const recent = await ctx.watch.recent({ providerId, limit: 200, onlyUnfinished: true });
+      return byKeys(recent.filter((r) => r.type === type).map((r) => r.entryKey));
+    }
+    if (item.kind === 'favorites') {
+      const saved = await ctx.favorites.list(providerId);
+      return byKeys(saved.filter((f) => f.type === type).map((f) => f.entryKey));
+    }
+    if (item.kind === 'genre') {
+      const ids = await ctx.tmdb.discoverIds(type, item.id);
+      return byKeys(ids.map((id) => `${type}:t${id}`));
+    }
+    return null;
   }
 
   async function loadPage(nextPage, focusIndex) {
     const token = (loadToken += 1);
-    const category = categories[selected];
-    const result = await pageEntries(db, { type, categoryId: category ? category.id : null, offset: nextPage * pageSize, limit: pageSize });
+    const item = items[selected] || items[0];
+    let result;
+    if (nextPage === 0 && ['continue', 'favorites', 'genre'].includes(item.kind)) list = await loadList(item).catch(() => []);
+    else if (!['continue', 'favorites', 'genre'].includes(item.kind)) list = null;
+    if (list) result = { entries: list.slice(nextPage * pageSize, (nextPage + 1) * pageSize), hasMore: list.length > (nextPage + 1) * pageSize };
+    else result = await pageEntries(db, { type, categoryId: item.kind === 'category' ? item.id : null, offset: nextPage * pageSize, limit: pageSize });
     if (destroyed || token !== loadToken) return;
     page = nextPage;
     hasMore = result.hasMore;
@@ -105,7 +173,7 @@ export function createBrowsePage(ctx, params = {}) {
 
   const catsZone = new FocusZone({
     id: CATS_ZONE,
-    model: new ListModel({ orientation: 'vertical', getCount: () => categories.length }),
+    model: new ListModel({ orientation: 'vertical', getCount: () => items.length }),
     onFocus: (i) => {
       if (!catNodes[i]) return;
       catNodes[i].classList.add('focused');
@@ -113,6 +181,13 @@ export function createBrowsePage(ctx, params = {}) {
     },
     onBlur: (i) => catNodes[i] && catNodes[i].classList.remove('focused'),
     onActivate: (i) => {
+      const item = items[i];
+      if (item.kind === 'toggle') {
+        expanded = !expanded;
+        selected = Math.min(selected, items.length - 1);
+        rebuildSidebar('toggle');
+        return;
+      }
       selected = i;
       catNodes.forEach((node, n) => node.classList.toggle('current', n === i));
       loadPage(0, 0).catch((err) => log.warn('Browse load failed', err && err.message));
@@ -140,8 +215,8 @@ export function createBrowsePage(ctx, params = {}) {
     onBlur: (i) => cardNodes[i] && cardNodes[i].classList.remove('focused'),
     onActivate: (i) => {
       if (!entries[i]) return;
-      const category = categories[selected];
-      ctx.openEntry(entries[i], { section: params.section, live: { categoryId: category ? category.id : null, offset: page * pageSize + i } });
+      const item = items[selected];
+      ctx.openEntry(entries[i], { section: params.section, live: { categoryId: item && item.kind === 'category' ? item.id : null, offset: page * pageSize + i } });
     },
   });
 
@@ -149,14 +224,29 @@ export function createBrowsePage(ctx, params = {}) {
     const current = await ctx.active.get();
     if (!current || destroyed) return;
     db = current.db; // shared handle: never closed here
+    providerId = current.provider.id;
     pageSize = (await ctx.settings.get()).gridItems;
-    const cats = await listCategories(db, type);
-    categories = [{ id: null, name: t('browse.all') }, ...cats.map((c) => ({ id: c.id, name: c.name }))];
+    const excluded = await ctx.settings.getExcluded(providerId, type);
+    categories = (await listCategories(db, type)).filter((c) => !excluded.has(String(c.id))).map((c) => ({ id: c.id, name: c.name }));
+    const filter = params.filter || null;
+    const wantsGenre = filter && filter.kind === 'genre';
+    const loadGenres = async () => {
+      if (type === 'live' || !ctx.tmdb || !ctx.tmdb.enabled) return;
+      genres = await ctx.tmdb.genres(type).catch(() => []);
+    };
+    if (wantsGenre) await loadGenres();
+    expanded = Boolean(filter && filter.kind === 'category');
+    items = sidebarItems({ type, genres, categories, expanded, labels: labels() });
+    selected = indexOfFilter(items, filter);
     renderCategories();
     await loadPage(0);
     if (destroyed) return;
     // Land in the grid when there is something to browse, otherwise leave the focus on the top bar.
     if (entries.length) ctx.focus.focus(GRID_ZONE, 0);
+    if (!wantsGenre && type !== 'live') {
+      await loadGenres();
+      if (!destroyed && genres.length) rebuildSidebar();
+    }
   }
 
   return {

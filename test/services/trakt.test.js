@@ -1,6 +1,6 @@
 import { openAppDb } from '../../src/db/appDb.js';
 import { WatchStore } from '../../src/services/watchStore.js';
-import { createTraktService, createWatchState, historyPayload } from '../../src/services/traktService.js';
+import { createTraktService, createWatchState, historyPayload, flattenWatchedShows } from '../../src/services/traktService.js';
 import { kvSet } from '../../src/db/kv.js';
 
 let n = 0;
@@ -80,12 +80,33 @@ describe('watch-state adapter', () => {
     expect(trakt.reportWatched).toHaveBeenCalledTimes(1);
   });
 
-  test('import adds recent Trakt movies without overwriting local progress', async () => {
+  test('import adds Trakt movies and episodes without overwriting local progress, and can be undone', async () => {
     const store = new WatchStore(await appDb());
     await store.save({ key: 'movie:t2', entryKey: 'movie:t2', type: 'movie', position: 10, duration: 100 });
-    const trakt = { recentMovies: async () => [{ tmdbId: 1, title: 'A', watchedAt: 5 }, { tmdbId: 2, title: 'B', watchedAt: 6 }] };
-    expect(await createWatchState({ store, trakt }).importFromTrakt()).toBe(1);
+    await store.save({ key: 'movie:t9', entryKey: 'movie:t9', type: 'movie', position: 50, duration: 100 });
+    const trakt = {
+      recentMovies: async () => [{ tmdbId: 1, title: 'A', watchedAt: 5 }, { tmdbId: 2, title: 'B', watchedAt: 6 }],
+      watchedEpisodes: async () => [{ tmdbId: 7, title: 'S', season: 1, episode: 2, watchedAt: 8 }],
+    };
+    const state = createWatchState({ store, trakt });
+    expect(await state.importFromTrakt()).toBe(2);
     expect((await store.get('movie:t2')).position).toBe(10);
     expect((await store.get('movie:t1')).watched).toBe(true);
+    expect((await store.get('series:t7|s1e2')).watched).toBe(true);
+    expect(await state.removeTraktData()).toBe(2);
+    expect(await store.get('movie:t1')).toBeUndefined();
+    expect((await store.get('movie:t9')).position).toBe(50); // local history stays
   });
+
+  test('watched shows payload becomes a flat, capped episode list', () => {
+    const data = [
+      { last_watched_at: '2024-01-02T00:00:00Z', show: { title: 'A', ids: { tmdb: 1 } }, seasons: [{ number: 1, episodes: [{ number: 1 }, { number: 2 }] }] },
+      { last_watched_at: '2024-02-01T00:00:00Z', show: { title: 'B', ids: { tmdb: 2 } }, seasons: [{ number: 3, episodes: [{ number: 4 }] }] },
+      { show: { title: 'no id', ids: {} }, seasons: [] },
+    ];
+    const flat = flattenWatchedShows(data, 10);
+    expect(flat.map((e) => `${e.tmdbId}:s${e.season}e${e.episode}`)).toEqual(['2:s3e4', '1:s1e1', '1:s1e2']);
+    expect(flattenWatchedShows(data, 2).length).toBe(2);
+  });
+
 });

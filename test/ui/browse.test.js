@@ -1,4 +1,4 @@
-import { createPagedGridModel, indexAfterPageChange, columnsFor } from '../../src/ui/pages/browsePage.js';
+import { createPagedGridModel, indexAfterPageChange, columnsFor, sidebarItems, indexOfFilter } from '../../src/ui/pages/browsePage.js';
 
 const GRID_COLUMNS = 6;
 const PAGE_SIZE = 24;
@@ -50,3 +50,26 @@ describe('paged grid', () => {
   });
 });
 
+
+describe('sidebar', () => {
+  const labels = { all: 'Tutto', continue: 'Continua', favorites: 'Preferiti', categories: 'Categorie' };
+  const cats = [{ id: '1', name: 'A' }, { id: '2', name: 'B' }];
+
+  test('movies: all, continue, favorites, genres, collapsed categories toggle', () => {
+    const items = sidebarItems({ type: 'movie', genres: [{ id: 16, name: 'Animazione' }], categories: cats, labels });
+    expect(items.map((i) => i.kind)).toEqual(['all', 'continue', 'favorites', 'genre', 'toggle']);
+    const open = sidebarItems({ type: 'movie', genres: [], categories: cats, expanded: true, labels });
+    expect(open.map((i) => i.kind)).toEqual(['all', 'continue', 'favorites', 'toggle', 'category', 'category']);
+  });
+
+  test('live: all plus flat categories', () => {
+    expect(sidebarItems({ type: 'live', categories: cats, labels }).map((i) => i.kind)).toEqual(['all', 'category', 'category']);
+  });
+
+  test('filter lookup falls back to "show all"', () => {
+    const items = sidebarItems({ type: 'movie', genres: [{ id: 16, name: 'X' }], categories: [], labels });
+    expect(indexOfFilter(items, { kind: 'genre', id: 16 })).toBe(3);
+    expect(indexOfFilter(items, { kind: 'genre', id: 99 })).toBe(0);
+    expect(indexOfFilter(items, null)).toBe(0);
+  });
+});

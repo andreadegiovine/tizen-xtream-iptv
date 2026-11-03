@@ -96,7 +96,8 @@ export function createDetailPage(ctx, params) {
   let providerId = null;
   let info = null; // provider details (plot, cast, seasons...)
   let meta = null; // TMDB (localized text, rating, credits)
-  let categoryNames = [];
+  let categoryItems = []; // [{ id, name }]
+  let related = []; // catalog entries "you might also like"
   let favorite = false;
   let selectedMember = null;
   let seasonIndex = 0;
@@ -116,12 +117,13 @@ export function createDetailPage(ctx, params) {
   const tagsEl = h('div', { class: 'detail-categories' });
   const episodesEl = h('div', { class: 'detail-section' });
   const castEl = h('div', { class: 'detail-section' });
+  const relatedEl = h('div', { class: 'detail-section' });
   const epgEl = h('div', { class: 'detail-epg' });
   const el = h(
     'section',
     { class: 'page detail' },
     poster,
-    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, categoriesEl, tagsEl, epgEl, episodesEl, castEl),
+    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, categoriesEl, tagsEl, epgEl, episodesEl, castEl, relatedEl),
   );
 
   const data = () => ({
@@ -224,11 +226,38 @@ export function createDetailPage(ctx, params) {
     while (node.firstChild) node.removeChild(node.firstChild);
   }
 
-  function renderCategories() {
-    clear(categoriesEl);
-    categoryNames.forEach((name) => categoriesEl.appendChild(h('span', { class: 'chip', text: name })));
-    clear(tagsEl);
-    tagsFrom(meta, info).forEach((tag) => tagsEl.appendChild(h('span', { class: 'chip', text: tag })));
+  /** Genres as [{ id?, name }]: TMDB ones carry an id (clickable), the provider's text does not. */
+  function genreItems() {
+    if (meta && meta.genreList && meta.genreList.length) return meta.genreList;
+    return tagsFrom(meta, info).map((name) => ({ name }));
+  }
+
+  /** A row of chips; the clickable ones form a horizontal focus zone that opens the matching browse view. */
+  function renderChips(container, zoneId, chipItems, kind, next) {
+    clear(container);
+    const nodes = chipItems.map((item) => h('span', { class: `chip${item.id !== undefined ? ' link' : ''}`, text: item.name }));
+    nodes.forEach((node) => container.appendChild(node));
+    const links = chipItems.map((item, i) => ({ item, node: nodes[i] })).filter(({ item }) => item.id !== undefined && item.id !== null);
+    if (!links.length) return;
+    const zone = new FocusZone({
+      id: zoneId,
+      model: new ListModel({ orientation: 'horizontal', getCount: () => links.length }),
+      onFocus: (i) => {
+        links[i].node.classList.add('focused');
+        ensureVisible(container, { margin: 24 });
+      },
+      onBlur: (i) => links[i] && links[i].node.classList.remove('focused'),
+      onActivate: (i) => {
+        const section = { movie: 'movies', series: 'series', live: 'live' }[entry.type];
+        ctx.router.push('browse', { type: entry.type, section, filter: { kind, id: String(links[i].item.id) } });
+      },
+    });
+    next.push({ id: zoneId, zone });
+  }
+
+  function renderCategories(next) {
+    renderChips(categoriesEl, 'detailCategories', categoryItems, 'category', next);
+    renderChips(tagsEl, 'detailGenres', entry.type === 'live' ? [] : genreItems(), 'genre', next);
   }
 
   function renderCast(next) {
@@ -244,6 +273,20 @@ export function createDetailPage(ctx, params) {
     });
     castEl.appendChild(carousel.el);
     next.push({ id: 'detailCast', zone: carousel.zone });
+  }
+
+  function renderRelated(next) {
+    clear(relatedEl);
+    if (!related.length) return;
+    const carousel = createCarousel({
+      id: 'detailRelated',
+      title: t('detail.related'),
+      items: related.map((item) => ({ entry: item, type: item.type })),
+      onOpen: (item) => ctx.openEntry(item.entry, { section: params.section }),
+    });
+    relatedEl.appendChild(carousel.el);
+    next.push({ id: 'detailRelated', zone: carousel.zone });
+    if (ctx.enrich) ctx.enrich(related, carousel.cards, entry.type, true);
   }
 
   function renderEpisodes(next, episodes) {
@@ -372,9 +415,10 @@ export function createDetailPage(ctx, params) {
     if (buttons.length) next.push({ id: 'detailActions', zone: createActions(buttons, Math.max(0, resumeAt)) });
     else clear(actionsEl);
 
-    renderCategories();
+    renderCategories(next);
     renderEpisodes(next, episodes);
     renderCast(next);
+    renderRelated(next);
     setRows(next);
   }
 
@@ -406,7 +450,7 @@ export function createDetailPage(ctx, params) {
     try {
       const categories = await listCategories(current.db, entry.type);
       const names = new Map(categories.map((c) => [c.id, c.name]));
-      categoryNames = (entry.categoryIds || []).map((id) => names.get(id)).filter(Boolean);
+      categoryItems = (entry.categoryIds || []).filter((id) => names.has(id)).map((id) => ({ id, name: names.get(id) }));
     } catch (err) {
       log.warn('Categories failed', err && err.message);
     }
@@ -441,6 +485,15 @@ export function createDetailPage(ctx, params) {
         fillText();
         build();
       }
+    }
+    if (ctx.suggestions && entry.type !== 'live') {
+      try {
+        related = await ctx.suggestions.forEntry(entry, { tmdbId: meta && meta.tmdbId, limit: 20 });
+      } catch (err) {
+        log.warn('Related failed', err && err.message);
+      }
+      if (destroyed) return;
+      if (related.length) build();
     }
     if (entry.type === 'live' && ctx.epg) loadEpg();
   }

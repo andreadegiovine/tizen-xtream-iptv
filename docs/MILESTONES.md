@@ -199,6 +199,7 @@ Da fare:
 12. **Tempi con il provider reale**: motore e tempi di sync (download/elementi/titoli) mostrati nella pagina Provider, per decidere se ottimizzare le scritture.
 13. **Ridisegno (nuovo)**: icone della topbar visibili e leggibili; Provider e Impostazioni a destra; sidebar ferma durante lo scorrimento della griglia e alta fino al bordo inferiore; card uguali per film/serie/canali; stella del voto e badge ✓/clessidra; scheda: menu Versione, categorie, menu Stagione + episodi, cast; scorrimento del carosello.
 15. **Preferiti, visto, trailer (nuovo)**: cuore e occhio nella scheda e pagina Preferiti; il trailer si apre nell'app YouTube (serve un titolo con `youtube_trailer`; se non si apre dire cosa appare nel log); il tasto visto su una serie segna tutti gli episodi.
+16. **Patch 4**: player su una riga (barra: OK poi ←/→, e trascinamento con puntatore), sidebar con generi/categorie, chip cliccabili, chiavi nelle impostazioni, pulsanti sync/rimozione, provider suggerimenti, "Potrebbe interessarti".
 14. **Player (nuovo)**: Giù porta il cursore sui pulsanti; indietro/avanti 10 s e play/pausa con OK; **formato**: i tre modi (AVPlay `setDisplayMethod`) cambiano davvero l'immagine? **sottotitoli**: l'elenco mostra le tracce del file e la scelta le attiva/disattiva (`getTotalTrackInfo`/`setSelectTrack`/`setSilentSubtitle`: da verificare se AVPlay li disegna da solo o se serve mostrare il testo dall'evento `onsubtitlechange`).
 
 ## 12. Ridisegno dell'interfaccia
@@ -220,6 +221,13 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
   - *Player*: i comandi (e il focus sui pulsanti) spariscono dopo 4 s senza tasti, anche in pausa (prima il polling li riaccendeva); i pulsanti indietro/avanti saltano di 30 s (le frecce restano 10 s). Sottotitoli: ora li disegna l'app (`setSilentSubtitle(true)` + evento `onsubtitlechange`) e il log riporta le tracce trovate (`AVPlay tracks`); **non verificato su TV**.
 
 - **2026-11-03 (notte, patch 3)** Home senza riepilogo del catalogo (restano i soli caroselli; i dettagli sono nella pagina Provider); ultima card dei caroselli staccata dal bordo destro (spaziatore in fondo alla riga); scheda: l'icona *visto* è il check delle card e i pulsanti attivi non hanno più il bordo rosso; badge delle card (voto e visto) della stessa altezza; categoria selezionata nella sidebar con sfondo bianco e testo nero, senza barra rossa.
+
+- **2026-11-03 (patch 4)** Nuova tornata di richieste (**non provata su TV**):
+  - *Player*: unica riga: indietro, play/pausa, avanti, barra di avanzamento, tempo, formato, sottotitoli. La barra è selezionabile: OK entra in modalità scorrimento (←/→ ±30 s, OK applica, Su/Indietro annulla); con puntatore (mouse/Smart Remote) si clicca o si trascina il cursore. `controller.seekTo(secondi)`.
+  - *Sidebar Film/Serie*: Mostra tutto (tutti i titoli, i più recenti per primi), Continua a guardare e Preferiti (per tipo), generi presenti in catalogo, Categorie (espande le categorie visibili). Limite: i generi vengono da TMDB `discover` (5 pagine per genere, ordinate per popolarità) incrociate con il catalogo, quindi coprono solo i titoli popolari con tmdb id.
+  - *Scheda*: categorie e generi cliccabili, aprono la pagina del tipo con l'elemento della sidebar attivo.
+  - *Impostazioni*: chiavi TMDB e Trakt (id, secret) digitabili (prevalgono su quelle di build, vuoto = chiave di build); con TMDB: sync manuale e rimozione dati; con Trakt: sync dello stato di visione (film + episodi, marcati `source:'trakt'`) e rimozione dei soli dati importati; menu del provider dei suggerimenti (TMDB/Trakt, con ripiego sull'altro se non utilizzabile).
+  - *Scheda*: carosello "Potrebbe interessarti" (20 suggerimenti) dopo il cast.
 
 ## Questioni aperte
 - Package id `XtrmIptv01` e app id `XtrmIptv01.XtreamIPTV` sono una proposta, da confermare prima di creare il profilo del certificato.

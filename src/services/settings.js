@@ -5,6 +5,7 @@ export const CAROUSEL_OPTIONS = [10, 15, 20, 30];
 // Multiples of 12 fill whole rows for both poster grids (6 columns) and channel grids (4 columns).
 export const GRID_OPTIONS = [12, 24, 36];
 export const LANGUAGE_OPTIONS = ['auto', 'en-US', 'it-IT'];
+export const SUGGESTION_SOURCE_OPTIONS = ['tmdb', 'trakt'];
 
 export const DEFAULT_SETTINGS = Object.freeze({
   language: 'auto',
@@ -12,6 +13,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   carouselItems: 15,
   gridItems: 24,
   autoplayNext: true,
+  suggestionSource: 'tmdb',
   excluded: {},
 });
 
@@ -24,6 +26,7 @@ function sanitize(raw) {
     carouselItems: pick(raw.carouselItems, CAROUSEL_OPTIONS, DEFAULT_SETTINGS.carouselItems),
     gridItems: pick(raw.gridItems, GRID_OPTIONS, DEFAULT_SETTINGS.gridItems),
     autoplayNext: typeof raw.autoplayNext === 'boolean' ? raw.autoplayNext : DEFAULT_SETTINGS.autoplayNext,
+    suggestionSource: pick(raw.suggestionSource, SUGGESTION_SOURCE_OPTIONS, DEFAULT_SETTINGS.suggestionSource),
     excluded: raw.excluded && typeof raw.excluded === 'object' ? raw.excluded : {},
   };
 }
