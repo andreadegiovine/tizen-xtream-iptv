@@ -62,6 +62,12 @@ export class WatchStore {
     return result;
   }
 
+  /** Every record, for badges (one read per rendered page). */
+  async all() {
+    await this.writes;
+    return dbGetAll(this.db, 'watch');
+  }
+
   /** Most recently watched tmdb ids, used to seed suggestions. */
   async seeds(limit = 10) {
     await this.writes;

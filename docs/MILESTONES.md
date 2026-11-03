@@ -190,13 +190,28 @@ Da fare:
 3. **Serie**: stagioni, episodio successivo automatico dopo 10 s (OK = subito, Indietro = ferma), CH+/CH− cambiano episodio.
 4. **Canali**: CH+/CH− e Su/Giù cambiano canale; formato scelto (HLS/TS); palinsesto (richiede un provider con `xmltv.php`): "adesso in onda" sulle card, prossime 24 h nella scheda, e se il download della guida è lento o blocca l'interfaccia (motore usato).
 5. **Sync e riproduzione**: durante un sync avviare un titolo e uscire: il sync riprende?
-6. **Ricerca**: scrivere con la tastiera a schermo ("Fatto" avvia la ricerca), risultati, apertura della scheda.
+6. **Ricerca** (nuova, nella topbar): Cerca apre il campo; scrivendo con la tastiera a schermo dopo 2 lettere compaiono i risultati senza Invio? "Fatto" porta ai risultati? Indietro chiude la ricerca e ripristina la pagina? la X si raggiunge e chiude?
 7. **Pagina Provider**: con due provider, *Usa*, *Modifica* (campi precompilati), *Rimuovi* con conferma, Back; frecce tra pulsanti, "Aggiorna il catalogo ora" e "Aggiungi".
 8. **Tastiera a schermo nei moduli**: "Fatto" passa al campo successivo senza attivarlo subito.
 9. **Griglie, Home, Impostazioni**: pannello categorie, cambio pagina, scorrimento fluido; caroselli della Home; cambiare *Titoli per pagina* e *per carosello*; nascondere una categoria in *Categorie visibili* e applicare (tempo di ricostruzione).
 10. **TMDB** (solo se la build ha la chiave): titoli e locandine che si aggiornano, trama in lingua, conteggi stagioni; pagina *Suggerimenti*.
 11. **Trakt** (solo se la build ha le chiavi): collegamento con il codice, un titolo visto a fine riproduzione compare su Trakt, scollegamento.
 12. **Tempi con il provider reale**: motore e tempi di sync (download/elementi/titoli) mostrati nella pagina Provider, per decidere se ottimizzare le scritture.
+13. **Ridisegno (nuovo)**: icone della topbar visibili e leggibili; Provider e Impostazioni a destra; sidebar ferma durante lo scorrimento della griglia e alta fino al bordo inferiore; card uguali per film/serie/canali; stella del voto e badge ✓/clessidra; scheda: menu Versione, categorie, menu Stagione + episodi, cast; scorrimento del carosello.
+14. **Player (nuovo)**: Giù porta il cursore sui pulsanti; indietro/avanti 10 s e play/pausa con OK; **formato**: i tre modi (AVPlay `setDisplayMethod`) cambiano davvero l'immagine? **sottotitoli**: l'elenco mostra le tracce del file e la scelta le attiva/disattiva (`getTotalTrackInfo`/`setSelectTrack`/`setSilentSubtitle`: da verificare se AVPlay li disegna da solo o se serve mostrare il testo dall'evento `onsubtitlechange`).
+
+## 12. Ridisegno dell'interfaccia
+Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome desktop (headless, server finto); **non provata su TV**.
+
+### Note di avanzamento
+- **2026-11-03**
+  - *Icone*: dipendenza `@fortawesome/free-solid-svg-icons`, importata icona per icona e inserita come SVG (`src/ui/icons.js`: `icon(name, classe)`); niente web-font perché css-loader gira con `url:false`.
+  - *Topbar*: Home (icona), Film, Serie TV, Live TV, Cerca (icona) e, allineati a destra, Provider e Impostazioni (icone). "Suggerimenti" non è più nella barra (la pagina e il servizio restano nel codice, senza voce di menu). Cerca apre un campo a tutta larghezza nella barra con l'icona per chiudere; da 2 caratteri (con 300 ms di attesa) compare la pagina dei risultati senza Invio; Invio/Giù portano ai risultati, Indietro chiude la ricerca e torna alla pagina precedente. Aprire un risultato chiude la barra di ricerca (tornando indietro si riapre con il testo).
+  - *Layout*: unica unità `$gutter` (48 px) per margini laterali, spazio barra → contenuto e sidebar → contenuto; pagine a tutta larghezza; sidebar delle categorie `sticky` e alta quanto la parte di schermo rimasta; carosello a tutta larghezza.
+  - *Card*: stessa dimensione per film, serie e canali (griglia a 6 colonne, 7 nella ricerca; il logo del canale è contenuto nel riquadro 2:3); voto con stella in alto a destra su fondo scuro trasparente; badge in alto a sinistra (✓ visto; per le serie clessidra se visto in parte e ✓ se tutti gli episodi noti sono visti — il totale arriva da TMDB, senza totale non diventa mai "visto"); riga titolo + riga piccola `anno · S7 · E87` (stagioni/episodi da TMDB, solo con tmdb id). `watchStatus.js` calcola i badge con una sola lettura della cronologia per pagina.
+  - *Scheda*: sotto il titolo anno · voto · durata (film) oppure anno · voto · stagioni · episodi (serie); menu *Versione* con etichetta e bordo sotto il sottotitolo, trama, pulsanti solo icona (play; riprendi = icona di refresh, selezionata di default quando c'è un punto di ripresa; Play ricomincia da capo), categorie, per le serie menu *Stagione N (X episodi)* + carosello degli episodi, infine carosello del cast (crediti TMDB con foto, altrimenti i nomi forniti dal provider con segnaposto; non selezionabile). Corretto un difetto: i dati TMDB sovrascrivevano `seasons` del provider.
+  - *Player*: titolo in alto; icone indietro 10 s / play-pausa / avanti 10 s al centro; formato (adatta / schermo intero / ingrandisci, `setDisplayMethod` su AVPlay, `object-fit` nel browser) e sottotitoli (elenco dalle tracce TEXT di AVPlay, voce "Disattivati") a destra. Giù (o OK sui canali) porta il cursore sui pulsanti, Su o Indietro lo riportano ai salti, un secondo Indietro esce.
+  - Test nuovi: icone, card, stato di visione, scheda (metadati, cast, stagioni), tracce/formato del player.
 
 ## Questioni aperte
 - Package id `XtrmIptv01` e app id `XtrmIptv01.XtreamIPTV` sono una proposta, da confermare prima di creare il profilo del certificato.

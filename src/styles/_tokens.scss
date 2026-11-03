@@ -9,7 +9,13 @@ $warn: #f5a623;
 $fail: #ff5a5f;
 
 // Layout is designed for a 1920x1080 coordinate space; keep content inside the safe area.
-$safe-x: 64px;
+// One spacing unit for everything: screen sides, bar → content, sidebar → content.
+$gutter: 48px;
+$safe-x: $gutter;
 $topbar-height: 96px;
+$topbar-item-height: 48px;
+$page-top: ($gutter - ($topbar-height - $topbar-item-height) * 0.5);
+$card-w: 224px;
+$card-gap: 18px;
 $focus-scale: 1.06;
 $font: 'Netflix Sans', 'Helvetica Neue', Roboto, Arial, sans-serif;

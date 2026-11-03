@@ -6,7 +6,7 @@ import { exitApp } from './core/env.js';
 import { log } from './core/logger.js';
 import { FocusManager } from './ui/focus/FocusManager.js';
 import { Router } from './ui/router.js';
-import { createTopbar, TOPBAR_ZONE, sectionForEntry } from './ui/components/topbar.js';
+import { createTopbar, TOPBAR_ZONE, sectionForEntry, isSearchable } from './ui/components/topbar.js';
 import { createDialogService } from './ui/components/dialog.js';
 import { createBackHandler } from './ui/backHandler.js';
 import { ProviderStore } from './services/providerStore.js';
@@ -22,7 +22,8 @@ import { createTmdbService } from './services/tmdbService.js';
 import { createActiveProvider } from './services/activeProvider.js';
 import { createSearchService } from './services/searchIndex.js';
 import { createDetailsService } from './services/details.js';
-import { WatchStore } from './services/watchStore.js';
+import { WatchStore, watchKey } from './services/watchStore.js';
+import { summarizeWatch, watchStatus } from './services/watchStatus.js';
 import { createDefaultEngine } from './services/playerEngines.js';
 import { createSuggestionsService } from './services/suggestions.js';
 import { createSuggestionsPage } from './ui/pages/suggestionsPage.js';
@@ -78,13 +79,49 @@ async function boot() {
   ctx.meta = { forEntry: (entry) => tmdb.forEntry(entry) };
   const epg = createEpgService({ active, providers, createWorker: createEpgWorker });
   ctx.epg = epg;
-  ctx.enrich = (entries, cards, type) => {
-    tmdb.enrich(entries, cards, type);
+  ctx.enrich = (entries, cards, type, keepQueue = false) => {
+    const totals = new Map();
+    let summaries = null;
+    const paint = (i) => {
+      if (!summaries || !cards[i]) return;
+      const entry = entries[i];
+      const providerId = summaries.providerId;
+      cards[i].update({ status: watchStatus(type, summaries.map.get(watchKey(providerId, entry.key)), totals.get(entry.key)) });
+    };
+    tmdb.enrich(entries, cards, type, (entry, i, meta) => {
+      if (meta.episodes) totals.set(entry.key, meta.episodes);
+      paint(i);
+    }, keepQueue);
     if (type === 'live') epg.decorate(entries, cards);
+    else {
+      Promise.all([active.get(), ctx.watch.all()])
+        .then(([current, records]) => {
+          if (!current) return;
+          summaries = { providerId: current.provider.id, map: summarizeWatch(records) };
+          entries.forEach((entry, i) => paint(i));
+        })
+        .catch(() => undefined);
+    }
   };
   ctx.openEntry = (entry, extra = {}) => ctx.router.push('detail', { entryKey: entry.key, type: entry.type, ...extra });
 
-  const topbar = createTopbar(ctx);
+  const topbar = createTopbar(ctx, {
+    onQuery: (text) => {
+      if (router.current && router.current.name === 'search') {
+        if (router.page && router.page.setQuery) router.page.setQuery(isSearchable(text) ? text : '');
+      } else if (isSearchable(text)) {
+        router.push('search', { query: text, section: 'search' });
+      }
+    },
+    onSubmit: () => {
+      if (router.page && router.page.focusResults) router.page.focusResults();
+    },
+    onClose: () => {
+      if (router.current && router.current.name === 'search') {
+        if (!router.back()) router.reset('home', { section: 'home' });
+      } else focus.focus(TOPBAR_ZONE, topbar.indexOfSection('search'));
+    },
+  });
   document.getElementById('topbar').appendChild(topbar.el);
 
   const router = new Router({
@@ -103,8 +140,12 @@ async function boot() {
       categories: () => createCategoriesPage(ctx),
       diagnostics: () => createDiagnosticsPage(ctx),
     },
-    onChange: (entry) => {
+    onChange: (entry, page) => {
       const section = sectionForEntry(entry);
+      // The search bar belongs to the results page: leaving it closes the bar, coming back reopens it.
+      if (entry.name === 'search' && !topbar.isSearching()) topbar.openSearch({ query: (page && page.getQuery && page.getQuery()) || '', silent: true });
+      else if (entry.name !== 'search' && topbar.isSearching()) topbar.closeSearch({ notify: false });
+      topbar.syncSearchLinks();
       topbar.setVisible(!(entry.name === 'providerSetup' && entry.params.firstRun) && entry.name !== 'player');
       topbar.setCurrentSection(section);
       // Pages with their own zone take focus in mount(). When the user switched section from the bar,
@@ -132,7 +173,11 @@ async function boot() {
   const dialogs = createDialogService({ focus });
   ctx.dialogs = dialogs;
   const onBack = createBackHandler({
-    dialogs,
+    dialogs: {
+      isOpen: () => dialogs.isOpen() || topbar.isSearching(),
+      dismiss: () => (dialogs.isOpen() ? dialogs.dismiss() : topbar.closeSearch()),
+      confirm: (options) => dialogs.confirm(options),
+    },
     router,
     getSection: sectionForEntry,
     goHome: () => router.reset('home', { section: 'home', focusTopbar: true }),

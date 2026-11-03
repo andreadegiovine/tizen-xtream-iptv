@@ -110,3 +110,15 @@ export function neighborEpisode(list, index, delta) {
   const next = index + delta;
   return next >= 0 && next < list.length ? { episode: list[next], index: next } : null;
 }
+
+const LANGUAGE_NAMES = { ita: 'Italiano', eng: 'English', spa: 'Español', fre: 'Français', fra: 'Français', ger: 'Deutsch', deu: 'Deutsch', por: 'Português', rus: 'Русский', ara: 'العربية', tur: 'Türkçe', rum: 'Română', ron: 'Română', alb: 'Shqip', sqi: 'Shqip' };
+
+/** Name shown in the subtitle list; `position` (1-based) names tracks that carry no language. */
+export function subtitleLabel(track, position, fallback) {
+  const code = String(track.language || '').toLowerCase();
+  if (!code || code === 'und') return fallback.replace('{n}', String(position));
+  return LANGUAGE_NAMES[code] || code.toUpperCase();
+}
+
+/** Next aspect mode in the cycle. */
+export const nextAspect = (modes, current) => modes[(modes.indexOf(current) + 1) % modes.length];

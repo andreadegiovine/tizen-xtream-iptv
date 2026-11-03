@@ -17,7 +17,7 @@ provider account.
 
 - Multiple providers, switchable at runtime; provider configured on first launch
 - Home carousels: new movies, new series, continue watching, suggested movies/series
-- Live TV, Movies, Series and Suggestions pages with provider categories, paginated grids,
+- Live TV, Movies and TV Series pages with provider categories, paginated grids,
   items ordered by date added
 - Titles sharing a provider tmdb id are grouped; a dropdown picks the stream id
   (lowest id preselected). Titles without tmdb id are never merged
@@ -151,6 +151,7 @@ Design rules worth knowing:
 | 9 | Trakt (second phase) | Done, needs Trakt keys; never run against Trakt |
 | 10 | Performance and memory pass on the TV | Open: needs the TV |
 | 11 | Final round of tests on the TV | Open (list in `docs/MILESTONES.md`) |
+| 12 | UI redesign: icons, search in the bar, full-width layout, new cards, detail and player | Done off-TV (2026-11-03) |
 
 ## Application and package ids
 

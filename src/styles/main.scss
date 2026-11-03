@@ -52,24 +52,44 @@ h2 {
   display: flex;
   align-items: center;
   height: $topbar-height;
-  padding: 0 $safe-x;
+  padding: 0 $gutter;
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0));
 
-  .brand {
-    margin-right: 48px;
-    color: $accent;
-    font-size: 36px;
-    font-weight: 800;
-    letter-spacing: 1px;
+  .topbar-spacer {
+    flex: 1;
+  }
+
+  &.searching {
+    .topbar-item {
+      margin-right: 0;
+    }
   }
 }
 
 .topbar-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: $topbar-item-height;
   margin-right: 12px;
-  padding: 8px 20px;
+  padding: 0 20px;
   border-radius: 6px;
   color: $text-muted;
   transition: transform 0.12s ease-out, background-color 0.12s ease-out;
+
+  .icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .icon + span {
+    margin-left: 10px;
+  }
+
+  &.icon-only {
+    width: 56px;
+    padding: 0;
+  }
 
   &.current {
     color: $text;
@@ -83,9 +103,53 @@ h2 {
   }
 }
 
+.topbar-search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  height: $topbar-item-height;
+  margin-right: 12px;
+  padding: 0 20px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: $bg-raised;
+
+  .icon {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    margin-right: 14px;
+    color: $text-muted;
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: $text;
+    font: inherit;
+  }
+
+  &.focused {
+    border-color: $text;
+    background: $bg-focus;
+  }
+}
+
+.icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+  vertical-align: middle;
+}
+
 .page {
   height: 100%;
-  padding: 24px $safe-x 96px;
+  padding: $page-top $gutter $gutter;
   overflow-y: auto;
 
   &::-webkit-scrollbar {
@@ -369,7 +433,7 @@ h2 {
 }
 
 .page.browse {
-  padding-top: 8px;
+  padding-top: $page-top;
 }
 
 .browse-body {
@@ -377,11 +441,14 @@ h2 {
   align-items: flex-start;
 }
 
+// Sticky and exactly as tall as the visible area under the bar (page padding included).
 .browse-cats {
+  position: sticky;
+  top: 0;
   flex: none;
   width: 340px;
-  max-height: 880px;
-  margin-right: 28px;
+  height: calc(100vh - #{$topbar-height} - #{$page-top} - #{$gutter});
+  margin-right: $gutter;
   overflow-y: auto;
   scrollbar-width: none;
 
@@ -412,6 +479,7 @@ h2 {
 
 .browse-main {
   flex: 1;
+  min-width: 0;
 }
 
 .browse-count {
@@ -420,29 +488,35 @@ h2 {
   font-size: 20px;
 }
 
-.browse-grid {
+.browse-grid,
+.search-grid {
   display: flex;
   flex-wrap: wrap;
-  width: 1400px;
+  margin-right: -$card-gap;
 }
 
 .card {
   box-sizing: border-box;
-  width: 216px;
-  margin: 0 12px 14px 0;
-  padding: 6px;
+  position: relative;
+  width: $card-w;
+  margin: 0 $card-gap 18px 0;
   border: 2px solid transparent;
-  border-radius: 6px;
-  background: $bg-raised;
+  border-radius: 8px;
+  background: transparent;
   transition: transform 0.12s ease-out;
 
   .card-poster {
-    height: 264px;
+    position: relative;
+    height: 0;
+    padding-bottom: 150%; // 2:3 poster (aspect-ratio is not available on the TV browser)
     overflow: hidden;
-    border-radius: 4px;
+    border-radius: 6px;
     background: $bg-focus;
 
     img {
+      position: absolute;
+      top: 0;
+      left: 0;
       display: block;
       width: 100%;
       height: 100%;
@@ -450,24 +524,71 @@ h2 {
     }
   }
 
-  &.live {
-    width: 332px;
+  &.live .card-poster img {
+    object-fit: contain;
+    padding: 12%;
+  }
 
-    .card-poster {
-      height: 172px;
+  .card-badge {
+    position: absolute;
+    z-index: 1;
+    display: none;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.72);
+    font-size: 18px;
+    font-weight: 700;
+
+    &.visible {
+      display: flex;
     }
 
-    .card-poster img {
-      object-fit: contain;
+    .icon {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  .card-rating {
+    top: 8px;
+    right: 8px;
+
+    .icon {
+      margin-right: 6px;
+      color: #f5c518;
+    }
+  }
+
+  .card-status {
+    top: 8px;
+    left: 8px;
+    color: $ok;
+
+    &.partial {
+      color: $warn;
     }
   }
 
   .card-title {
-    height: 52px;
-    margin-top: 6px;
+    margin-top: 8px;
+    padding: 0 2px;
     overflow: hidden;
-    font-size: 20px;
-    line-height: 26px;
+    font-size: 22px;
+    line-height: 28px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card-meta {
+    min-height: 22px;
+    padding: 0 2px;
+    overflow: hidden;
+    color: $text-muted;
+    font-size: 17px;
+    line-height: 22px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &.focused {
@@ -490,12 +611,27 @@ h2 {
   background: transparent;
   color: $text;
 
+  .player-top {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    padding: 40px $gutter 96px;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0));
+    opacity: 0;
+    transition: opacity 0.2s;
+
+    &.visible {
+      opacity: 1;
+    }
+  }
+
   .player-controls {
     position: absolute;
-    left: 0;
     right: 0;
     bottom: 0;
-    padding: 80px $safe-x 56px;
+    left: 0;
+    padding: 96px $gutter 40px;
     background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0));
     opacity: 0;
     transition: opacity 0.2s;
@@ -506,7 +642,7 @@ h2 {
   }
 
   .player-title {
-    font-size: 36px;
+    font-size: 40px;
     font-weight: 700;
   }
 
@@ -519,7 +655,6 @@ h2 {
   .player-progress {
     display: flex;
     align-items: center;
-    margin-top: 16px;
   }
 
   .player-time {
@@ -542,6 +677,51 @@ h2 {
     background: $accent;
   }
 
+  .player-buttons {
+    display: flex;
+    align-items: center;
+    margin-top: 20px;
+  }
+
+  .player-group {
+    display: flex;
+    align-items: center;
+
+    &.side {
+      flex: 1;
+    }
+
+    &.end {
+      justify-content: flex-end;
+    }
+  }
+
+  .player-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 64px;
+    margin: 0 8px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: $text;
+    transition: transform 0.12s ease-out;
+
+    .icon {
+      width: 30px;
+      height: 30px;
+    }
+
+    &.focused {
+      border-color: $text;
+      background: rgba(255, 255, 255, 0.18);
+      transform: scale(1.1);
+    }
+  }
+
   .player-status {
     position: absolute;
     top: 50%;
@@ -557,9 +737,10 @@ h2 {
     }
   }
 
-  .player-next {
+  .player-next,
+  .player-flash {
     position: absolute;
-    right: $safe-x;
+    right: $gutter;
     bottom: 220px;
     max-width: 700px;
     padding: 16px 24px;
@@ -572,6 +753,11 @@ h2 {
       opacity: 1;
     }
   }
+
+  .player-flash {
+    bottom: 280px;
+    transition: opacity 0.2s;
+  }
 }
 
 // ---- detail ----
@@ -580,10 +766,12 @@ h2 {
   align-items: flex-start;
 
   .detail-poster {
+    position: sticky;
+    top: 0;
     flex: none;
     width: 360px;
     height: 540px;
-    margin-right: 48px;
+    margin-right: $gutter;
     overflow: hidden;
     border-radius: 8px;
     background: $bg-raised;
@@ -597,29 +785,101 @@ h2 {
 
   .detail-body {
     flex: 1;
-    max-width: 1100px;
+    min-width: 0;
   }
 
   .detail-title {
     margin-bottom: 8px;
   }
 
+  .detail-meta {
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+    margin: 0 0 20px;
+    color: $text-muted;
+    font-size: 24px;
+
+    .meta-sep {
+      margin: 0 12px;
+    }
+
+    .meta-rating {
+      display: flex;
+      align-items: center;
+      color: $text;
+      font-weight: 700;
+
+      .icon {
+        margin-right: 6px;
+        color: #f5c518;
+      }
+    }
+  }
+
   .detail-plot {
+    max-width: 1100px;
     max-height: 168px;
+    margin: 0 0 20px;
     overflow: hidden;
     font-size: 24px;
     line-height: 1.4;
   }
 
-  .detail-actions .btn,
-  .detail-actions .row,
-  .detail-episodes .row {
-    width: 880px;
+  .detail-version {
+    margin-bottom: 20px;
   }
 
-  .detail-row {
+  .detail-actions {
+    display: flex;
+    align-items: center;
+    margin-bottom: 24px;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  .detail-note {
+    margin-left: 12px;
+    color: $text-muted;
+    font-size: 22px;
+  }
+
+  .detail-categories {
+    display: flex;
+    flex-wrap: wrap;
     margin-bottom: 8px;
-    padding: 12px 24px;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  .detail-section {
+    margin-top: 16px;
+
+    .select-field + .carousel {
+      margin-top: 14px;
+    }
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  // Carousels inside the body run to the right screen edge.
+  .carousel-track {
+    margin: 0 (-$gutter) 0 -8px;
+    padding: 8px $gutter 0 8px;
+  }
+
+  .carousel.episodes .card {
+    width: 320px;
+  }
+
+  .carousel.cast .card {
+    width: 168px;
   }
 
   .epg-row {
@@ -632,6 +892,108 @@ h2 {
       color: $text-muted;
     }
   }
+}
+
+.chip {
+  margin: 0 12px 12px 0;
+  padding: 6px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 20px;
+  color: $text-muted;
+  font-size: 20px;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 64px;
+  margin-right: 12px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: $bg-raised;
+  color: $text;
+  font-size: 28px;
+  transition: transform 0.12s ease-out;
+
+  .icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  &.primary {
+    background: $accent;
+  }
+
+  &.focused {
+    border-color: $text;
+    transform: scale(1.08);
+  }
+}
+
+// Labelled dropdown input.
+.select-field {
+  display: inline-block;
+  min-width: 420px;
+  max-width: 720px;
+  transition: transform 0.12s ease-out;
+
+  .field-label {
+    display: block;
+    margin-bottom: 6px;
+    color: $text-muted;
+    font-size: 20px;
+  }
+
+  .select-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-radius: 6px;
+    background: $bg-raised;
+
+    .icon {
+      flex: none;
+      width: 20px;
+      height: 20px;
+      margin-left: 20px;
+      color: $text-muted;
+    }
+  }
+
+  &.focused .select-box {
+    border-color: $text;
+    background: $bg-focus;
+  }
+}
+
+.card-placeholder {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.25);
+
+  .icon {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+.card.episode .card-poster {
+  padding-bottom: 56.25%; // 16:9 still
+}
+
+.card.cast .card-poster {
+  border-radius: 50% 50% 6px 6px;
 }
 
 .choice-list {
@@ -656,30 +1018,11 @@ h2 {
 }
 
 // ---- search ----
-.search-field {
-  width: 880px;
-}
-
 .search-status {
-  min-height: 32px;
-}
+  margin: 0 0 16px;
 
-.search-grid {
-  display: flex;
-  flex-wrap: wrap;
-  width: 1400px;
-}
-
-.card-sub {
-  display: none;
-  margin-top: -2px;
-  overflow: hidden;
-  color: $text-muted;
-  font-size: 18px;
-  white-space: nowrap;
-
-  .has-sub & {
-    display: block;
+  &:empty {
+    display: none;
   }
 }
 
@@ -702,6 +1045,7 @@ h2 {
   }
 }
 
+
 // ---- carousels ----
 .home-rows {
   margin-bottom: 24px;
@@ -712,14 +1056,17 @@ h2 {
 }
 
 .carousel-title {
-  margin: 0 0 8px;
+  margin: 0 0 12px;
   font-size: 30px;
 }
 
+// Full width: the track runs under the page padding, so a focused first card still has room.
 .carousel-track {
+  position: relative;
   display: flex;
   flex-wrap: nowrap;
-  width: 1792px;
+  margin: 0 (-$gutter);
+  padding: 8px $gutter 0;
   overflow: hidden;
 
   .card {

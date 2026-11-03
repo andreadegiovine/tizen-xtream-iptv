@@ -19,7 +19,7 @@ export function createTmdbClient({ apiKey = TMDB_API_KEY, fetcher = fetchJson } 
   const kind = (type) => (type === 'series' ? 'tv' : 'movie');
   return {
     enabled,
-    details: (type, id, language) => get(`/${kind(type)}/${id}`, { language }),
+    details: (type, id, language) => get(`/${kind(type)}/${id}`, { language, append_to_response: 'credits' }),
     search: (type, query, year, language) =>
       get(`/search/${kind(type)}`, { query, language, ...(year ? { [type === 'series' ? 'first_air_date_year' : 'year']: year } : {}) }),
     recommendations: (type, id, language) => get(`/${kind(type)}/${id}/recommendations`, { language }),

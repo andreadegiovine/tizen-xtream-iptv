@@ -8,7 +8,7 @@ import { createCard } from '../components/card.js';
 import { log } from '../../core/logger.js';
 
 const ZONE_ID = 'suggestions';
-const COLUMNS = 6;
+const COLUMNS = 7;
 
 /** Suggested titles available in the provider catalog (TMDB recommendations from the watch history). */
 export function createSuggestionsPage(ctx) {

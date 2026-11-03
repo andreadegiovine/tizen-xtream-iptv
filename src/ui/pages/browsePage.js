@@ -11,8 +11,8 @@ import { log } from '../../core/logger.js';
 
 const CATS_ZONE = 'browseCategories';
 const GRID_ZONE = 'browseGrid';
-/** Poster grids have 6 columns, channel tiles 4: any multiple of 12 fills whole rows for both. */
-export const columnsFor = (type) => (type === 'live' ? 4 : 6);
+/** Every media type uses the same 6-column grid of equally sized cards (channels included). */
+export const columnsFor = () => 6;
 
 /** Where focus lands after changing page: same column, first row going forward, last row going back. */
 export function indexAfterPageChange(direction, index, pageSize, columns) {

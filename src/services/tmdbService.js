@@ -1,7 +1,6 @@
 import { dbGet, dbPut } from '../core/idb.js';
 import { makeSearchKey } from './titleNormalizer.js';
 import { posterUrl } from './tmdbClient.js';
-import { t } from '../i18n/index.js';
 
 export const META_TTL_MS = 30 * 24 * 3600 * 1000;
 export const NOT_FOUND_TTL_MS = 7 * 24 * 3600 * 1000;
@@ -24,6 +23,10 @@ export function normalizeMeta(type, data) {
     year: yearOf(date),
     seasons: Number(data.number_of_seasons) || null,
     episodes: Number(data.number_of_episodes) || null,
+    castList: ((data.credits && data.credits.cast) || [])
+      .slice(0, 20)
+      .map((c) => ({ name: c.name || '', character: c.character || '', photo: posterUrl(c.profile_path, 'w185') }))
+      .filter((c) => c.name),
   };
 }
 
@@ -140,16 +143,23 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now }) {
       return id ? getMeta(entry.type, id) : null;
     },
     /** Fills visible cards with TMDB title / poster / series counts as the answers arrive. */
-    enrich(entries, cards, type) {
-      queue.clear();
+    enrich(entries, cards, type, onMeta, keepQueue = false) {
+      if (!keepQueue) queue.clear();
       if (!client.enabled || type === 'live') return;
       entries.forEach((entry, i) => {
         if (!entry.tmdbId) return;
         queue.add(async () => {
           const meta = await getMeta(type, entry.tmdbId);
           if (!meta || !cards[i]) return;
-          const subtitle = type === 'series' && meta.seasons ? t('card.seriesCounts', { seasons: meta.seasons, episodes: meta.episodes || '?' }) : undefined;
-          cards[i].update({ title: meta.title ? (entry.year || meta.year ? `${meta.title} (${entry.year || meta.year})` : meta.title) : undefined, poster: meta.poster, subtitle });
+          cards[i].update({
+            title: meta.title || undefined,
+            poster: meta.poster,
+            year: entry.year || meta.year || undefined,
+            seasons: type === 'series' ? meta.seasons : undefined,
+            episodes: type === 'series' ? meta.episodes : undefined,
+            rating: entry.rating ? undefined : meta.rating,
+          });
+          if (onMeta) onMeta(entry, i, meta);
         });
       });
     },

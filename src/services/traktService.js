@@ -115,6 +115,7 @@ export function createWatchState({ store, trakt }) {
     recent: (options) => store.recent(options),
     recentForEntry: (entryKey) => store.recentForEntry(entryKey),
     seeds: (limit) => store.seeds(limit),
+    all: () => store.all(),
     async save(record, now) {
       const before = await store.get(record.key);
       const saved = await store.save(record, now);

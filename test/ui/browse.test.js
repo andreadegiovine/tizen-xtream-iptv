@@ -46,7 +46,7 @@ describe('paged grid', () => {
     expect(indexAfterPageChange('next', 17, PAGE_SIZE, GRID_COLUMNS)).toBe(17 % GRID_COLUMNS);
     expect(indexAfterPageChange('previous', 3, PAGE_SIZE, GRID_COLUMNS)).toBe(3 * GRID_COLUMNS + 3);
     expect(indexAfterPageChange('previous', 1, 12, 4)).toBe(2 * 4 + 1);
-    expect(columnsFor('live')).toBe(4);
+    expect(columnsFor('live')).toBe(6);
     expect(columnsFor('movie')).toBe(6);
   });
 });
