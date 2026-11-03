@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>html,body{margin:0;padding:0;background:#000;width:100%;height:100%;overflow:hidden}#player{width:100%;height:100%}</style>
+</head>
+<body>
+<div id="player"></div>
+<script>
+/* YouTube player page. It is served over http (the service on the TV, or the dev server) so that YouTube sees a
+   real origin; the app embeds it in an iframe and talks to it with postMessage:
+   page -> app  { __ytbridge: true, type: ready | state | time | error, ... }
+   app -> page  { __ytbridge_cmd: true, cmd: play | pause | stop | seek | volume | mute, val } */
+var VID = new URLSearchParams(window.location.search).get('videoId');
+var player = null;
+function post(type, data, t, d, s) {
+  window.parent.postMessage({ __ytbridge: true, type: type, data: data, t: t || 0, d: d || 0, s: s === undefined ? -1 : s }, '*');
+}
+window.onYouTubeIframeAPIReady = function () {
+  player = new YT.Player('player', {
+    width: '100%',
+    height: '100%',
+    videoId: VID,
+    playerVars: { autoplay: 1, controls: 0, rel: 0, fs: 0, iv_load_policy: 3, modestbranding: 1, disablekb: 1, enablejsapi: 1, playsinline: 1, origin: window.location.origin },
+    events: {
+      onReady: function () {
+        post('ready');
+        setTimeout(function () { player.playVideo(); }, 100);
+        setInterval(function () {
+          if (player && player.getCurrentTime) post('time', null, player.getCurrentTime() * 1000, player.getDuration() * 1000, player.getPlayerState());
+        }, 500);
+      },
+      onStateChange: function (ev) { post('state', ev.data); },
+      onError: function (ev) { post('error', ev.data); }
+    }
+  });
+};
+window.addEventListener('message', function (ev) {
+  var m = ev.data;
+  if (!m || !m.__ytbridge_cmd || !player) return;
+  if (m.cmd === 'play') player.playVideo();
+  else if (m.cmd === 'pause') player.pauseVideo();
+  else if (m.cmd === 'stop') player.stopVideo();
+  else if (m.cmd === 'seek') player.seekTo(m.val / 1000, true);
+  else if (m.cmd === 'volume') player.setVolume(m.val);
+  else if (m.cmd === 'mute') { if (m.val) player.mute(); else player.unMute(); }
+});
+var tag = document.createElement('script');
+tag.src = 'https://www.youtube.com/iframe_api';
+document.head.appendChild(tag);
+</script>
+</body>
+</html>

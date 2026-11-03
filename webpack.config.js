@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
@@ -5,6 +6,8 @@ const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
 const pkg = require('./package.json');
 const devProxy = require('./scripts/dev-proxy');
+
+const YOUTUBE_SERVICE_PORT = 8125; // keep in sync with src/services/youtubeEngine.js
 
 module.exports = (env = {}, argv = {}) => {
   const isProd = argv.mode === 'production';
@@ -56,6 +59,17 @@ module.exports = (env = {}, argv = {}) => {
             transform: (content) => content.toString().replace(/__VERSION__/g, pkg.version),
           },
           { from: 'tizen/icon.png', to: 'icon.png' },
+          // YouTube player page: served by the on-TV service (service/service.js) and, for development, by the dev server.
+          { from: 'tizen/youtube/player.html', to: 'yt-player.html' },
+          {
+            from: 'tizen/youtube/service.js',
+            to: 'service/service.js',
+            transform: (content) =>
+              content
+                .toString()
+                .replace(/__PORT__/g, String(YOUTUBE_SERVICE_PORT))
+                .replace('__PLAYER_HTML__', () => JSON.stringify(fs.readFileSync(path.resolve(__dirname, 'tizen/youtube/player.html'), 'utf8'))),
+          },
         ],
       }),
       new MiniCssExtractPlugin({ filename: 'css/[name].css' }),

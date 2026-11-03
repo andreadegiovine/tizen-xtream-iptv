@@ -5,6 +5,7 @@ import { log } from '../../core/logger.js';
 import { icon } from '../icons.js';
 import { createPlayerController, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer } from '../../services/playerController.js';
 import { ASPECT_MODES } from '../../services/playerEngines.js';
+import { youtubeStreamUrl } from '../../services/youtubeEngine.js';
 import { watchKey, shouldResume } from '../../services/watchStore.js';
 import { pageEntries } from '../../services/catalogQuery.js';
 
@@ -22,7 +23,8 @@ const SCRUB_STEP = 30;
  *           live?: { categoryId, offset } }
  */
 export function createPlayerPage(ctx, params) {
-  const engine = ctx.createEngine();
+  const isTrailer = params.type === 'trailer'; // a YouTube trailer: same player and controls, no aspect ratio / subtitles
+  const engine = isTrailer ? ctx.createTrailerEngine() : ctx.createEngine();
   const controller = createPlayerController({ engine });
   const isLive = params.type === 'live';
   let playlist = params.playlist;
@@ -71,7 +73,7 @@ export function createPlayerPage(ctx, params) {
     { id: 'seek', vodOnly: true, group: 'bar', el: seek, run: () => toggleScrub() },
     { id: 'aspect', icon: 'aspect', label: () => t('player.aspect'), group: 'end', run: () => cycleAspect() },
     { id: 'subtitles', icon: 'subtitles', label: () => t('player.subtitles'), group: 'end', run: () => openSubtitles() },
-  ].filter((def) => !(isLive && def.vodOnly));
+  ].filter((def) => !(isLive && def.vodOnly) && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles')));
   buttonDefs.forEach((def) => {
     if (def.el) return;
     def.el = h('button', { class: 'player-btn', type: 'button', 'aria-label': def.label() }, icon(def.icon));
@@ -288,6 +290,10 @@ export function createPlayerPage(ctx, params) {
     titleEl.textContent = [title, current().title].filter(Boolean).join(' · ');
     nowEl.textContent = '';
     showControls();
+    if (isTrailer) {
+      controller.load(youtubeStreamUrl(params.trailer.videoId), { bufferSeconds: 0 });
+      return;
+    }
     try {
       const client = isLive ? await ctx.active.authenticatedClient() : (await ctx.active.get()).client;
       let startAt = 0;
@@ -314,6 +320,10 @@ export function createPlayerPage(ctx, params) {
   }
 
   function onEnded() {
+    if (isTrailer) {
+      ctx.router.back();
+      return;
+    }
     saveProgress(true);
     const next = neighborEpisode(playlist, index, 1);
     if (isLive || !next) return;

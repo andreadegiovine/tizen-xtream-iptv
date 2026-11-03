@@ -139,7 +139,7 @@ export async function runTmdbDownload({ db, appDb, tmdb, language, signal, gate 
   async function download(title) {
     let value = null;
     try {
-      value = normalizeMeta(title.type, await tmdb.details(title.type, title.tmdbId, language));
+      value = normalizeMeta(title.type, await tmdb.details(title.type, title.tmdbId, language), language);
     } catch (err) {
       if (!(err && err.details && err.details.status === 404)) return; // network / quota: the next run tries again
     }

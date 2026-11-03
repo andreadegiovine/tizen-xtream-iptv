@@ -11,8 +11,17 @@ export const metaKey = (type, tmdbId, language) => `meta:${type}:${tmdbId}:${lan
 
 const yearOf = (date) => Number.parseInt(String(date || '').slice(0, 4), 10) || null;
 
+/** YouTube key of the best trailer: the UI language first, then English, then any; trailers before teasers. */
+export function trailerKeyOf(videos, language = '') {
+  const list = ((videos && videos.results) || []).filter((v) => v && v.site === 'YouTube' && v.key && (v.type === 'Trailer' || v.type === 'Teaser'));
+  const lang = String(language).slice(0, 2);
+  const rank = (v) => (v.type === 'Trailer' ? 0 : 4) + (v.iso_639_1 === lang ? 0 : v.iso_639_1 === 'en' ? 1 : 2);
+  const best = list.slice().sort((a, b) => rank(a) - rank(b))[0];
+  return best ? best.key : '';
+}
+
 /** TMDB payload → what the UI needs. */
-export function normalizeMeta(type, data) {
+export function normalizeMeta(type, data, language = '') {
   const date = type === 'series' ? data.first_air_date : data.release_date;
   return {
     tmdbId: data.id,
@@ -28,6 +37,7 @@ export function normalizeMeta(type, data) {
     year: yearOf(date),
     seasons: Number(data.number_of_seasons) || null,
     episodes: Number(data.number_of_episodes) || null,
+    trailerKey: trailerKeyOf(data.videos, language),
     companies: (Array.isArray(data.production_companies) ? data.production_companies : [])
       .map((c) => ({ id: c.id, name: c.name || '', logo: posterUrl(c.logo_path, 'w185') }))
       .filter((c) => c.name),
@@ -132,7 +142,7 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
     if (memory.has(key)) return memory.get(key);
     const record = await cached('tmdb', key, ttl, async () => {
       try {
-        return normalizeMeta(type, await client.details(type, tmdbId, language));
+        return normalizeMeta(type, await client.details(type, tmdbId, language), language);
       } catch (err) {
         if (err && err.details && err.details.status === 404) return null; // cached as "not found" for a week
         throw err;

@@ -26,6 +26,7 @@ import { createDetailsService } from './services/details.js';
 import { WatchStore, watchKey } from './services/watchStore.js';
 import { summarizeWatch, watchStatus } from './services/watchStatus.js';
 import { createDefaultEngine } from './services/playerEngines.js';
+import { createYouTubeEngine } from './services/youtubeEngine.js';
 import { createSyncLog } from './services/syncLog.js';
 import { createOperations } from './services/operations.js';
 import { createGenreIndex } from './services/genreIndex.js';
@@ -74,6 +75,7 @@ async function boot() {
     details: createDetailsService({ active }),
     search: createSearchService({ active }),
     createEngine: createDefaultEngine,
+    createTrailerEngine: createYouTubeEngine,
     openEntry: null,
     enrich: null,
     meta: null,

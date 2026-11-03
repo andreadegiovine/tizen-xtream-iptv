@@ -11,7 +11,7 @@ import { getEntry, listCategories } from '../../services/catalogQuery.js';
 import { watchKey, shouldResume, isWatched } from '../../services/watchStore.js';
 import { formatClock } from '../../services/playerController.js';
 import { formatRating } from '../components/card.js';
-import { openTrailer, youtubeId } from '../../services/trailer.js';
+import { youtubeId } from '../../services/trailer.js';
 import { mergeGenres } from '../../services/genres.js';
 import { log } from '../../core/logger.js';
 
@@ -154,6 +154,11 @@ export function createDetailPage(ctx, params) {
       epgChannelId: entry.epgChannelId,
       section: params.section,
     });
+  }
+
+  /** The trailer plays in the app's own player (same controls as a film, without aspect ratio and subtitles). */
+  function playTrailer(videoId) {
+    ctx.router.push('player', { type: 'trailer', trailer: { videoId }, entryKey: entry.key, title: data().title, playlist: [{ id: '', ext: '', title: t('detail.trailer') }], index: 0, section: params.section });
   }
 
   async function chooseStream() {
@@ -412,9 +417,9 @@ export function createDetailPage(ctx, params) {
       if (canResume) note = formatClock(record.position);
       buttons.push({ id: 'play', icon: 'play', label: t('detail.play'), run: () => play({ restart: true }) });
     }
-    if (buttons.length && info && youtubeId(info.trailer)) {
-      buttons.push({ id: 'trailer', icon: 'trailer', label: t('detail.trailer'), run: () => openTrailer(info.trailer) });
-    }
+    // The provider's trailer first, otherwise the one TMDB lists for the title.
+    const trailerId = (info && youtubeId(info.trailer)) || (meta && meta.trailerKey) || '';
+    if (buttons.length && trailerId) buttons.push({ id: 'trailer', icon: 'trailer', label: t('detail.trailer'), run: () => playTrailer(trailerId) });
     if (canResume) {
       buttons.push({ id: 'resume', icon: 'resume', label: t('detail.resume'), run: () => (entry.type === 'series' ? play({ list: episodes, startIndex }) : play({})) });
     }
