@@ -114,7 +114,7 @@ export function createCategoriesPage(ctx, params = {}) {
     try {
       await ctx.settings.setExcluded(providerId, type, Array.from(excluded));
       if (excluded.size !== original.size || Array.from(excluded).some((id) => !original.has(id))) {
-        await rebuildEntries({ db, type, excludedCategories: excluded });
+        await rebuildEntries({ db, type, excludedCategories: excluded, cleanTitles: Boolean(ctx.apiKeys.get().tmdbKey) });
         ctx.search.invalidate();
       }
       original = new Set(excluded);

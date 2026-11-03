@@ -74,4 +74,14 @@ describe('buildEntryCategoryRows', () => {
     const rows = buildEntryCategoryRows(entries);
     expect(rows.map((r) => r.key).sort()).toEqual(['movie:t1|1', 'movie:t1|2']);
   });
+
+  test('without cleanTitles movie and series titles stay as the provider wrote them', () => {
+    const items = [item(1, 'IT - Heat (1995) [4K]', { year: '1995' })];
+    const raw = buildEntries('movie', items, { cleanTitles: false })[0];
+    expect(raw.name).toBe('IT - Heat (1995) [4K]');
+    expect(raw.year).toBe('1995');
+    expect(raw.searchKeys).toHaveLength(1);
+    expect(buildEntries('movie', items)[0].name).toBe('Heat');
+    expect(buildEntries('live', [item(2, 'IT: Rai 1 HD')], { cleanTitles: false })[0].name).toBe(buildEntries('live', [item(2, 'IT: Rai 1 HD')])[0].name);
+  });
 });

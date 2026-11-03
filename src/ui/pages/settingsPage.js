@@ -9,6 +9,7 @@ import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { createSyncPanel, createTmdbPanel, createTraktPanel, createDevicePanel, createOperationsPanel } from '../components/syncPanel.js';
 import { log } from '../../core/logger.js';
+import { rebuildEntries } from '../../services/catalogSync.js';
 
 const ZONE_ID = 'settings';
 const IME_DONE = 65376;
@@ -27,7 +28,8 @@ export function textRow({ label, field, secret = false, ctx }) {
       event.preventDefault();
       input.blur();
       const before = ctx.apiKeys.getStored(field);
-      ctx.apiKeys.set({ [field]: input.value }).then(() => {
+      const titlesChange = field === 'tmdbKey' && Boolean(before.trim()) !== Boolean(input.value.trim());
+      ctx.apiKeys.set({ [field]: input.value }).then(() => (titlesChange ? rebuildTitles(ctx) : undefined)).then(() => {
         toast(t('settings.saved'));
         // A new TMDB key starts the first metadata run at once (genres and TMDB data of what was watched).
         if (field === 'tmdbKey' && input.value.trim() && input.value.trim() !== before && ctx.genres) {
@@ -44,6 +46,22 @@ export function textRow({ label, field, secret = false, ctx }) {
     }
   });
   return { el, refresh: async () => show(), activate: async () => input.focus() };
+}
+
+/** Movie / series titles are cleaned only when TMDB is configured: adding or removing the key rebuilds the entries. */
+async function rebuildTitles(ctx) {
+  try {
+    const active = await ctx.active.get();
+    if (!active) return;
+    const cleanTitles = Boolean(ctx.apiKeys.get().tmdbKey);
+    for (const type of ['movie', 'series']) {
+      const excluded = await ctx.settings.getExcluded(active.provider.id, type);
+      await rebuildEntries({ db: active.db, type, excludedCategories: excluded, cleanTitles });
+    }
+    ctx.search.invalidate();
+  } catch (err) {
+    log.warn('Titles rebuild failed', err && err.message);
+  }
 }
 
 /** A row that runs an action (optionally after a confirmation). */
@@ -124,6 +142,7 @@ export function createSettingsPage(ctx) {
     const connected = await login.catch(() => false);
     if (connected) ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal })).catch((err) => log.warn('Trakt import failed', err && err.message));
     await traktPanel.refresh();
+    if (connected) ctx.focus.focus(ZONE_ID, visibleRows().indexOf(traktSyncRow) + opsPanel.rows.length); // the connect button is gone
   }
 
   async function syncTrakt() {

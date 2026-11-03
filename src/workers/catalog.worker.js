@@ -19,6 +19,7 @@ self.onmessage = function (event) {
         provider: message.provider,
         types: message.types,
         excluded: toSets(message.excluded),
+        cleanTitles: message.cleanTitles !== false,
         force: message.force,
         signal: controller.signal,
         emit: (payload) => self.postMessage(payload),

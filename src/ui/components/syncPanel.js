@@ -202,6 +202,7 @@ export function createTraktPanel(ctx) {
     sync.status.classList.toggle('in-progress', active.has('trakt'));
     sync.status.textContent = describeMeta(log.trakt, locale, enabled && connected, active.get('trakt'));
     if (enabled && !connected && !active.has('trakt')) sync.status.textContent = t('settings.notConfigured');
+    connectButton.style.display = connected ? 'none' : '';
     removeButton.style.display = connected ? '' : 'none';
     syncButton.style.display = connected ? '' : 'none';
   }

@@ -69,9 +69,9 @@ export async function writeEntries(db, type, entries, { onBatch } = {}) {
 }
 
 /** Rebuilds the grid entries from the stored items (used when the excluded categories change). */
-export async function rebuildEntries({ db, type, excludedCategories = new Set(), emit = () => {} }) {
+export async function rebuildEntries({ db, type, excludedCategories = new Set(), cleanTitles = true, emit = () => {} }) {
   const items = await dbGetAllRange(db, 'items', IDBKeyRange.bound(`${type}:`, `${type}:\uffff`));
-  const entries = buildEntries(type, items, { excludedCategories });
+  const entries = buildEntries(type, items, { excludedCategories, cleanTitles });
   await writeEntries(db, type, entries);
   const previous = (await getSyncMeta(db, type)) || { key: metaKey(type), type };
   await dbPut(db, 'meta', { ...previous, entryCount: entries.length });
@@ -97,6 +97,7 @@ export async function syncType({
   client,
   type,
   excludedCategories = new Set(),
+  cleanTitles = true,
   signal,
   emit = () => {},
   gate = () => Promise.resolve(),
@@ -143,7 +144,7 @@ export async function syncType({
   throwIfAborted(signal);
   progress('entries');
   const entriesStart = now();
-  const entries = buildEntries(type, items, { excludedCategories });
+  const entries = buildEntries(type, items, { excludedCategories, cleanTitles });
   const buildMs = now() - entriesStart;
   await writeEntries(db, type, entries);
   const entriesMs = now() - entriesStart;
@@ -172,7 +173,7 @@ export async function syncType({
 }
 
 /** Syncs several media types in order. A failing type does not stop the others, except auth/abort errors. */
-export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, force = false, signal, emit = () => {}, gate, now = Date.now }) {
+export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, cleanTitles = true, force = false, signal, emit = () => {}, gate, now = Date.now }) {
   const results = [];
   for (const type of types) {
     try {
@@ -182,7 +183,7 @@ export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, f
         results.push({ type, skipped: true });
         continue;
       }
-      const meta = await syncType({ db, client, type, excludedCategories: excluded[type] || new Set(), signal, emit, gate, now });
+      const meta = await syncType({ db, client, type, excludedCategories: excluded[type] || new Set(), cleanTitles, signal, emit, gate, now });
       results.push({ type, meta });
     } catch (err) {
       const error = toAppError(err);
@@ -198,7 +199,7 @@ export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, f
  * Entry point shared by the Web Worker and the main-thread fallback:
  * opens the provider database, checks the account, syncs, and always ends with a `done` event.
  */
-export async function runSyncForProvider({ provider, types, excluded, force, signal, emit = () => {}, gate, openDb = openProviderDb, makeClient }) {
+export async function runSyncForProvider({ provider, types, excluded, cleanTitles = true, force, signal, emit = () => {}, gate, openDb = openProviderDb, makeClient }) {
   let db = null;
   let results = [];
   let failure = null;
@@ -208,7 +209,7 @@ export async function runSyncForProvider({ provider, types, excluded, force, sig
     const auth = await client.authenticate();
     emit({ event: 'account', expiresAt: (auth && auth.user && auth.user.expiresAt) || null });
     db = await openDb(provider.id);
-    results = await runSync({ db, client, types, excluded, force, signal, emit, gate });
+    results = await runSync({ db, client, types, excluded, cleanTitles, force, signal, emit, gate });
   } catch (err) {
     const error = toAppError(err);
     failure = { code: error.code, message: error.message };

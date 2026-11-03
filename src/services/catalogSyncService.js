@@ -21,10 +21,11 @@ const emptyState = () => ({
  * code on the main thread instead.
  */
 export class CatalogSyncService {
-  constructor({ providers, settings, createWorker, runLocal = runSyncForProvider, readyTimeoutMs = 4000 }) {
+  constructor({ providers, settings, createWorker, getCleanTitles = () => true, runLocal = runSyncForProvider, readyTimeoutMs = 4000 }) {
     this.providers = providers;
     this.settings = settings;
     this.createWorker = createWorker;
+    this.getCleanTitles = getCleanTitles;
     this.runLocal = runLocal;
     this.readyTimeoutMs = readyTimeoutMs;
     this.bus = new EventBus();
@@ -76,6 +77,7 @@ export class CatalogSyncService {
       provider: { id: provider.id, baseUrl: provider.baseUrl, username: provider.username, password: provider.password },
       types,
       excluded,
+      cleanTitles: Boolean(this.getCleanTitles()),
       force,
     };
 
@@ -151,6 +153,7 @@ export class CatalogSyncService {
       provider: payload.provider,
       types: payload.types,
       excluded,
+      cleanTitles: payload.cleanTitles,
       force: payload.force,
       signal: this.controller.signal,
       emit: (message) => this.handle(job, message),

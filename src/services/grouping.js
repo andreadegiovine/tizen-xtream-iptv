@@ -1,6 +1,6 @@
 import { MediaType } from './mediaType.js';
 import { mergeGenres } from './genres.js';
-import { normalizeTitle, normalizeChannelName } from './titleNormalizer.js';
+import { normalizeTitle, normalizeChannelName, makeSearchKey } from './titleNormalizer.js';
 
 /**
  * Builds the entries shown in grids.
@@ -9,8 +9,15 @@ import { normalizeTitle, normalizeChannelName } from './titleNormalizer.js';
  * - Items in excluded categories are dropped before grouping.
  * Output is sorted by `added` (newest first), where a group's `added` is the max of its members.
  */
-export function buildEntries(type, items, { excludedCategories = new Set() } = {}) {
-  const normalize = type === MediaType.LIVE ? normalizeChannelName : normalizeTitle;
+export function buildEntries(type, items, { excludedCategories = new Set(), cleanTitles = true } = {}) {
+  let normalize = type === MediaType.LIVE ? normalizeChannelName : normalizeTitle;
+  // Without TMDB the movie / series titles stay as the provider wrote them.
+  if (type !== MediaType.LIVE && !cleanTitles) {
+    normalize = (raw) => {
+      const cleanTitle = String(raw == null ? '' : raw).trim();
+      return { cleanTitle, year: null, searchKey: makeSearchKey(cleanTitle) };
+    };
+  }
   const groups = new Map();
 
   for (const item of items) {

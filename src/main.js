@@ -60,7 +60,7 @@ async function boot() {
   i18n.setLocale(prefs.language === 'auto' ? detectLocale(navigator.language) : prefs.language);
 
   const focus = new FocusManager();
-  const catalog = new CatalogSyncService({ providers, settings, createWorker: createCatalogWorker });
+  const catalog = new CatalogSyncService({ providers, settings, createWorker: createCatalogWorker, getCleanTitles: () => Boolean(ctx.apiKeys && ctx.apiKeys.get().tmdbKey) });
   const active = createActiveProvider({ providers });
   const ctx = {
     db,
