@@ -821,9 +821,10 @@ h2 {
 // Heart of the sticky head: the .icon-btn look of the title page, a bit smaller to fit the head.
 .browse-fav.icon-btn {
   align-self: center;
+  margin-left: auto; // right edge of the head
   width: 84px;
   height: 46px;
-  margin-right: 0;
+  margin-right: 6px; // room for the focus scale
 
   .icon {
     width: 28px;

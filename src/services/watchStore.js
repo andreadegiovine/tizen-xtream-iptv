@@ -55,7 +55,8 @@ export class WatchStore {
       const group = rec.entryKey; // one row per title: the most recent episode wins
       if (seen.has(group)) continue;
       seen.add(group);
-      if (onlyUnfinished && rec.watched && rec.type !== 'series') continue;
+      // A series stays while it has a next episode; "mark as seen" (seriesDone) closes it.
+      if (onlyUnfinished && rec.watched && (rec.type !== 'series' || rec.seriesDone)) continue;
       result.push(rec);
       if (result.length >= limit) break;
     }
