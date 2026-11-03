@@ -336,7 +336,7 @@ export function createDetailPage(ctx, params) {
           type: 'episode',
           meta: {
             subtitle: episode.duration ? formatClock(episode.duration) : '',
-            status: rec && rec.watched ? 'watched' : null,
+            status: rec && rec.watched ? 'watched' : rec && rec.position > 0 ? 'partial' : null,
             progress: rec && !rec.watched && rec.duration ? rec.position / rec.duration : 0,
           },
         };

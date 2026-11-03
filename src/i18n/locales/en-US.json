@@ -195,5 +195,7 @@
   "operations.queued": "Queued",
   "meta.running": "Running since {time}",
   "player.recovering": "Playback problem, trying again… ({attempt}/{attempts})",
-  "common.never": "Never run"
+  "common.never": "Never run",
+  "favorites.category": "Category",
+  "favorites.genre": "Genre"
 }

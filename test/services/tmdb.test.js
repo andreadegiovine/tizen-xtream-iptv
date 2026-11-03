@@ -1,5 +1,5 @@
 import { openAppDb } from '../../src/db/appDb.js';
-import { normalizeMeta, pickMatch, createQueue, createTmdbService, META_TTL_MS } from '../../src/services/tmdbService.js';
+import { gridMeta, normalizeMeta, pickMatch, createQueue, createTmdbService, META_TTL_MS } from '../../src/services/tmdbService.js';
 
 let n = 0;
 const appDb = () => openAppDb(`tmdb-test-${(n += 1)}`);
@@ -87,6 +87,24 @@ describe('tmdb service', () => {
     expect(c.details).toHaveBeenCalledTimes(1);
   });
 
+  test('the database keeps only the grid fields; the detail page fetches the rest when it opens', async () => {
+    const db = await appDb();
+    const c = client();
+    c.details.mockResolvedValue({ id: 5, title: 'Five', overview: 'Plot', backdrop_path: '/b.jpg', poster_path: '/p.jpg', genres: [{ id: 1, name: 'Drama' }], credits: { cast: [{ name: 'A' }] }, production_companies: [{ id: 1, name: 'Acme' }] });
+    const svc = createTmdbService({ db, client: c, getLanguage: () => 'en-US' });
+    const slim = await svc.getMeta('movie', 5);
+    expect(slim).toMatchObject({ title: 'Five', genreList: [{ id: 1, name: 'Drama' }] });
+    expect(slim.overview).toBeUndefined();
+    expect(slim.castList).toBeUndefined();
+    expect(c.details.mock.calls[0][3]).toEqual({ full: false });
+    const full = await svc.getFull('movie', 5);
+    expect(full).toMatchObject({ overview: 'Plot', castList: [{ name: 'A' }], companies: [{ name: 'Acme' }] });
+    expect(c.details.mock.calls[1][3]).toBeUndefined(); // full answer
+    await svc.getFull('movie', 5);
+    expect(c.details).toHaveBeenCalledTimes(2); // the detail answer is kept for the session
+    expect(Object.keys(gridMeta(full)).sort()).toEqual(['episodes', 'genre', 'genreList', 'poster', 'rating', 'seasons', 'title', 'tmdbId', 'year']);
+  });
+
   test('forEntry: provider tmdb id wins; no id → conservative match; live → nothing', async () => {
     const db = await appDb();
     const c = client();
@@ -115,6 +133,8 @@ test('requests the user waits for report activity (the background download holds
   expect(seen[0]).toBe(1);
   expect(seen[seen.length - 1]).toBe(0);
   const { dbGet } = await import('../../src/core/idb.js');
+  expect(await dbGet(db, 'tmdb', 'meta:movie:4:it-IT')).toBeUndefined(); // the page answer is not stored
+  await svc.getMeta('movie', 4);
   expect((await dbGet(db, 'tmdb', 'meta:movie:4:it-IT')).expiresAt).toBe(5 + META_TTL_MS);
 });
 

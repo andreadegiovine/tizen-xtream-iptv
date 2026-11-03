@@ -6,6 +6,13 @@ import { createCarousel } from './carousel.js';
 const ORDER = ['movie', 'series', 'live'];
 const LABEL = { movie: 'nav.movies', series: 'nav.series', live: 'nav.live' };
 
+/**
+ * A favourite category or genre shown as a card: `{ type, key, name, filterKind: 'category' | 'genre', filterId }`.
+ * The card carries an icon instead of a poster and the kind ("Category", "Genre") as its subtitle.
+ */
+export const isFilterEntry = (entry) => Boolean(entry && entry.filterKind);
+export const filterCardMeta = (entry) => ({ placeholder: entry.filterKind === 'genre' ? 'genres' : 'categories', subtitle: t(entry.filterKind === 'genre' ? 'favorites.genre' : 'favorites.category') });
+
 /** Splits entries by type, keeping the order and at most `limit` per type. */
 export function groupByType(entries, limit = 20) {
   return ORDER.map((type) => ({ type, entries: entries.filter((entry) => entry.type === type).slice(0, limit) })).filter((group) => group.entries.length);
@@ -15,7 +22,7 @@ export function groupByType(entries, limit = 20) {
  * One carousel per media type (movies, series, channels), stacked vertically with linked focus zones.
  * Used by Favorites, Suggestions and the search results.
  */
-export function createTypedRows(ctx, { prefix, onOpen, limit = 20 }) {
+export function createTypedRows(ctx, { prefix, onOpen, limit = 20 }) { // onOpen(entry): titles and favourite filters (see isFilterEntry)
   const el = h('div', { class: 'typed-rows' });
   let carousels = [];
 
@@ -33,7 +40,7 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 20 }) {
         const carousel = createCarousel({
           id: `${prefix}-${group.type}`,
           title: t(LABEL[group.type]),
-          items: group.entries.map((entry) => ({ entry, type: group.type })),
+          items: group.entries.map((entry) => (isFilterEntry(entry) ? { entry, type: group.type, meta: filterCardMeta(entry) } : { entry, type: group.type })),
           onOpen: (item) => onOpen(item.entry),
           revealTop: index === 0,
         });

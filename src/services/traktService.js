@@ -185,23 +185,35 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
  * Same surface as WatchStore, so pages do not know whether Trakt is connected.
  */
 export function createWatchState({ store, trakt }) {
+  // Saves run one after the other, and every read waits for the ones already requested: a page that opens right
+  // after the player (which saves while it closes) must see the progress that was just written.
+  let pending = Promise.resolve();
+  const queued = (job) => {
+    const run = pending.then(job);
+    pending = run.catch(() => undefined);
+    return run;
+  };
+  const read = (fn) => (...args) => pending.then(() => fn(...args));
   return {
-    get: (key) => store.get(key),
-    recent: (options) => store.recent(options),
-    recentForEntry: (entryKey) => store.recentForEntry(entryKey),
-    seeds: (limit) => store.seeds(limit),
-    all: () => store.all(),
-    clearEntry: (providerId, entryKey) => store.clearEntry(providerId, entryKey),
+    get: read((key) => store.get(key)),
+    recent: read((options) => store.recent(options)),
+    recentForEntry: read((entryKey) => store.recentForEntry(entryKey)),
+    seeds: read((limit) => store.seeds(limit)),
+    seenKeys: read(() => store.seenKeys()),
+    all: read(() => store.all()),
+    clearEntry: (providerId, entryKey) => queued(() => store.clearEntry(providerId, entryKey)),
     /** "Mark as watched" by hand: stored locally, not reported to Trakt one by one. */
-    async markWatched(records, now) {
-      for (const record of records) await store.save({ ...record, position: 1, duration: 1 }, now);
-    },
-    async save(record, now) {
-      const before = await store.get(record.key);
-      const saved = await store.save(record, now);
-      if (saved.watched && !(before && before.watched) && trakt) trakt.reportWatched(saved).catch(() => undefined);
-      return saved;
-    },
+    markWatched: (records, now) =>
+      queued(async () => {
+        for (const record of records) await store.save({ ...record, position: 1, duration: 1 }, now);
+      }),
+    save: (record, now) =>
+      queued(async () => {
+        const before = await store.get(record.key);
+        const saved = await store.save(record, now);
+        if (saved.watched && !(before && before.watched) && trakt) trakt.reportWatched(saved).catch(() => undefined);
+        return saved;
+      }),
     /**
      * Imports what Trakt knows as watched (movies and episodes) without overwriting local records.
      * Imported records carry `source: 'trakt'`, so they can be removed again on their own.

@@ -80,6 +80,18 @@ describe('watch-state adapter', () => {
     expect(trakt.reportWatched).toHaveBeenCalledTimes(1);
   });
 
+  test('reads wait for a save that is still being written', async () => {
+    const store = new WatchStore(await appDb());
+    const ws = createWatchState({ store, trakt: null });
+    const rec = { key: 'series:t3|s1e1', entryKey: 'series:t3', episodeKey: 's1e1', type: 'series', duration: 100, position: 99 };
+    const saving = ws.save(rec); // not awaited, like the player closing
+    const seen = await ws.recentForEntry('series:t3');
+    expect(seen).toHaveLength(1);
+    expect(seen[0].watched).toBe(true);
+    await saving;
+    expect(await ws.seenKeys()).toEqual(new Set(['series:t3']));
+  });
+
   test('import adds Trakt movies and episodes without overwriting local progress, and can be undone', async () => {
     const store = new WatchStore(await appDb());
     await store.save({ key: 'movie:t2', entryKey: 'movie:t2', type: 'movie', position: 10, duration: 100 });

@@ -124,6 +124,12 @@ h2 {
     font-weight: 700;
   }
 
+  // The favourite heart is red while the open grid is a favourite.
+  &.active,
+  &.active.focused {
+    color: $accent;
+  }
+
   &.focused {
     background: $text;
     color: $bg;

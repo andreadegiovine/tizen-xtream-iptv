@@ -87,6 +87,17 @@ export class WatchStore {
     return dbGetAll(this.db, 'watch');
   }
 
+  /** Titles with any watch record (finished or started), as `movie:t123` / `series:t456`: never suggested again. */
+  async seenKeys() {
+    await this.writes;
+    const out = new Set();
+    for (const rec of await dbGetAll(this.db, 'watch')) {
+      const match = /^(movie|series):t(\d+)/.exec(rec.entryKey || '');
+      if (match) out.add(`${match[1]}:t${match[2]}`);
+    }
+    return out;
+  }
+
   /** Most recently watched tmdb ids, used to seed suggestions. */
   async seeds(limit = 10) {
     await this.writes;

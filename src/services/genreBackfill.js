@@ -4,7 +4,7 @@ import { XtreamClient } from './xtreamClient.js';
 import { createTmdbClient } from './tmdbClient.js';
 import { mergeGenres } from './genres.js';
 import { openAppDb } from '../db/appDb.js';
-import { normalizeMeta, metaKey, META_TTL_MS, NOT_FOUND_TTL_MS } from './tmdbService.js';
+import { normalizeMeta, gridMeta, metaKey, META_TTL_MS, NOT_FOUND_TTL_MS } from './tmdbService.js';
 
 const STORE = 'entry_genre_tmdb';
 export const GENRE_BATCH = 60;
@@ -139,7 +139,7 @@ export async function runTmdbDownload({ db, appDb, tmdb, language, signal, gate 
   async function download(title) {
     let value = null;
     try {
-      value = normalizeMeta(title.type, await tmdb.details(title.type, title.tmdbId, language), language);
+      value = gridMeta(normalizeMeta(title.type, await tmdb.details(title.type, title.tmdbId, language, { full: false }), language));
     } catch (err) {
       if (!(err && err.details && err.details.status === 404)) return; // network / quota: the next run tries again
     }

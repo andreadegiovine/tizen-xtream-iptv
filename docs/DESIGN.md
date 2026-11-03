@@ -92,3 +92,6 @@ Decisions agreed during the design phase. Update this file when a decision chang
 - Le chiavi TMDB/Trakt non stanno nel repository né nella build: si digitano nelle Impostazioni.
 - EPG: XMLTV filtrato per i canali presenti, letto a blocchi in un worker, una volta al giorno dopo il sync del catalogo.
 - Suggerimenti: raccomandazioni TMDB dalla cronologia, intersecate per tmdb id con il catalogo.
+
+## Preferiti di categorie e generi, record TMDB leggeri (2026-11-03)
+I preferiti possono essere titoli o filtri (`kind` category/genre). Le card dei filtri precedono i titoli e aprono la griglia (`openFilter`). Nel database TMDB resta solo `gridMeta`; i dettagli completi si recuperano con `getFull` e vivono in memoria. I suggerimenti non propongono titoli già visti.

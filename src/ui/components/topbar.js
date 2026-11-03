@@ -27,6 +27,9 @@ export const SECTIONS = [
   { id: 'settings', labelKey: 'nav.settings', route: 'settings', icon: 'settings', iconOnly: true, end: true },
 ];
 
+// Shown only while a page offers it (a category or genre grid): adds / removes the open grid from the favourites.
+const FAVORITE_ITEM = { id: 'favorite', labelKey: 'detail.favorite', icon: 'heart', iconOnly: true, end: true, action: 'favorite' };
+
 const SECTION_OF_ROUTE = { categories: 'settings', browse: 'home', search: 'search', suggestions: 'suggestions', favorites: 'favorites', detail: 'home', player: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
 
 /** Section a router entry belongs to: explicit `params.section`, otherwise derived from the route name. */
@@ -53,15 +56,22 @@ export function createTopbar(ctx, handlers = {}) {
   let field = null;
   let closeBtn = null;
   let timer = null;
+  let favorite = null; // { owner, active, onToggle }
+  let favoriteOwner = null;
+  const items = () => (favorite ? SECTIONS.concat([FAVORITE_ITEM]) : SECTIONS);
   const indexOf = (id) => Math.max(0, SECTIONS.findIndex((s) => s.id === id));
 
   const zone = new FocusZone({
     id: TOPBAR_ZONE,
-    model: new ListModel({ orientation: 'horizontal', getCount: () => (searching || skeleton ? 0 : SECTIONS.length) }),
+    model: new ListModel({ orientation: 'horizontal', getCount: () => (searching || skeleton ? 0 : items().length) }),
     onFocus: (i) => nodes[i] && nodes[i].classList.add('focused'),
     onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
     onActivate: (i) => {
-      const section = SECTIONS[i];
+      const section = items()[i];
+      if (section.action === 'favorite') {
+        if (favorite) favorite.onToggle();
+        return;
+      }
       if (section.action === 'search') {
         api.openSearch();
         return;
@@ -85,7 +95,7 @@ export function createTopbar(ctx, handlers = {}) {
     nodes = [];
     let spacerAdded = false;
     el.appendChild(createLogo());
-    SECTIONS.forEach((section) => {
+    items().forEach((section) => {
       if (section.end && !spacerAdded) {
         el.appendChild(h('span', { class: 'topbar-spacer' }));
         spacerAdded = true;
@@ -94,8 +104,9 @@ export function createTopbar(ctx, handlers = {}) {
         el.appendChild(h('span', { class: 'topbar-item' }, h('span', { class: `skeleton-line${section.iconOnly ? ' icon' : ''}` })));
         return;
       }
-      const label = t(section.labelKey);
-      const node = h('span', { class: `topbar-item${section.id === currentSection ? ' current' : ''}${section.iconOnly ? ' icon-only' : ''}`, 'aria-label': label });
+      const isFavorite = section.action === 'favorite';
+      const label = isFavorite && favorite && favorite.active ? t('detail.unfavorite') : t(section.labelKey);
+      const node = h('span', { class: `topbar-item${section.id === currentSection ? ' current' : ''}${section.iconOnly ? ' icon-only' : ''}${isFavorite && favorite && favorite.active ? ' active' : ''}`, 'aria-label': label });
       if (section.icon) node.appendChild(icon(section.icon));
       if (!section.iconOnly) node.appendChild(h('span', { text: label }));
       nodes.push(node);
@@ -157,6 +168,18 @@ export function createTopbar(ctx, handlers = {}) {
       api.render();
     },
     indexOfSection: indexOf,
+    /**
+     * Heart at the right edge of the bar: `state` = { active, onToggle }, or null to hide it. `owner` identifies the page,
+     * so a page that is being closed does not remove the heart of the page that replaced it.
+     */
+    setFavorite(state, owner = null) {
+      if (state === null && owner !== favoriteOwner) return;
+      favorite = state;
+      favoriteOwner = state ? owner : null;
+      const count = items().length;
+      if (zone.index >= count) zone.index = count - 1;
+      if (!searching) renderNav();
+    },
     isSearching: () => searching,
     getQuery: () => (input ? input.value : ''),
     /** Shows the search field. `silent` keeps the current focus (used when the results page is restored). */

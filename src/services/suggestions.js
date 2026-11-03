@@ -60,7 +60,8 @@ export function createSuggestionsService({ active, watch, tmdb, trakt = null, ge
       const current = await active.get();
       if (!current) return { entries: [], source: 'none' };
       const seeds = await watch.seeds(seedCount);
-      const exclude = new Set(seeds.map((s) => `${s.type}:t${s.tmdbId}`));
+      // Whatever has a watch record (finished, started or imported from Trakt) is not suggested.
+      const exclude = new Set([...(await watch.seenKeys()), ...seeds.map((s) => `${s.type}:t${s.tmdbId}`)]);
       if (source === 'trakt') {
         const entries = await inCatalog(current.db, rankCandidates(await trakt.recommendations().catch(() => [])), exclude, limit);
         if (entries.length || !tmdb.enabled) return { entries, source: 'trakt' };
@@ -89,7 +90,8 @@ export function createSuggestionsService({ active, watch, tmdb, trakt = null, ge
       const current = await active.get();
       if (!current) return [];
       const items = source === 'trakt' ? await trakt.related(entry.type, id).catch(() => []) : await tmdb.recommendations(entry.type, id).catch(() => []);
-      return inCatalog(current.db, items.map((item) => ({ type: entry.type, id: item.id })), new Set([`${entry.type}:t${id}`, entry.key]), limit);
+      const exclude = new Set([...(await watch.seenKeys()), `${entry.type}:t${id}`, entry.key]);
+      return inCatalog(current.db, items.map((item) => ({ type: entry.type, id: item.id })), exclude, limit);
     },
   };
 }

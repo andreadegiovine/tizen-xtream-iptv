@@ -28,7 +28,9 @@ export function createTmdbClient({ getApiKey = () => '', fetcher = fetchJson } =
     get enabled() {
       return Boolean(getApiKey());
     },
-    details: (type, id, language) => get(`/${kind(type)}/${id}`, { language, append_to_response: 'credits,videos', include_video_language: `${String(language || 'en').slice(0, 2)},en,null` }),
+    /** `full: false` is the light answer the grids need (no cast, trailers or images); the detail page asks for everything. */
+    details: (type, id, language, { full = true } = {}) =>
+      get(`/${kind(type)}/${id}`, full ? { language, append_to_response: 'credits,videos', include_video_language: `${String(language || 'en').slice(0, 2)},en,null` } : { language }),
     search: (type, query, year, language) =>
       get(`/search/${kind(type)}`, { query, language, ...(year ? { [type === 'series' ? 'first_air_date_year' : 'year']: year } : {}) }),
     recommendations: (type, id, language) => get(`/${kind(type)}/${id}/recommendations`, { language }),

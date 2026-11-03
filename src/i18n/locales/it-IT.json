@@ -195,5 +195,7 @@
   "operations.queued": "In coda",
   "meta.running": "In corso dal {time}",
   "player.recovering": "Problema di riproduzione, riprovo… ({attempt}/{attempts})",
-  "common.never": "Mai eseguito"
+  "common.never": "Mai eseguito",
+  "favorites.category": "Categoria",
+  "favorites.genre": "Genere"
 }

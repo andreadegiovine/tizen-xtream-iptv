@@ -4,6 +4,8 @@ import { t, i18n } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel, ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
+import { isFilterEntry, filterCardMeta } from '../components/typedRows.js';
+import { favoriteFilterEntries, openFilter } from '../../services/favoriteFilters.js';
 import { ensureVisible } from '../scroll.js';
 import { listCategories, pageEntries, getEntry, countEntries } from '../../services/catalogQuery.js';
 import { icon } from '../icons.js';
@@ -93,6 +95,7 @@ export function createBrowsePage(ctx, params = {}) {
   let db = null;
   let providerId = null;
   let destroyed = false;
+  const favoriteOwner = {}; // identifies this page's heart in the top bar
   let genres = [];
   let categories = []; // visible provider categories [{ id, name }]
   let expanded = false; // categories group
@@ -185,6 +188,7 @@ export function createBrowsePage(ctx, params = {}) {
     const same = keep ? items.findIndex((item) => item.kind === keep.kind && String(item.id) === String(keep.id)) : -1;
     selected = same >= 0 ? same : 0;
     renderCategories();
+    syncFavorite();
     if (focusKey !== undefined && ctx.focus.activeId === CATS_ZONE) {
       const at = items.findIndex((item) => item.kind === focusKey);
       if (at >= 0) ctx.focus.focus(CATS_ZONE, at);
@@ -194,7 +198,7 @@ export function createBrowsePage(ctx, params = {}) {
   function renderGrid() {
     while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
     cards = entries.map((entry) => {
-      const card = createCard(entry, type);
+      const card = createCard(entry, type, isFilterEntry(entry) ? filterCardMeta(entry) : undefined);
       gridEl.appendChild(card.el);
       return card;
     });
@@ -206,6 +210,33 @@ export function createBrowsePage(ctx, params = {}) {
     empty.style.display = entries.length ? 'none' : '';
   }
 
+  /** The heart in the top bar follows the open category / genre: it adds or removes it from the favourites. */
+  async function syncFavorite() {
+    if (!ctx.topbar || destroyed || !providerId) return;
+    const item = items[selected];
+    if (!item || (item.kind !== 'category' && item.kind !== 'genre')) {
+      ctx.topbar.setFavorite(null, favoriteOwner);
+      return;
+    }
+    const active = await ctx.favorites.hasFilter(providerId, item.kind, type, item.id).catch(() => false);
+    if (destroyed || items[selected] !== item) return;
+    ctx.topbar.setFavorite(
+      {
+        active,
+        onToggle: async () => {
+          await ctx.favorites.toggleFilter(providerId, { kind: item.kind, type, id: item.id, name: item.name });
+          const saved = await ctx.favorites.list(providerId);
+          counts.set('favorites:', saved.filter((f) => f.type === type).length);
+          if (!destroyed) {
+            showCounts();
+            syncFavorite();
+          }
+        },
+      },
+      favoriteOwner
+    );
+  }
+
   const byKeys = async (keys) => (await Promise.all(keys.map((key) => getEntry(db, key)))).filter(Boolean);
 
   /** Entries of the views that are not a plain catalog walk. */
@@ -215,8 +246,10 @@ export function createBrowsePage(ctx, params = {}) {
       return byKeys(recent.filter((r) => r.type === type).map((r) => r.entryKey));
     }
     if (item.kind === 'favorites') {
-      const saved = await ctx.favorites.list(providerId);
-      return byKeys(saved.filter((f) => f.type === type).map((f) => f.entryKey));
+      const saved = (await ctx.favorites.list(providerId)).filter((f) => f.type === type);
+      // Favourite categories and genres come first, as cards that open their own grid.
+      const filters = await favoriteFilterEntries(saved, () => Promise.resolve(categories));
+      return filters.concat(await byKeys(saved.filter((f) => !f.kind).map((f) => f.entryKey)));
     }
     if (item.kind === 'suggestions') {
       return suggestionEntries(true);
@@ -270,6 +303,7 @@ export function createBrowsePage(ctx, params = {}) {
       }
       selected = i;
       catNodes.forEach((node, n) => node.classList.toggle('current', n === i));
+      syncFavorite();
       loadPage(0, 0).catch((err) => log.warn('Browse load failed', err && err.message));
     },
   });
@@ -295,6 +329,10 @@ export function createBrowsePage(ctx, params = {}) {
     onBlur: (i) => cardNodes[i] && cardNodes[i].classList.remove('focused'),
     onActivate: (i) => {
       if (!entries[i]) return;
+      if (entries[i].filterKind) {
+        openFilter(ctx, entries[i], { push: true });
+        return;
+      }
       const item = items[selected];
       ctx.openEntry(entries[i], { section: params.section, live: { categoryId: item && item.kind === 'category' ? item.id : null, offset: page * pageSize + i } });
     },
@@ -323,6 +361,7 @@ export function createBrowsePage(ctx, params = {}) {
     items = sidebarItems({ type, genres, categories, expanded, genresExpanded, genresLoading, labels: labels() });
     selected = indexOfFilter(items, filter);
     renderCategories();
+    syncFavorite();
     await loadPage(0);
     if (destroyed) return;
     // Land in the grid when there is something to browse, otherwise leave the focus on the top bar.
@@ -354,6 +393,7 @@ export function createBrowsePage(ctx, params = {}) {
     },
     destroy() {
       destroyed = true;
+      if (ctx.topbar) ctx.topbar.setFavorite(null, favoriteOwner);
       ctx.focus.unregister(CATS_ZONE);
       ctx.focus.unregister(GRID_ZONE);
     },

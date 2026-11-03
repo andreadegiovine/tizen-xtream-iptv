@@ -1,5 +1,6 @@
 import { openAppDb } from '../../src/db/appDb.js';
 import { createFavoritesService } from '../../src/services/favorites.js';
+import { favoriteFilterEntries } from '../../src/services/favoriteFilters.js';
 import { youtubeId, youtubeUrl } from '../../src/services/trailer.js';
 import { groupByType } from '../../src/ui/components/typedRows.js';
 import { tagsFrom } from '../../src/ui/pages/detailPage.js';
@@ -23,6 +24,34 @@ test('favorites: toggle, list per provider (newest first), persistence', async (
   await again.removeProvider('p1');
   expect(await again.list('p1')).toEqual([]);
   expect((await again.list('p2')).length).toBe(1);
+});
+
+test('favourite categories and genres: stored apart from the titles, per provider', async () => {
+  const db = await newDb();
+  let clock = 1;
+  const svc = createFavoritesService({ db, now: () => (clock += 1) });
+  await svc.toggle('p1', 'movie:t1', 'movie');
+  expect(await svc.toggleFilter('p1', { kind: 'genre', type: 'movie', id: 'drama', name: 'Drama' })).toBe(true);
+  expect(await svc.toggleFilter('p1', { kind: 'category', type: 'live', id: '7', name: 'Sport' })).toBe(true);
+  expect(await svc.hasFilter('p1', 'genre', 'movie', 'drama')).toBe(true);
+  expect(await svc.hasFilter('p1', 'genre', 'series', 'drama')).toBe(false); // same genre, other type
+  expect((await svc.listFilters('p1')).map((f) => [f.entryKey, f.name])).toEqual([['category:live:7', 'Sport'], ['genre:movie:drama', 'Drama']]);
+  expect((await svc.listTitles('p1')).map((f) => f.entryKey)).toEqual(['movie:t1']);
+  expect(await svc.toggleFilter('p1', { kind: 'genre', type: 'movie', id: 'drama', name: 'Drama' })).toBe(false);
+  expect((await createFavoritesService({ db }).listFilters('p1')).length).toBe(1);
+});
+
+test('favourite filters become cards ahead of the titles; a category the provider dropped is skipped', async () => {
+  const saved = [
+    { kind: 'genre', type: 'movie', refId: 'drama', name: 'Drama', entryKey: 'genre:movie:drama' },
+    { kind: 'category', type: 'movie', refId: '5', name: 'Gone', entryKey: 'category:movie:5' },
+    { kind: 'category', type: 'movie', refId: '3', name: 'Action', entryKey: 'category:movie:3' },
+    { entryKey: 'movie:t1', type: 'movie' },
+  ];
+  const entries = await favoriteFilterEntries(saved, async () => [{ id: '3' }]);
+  expect(entries.map((e) => [e.filterKind, e.name, e.type])).toEqual([['genre', 'Drama', 'movie'], ['category', 'Action', 'movie']]);
+  const groups = groupByType(entries.concat([{ type: 'movie', key: 'movie:t1', name: 'Heat' }]));
+  expect(groups[0].entries.map((e) => e.name)).toEqual(['Drama', 'Action', 'Heat']);
 });
 
 test('youtube id from an id or a url', () => {

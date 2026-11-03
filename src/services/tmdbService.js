@@ -20,6 +20,24 @@ export function trailerKeyOf(videos, language = '') {
   return best ? best.key : '';
 }
 
+/**
+ * What is kept in the database for every title of the catalog: only what the grids and the genre lists need.
+ * Backdrop, plot, cast, companies and trailer are fetched when the title page opens (see `getFull`).
+ */
+export function gridMeta(meta) {
+  return {
+    tmdbId: meta.tmdbId,
+    title: meta.title,
+    poster: meta.poster,
+    rating: meta.rating,
+    genre: meta.genre,
+    genreList: meta.genreList,
+    year: meta.year,
+    seasons: meta.seasons,
+    episodes: meta.episodes,
+  };
+}
+
 /** TMDB payload → what the UI needs. */
 export function normalizeMeta(type, data, language = '') {
   const date = type === 'series' ? data.first_air_date : data.release_date;
@@ -105,6 +123,7 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
   const report = () => onActivity && onActivity(inFlight + queue.size());
   const queue = createQueue(3, report);
   const memory = new Map();
+  const fullMemory = new Map(); // detail-page metadata: kept for the session only, not in the database
 
   /** Runs a request the user is waiting for; while any is pending the background job holds back. */
   async function priority(fn) {
@@ -142,7 +161,7 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
     if (memory.has(key)) return memory.get(key);
     const record = await cached('tmdb', key, ttl, async () => {
       try {
-        return normalizeMeta(type, await client.details(type, tmdbId, language), language);
+        return gridMeta(normalizeMeta(type, await client.details(type, tmdbId, language, { full: false }), language));
       } catch (err) {
         if (err && err.details && err.details.status === 404) return null; // cached as "not found" for a week
         throw err;
@@ -150,6 +169,22 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
     });
     memory.set(key, record.value);
     return record.value;
+  }
+
+  /** Everything TMDB knows about a title (plot, cast, companies, backdrop, trailer), fetched when its page opens. */
+  async function getFull(type, tmdbId) {
+    if (!client.enabled || !tmdbId) return null;
+    const language = getLanguage();
+    const key = metaKey(type, tmdbId, language);
+    if (fullMemory.has(key)) return fullMemory.get(key);
+    try {
+      const value = normalizeMeta(type, await client.details(type, tmdbId, language), language);
+      fullMemory.set(key, value);
+      return value;
+    } catch (err) {
+      if (err && err.details && err.details.status === 404) return null;
+      return getMeta(type, tmdbId).catch(() => null); // offline: the light record of the grids is better than nothing
+    }
   }
 
   async function matchTmdbId(type, name, year) {
@@ -179,6 +214,7 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
       return client.enabled;
     },
     getMeta,
+    getFull,
     /** How many titles have their metadata downloaded (all languages). */
     async countMeta() {
       return (await dbGetAllKeys(db, 'tmdb', { range: IDBKeyRange.bound('meta:', 'meta:\uffff') })).length;
@@ -186,6 +222,7 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
     /** Forgets every cached answer (metadata, matches, genres, recommendations). */
     async clearAll() {
       memory.clear();
+      fullMemory.clear();
       await dbClear(db, 'tmdb');
       await dbClear(db, 'tmdb_match');
     },
@@ -196,7 +233,7 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
       if (!client.enabled || entry.type === 'live') return Promise.resolve(null);
       return priority(async () => {
         const id = entry.tmdbId || (await matchTmdbId(entry.type, entry.name, entry.year));
-        return id ? getMeta(entry.type, id) : null;
+        return id ? getFull(entry.type, id) : null;
       });
     },
     /** Fills visible cards with TMDB title / poster / series counts as the answers arrive. */
