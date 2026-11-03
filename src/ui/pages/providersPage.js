@@ -1,5 +1,7 @@
 import { h } from '../dom.js';
-import { t } from '../../i18n/index.js';
+import { t, i18n } from '../../i18n/index.js';
+import { icon } from '../icons.js';
+import { formatDate } from '../../core/format.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
@@ -31,6 +33,15 @@ export function buildCells(providers, activeId) {
   return cells;
 }
 
+/** "Valid until 22/10/2026" / "Expired on ..." from the expiry date saved with the provider, or null when unknown. */
+export function validity(provider, now = Date.now()) {
+  const at = provider && Number(provider.expiresAt);
+  if (!at) return null;
+  const date = formatDate(at, i18n.getLocale());
+  const expired = at < now;
+  return { expired, text: t(expired ? 'providers.expired' : 'providers.validUntil', { date }) };
+}
+
 export function createProvidersPage(ctx, params = {}) {
   const list = h('div', { class: 'provider-list' });
   let cells = [];
@@ -43,14 +54,20 @@ export function createProvidersPage(ctx, params = {}) {
       cells = buildCells(providers, activeId);
       nodes = cells.map((cell) => {
         if (cell.action === ProviderAction.ADD) {
-          return h('button', { class: 'btn primary provider-add', type: 'button', text: t('providers.add') });
+          return h('button', { class: 'btn primary provider-add icon-only', type: 'button', 'aria-label': t('providers.add') }, icon('add'));
         }
         const labelKey = cell.action === ProviderAction.USE && cell.disabled ? 'providers.active' : `providers.${cell.action}`;
-        return h('button', {
-          class: `btn provider-action${cell.disabled ? ' is-current' : ''}${cell.action === ProviderAction.REMOVE ? ' danger' : ''}`,
-          type: 'button',
-          text: t(labelKey),
-        });
+        // Use / Active keep their label; Edit and Remove are icons only.
+        const iconName = { [ProviderAction.EDIT]: 'edit', [ProviderAction.REMOVE]: 'remove' }[cell.action];
+        return h(
+          'button',
+          {
+            class: `btn provider-action${iconName ? ' icon-only' : ''}${cell.disabled ? ' is-current' : ''}${cell.action === ProviderAction.REMOVE ? ' danger' : ''}`,
+            type: 'button',
+            'aria-label': t(labelKey),
+          },
+          iconName ? icon(iconName) : t(labelKey),
+        );
       });
       while (list.firstChild) list.removeChild(list.firstChild);
       let cursor = 0;
@@ -61,7 +78,7 @@ export function createProvidersPage(ctx, params = {}) {
             'div',
             { class: `provider-row${active ? ' is-active' : ''}` },
             h('div', { class: 'provider-info' },
-              h('span', { class: 'provider-name', text: provider.name }),
+              h('span', { class: 'provider-name', text: provider.name }, validity(provider) ? h('span', { class: `provider-valid${validity(provider).expired ? ' expired' : ''}`, text: validity(provider).text }) : null),
               h('span', { class: 'provider-meta', text: `${hostOf(provider.baseUrl)} · ${provider.username}` })),
             h('div', { class: 'provider-actions' }, nodes[cursor], nodes[cursor + 1], nodes[cursor + 2]),
           ),

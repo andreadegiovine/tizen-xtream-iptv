@@ -41,6 +41,8 @@ h2 {
 
 #topbar {
   height: $topbar-height;
+  z-index: 1;
+  position: relative;
 }
 
 #content {
@@ -424,6 +426,17 @@ h2 {
     font-weight: 700;
   }
 
+  .provider-valid {
+    margin-left: 20px;
+    color: $ok;
+    font-size: 24px;
+    font-weight: 400;
+
+    &.expired {
+      color: $fail;
+    }
+  }
+
   .provider-meta {
     display: block;
     color: $text-muted;
@@ -445,6 +458,18 @@ h2 {
   width: 880px;
 }
 
+// Buttons that show only an icon.
+.btn.icon-only {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .icon {
+    width: 28px;
+    height: 28px;
+  }
+}
+
 .btn.danger.focused {
   background: $fail;
 }
@@ -455,8 +480,13 @@ h2 {
   background: #2fa84f;
 }
 
-.list .sync-button {
+.sync-button {
   width: 880px;
+  margin-top: 8px;
+}
+
+.prefs-title {
+  margin-top: 48px;
 }
 
 .page.browse {
@@ -504,11 +534,28 @@ h2 {
   &.sub {
     margin-left: 20px;
     font-size: 24px;
+
+    .browse-cat-icon {
+      display: none;
+    }
   }
 
   .browse-cat-name {
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .browse-cat-icon {
+    flex: none;
+    width: 24px;
+    margin-right: 16px;
+
+    .icon {
+      width: 24px;
+      height: 24px;
+      margin: 0;
+    }
   }
 
   .icon {
@@ -556,6 +603,10 @@ h2 {
 
 .browse-count {
   font-size: 30px;
+}
+
+.browse-grid {
+  margin-top: 28px; // room for the focused card's scale and border below the sticky head
 }
 
 .browse-grid,
@@ -893,12 +944,44 @@ h2 {
 
 // ---- detail ----
 .page.detail {
+  position: relative;
   display: flex;
   align-items: flex-start;
+
+  // Provider (or TMDB) backdrop across the whole width, darkened for reading and fading into the page colour.
+  .detail-backdrop {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 0;
+    height: 820px;
+    background-position: center top;
+    background-repeat: no-repeat;
+    background-size: cover;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s;
+
+    &.visible {
+      opacity: 1;
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      background: linear-gradient(to bottom, rgba(20, 20, 20, 0.45) 0%, rgba(20, 20, 20, 0.7) 55%, $bg 100%), linear-gradient(to right, rgba(20, 20, 20, 0.75), rgba(20, 20, 20, 0.2));
+    }
+  }
 
   .detail-poster {
     position: sticky;
     top: 0;
+    z-index: 1;
     flex: none;
     width: 360px;
     height: 540px;
@@ -915,6 +998,8 @@ h2 {
   }
 
   .detail-body {
+    position: relative;
+    z-index: 1;
     flex: 1;
     min-width: 0;
   }
@@ -1209,5 +1294,55 @@ h2 {
     content: '';
     flex: none;
     width: $gutter;
+  }
+}
+
+// ---- skeleton loading ----
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.card-poster.loading,
+.detail-poster.loading {
+  animation: skeleton-pulse 1.3s ease-in-out infinite;
+}
+
+.skeleton-card {
+  pointer-events: none;
+
+  .skeleton-line {
+    height: 22px;
+    margin-top: 10px;
+    background: $bg-raised;
+    animation: skeleton-pulse 1.3s ease-in-out infinite;
+
+    &.short {
+      width: 45%;
+      height: 16px;
+    }
+  }
+}
+
+.page.detail.loading {
+  .detail-title,
+  .detail-plot {
+    min-height: 44px;
+    background: $bg-raised;
+    animation: skeleton-pulse 1.3s ease-in-out infinite;
+  }
+
+  .detail-title {
+    width: 520px;
+  }
+
+  .detail-plot {
+    min-height: 120px;
   }
 }

@@ -159,6 +159,10 @@ export class CatalogSyncService {
 
   handle(job, message) {
     if (this.job !== job) return; // stale event from a cancelled run
+    if (message.event === 'account') {
+      if (this.state.providerId && this.providers.update) this.providers.update(this.state.providerId, { expiresAt: message.expiresAt || null }).catch(() => undefined);
+      return;
+    }
     if (message.event === 'done') {
       this.state.running = false;
       this.state.error = message.error || null;

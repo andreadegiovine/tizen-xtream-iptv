@@ -200,6 +200,7 @@ Da fare:
 13. **Ridisegno (nuovo)**: icone della topbar visibili e leggibili; Provider e Impostazioni a destra; sidebar ferma durante lo scorrimento della griglia e alta fino al bordo inferiore; card uguali per film/serie/canali; stella del voto e badge ✓/clessidra; scheda: menu Versione, categorie, menu Stagione + episodi, cast; scorrimento del carosello.
 15. **Preferiti, visto, trailer (nuovo)**: cuore e occhio nella scheda e pagina Preferiti; il trailer si apre nell'app YouTube (serve un titolo con `youtube_trailer`; se non si apre dire cosa appare nel log); il tasto visto su una serie segna tutti gli episodi.
 18. **Patch 7**: Impostazioni con tabelle Catalogo/Metadata e pulsante di aggiornamento; Provider senza tabella e con "Attivo" verde; card di ricerca con voto e visto; generi trovati dal worker in background (quanto ci mette con il provider reale? il traffico verso il provider è accettabile?); testata sticky delle griglie senza sovrapposizioni (prima riga, scorrendo su e giù); bordo del focus staccato dal contenuto.
+19. **Patch 8**: tabella Dispositivo (valori plausibili? la risoluzione è quella del pannello?), pulsanti di aggiornamento catalogo/metadata, data di scadenza nei provider, sidebar con icone e Suggerimenti, sfondo backdrop nella scheda, skeleton e lazyload su TV (fluidità, nessun salto di scorrimento), topbar delle griglie senza sovrapposizioni.
 17. **Patch 5/6 (generi)**: senza chiave TMDB la sidebar mostra i generi del provider (dopo il nuovo sync automatico); con la chiave se ne aggiungono altri col tempo; lo stesso genere compare una volta sola; clic su un genere nella scheda apre il filtro giusto.
 16. **Patch 4**: player su una riga (barra: OK poi ←/→, e trascinamento con puntatore), sidebar con generi/categorie, chip cliccabili, chiavi nelle impostazioni, pulsanti sync/rimozione, provider suggerimenti, "Potrebbe interessarti".
 14. **Player (nuovo)**: Giù porta il cursore sui pulsanti; indietro/avanti 10 s e play/pausa con OK; **formato**: i tre modi (AVPlay `setDisplayMethod`) cambiano davvero l'immagine? **sottotitoli**: l'elenco mostra le tracce del file e la scelta le attiva/disattiva (`getTotalTrackInfo`/`setSelectTrack`/`setSilentSubtitle`: da verificare se AVPlay li disegna da solo o se serve mostrare il testo dall'evento `onsubtitlechange`).
@@ -252,6 +253,13 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
   - *Card*: 6 px di margine sono diventati padding (stesso ingombro), così il bordo del focus non tocca poster e testo.
   - *Impostazioni*: in cima le tabelle Catalogo (spostata dalla pagina Provider, con il pulsante "Aggiorna il catalogo ora" come prima riga) e Metadata (TMDB, Generi, Trakt: stato, ultimo aggiornamento, elementi e durata; `syncLog` nel kv). Provider: il pulsante "Attivo" è verde, con lo stesso aspetto al focus del rosso "Rimuovi".
 
+- **2026-11-03 (patch 8)** (**non provata su TV**):
+  - *Impostazioni*: pulsante "Aggiorna il catalogo ora" sotto la tabella Catalogo; sotto Metadata "Aggiorna i metadata ora" (TMDB, generi); nuova tabella Dispositivo (risoluzione schermo/pagina, heap JS, spazio usato/quota, RAM se nota; da `performance.memory`, `navigator.storage`, `deviceMemory`, systeminfo Tizen); titolo "Preferenze" prima dei campi.
+  - *Provider*: accanto al nome "Valido fino al gg/mm/aaaa" (`expiresAt` salvato da autenticazione e sync); modifica/rimuovi/aggiungi sono icone senza etichetta.
+  - *Griglie*: margine superiore di 28 px sotto la testata sticky, così la card scalata della prima riga resta libera anche in pagina 1 e dopo il cambio pagina.
+  - *Sidebar*: icone per Mostra tutto, Continua a guardare, Preferiti, Categorie; nuova voce "Suggerimenti" sotto Preferiti (film o serie).
+  - *Scheda*: sfondo a tutta larghezza con `backdrop_path` del provider (o TMDB), velo e sfumatura in basso fino al colore di fondo.
+  - *Caricamento*: immagini in lazyload (IntersectionObserver) e skeleton pulsante su card, poster e scheda.
 ## Questioni aperte
 - Package id `XtrmIptv01` e app id `XtrmIptv01.XtreamIPTV` sono una proposta, da confermare prima di creare il profilo del certificato.
 - I privilegi in `tizen/config.xml` non sono verificati sulla TV.

@@ -52,14 +52,14 @@ describe('paged grid', () => {
 
 
 describe('sidebar', () => {
-  const labels = { all: 'Tutto', continue: 'Continua', favorites: 'Preferiti', categories: 'Categorie' };
+  const labels = { all: 'Tutto', continue: 'Continua', favorites: 'Preferiti', suggestions: 'Suggerimenti', categories: 'Categorie' };
   const cats = [{ id: '1', name: 'A' }, { id: '2', name: 'B' }];
 
   test('movies: all, continue, favorites, genres, collapsed categories toggle', () => {
     const items = sidebarItems({ type: 'movie', genres: [{ key: 'animation', name: 'Animazione' }], categories: cats, labels });
-    expect(items.map((i) => i.kind)).toEqual(['all', 'continue', 'favorites', 'genre', 'toggle']);
+    expect(items.map((i) => i.kind)).toEqual(['all', 'continue', 'favorites', 'suggestions', 'genre', 'toggle']);
     const open = sidebarItems({ type: 'movie', genres: [], categories: cats, expanded: true, labels });
-    expect(open.map((i) => i.kind)).toEqual(['all', 'continue', 'favorites', 'toggle', 'category', 'category']);
+    expect(open.map((i) => i.kind)).toEqual(['all', 'continue', 'favorites', 'suggestions', 'toggle', 'category', 'category']);
   });
 
   test('live: all plus flat categories', () => {
@@ -68,7 +68,7 @@ describe('sidebar', () => {
 
   test('filter lookup falls back to "show all"', () => {
     const items = sidebarItems({ type: 'movie', genres: [{ key: 'animation', name: 'X' }], categories: [], labels });
-    expect(indexOfFilter(items, { kind: 'genre', id: 'animation' })).toBe(3);
+    expect(indexOfFilter(items, { kind: 'genre', id: 'animation' })).toBe(4);
     expect(indexOfFilter(items, { kind: 'genre', id: 'war' })).toBe(0);
     expect(indexOfFilter(items, null)).toBe(0);
   });

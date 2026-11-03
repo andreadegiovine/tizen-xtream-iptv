@@ -47,8 +47,8 @@ export function createProviderSetupPage(ctx, params = {}) {
       const values = Object.fromEntries(rows.map((r) => [r.field.id, r.input.value.trim()]));
       if (!values.name || !values.username || !values.password) throw new AppError(ErrorCode.INVALID_INPUT);
       const baseUrl = normalizeBaseUrl(values.url);
-      await new XtreamClient({ baseUrl, username: values.username, password: values.password }).authenticate();
-      const data = { name: values.name, baseUrl, username: values.username, password: values.password };
+      const auth = await new XtreamClient({ baseUrl, username: values.username, password: values.password }).authenticate();
+      const data = { name: values.name, baseUrl, username: values.username, password: values.password, expiresAt: auth.user.expiresAt || null };
       if (editing) {
         const changed = ['baseUrl', 'username', 'password'].some((key) => editing[key] !== data[key]);
         await ctx.providers.update(editing.id, data);

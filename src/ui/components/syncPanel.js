@@ -2,6 +2,7 @@ import { h } from '../dom.js';
 import { t, i18n } from '../../i18n/index.js';
 import { MediaType } from '../../services/mediaType.js';
 import { formatNumber, formatDateTime, formatSeconds } from '../../core/format.js';
+import { collectDeviceInfo, formatBytes } from '../../services/deviceInfo.js';
 
 const TYPES = [MediaType.MOVIE, MediaType.SERIES, MediaType.LIVE];
 const LABEL_KEY = { movie: 'nav.movies', series: 'nav.series', live: 'nav.live' };
@@ -122,7 +123,8 @@ export function createMetaPanel(ctx) {
     const status = h('span', { class: 'sync-status' });
     return { ...row, status, el: h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: row.label }), status) };
   });
-  const el = h('div', { class: 'sync-panel' }, h('h2', { text: t('meta.title') }), h('div', { class: 'sync' }, rows.map((r) => r.el)));
+  const button = h('button', { class: 'btn primary sync-button', type: 'button', text: t('settings.metaUpdate') });
+  const el = h('div', { class: 'sync-panel' }, h('h2', { text: t('meta.title') }), h('div', { class: 'sync' }, rows.map((r) => r.el)), button);
 
   async function refresh() {
     const log = await ctx.syncLog.get();
@@ -133,6 +135,32 @@ export function createMetaPanel(ctx) {
       if (row.name === 'trakt' && row.ready() && !connected) text = t('settings.notConnected');
       row.status.textContent = text;
     });
+  }
+  return { el, button, refresh };
+}
+
+/** Text rows of the "Device" table from `collectDeviceInfo()`. */
+export function deviceRows(info) {
+  const unknown = t('device.unknown');
+  const of = (used, total) => t('device.of', { used: formatBytes(used), total: formatBytes(total) });
+  const size = (d) => (d ? `${d.width} × ${d.height}` : null);
+  const resolution = info.panel ? `${size(info.panel)}${info.page && size(info.page) !== size(info.panel) ? ` (${size(info.page)})` : ''}` : unknown;
+  return [
+    { label: t('device.resolution'), value: resolution },
+    { label: t('device.heap'), value: info.heap ? of(info.heap.used, info.heap.limit) : unknown },
+    { label: t('device.storage'), value: info.storage ? of(info.storage.used, info.storage.quota) : unknown },
+    { label: t('device.ram'), value: info.ram ? formatBytes(info.ram) : unknown },
+  ];
+}
+
+/** "Device" table in the same style as Catalog and Metadata. */
+export function createDevicePanel() {
+  const body = h('div', { class: 'sync' });
+  const el = h('div', { class: 'sync-panel' }, h('h2', { text: t('settings.device') }), body);
+  async function refresh() {
+    const rows = deviceRows(await collectDeviceInfo());
+    while (body.firstChild) body.removeChild(body.firstChild);
+    rows.forEach((row) => body.appendChild(h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: row.label }), h('span', { class: 'sync-status', text: row.value }))));
   }
   return { el, refresh };
 }

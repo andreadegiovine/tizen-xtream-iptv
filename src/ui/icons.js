@@ -19,6 +19,13 @@ import { faHeart } from '@fortawesome/free-solid-svg-icons/faHeart';
 import { faEye } from '@fortawesome/free-solid-svg-icons/faEye';
 import { faClapperboard } from '@fortawesome/free-solid-svg-icons/faClapperboard';
 import { faClock } from '@fortawesome/free-solid-svg-icons/faClock';
+import { faTableCells } from '@fortawesome/free-solid-svg-icons/faTableCells';
+import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons/faClockRotateLeft';
+import { faLayerGroup } from '@fortawesome/free-solid-svg-icons/faLayerGroup';
+import { faLightbulb } from '@fortawesome/free-solid-svg-icons/faLightbulb';
+import { faPen } from '@fortawesome/free-solid-svg-icons/faPen';
+import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash';
+import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
 
 // Font Awesome Free (CC BY 4.0 / SIL OFL): only the icons listed here end up in the bundle.
 // They are inlined as SVG, so there are no font files to ship or load on the TV.
@@ -44,6 +51,13 @@ const ICONS = {
   heart: faHeart,
   seen: faEye,
   trailer: faClapperboard,
+  all: faTableCells,
+  continue: faClockRotateLeft,
+  categories: faLayerGroup,
+  suggestions: faLightbulb,
+  edit: faPen,
+  remove: faTrash,
+  add: faPlus,
 };
 
 export const iconNames = Object.keys(ICONS);

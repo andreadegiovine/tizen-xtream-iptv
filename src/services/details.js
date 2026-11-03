@@ -34,10 +34,17 @@ export function parseSeriesInfo(data) {
     genre: String(info.genre || ''),
     cast: String(info.cast || ''),
     cover: String(info.cover || ''),
+    backdrop: firstBackdrop(info.backdrop_path),
     trailer: String(info.youtube_trailer || info.trailer || ''),
     seasons,
     episodeCount: seasons.reduce((n, s) => n + s.episodes.length, 0),
   };
+}
+
+/** Providers send `backdrop_path` as a list (sometimes a single string): the first usable address. */
+export function firstBackdrop(value) {
+  const list = Array.isArray(value) ? value : [value];
+  return String(list.find((item) => typeof item === 'string' && /^https?:/i.test(item)) || '');
 }
 
 export function parseVodInfo(data) {
@@ -50,6 +57,7 @@ export function parseVodInfo(data) {
     trailer: String(info.youtube_trailer || info.trailer || ''),
     duration: Number(info.duration_secs) || 0,
     cover: String(info.movie_image || info.cover_big || ''),
+    backdrop: firstBackdrop(info.backdrop_path),
     year: Number.parseInt(String(info.releasedate || info.release_date || '').slice(0, 4), 10) || null,
   };
 }

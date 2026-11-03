@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { createCard } from '../components/card.js';
+import { createCard, createSkeletonCard } from '../components/card.js';
 import { t, i18n } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel, ListModel } from '../focus/models.js';
@@ -11,7 +11,11 @@ import { formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
 
 const CATS_ZONE = 'browseCategories';
+/** Icon before the label of the fixed sidebar entries (genres and categories get an empty slot to stay aligned). */
+export const SIDEBAR_ICON = { all: 'all', continue: 'continue', favorites: 'heart', suggestions: 'suggestions', toggle: 'categories' };
 const GRID_ZONE = 'browseGrid';
+/** Views that are loaded as one in-memory list and paged locally. */
+const LIST_KINDS = ['continue', 'favorites', 'suggestions', 'genre'];
 /** Every media type uses the same 6-column grid of equally sized cards (channels included). */
 export const columnsFor = () => 6;
 
@@ -53,7 +57,7 @@ export function createPagedGridModel({ columns, getCount, hasNext, hasPrevious, 
 export function sidebarItems({ type, genres = [], categories = [], expanded = false, labels }) {
   const items = [{ kind: 'all', name: labels.all }];
   if (type === 'live') return items.concat(categories.map((c) => ({ kind: 'category', id: c.id, name: c.name })));
-  items.push({ kind: 'continue', name: labels.continue }, { kind: 'favorites', name: labels.favorites });
+  items.push({ kind: 'continue', name: labels.continue }, { kind: 'favorites', name: labels.favorites }, { kind: 'suggestions', name: labels.suggestions });
   genres.forEach((g) => items.push({ kind: 'genre', id: String(g.key), name: g.name }));
   if (categories.length) {
     items.push({ kind: 'toggle', name: labels.categories, expanded });
@@ -98,12 +102,13 @@ export function createBrowsePage(ctx, params = {}) {
   let cards = [];
   let loadToken = 0;
 
-  const labels = () => ({ all: t('browse.all'), continue: t('browse.continue'), favorites: t('browse.favorites'), categories: t('browse.categories') });
+  const labels = () => ({ all: t('browse.all'), continue: t('browse.continue'), favorites: t('browse.favorites'), suggestions: t('browse.suggestions'), categories: t('browse.categories') });
 
   function renderCategories() {
     while (catList.firstChild) catList.removeChild(catList.firstChild);
     catNodes = items.map((item, i) => {
-      const node = h('div', { class: `browse-cat${i === selected ? ' current' : ''}${item.depth ? ' sub' : ''}` }, h('span', { class: 'browse-cat-name', text: item.name }));
+      const slot = h('span', { class: 'browse-cat-icon' }, SIDEBAR_ICON[item.kind] ? icon(SIDEBAR_ICON[item.kind]) : null);
+      const node = h('div', { class: `browse-cat${i === selected ? ' current' : ''}${item.depth ? ' sub' : ''}` }, slot, h('span', { class: 'browse-cat-name', text: item.name }));
       if (item.kind === 'toggle') node.appendChild(icon('chevron', item.expanded ? 'open' : ''));
       catList.appendChild(node);
       return node;
@@ -136,7 +141,7 @@ export function createBrowsePage(ctx, params = {}) {
     titleEl.textContent = name;
     count.textContent = entries.length ? t('browse.page', { page: formatNumber(page + 1, i18n.getLocale()), pages: formatNumber(Math.max(pages, page + 1), i18n.getLocale()) }) : '';
     const kind = items[selected] && items[selected].kind;
-    empty.textContent = kind === 'continue' ? t('browse.emptyContinue') : kind === 'favorites' ? t('browse.emptyFavorites') : kind === 'genre' ? t('browse.emptyGenre') : t('browse.empty');
+    empty.textContent = kind === 'continue' ? t('browse.emptyContinue') : kind === 'favorites' ? t('browse.emptyFavorites') : kind === 'suggestions' ? t('browse.emptySuggestions') : kind === 'genre' ? t('browse.emptyGenre') : t('browse.empty');
     empty.style.display = entries.length ? 'none' : '';
   }
 
@@ -152,6 +157,10 @@ export function createBrowsePage(ctx, params = {}) {
       const saved = await ctx.favorites.list(providerId);
       return byKeys(saved.filter((f) => f.type === type).map((f) => f.entryKey));
     }
+    if (item.kind === 'suggestions') {
+      const result = await ctx.suggestions.build({ limit: 120 });
+      return result.entries.filter((entry) => entry.type === type);
+    }
     if (item.kind === 'genre') {
       return byKeys(await ctx.genres.entryKeys(type, item.id));
     }
@@ -161,9 +170,14 @@ export function createBrowsePage(ctx, params = {}) {
   async function loadPage(nextPage, focusIndex) {
     const token = (loadToken += 1);
     const item = items[selected] || items[0];
+    if (!entries.length) {
+      // Nothing on screen yet: pulsing placeholders instead of an empty page.
+      while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
+      for (let i = 0; i < Math.min(pageSize, columns * 2); i += 1) gridEl.appendChild(createSkeletonCard());
+    }
     let result;
-    if (nextPage === 0 && ['continue', 'favorites', 'genre'].includes(item.kind)) list = await loadList(item).catch(() => []);
-    else if (!['continue', 'favorites', 'genre'].includes(item.kind)) list = null;
+    if (nextPage === 0 && LIST_KINDS.includes(item.kind)) list = await loadList(item).catch(() => []);
+    else if (!LIST_KINDS.includes(item.kind)) list = null;
     if (list) result = { entries: list.slice(nextPage * pageSize, (nextPage + 1) * pageSize), hasMore: list.length > (nextPage + 1) * pageSize };
     else result = await pageEntries(db, { type, categoryId: item.kind === 'category' ? item.id : null, offset: nextPage * pageSize, limit: pageSize });
     if (destroyed || token !== loadToken) return;

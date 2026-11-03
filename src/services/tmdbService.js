@@ -16,7 +16,7 @@ export function normalizeMeta(type, data) {
     title: (type === 'series' ? data.name : data.title) || '',
     overview: data.overview || '',
     poster: posterUrl(data.poster_path),
-    backdrop: posterUrl(data.backdrop_path, 'w780'),
+    backdrop: posterUrl(data.backdrop_path, 'w1280'),
     rating: Number(data.vote_average) || null,
     genre: Array.isArray(data.genres) ? data.genres.map((g) => g.name).join(', ') : '',
     genreList: Array.isArray(data.genres) ? data.genres.map((g) => ({ id: g.id, name: g.name })) : [],

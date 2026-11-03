@@ -23,7 +23,7 @@ provider account.
   (lowest id preselected). Titles without tmdb id are never merged
 - TMDB metadata (text only, cached) and provider-supplied images
 - EPG for live channels (now playing on the card, next 24 h on the channel page)
-- Settings: buffering time, carousel size, grid size, per-type category exclusion
+- Settings: buffering time, carousel size, grid size, per-type category exclusion; device table, manual catalog/metadata refresh
 - Native Tizen player (AVPlay) and native on-screen keyboard
 - Local cache; Trakt sync planned as a second phase
 - English (`en-US`) and Italian (`it-IT`)

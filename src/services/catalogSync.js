@@ -205,12 +205,14 @@ export async function runSyncForProvider({ provider, types, excluded, force, sig
   try {
     const client = makeClient ? makeClient(provider) : new XtreamClient(provider);
     emit({ event: 'progress', mediaType: null, phase: 'auth' });
-    await client.authenticate();
+    const auth = await client.authenticate();
+    emit({ event: 'account', expiresAt: (auth && auth.user && auth.user.expiresAt) || null });
     db = await openDb(provider.id);
     results = await runSync({ db, client, types, excluded, force, signal, emit, gate });
   } catch (err) {
     const error = toAppError(err);
     failure = { code: error.code, message: error.message };
+    if (error.details && error.details.expiresAt) emit({ event: 'account', expiresAt: error.details.expiresAt }); // expired account: still show the date
     emit({ event: 'progress', mediaType: null, phase: 'error', code: error.code, message: error.message });
   } finally {
     if (db) db.close();

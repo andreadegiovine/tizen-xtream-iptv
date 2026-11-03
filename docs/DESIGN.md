@@ -46,7 +46,7 @@ Decisions agreed during the design phase. Update this file when a decision chang
   dropdown (no label) + episode carousel (series), cast carousel (TMDB credits, placeholder when no photo; not clickable yet).
   Buttons: play, trailer (only when the provider sends `youtube_trailer`), resume, watched, favourite.
 - Player: title at the top; one control row: back 30 s, play-pause, forward 30 s, draggable progress bar (OK then left/right to scrub, or pointer drag), time, aspect ratio, subtitles (drawn by the app from AVPlay events).
-- Browse sidebar (Movies/Series): Show all, Continue watching, Favorites, genres (provider + TMDB merged under one normalised, untranslated key; only those with titles), Categories (expandable). Detail chips link back to the matching filter. API keys can be typed in Settings; suggestions come from TMDB or Trakt (setting).
+- Browse sidebar (Movies/Series): Show all, Continue watching, Favorites, Suggestions, genres (provider + TMDB merged under one normalised, untranslated key; only those with titles), Categories (expandable). Detail chips link back to the matching filter. API keys can be typed in Settings; suggestions come from TMDB or Trakt (setting). Each entry has an icon.
   Down (or OK on live) puts the D-pad on the buttons, Back leaves that mode first.
 - AVPlay is the engine; all player controls are built in HTML. On-screen keyboard is the native IME.
 - Settings: grid sizes are multiples of 12 (12/24/36), carousels 10/15/20/30, buffering 2/5/10/20/30 s.
@@ -80,7 +80,7 @@ Decisions agreed during the design phase. Update this file when a decision chang
 
 ## Sfoglia il catalogo (2026-11-02)
 - Una pagina `browse` per film/serie/live: categorie a sinistra, griglia paginata a destra (21 titoli per pagina). Le pagine si leggono con cursori sugli indici `byTypeAdded` / `byCatAdded`; nessuna lista intera viene caricata in memoria.
-- Dettagli del sync e aggiornamento manuale: in cima alle Impostazioni (tabelle Catalogo e Metadata). La sezione Provider ha solo l'elenco.
+- Dettagli del sync e aggiornamento manuale: in cima alle Impostazioni (tabelle Catalogo, Metadata e Dispositivo, ciascuna con il proprio pulsante; poi il titolo Preferenze). La sezione Provider ha solo l'elenco.
 
 ## Riproduzione, stato di visione e metadati (2026-11-02, notte)
 - Un solo `playerController` (macchina a stati) sopra un motore intercambiabile: AVPlay sulla TV, `<video>` in un browser desktop. I controlli sono HTML.

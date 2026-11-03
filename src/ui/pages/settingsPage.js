@@ -5,7 +5,7 @@ import { ListModel } from '../focus/models.js';
 import { LANGUAGE_OPTIONS, GRID_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SUGGESTION_SOURCE_OPTIONS } from '../../services/settings.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
-import { createSyncPanel, createMetaPanel } from '../components/syncPanel.js';
+import { createSyncPanel, createMetaPanel, createDevicePanel } from '../components/syncPanel.js';
 import { log } from '../../core/logger.js';
 
 const ZONE_ID = 'settings';
@@ -126,6 +126,45 @@ export function createSettingsPage(ctx) {
     },
   };
 
+
+  /** Downloads again the TMDB data of what was watched and of the favourites; resolves with how many titles. */
+  async function refreshTmdb() {
+    const items = [];
+    (await ctx.watch.seeds(30)).forEach((seed) => items.push({ type: seed.type, tmdbId: seed.tmdbId }));
+    const current = await ctx.active.get();
+    if (current) {
+      for (const fav of await ctx.favorites.list(current.provider.id)) {
+        const match = /^(movie|series):t(\d+)$/.exec(fav.entryKey);
+        if (match) items.push({ type: match[1], tmdbId: Number(match[2]) });
+      }
+    }
+    return ctx.syncLog.track('tmdb', () => ctx.tmdb.refresh(items));
+  }
+
+  /** "Update metadata now": TMDB data, the genre search and the Trakt watch state, whichever is available. */
+  async function updateMetadata() {
+    if (metaBusy) return;
+    metaBusy = true;
+    metaPanel.button.classList.add('disabled');
+    toast(t('settings.working'), 15000);
+    try {
+      if (ctx.tmdb && ctx.tmdb.enabled) await refreshTmdb();
+      if (ctx.trakt.enabled && (await ctx.trakt.isConnected())) {
+        await ctx.trakt.flush();
+        await ctx.syncLog.track('trakt', () => ctx.watch.importFromTrakt());
+      }
+      await ctx.genres.backfill();
+      toast(t('settings.metaDone'));
+    } catch (err) {
+      log.warn('Metadata update failed', err && err.message);
+    } finally {
+      metaBusy = false;
+      metaPanel.button.classList.remove('disabled');
+      metaPanel.refresh().catch(() => undefined);
+      devicePanel.refresh().catch(() => undefined);
+    }
+  }
+
   const tmdbOn = ctx.tmdb && ctx.tmdb.enabled;
   const traktOn = ctx.trakt.enabled;
 
@@ -136,16 +175,7 @@ export function createSettingsPage(ctx) {
           label: t('settings.tmdbSync'),
           run: async () => {
             toast(t('settings.working'), 8000);
-            const items = [];
-            (await ctx.watch.seeds(30)).forEach((seed) => items.push({ type: seed.type, tmdbId: seed.tmdbId }));
-            const current = await ctx.active.get();
-            if (current) {
-              for (const fav of await ctx.favorites.list(current.provider.id)) {
-                const match = /^(movie|series):t(\d+)$/.exec(fav.entryKey);
-                if (match) items.push({ type: match[1], tmdbId: Number(match[2]) });
-              }
-            }
-            toast(t('settings.tmdbSyncDone', { count: await ctx.syncLog.track('tmdb', () => ctx.tmdb.refresh(items)) }));
+            toast(t('settings.tmdbSyncDone', { count: await refreshTmdb() }));
             ctx.genres.backfill().catch(() => undefined); // genres of the rest of the catalog, in background
           },
         }),
@@ -187,10 +217,15 @@ export function createSettingsPage(ctx) {
   // Catalog and metadata tables at the top; the "update the catalog" button is the first row of the list.
   const panel = createSyncPanel(ctx);
   const metaPanel = createMetaPanel(ctx);
+  const devicePanel = createDevicePanel();
+  let metaBusy = false;
   const syncRow = { el: panel.button, refresh: async () => undefined, activate: async () => panel.syncNow() };
+  const metaRow = { el: metaPanel.button, refresh: async () => undefined, activate: updateMetadata };
+  const prefsTitle = h('h2', { class: 'prefs-title', text: t('settings.preferences') });
 
   const rows = [
     syncRow,
+    metaRow,
     optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
     optionRow({ ctx, labelKey: 'settings.gridItems', key: 'gridItems', options: GRID_OPTIONS }),
     optionRow({ ctx, labelKey: 'settings.carouselItems', key: 'carouselItems', options: CAROUSEL_OPTIONS }),
@@ -223,7 +258,7 @@ export function createSettingsPage(ctx) {
   });
 
   return {
-    el: h('section', { class: 'page' }, h('h1', { text: t('settings.title') }), panel.el, metaPanel.el, h('div', { class: 'list' }, rows.map((r) => r.el))),
+    el: h('section', { class: 'page' }, h('h1', { text: t('settings.title') }), panel.el, metaPanel.el, devicePanel.el, prefsTitle, h('div', { class: 'list' }, rows.slice(2).map((r) => r.el))),
     mount() {
       panel.mount();
       ctx.providers.getActiveId().then((id) => {
@@ -232,6 +267,7 @@ export function createSettingsPage(ctx) {
         if (id) panel.setProvider(id);
       });
       metaPanel.refresh().catch(() => undefined);
+      devicePanel.refresh().catch(() => undefined);
       ctx.focus.register(zone);
       ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
       ctx.focus.link(TOPBAR_ZONE, 'down', ZONE_ID);

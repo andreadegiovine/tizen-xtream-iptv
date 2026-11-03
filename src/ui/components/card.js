@@ -1,5 +1,6 @@
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
+import { lazySrc } from '../lazyImage.js';
 
 /** "2019 · S7 · E87": year, then seasons/episodes for series, then an optional tag. A `subtitle` (e.g. the program on air) replaces all. */
 export function cardMeta({ year, seasons, episodes, tag, subtitle } = {}) {
@@ -10,6 +11,11 @@ export function cardMeta({ year, seasons, episodes, tag, subtitle } = {}) {
   if (episodes) parts.push(`E${episodes}`);
   if (tag) parts.push(tag);
   return parts.join(' · ');
+}
+
+/** Empty card with the same footprint, pulsing while the real ones are loaded. */
+export function createSkeletonCard() {
+  return h('div', { class: 'card skeleton-card' }, h('div', { class: 'card-poster loading' }), h('div', { class: 'card-title skeleton-line' }), h('div', { class: 'card-meta skeleton-line short' }));
 }
 
 export const formatRating = (rating) => (Number(rating) > 0 ? Number(rating).toFixed(1) : '');
@@ -37,13 +43,19 @@ export function createCard(entry, type, meta = {}) {
     if (!url) return;
     if (!img) {
       img = h('img', { alt: '', referrerpolicy: 'no-referrer' });
+      const done = () => poster.classList.remove('loading');
+      img.addEventListener('load', done);
       img.addEventListener('error', () => {
         img.remove();
         img = null;
+        done();
       });
       poster.insertBefore(img, ratingBadge);
     }
-    if (img.getAttribute('src') !== url) img.setAttribute('src', url);
+    if (img.dataset.src !== url) {
+      poster.classList.add('loading'); // skeleton until the picture is there
+      lazySrc(img, url);
+    }
   }
 
   function setRating(rating) {

@@ -181,5 +181,19 @@
   "meta.genres": "Genres",
   "meta.never": "never run",
   "meta.ran": "{count} items · updated {time} · {seconds}",
-  "meta.failed": "failed · tried {time} · {seconds}"
+  "meta.failed": "failed · tried {time} · {seconds}",
+  "browse.suggestions": "Suggestions",
+  "browse.emptySuggestions": "No suggestions: a TMDB or Trakt key and something watched are needed.",
+  "providers.validUntil": "Valid until {date}",
+  "providers.expired": "Expired on {date}",
+  "settings.device": "Device",
+  "settings.preferences": "Preferences",
+  "settings.metaUpdate": "Update metadata now",
+  "settings.metaDone": "Metadata updated",
+  "device.resolution": "Resolution",
+  "device.heap": "App memory",
+  "device.storage": "Storage",
+  "device.ram": "Device RAM",
+  "device.unknown": "not available",
+  "device.of": "{used} of {total}"
 }

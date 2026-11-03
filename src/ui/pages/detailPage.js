@@ -108,7 +108,9 @@ export function createDetailPage(ctx, params) {
   let destroyed = false;
   let focusedOnce = false;
 
-  const poster = h('div', { class: 'detail-poster' });
+  let backdropUrl = '';
+  const poster = h('div', { class: 'detail-poster loading' });
+  const backdropEl = h('div', { class: 'detail-backdrop' });
   const titleEl = h('h1', { class: 'detail-title' });
   const metaEl = h('p', { class: 'detail-meta' });
   const versionEl = h('div', { class: 'detail-version' });
@@ -122,7 +124,8 @@ export function createDetailPage(ctx, params) {
   const epgEl = h('div', { class: 'detail-epg' });
   const el = h(
     'section',
-    { class: 'page detail' },
+    { class: 'page detail loading' },
+    backdropEl,
     poster,
     h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, categoriesEl, tagsEl, epgEl, episodesEl, castEl, relatedEl),
   );
@@ -435,9 +438,27 @@ export function createDetailPage(ctx, params) {
     const img = (meta && meta.poster) || (info && info.cover) || (entry && entry.icon);
     if (img && !poster.firstChild) {
       const node = h('img', { src: img, alt: '', referrerpolicy: 'no-referrer' });
-      node.addEventListener('error', () => node.remove());
+      node.addEventListener('load', () => poster.classList.remove('loading'));
+      node.addEventListener('error', () => {
+        node.remove();
+        poster.classList.remove('loading');
+      });
       poster.appendChild(node);
     }
+    showBackdrop((info && info.backdrop) || (meta && meta.backdrop));
+  }
+
+  /** Full-width picture behind the page (provider's own, otherwise TMDB's), faded in once it has loaded. */
+  function showBackdrop(url) {
+    if (!url || backdropUrl === url) return;
+    backdropUrl = url;
+    const probe = new Image();
+    probe.onload = () => {
+      if (destroyed || backdropUrl !== url) return;
+      backdropEl.style.backgroundImage = `url("${url}")`;
+      backdropEl.classList.add('visible');
+    };
+    probe.src = url;
   }
 
   async function load() {
@@ -469,6 +490,7 @@ export function createDetailPage(ctx, params) {
       info = info || {};
     }
     if (destroyed) return;
+    el.classList.remove('loading');
     if (entry.type === 'series' && info.seasons && info.seasons.length && !seasonChosen) {
       seasonIndex = seasonIndexOf(info.seasons, pickNextEpisode(flattenEpisodes(info.seasons), records).episode);
     }
