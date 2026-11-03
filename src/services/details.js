@@ -34,6 +34,7 @@ export function parseSeriesInfo(data) {
     genre: String(info.genre || ''),
     cast: String(info.cast || ''),
     cover: String(info.cover || ''),
+    trailer: String(info.youtube_trailer || info.trailer || ''),
     seasons,
     episodeCount: seasons.reduce((n, s) => n + s.episodes.length, 0),
   };
@@ -46,6 +47,7 @@ export function parseVodInfo(data) {
     genre: String(info.genre || ''),
     cast: String(info.cast || info.actors || ''),
     director: String(info.director || ''),
+    trailer: String(info.youtube_trailer || info.trailer || ''),
     duration: Number(info.duration_secs) || 0,
     cover: String(info.movie_image || info.cover_big || ''),
     year: Number.parseInt(String(info.releasedate || info.release_date || '').slice(0, 4), 10) || null,

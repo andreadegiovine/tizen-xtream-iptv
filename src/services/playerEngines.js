@@ -42,6 +42,8 @@ export function createAvPlayEngine() {
         onbufferingcomplete: () => handlers.onBufferingDone(),
         onstreamcompleted: () => handlers.onEnded(),
         onerror: (error) => handlers.onError(error),
+        // Embedded subtitles arrive as events; the page draws them (see setSubtitleTrack).
+        onsubtitlechange: (duration, text) => handlers.onSubtitle && handlers.onSubtitle(String(text || ''), Number(duration) || 0),
       });
       try {
         api.setBufferingParam('PLAYER_BUFFER_FOR_PLAY', 'PLAYER_BUFFER_SIZE_IN_SECOND', bufferSeconds);
@@ -65,19 +67,18 @@ export function createAvPlayEngine() {
     },
     getSubtitleTracks() {
       try {
-        return parseAvPlayTracks(av().getTotalTrackInfo());
+        const all = av().getTotalTrackInfo();
+        log.info('AVPlay tracks', JSON.stringify(all)); // helps to see why a file has no subtitles
+        return parseAvPlayTracks(all);
       } catch {
         return [];
       }
     },
-    /** index = track to show, null = subtitles off. */
+    /** index = track to show, null = subtitles off. The text is drawn by the app, never by the player. */
     setSubtitleTrack(index) {
       try {
-        if (index === null) av().setSilentSubtitle(true);
-        else {
-          av().setSelectTrack('TEXT', index);
-          av().setSilentSubtitle(false);
-        }
+        av().setSilentSubtitle(true);
+        if (index !== null) av().setSelectTrack('TEXT', index);
       } catch (err) {
         log.warn('avplay subtitle selection failed', err && err.message);
       }

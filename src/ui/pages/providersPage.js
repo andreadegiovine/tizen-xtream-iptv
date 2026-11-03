@@ -106,6 +106,7 @@ export function createProvidersPage(ctx, params = {}) {
         const wasActive = (await ctx.providers.getActiveId()) === provider.id;
         ctx.active.release(); // an open connection would block deleting the provider's database
         await ctx.providers.remove(provider.id);
+        if (ctx.favorites) await ctx.favorites.removeProvider(provider.id);
         if (wasActive) {
           const next = await ctx.providers.getActive();
           if (next) ctx.catalog.start();

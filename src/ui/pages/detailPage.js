@@ -11,6 +11,7 @@ import { getEntry, listCategories } from '../../services/catalogQuery.js';
 import { watchKey, shouldResume, isWatched } from '../../services/watchStore.js';
 import { formatClock } from '../../services/playerController.js';
 import { formatRating } from '../components/card.js';
+import { openTrailer, youtubeId } from '../../services/trailer.js';
 import { log } from '../../core/logger.js';
 
 /** Label of one stream choice: "#123 · mkv". */
@@ -74,6 +75,12 @@ export function castFrom(meta, info) {
   return names.slice(0, 20).map((name) => ({ name, character: '', photo: '' }));
 }
 
+/** Genres as separate tags: "Action, Drama / Thriller" → ['Action', 'Drama', 'Thriller']. */
+export function tagsFrom(meta, info) {
+  const raw = (meta && meta.genre) || (info && info.genre) || '';
+  return Array.from(new Set(String(raw).split(/[,/|]/).map((tag) => tag.trim()).filter(Boolean))).slice(0, 8);
+}
+
 /** "Stagione 1 (10 episodi)" */
 export const seasonOptionLabel = (season) => t('detail.seasonOption', { season: season.season, count: episodesLabel(season.episodes.length) });
 
@@ -90,6 +97,7 @@ export function createDetailPage(ctx, params) {
   let info = null; // provider details (plot, cast, seasons...)
   let meta = null; // TMDB (localized text, rating, credits)
   let categoryNames = [];
+  let favorite = false;
   let selectedMember = null;
   let seasonIndex = 0;
   let seasonChosen = false;
@@ -105,6 +113,7 @@ export function createDetailPage(ctx, params) {
   const plotEl = h('p', { class: 'detail-plot' });
   const actionsEl = h('div', { class: 'detail-actions' });
   const categoriesEl = h('div', { class: 'detail-categories' });
+  const tagsEl = h('div', { class: 'detail-categories' });
   const episodesEl = h('div', { class: 'detail-section' });
   const castEl = h('div', { class: 'detail-section' });
   const epgEl = h('div', { class: 'detail-epg' });
@@ -112,7 +121,7 @@ export function createDetailPage(ctx, params) {
     'section',
     { class: 'page detail' },
     poster,
-    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, categoriesEl, epgEl, episodesEl, castEl),
+    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, categoriesEl, tagsEl, epgEl, episodesEl, castEl),
   );
 
   const data = () => ({
@@ -165,7 +174,7 @@ export function createDetailPage(ctx, params) {
 
   /** Icon-only button row (play / resume) with its own horizontal zone. */
   function createActions(buttons, initial) {
-    const nodes = buttons.map((b) => h('button', { class: `icon-btn${b.primary ? ' primary' : ''}`, type: 'button', 'aria-label': b.label }, icon(b.icon)));
+    const nodes = buttons.map((b) => h('button', { class: `icon-btn${b.active ? ' active' : ''}`, type: 'button', 'aria-label': b.label }, icon(b.icon)));
     while (actionsEl.firstChild) actionsEl.removeChild(actionsEl.firstChild);
     nodes.forEach((n) => actionsEl.appendChild(n));
     if (buttons.note) actionsEl.appendChild(h('span', { class: 'detail-note', text: buttons.note }));
@@ -187,6 +196,15 @@ export function createDetailPage(ctx, params) {
     const keep = ctx.focus.activeId && rows.some((r) => r.id === ctx.focus.activeId) ? { id: ctx.focus.activeId, index: ctx.focus.active.index } : null;
     rows.forEach((r) => ctx.focus.unregister(r.id));
     rows = next;
+    if (rows.length) {
+      // Reaching the first row scrolls the whole page back up (title and subtitle included).
+      const first = rows[0].zone;
+      const original = first.onFocus;
+      first.onFocus = (i) => {
+        original(i);
+        el.scrollTop = 0;
+      };
+    }
     rows.forEach((r, i) => {
       ctx.focus.register(r.zone);
       ctx.focus.link(r.id, 'up', i === 0 ? TOPBAR_ZONE : rows[i - 1].id);
@@ -209,6 +227,8 @@ export function createDetailPage(ctx, params) {
   function renderCategories() {
     clear(categoriesEl);
     categoryNames.forEach((name) => categoriesEl.appendChild(h('span', { class: 'chip', text: name })));
+    clear(tagsEl);
+    tagsFrom(meta, info).forEach((tag) => tagsEl.appendChild(h('span', { class: 'chip', text: tag })));
   }
 
   function renderCast(next) {
@@ -234,7 +254,7 @@ export function createDetailPage(ctx, params) {
       return;
     }
     const season = info.seasons[seasonIndex];
-    const select = createSelectField({ id: 'detailSeason', label: t('detail.season'), text: seasonOptionLabel(season), onOpen: chooseSeason });
+    const select = createSelectField({ id: 'detailSeason', label: '', text: seasonOptionLabel(season), onOpen: chooseSeason });
     episodesEl.appendChild(select.el);
     next.push({ id: 'detailSeason', zone: select.zone });
     const carousel = createCarousel({
@@ -260,6 +280,48 @@ export function createDetailPage(ctx, params) {
     next.push({ id: 'detailEpisodes', zone: carousel.zone });
   }
 
+  function isEntryWatched(episodes) {
+    if (entry.type === 'series') {
+      return episodes.length > 0 && episodes.every((ep) => records.some((r) => r.episodeKey === `s${ep.season}e${ep.number}` && r.watched));
+    }
+    return Boolean(records[0] && records[0].watched);
+  }
+
+  async function reloadRecords() {
+    if (entry.type === 'series') records = (await ctx.watch.recentForEntry(entry.key)) || [];
+    else {
+      const rec = await ctx.watch.get(watchKey(providerId, entry.key));
+      records = rec ? [rec] : [];
+    }
+  }
+
+  /** "Seen" button: marks the movie (or every episode) as watched, or forgets its history again. */
+  async function toggleWatched(episodes, watched) {
+    try {
+      if (watched) await ctx.watch.clearEntry(providerId, entry.key);
+      else {
+        const base = { providerId, entryKey: entry.key, type: entry.type, title: data().title, icon: entry.icon || '' };
+        const list = entry.type === 'series'
+          ? episodes.map((ep) => ({ ...base, key: watchKey(providerId, entry.key, `s${ep.season}e${ep.number}`), episodeKey: `s${ep.season}e${ep.number}`, episodeTitle: ep.title }))
+          : [{ ...base, key: watchKey(providerId, entry.key) }];
+        await ctx.watch.markWatched(list);
+      }
+      await reloadRecords();
+      if (!destroyed) build();
+    } catch (err) {
+      log.warn('Mark watched failed', err && err.message);
+    }
+  }
+
+  async function toggleFavorite() {
+    try {
+      favorite = await ctx.favorites.toggle(providerId, entry.key, entry.type);
+      if (!destroyed) build();
+    } catch (err) {
+      log.warn('Favorite failed', err && err.message);
+    }
+  }
+
   function build() {
     if (!entry) return;
     const next = [];
@@ -273,30 +335,41 @@ export function createDetailPage(ctx, params) {
       next.push({ id: 'detailVersion', zone: select.zone });
     }
 
-    // Play / resume (icons only).
-    let buttons = [];
+    // Icon-only buttons: play, trailer, resume, watched, favourite.
+    const buttons = [];
     let note = '';
-    let record = null;
+    let canResume = false;
+    let startIndex = 0;
     if (entry.type === 'series') {
       if (episodes.length) {
         const pick = pickNextEpisode(episodes, records);
-        record = pick.record;
-        const index = episodes.indexOf(pick.episode);
-        const canResume = record && shouldResume(record.position, record.duration);
-        buttons = [{ icon: 'play', label: t('detail.play'), primary: true, run: () => play({ list: episodes, startIndex: index, restart: true }) }];
-        if (canResume) buttons.push({ icon: 'resume', label: t('detail.resume'), run: () => play({ list: episodes, startIndex: index }) });
-        note = `S${pick.episode.season}E${pick.episode.number}${canResume ? ` · ${formatClock(record.position)}` : ''}`;
+        startIndex = episodes.indexOf(pick.episode);
+        canResume = Boolean(pick.record && shouldResume(pick.record.position, pick.record.duration));
+        note = `S${pick.episode.season}E${pick.episode.number}${canResume ? ` · ${formatClock(pick.record.position)}` : ''}`;
+        buttons.push({ id: 'play', icon: 'play', label: t('detail.play'), run: () => play({ list: episodes, startIndex, restart: true }) });
       }
     } else {
-      record = records[0];
-      const canResume = record && shouldResume(record.position, record.duration);
-      buttons = [{ icon: 'play', label: t('detail.play'), primary: true, run: () => play({ restart: true }) }];
-      if (canResume) buttons.push({ icon: 'resume', label: t('detail.resume'), run: () => play({}) });
+      const record = records[0];
+      canResume = Boolean(record && shouldResume(record.position, record.duration));
       if (canResume) note = formatClock(record.position);
+      buttons.push({ id: 'play', icon: 'play', label: t('detail.play'), run: () => play({ restart: true }) });
+    }
+    if (buttons.length && info && youtubeId(info.trailer)) {
+      buttons.push({ id: 'trailer', icon: 'trailer', label: t('detail.trailer'), run: () => openTrailer(info.trailer) });
+    }
+    if (canResume) {
+      buttons.push({ id: 'resume', icon: 'resume', label: t('detail.resume'), run: () => (entry.type === 'series' ? play({ list: episodes, startIndex }) : play({})) });
+    }
+    const watched = isEntryWatched(episodes);
+    if (buttons.length && entry.type !== 'live') {
+      buttons.push({ id: 'watched', icon: 'seen', active: watched, label: watched ? t('detail.unwatched') : t('detail.watched'), run: () => toggleWatched(episodes, watched) });
+    }
+    if (buttons.length) {
+      buttons.push({ id: 'favorite', icon: 'heart', active: favorite, label: favorite ? t('detail.unfavorite') : t('detail.favorite'), run: toggleFavorite });
     }
     buttons.note = note;
-    const initial = buttons.length > 1 ? 1 : 0; // resume is the natural default when it exists
-    if (buttons.length) next.push({ id: 'detailActions', zone: createActions(buttons, initial) });
+    const resumeAt = buttons.findIndex((b) => b.id === 'resume'); // resume is the natural default when it exists
+    if (buttons.length) next.push({ id: 'detailActions', zone: createActions(buttons, Math.max(0, resumeAt)) });
     else clear(actionsEl);
 
     renderCategories();
@@ -338,12 +411,8 @@ export function createDetailPage(ctx, params) {
       log.warn('Categories failed', err && err.message);
     }
     fillText();
-    if (entry.type === 'series') {
-      records = (await ctx.watch.recentForEntry(entry.key)) || [];
-    } else {
-      const rec = await ctx.watch.get(watchKey(providerId, entry.key));
-      records = rec ? [rec] : [];
-    }
+    favorite = await ctx.favorites.has(providerId, entry.key);
+    await reloadRecords();
     build();
 
     // Slow parts arrive later and refresh the page in place.

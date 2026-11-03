@@ -28,20 +28,24 @@ Decisions agreed during the design phase. Update this file when a decision chang
 - Matching without tmdb id is conservative: prefer no metadata over wrong metadata.
 
 ## UI
-- Netflix-like top bar: Home (icon), Movies, TV Series, Live TV, Search (icon), then Provider and Settings (icons)
-  pushed to the right edge. Search opens a full-width field in the bar (close icon on the right): from 2 characters
+- Netflix-like top bar: Home (icon), Search (icon), Movies, TV Series, Live TV, Favorites, Suggestions, then Provider
+  and Settings (icons) pushed to the right edge. Search opens a full-width field in the bar (close icon on the right): from 2 characters
   the results page is shown without pressing Enter; Enter/Down moves to the results, Back closes the search.
 - One spacing unit (`$gutter`, 48 px) for the screen sides, bar → content and sidebar → content. Pages are full width.
 - Icons: Font Awesome Free solid, imported one by one and inlined as SVG (`src/ui/icons.js`); css-loader runs with
   `url:false`, so web-font files would not be shipped.
 - Cards are the same size for every type (224 px wide, 2:3 poster): rating badge top-right, watched / partial badge
-  top-left, one line of title, one smaller line `year · S7 · E87`. The suggestions page is no longer in the bar.
+  top-left, one line of title, one smaller line `year · S7 · E87`.
+- Favorites, Suggestions and search results are one carousel per type (movies / series / channels), not one grid.
+  Favorites live in the app DB (`kv`, key `favorites`), per provider; the heart on the detail page toggles them.
+- There is a single card component for every content type (titles, episodes, cast, channels): square corners, same size.
 - Model-based focus (data indices, not geometry); `.focused` class; transform/opacity animations only.
 - Category side panel with an "All" entry as default; paginated grids with a page bar and CH+/CH-.
 - Posters 2:3 for every card (channel logos are contained inside the same box). Custom dropdowns (`selectField`) with label.
-- Detail page: icon-only play / resume buttons, version dropdown under the subtitle, plot, category chips, season
-  dropdown + episode carousel (series), cast carousel (TMDB credits, placeholder when no photo; not clickable yet).
-- Player: title at the top; back / play-pause / forward in the middle; aspect ratio and subtitles on the right.
+- Detail page: icon-only play / resume buttons, version dropdown under the subtitle, plot, category chips, genre tags, season
+  dropdown (no label) + episode carousel (series), cast carousel (TMDB credits, placeholder when no photo; not clickable yet).
+  Buttons: play, trailer (only when the provider sends `youtube_trailer`), resume, watched, favourite.
+- Player: title at the top; back 30 s / play-pause / forward 30 s in the middle (subtitles are drawn by the app from AVPlay events); aspect ratio and subtitles on the right.
   Down (or OK on live) puts the D-pad on the buttons, Back leaves that mode first.
 - AVPlay is the engine; all player controls are built in HTML. On-screen keyboard is the native IME.
 - Settings: grid sizes are multiples of 12 (12/24/36), carousels 10/15/20/30, buffering 2/5/10/20/30 s.

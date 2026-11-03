@@ -116,6 +116,11 @@ export function createWatchState({ store, trakt }) {
     recentForEntry: (entryKey) => store.recentForEntry(entryKey),
     seeds: (limit) => store.seeds(limit),
     all: () => store.all(),
+    clearEntry: (providerId, entryKey) => store.clearEntry(providerId, entryKey),
+    /** "Mark as watched" by hand: stored locally, not reported to Trakt one by one. */
+    async markWatched(records, now) {
+      for (const record of records) await store.save({ ...record, position: 1, duration: 1 }, now);
+    },
     async save(record, now) {
       const before = await store.get(record.key);
       const saved = await store.save(record, now);

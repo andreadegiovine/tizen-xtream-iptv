@@ -41,6 +41,8 @@ export function createPlayerPage(ctx, params) {
   let focusMode = false; // the D-pad moves over the control buttons instead of seeking
   let focusIndex = 0;
   let flashTimer = null;
+  let lastStatus = '';
+  let subtitleTimer = null;
 
   const titleEl = h('div', { class: 'player-title' });
   const statusEl = h('div', { class: 'player-status' });
@@ -50,12 +52,13 @@ export function createPlayerPage(ctx, params) {
   const bar = h('div', { class: 'player-bar' }, fill);
   const nextEl = h('div', { class: 'player-next' });
   const flashEl = h('div', { class: 'player-flash' });
+  const subtitleEl = h('div', { class: 'player-subtitle' });
 
   // Control buttons: transport in the middle (not for live), aspect ratio + subtitles on the right.
   const buttonDefs = [
-    { id: 'back', icon: 'backward', label: () => t('player.back'), vodOnly: true, group: 'center', run: () => controller.seekBy(-SEEK_SHORT) },
+    { id: 'back', icon: 'backward', label: () => t('player.back'), vodOnly: true, group: 'center', run: () => controller.seekBy(-SEEK_LONG) },
     { id: 'toggle', icon: 'pause', label: () => t('player.pause'), vodOnly: true, group: 'center', run: () => controller.togglePause() },
-    { id: 'forward', icon: 'forward', label: () => t('player.forward'), vodOnly: true, group: 'center', run: () => controller.seekBy(SEEK_SHORT) },
+    { id: 'forward', icon: 'forward', label: () => t('player.forward'), vodOnly: true, group: 'center', run: () => controller.seekBy(SEEK_LONG) },
     { id: 'aspect', icon: 'aspect', label: () => t('player.aspect'), group: 'end', run: () => cycleAspect() },
     { id: 'subtitles', icon: 'subtitles', label: () => t('player.subtitles'), group: 'end', run: () => openSubtitles() },
   ].filter((def) => !(isLive && def.vodOnly));
@@ -66,7 +69,7 @@ export function createPlayerPage(ctx, params) {
   const buttonsRow = h('div', { class: 'player-buttons' }, h('div', { class: 'player-group side' }), h('div', { class: 'player-group' }, groupOf('center')), h('div', { class: 'player-group side end' }, groupOf('end')));
   const top = h('div', { class: 'player-top' }, titleEl, nowEl);
   const controls = h('div', { class: 'player-controls' }, h('div', { class: 'player-progress' }, timeEl, bar), buttonsRow);
-  const el = h('section', { class: 'player' }, top, controls, statusEl, nextEl, flashEl);
+  const el = h('section', { class: 'player' }, top, controls, statusEl, nextEl, flashEl, subtitleEl);
 
   const current = () => playlist[index];
   const episodeKey = () => (params.type === 'series' && current().season !== undefined ? `s${current().season}e${current().number}` : null);
@@ -75,9 +78,10 @@ export function createPlayerPage(ctx, params) {
     controls.classList.add('visible');
     top.classList.add('visible');
     clearTimeout(hideTimer);
-    // While the user is on the buttons the bar stays up.
-    if (focusMode) return;
+    // Without a key press for a few seconds everything fades out, the button focus included.
     hideTimer = setTimeout(() => {
+      focusMode = false;
+      paintFocus();
       controls.classList.remove('visible');
       top.classList.remove('visible');
     }, CONTROLS_MS);
@@ -108,6 +112,14 @@ export function createPlayerPage(ctx, params) {
     showControls();
   }
 
+  /** Subtitle text delivered by the engine: shown by the app for the time the engine gives. */
+  function showSubtitle(text, durationMs) {
+    clearTimeout(subtitleTimer);
+    subtitleEl.textContent = text || '';
+    subtitleEl.classList.toggle('visible', Boolean(text));
+    if (text && durationMs > 0) subtitleTimer = setTimeout(() => subtitleEl.classList.remove('visible'), durationMs);
+  }
+
   function cycleAspect() {
     aspect = nextAspect(ASPECT_MODES, aspect);
     if (engine.setAspect) engine.setAspect(aspect);
@@ -127,6 +139,7 @@ export function createPlayerPage(ctx, params) {
     const value = await ctx.dialogs.choose({ title: t('player.subtitles'), options, selected: subtitle });
     if (value === null || destroyed) return;
     subtitle = value;
+    showSubtitle('');
     if (engine.setSubtitleTrack) engine.setSubtitleTrack(value < 0 ? null : value);
     showControls();
   }
@@ -157,7 +170,8 @@ export function createPlayerPage(ctx, params) {
       appliedFor = loadToken;
       if (engine.setAspect && aspect !== 'fit') engine.setAspect(aspect);
     }
-    if (state.status === 'paused' || state.status === 'error') showControls();
+    if ((state.status === 'paused' || state.status === 'error') && state.status !== lastStatus) showControls();
+    lastStatus = state.status;
     if (state.status === 'ended') onEnded();
   }
 
@@ -188,6 +202,7 @@ export function createPlayerPage(ctx, params) {
     const token = (loadToken += 1);
     cancelCountdown();
     subtitle = -1;
+    showSubtitle('');
     titleEl.textContent = [title, current().title].filter(Boolean).join(' · ');
     nowEl.textContent = '';
     showControls();
@@ -201,7 +216,7 @@ export function createPlayerPage(ctx, params) {
       }
       if (destroyed || token !== loadToken) return;
       const { bufferSeconds } = await ctx.settings.get();
-      controller.load(client.streamUrl(params.type, current().id, current().ext), { startAt, bufferSeconds });
+      controller.load(client.streamUrl(params.type, current().id, current().ext), { startAt, bufferSeconds, onSubtitle: showSubtitle });
       if (isLive && ctx.epg) ctx.epg.nowNext(params.epgChannelId).then((n) => { if (!destroyed && n && n.now) nowEl.textContent = n.now.title; }).catch(() => {});
     } catch (err) {
       log.warn('Player start failed', err && err.message);
@@ -319,6 +334,7 @@ export function createPlayerPage(ctx, params) {
       destroyed = true;
       clearTimeout(hideTimer);
       clearTimeout(flashTimer);
+      clearTimeout(subtitleTimer);
       clearInterval(saveTimer);
       cancelCountdown();
       saveProgress(true);

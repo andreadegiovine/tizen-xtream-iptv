@@ -11,7 +11,7 @@ import { ensureVisible } from '../scroll.js';
 export function createSelectField({ id, label, text, onOpen }) {
   const value = h('span', { class: 'select-value', text });
   const box = h('div', { class: 'select-box' }, value, icon('chevron'));
-  const el = h('div', { class: 'select-field' }, h('span', { class: 'field-label', text: label }), box);
+  const el = h('div', { class: 'select-field' }, label ? h('span', { class: 'field-label', text: label }) : null, box);
   const zone = new FocusZone({
     id,
     model: new ListModel({ orientation: 'vertical', getCount: () => 1 }),

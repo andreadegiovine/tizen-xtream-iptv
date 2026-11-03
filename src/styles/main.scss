@@ -13,7 +13,7 @@ body {
   background: $bg;
   color: $text;
   font-family: $font;
-  font-size: 24px;
+  font-size: 26px;
   line-height: 1.35;
 }
 
@@ -26,13 +26,13 @@ body.video-active #topbar {
 
 h1 {
   margin: 0 0 32px;
-  font-size: 48px;
+  font-size: 53px;
   font-weight: 700;
 }
 
 h2 {
   margin: 32px 0 12px;
-  font-size: 28px;
+  font-size: 31px;
 }
 
 .muted {
@@ -173,7 +173,7 @@ h2 {
   .field-label {
     display: block;
     color: $text-muted;
-    font-size: 20px;
+    font-size: 22px;
   }
 
   input {
@@ -258,7 +258,7 @@ h2 {
   border-left: 6px solid $text-muted;
   background: $bg-raised;
   margin-bottom: 4px;
-  font-size: 20px;
+  font-size: 22px;
 
   .diag-id {
     width: 160px;
@@ -285,7 +285,7 @@ h2 {
   border: 2px solid transparent;
   border-radius: 6px;
   color: $text-muted;
-  font-size: 16px;
+  font-size: 18px;
   white-space: pre-wrap;
   word-break: break-all;
 
@@ -372,7 +372,7 @@ h2 {
 
 .sync-info {
   min-height: 32px;
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .btn.disabled {
@@ -403,14 +403,14 @@ h2 {
 
   .provider-name {
     display: block;
-    font-size: 32px;
+    font-size: 35px;
     font-weight: 700;
   }
 
   .provider-meta {
     display: block;
     color: $text-muted;
-    font-size: 22px;
+    font-size: 24px;
   }
 
   .provider-actions {
@@ -462,7 +462,7 @@ h2 {
   padding: 10px 16px;
   border-left: 5px solid transparent;
   border-radius: 4px;
-  font-size: 24px;
+  font-size: 26px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -485,7 +485,7 @@ h2 {
 .browse-count {
   min-height: 30px;
   margin: 0 0 8px;
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .browse-grid,
@@ -500,17 +500,17 @@ h2 {
   position: relative;
   width: $card-w;
   margin: 0 $card-gap 18px 0;
-  border: 2px solid transparent;
-  border-radius: 8px;
+  border: 3px solid transparent;
+  border-radius: 0;
   background: transparent;
-  transition: transform 0.12s ease-out;
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
 
   .card-poster {
     position: relative;
     height: 0;
     padding-bottom: 150%; // 2:3 poster (aspect-ratio is not available on the TV browser)
     overflow: hidden;
-    border-radius: 6px;
+    border-radius: 0;
     background: $bg-focus;
 
     img {
@@ -535,9 +535,9 @@ h2 {
     display: none;
     align-items: center;
     padding: 4px 10px;
-    border-radius: 6px;
+    border-radius: 0;
     background: rgba(0, 0, 0, 0.72);
-    font-size: 18px;
+    font-size: 22px;
     font-weight: 700;
 
     &.visible {
@@ -545,8 +545,8 @@ h2 {
     }
 
     .icon {
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
     }
   }
 
@@ -574,31 +574,33 @@ h2 {
     margin-top: 8px;
     padding: 0 2px;
     overflow: hidden;
-    font-size: 22px;
-    line-height: 28px;
+    font-size: 24px;
+    line-height: 30px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .card-meta {
-    min-height: 22px;
+    min-height: 26px;
     padding: 0 2px;
     overflow: hidden;
     color: $text-muted;
-    font-size: 17px;
-    line-height: 22px;
+    font-size: 19px;
+    line-height: 26px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   &.focused {
+    z-index: 2;
     border-color: $text;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), 0 14px 32px rgba(0, 0, 0, 0.95);
     transform: scale(1.06);
   }
 }
 
 .browse-empty {
-  font-size: 24px;
+  font-size: 26px;
 }
 
 // ---- player ----
@@ -642,14 +644,14 @@ h2 {
   }
 
   .player-title {
-    font-size: 40px;
+    font-size: 44px;
     font-weight: 700;
   }
 
   .player-now {
     min-height: 30px;
     color: $text-muted;
-    font-size: 24px;
+    font-size: 26px;
   }
 
   .player-progress {
@@ -660,7 +662,7 @@ h2 {
   .player-time {
     flex: none;
     width: 240px;
-    font-size: 24px;
+    font-size: 26px;
   }
 
   .player-bar {
@@ -728,7 +730,7 @@ h2 {
     left: 0;
     right: 0;
     text-align: center;
-    font-size: 36px;
+    font-size: 40px;
     opacity: 0;
     text-shadow: 0 2px 8px #000;
 
@@ -746,11 +748,28 @@ h2 {
     padding: 16px 24px;
     border-radius: 6px;
     background: rgba(0, 0, 0, 0.8);
-    font-size: 26px;
+    font-size: 29px;
     opacity: 0;
 
     &.visible {
       opacity: 1;
+    }
+  }
+
+  .player-subtitle {
+    position: absolute;
+    right: 160px;
+    bottom: 56px;
+    left: 160px;
+    display: none;
+    text-align: center;
+    font-size: 40px;
+    line-height: 1.25;
+    text-shadow: 0 2px 6px #000, 0 0 12px #000;
+    white-space: pre-line;
+
+    &.visible {
+      display: block;
     }
   }
 
@@ -798,7 +817,7 @@ h2 {
     min-height: 32px;
     margin: 0 0 20px;
     color: $text-muted;
-    font-size: 24px;
+    font-size: 26px;
 
     .meta-sep {
       margin: 0 12px;
@@ -822,7 +841,7 @@ h2 {
     max-height: 168px;
     margin: 0 0 20px;
     overflow: hidden;
-    font-size: 24px;
+    font-size: 26px;
     line-height: 1.4;
   }
 
@@ -843,7 +862,7 @@ h2 {
   .detail-note {
     margin-left: 12px;
     color: $text-muted;
-    font-size: 22px;
+    font-size: 24px;
   }
 
   .detail-categories {
@@ -870,22 +889,14 @@ h2 {
 
   // Carousels inside the body run to the right screen edge.
   .carousel-track {
-    margin: 0 (-$gutter) 0 -8px;
-    padding: 8px $gutter 0 8px;
-  }
-
-  .carousel.episodes .card {
-    width: 320px;
-  }
-
-  .carousel.cast .card {
-    width: 168px;
+    margin: -24px (-$gutter) -8px -24px;
+    padding: 32px $gutter 16px 24px;
   }
 
   .epg-row {
     display: flex;
     padding: 6px 0;
-    font-size: 22px;
+    font-size: 24px;
 
     .epg-time {
       width: 120px;
@@ -900,36 +911,45 @@ h2 {
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 20px;
   color: $text-muted;
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 80px;
-  height: 64px;
-  margin-right: 12px;
+  width: 96px;
+  height: 76px;
+  margin-right: 14px;
   padding: 0;
-  border: 2px solid transparent;
-  border-radius: 8px;
-  background: $bg-raised;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: transparent;
   color: $text;
-  font-size: 28px;
   transition: transform 0.12s ease-out;
 
   .icon {
-    width: 28px;
-    height: 28px;
+    width: 34px;
+    height: 34px;
   }
 
-  &.primary {
-    background: $accent;
-  }
-
+  // Same look as the search field in the bar: white box, dark icon on focus.
   &.focused {
     border-color: $text;
-    transform: scale(1.08);
+    background: $text;
+    color: $bg;
+    transform: scale(1.06);
+  }
+
+  // Toggled on (watched / favourite): drawn like the focused state.
+  &.active {
+    border-color: $text;
+    background: $text;
+    color: $bg;
+  }
+
+  &.active.focused {
+    box-shadow: 0 0 0 3px $accent;
   }
 }
 
@@ -944,7 +964,7 @@ h2 {
     display: block;
     margin-bottom: 6px;
     color: $text-muted;
-    font-size: 20px;
+    font-size: 22px;
   }
 
   .select-box {
@@ -988,14 +1008,6 @@ h2 {
   }
 }
 
-.card.episode .card-poster {
-  padding-bottom: 56.25%; // 16:9 still
-}
-
-.card.cast .card-poster {
-  border-radius: 50% 50% 6px 6px;
-}
-
 .choice-list {
   max-height: 560px;
   overflow-y: auto;
@@ -1006,7 +1018,7 @@ h2 {
   padding: 14px 24px;
   border-left: 5px solid transparent;
   border-radius: 4px;
-  font-size: 26px;
+  font-size: 29px;
 
   &.current {
     border-left-color: $accent;
@@ -1057,7 +1069,7 @@ h2 {
 
 .carousel-title {
   margin: 0 0 12px;
-  font-size: 30px;
+  font-size: 33px;
 }
 
 // Full width: the track runs under the page padding, so a focused first card still has room.
@@ -1065,8 +1077,9 @@ h2 {
   position: relative;
   display: flex;
   flex-wrap: nowrap;
-  margin: 0 (-$gutter);
-  padding: 8px $gutter 0;
+  // Room above/below/aside so a scaled, shadowed focused card is never clipped by the track.
+  margin: -24px (-$gutter) -8px;
+  padding: 32px $gutter 16px;
   overflow: hidden;
 
   .card {

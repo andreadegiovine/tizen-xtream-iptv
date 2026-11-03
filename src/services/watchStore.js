@@ -1,4 +1,4 @@
-import { dbGet, dbPut, dbGetAll } from '../core/idb.js';
+import { dbGet, dbPut, dbGetAll, dbDelete } from '../core/idb.js';
 
 export const WATCHED_RATIO = 0.9;
 export const RESUME_MIN_SECONDS = 30;
@@ -60,6 +60,16 @@ export class WatchStore {
       if (result.length >= limit) break;
     }
     return result;
+  }
+
+  /** Forgets every record of one title (all its episodes). */
+  async clearEntry(providerId, entryKey) {
+    await this.writes;
+    const base = watchKey(providerId, entryKey);
+    const all = await dbGetAll(this.db, 'watch');
+    const mine = all.filter((r) => r.key === base || r.key.indexOf(`${base}|`) === 0);
+    await Promise.all(mine.map((r) => dbDelete(this.db, 'watch', r.key)));
+    return mine.length;
   }
 
   /** Every record, for badges (one read per rendered page). */

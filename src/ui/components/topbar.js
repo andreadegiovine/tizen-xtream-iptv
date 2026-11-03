@@ -16,15 +16,17 @@ const DEBOUNCE_MS = 300;
 // `action: 'search'` opens the search bar instead of navigating.
 export const SECTIONS = [
   { id: 'home', labelKey: 'nav.home', route: 'home', icon: 'home', iconOnly: true },
+  { id: 'search', labelKey: 'nav.search', route: 'search', icon: 'search', iconOnly: true, action: 'search' },
   { id: 'movies', labelKey: 'nav.movies', route: 'browse', params: { type: 'movie' } },
   { id: 'series', labelKey: 'nav.series', route: 'browse', params: { type: 'series' } },
   { id: 'live', labelKey: 'nav.live', route: 'browse', params: { type: 'live' } },
-  { id: 'search', labelKey: 'nav.search', route: 'search', icon: 'search', iconOnly: true, action: 'search' },
+  { id: 'favorites', labelKey: 'nav.favorites', route: 'favorites' },
+  { id: 'suggestions', labelKey: 'nav.suggestions', route: 'suggestions' },
   { id: 'provider', labelKey: 'nav.provider', route: 'providers', icon: 'provider', iconOnly: true, end: true },
   { id: 'settings', labelKey: 'nav.settings', route: 'settings', icon: 'settings', iconOnly: true, end: true },
 ];
 
-const SECTION_OF_ROUTE = { categories: 'settings', browse: 'home', search: 'search', suggestions: 'home', detail: 'home', player: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
+const SECTION_OF_ROUTE = { categories: 'settings', browse: 'home', search: 'search', suggestions: 'suggestions', favorites: 'favorites', detail: 'home', player: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
 
 /** Section a router entry belongs to: explicit `params.section`, otherwise derived from the route name. */
 export function sectionForEntry(entry) {

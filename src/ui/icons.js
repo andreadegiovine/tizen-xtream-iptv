@@ -15,6 +15,9 @@ import { faExpand } from '@fortawesome/free-solid-svg-icons/faExpand';
 import { faClosedCaptioning } from '@fortawesome/free-solid-svg-icons/faClosedCaptioning';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons/faChevronDown';
 import { faUser } from '@fortawesome/free-solid-svg-icons/faUser';
+import { faHeart } from '@fortawesome/free-solid-svg-icons/faHeart';
+import { faEye } from '@fortawesome/free-solid-svg-icons/faEye';
+import { faClapperboard } from '@fortawesome/free-solid-svg-icons/faClapperboard';
 import { faClock } from '@fortawesome/free-solid-svg-icons/faClock';
 
 // Font Awesome Free (CC BY 4.0 / SIL OFL): only the icons listed here end up in the bundle.
@@ -38,6 +41,9 @@ const ICONS = {
   chevron: faChevronDown,
   user: faUser,
   clock: faClock,
+  heart: faHeart,
+  seen: faEye,
+  trailer: faClapperboard,
 };
 
 export const iconNames = Object.keys(ICONS);

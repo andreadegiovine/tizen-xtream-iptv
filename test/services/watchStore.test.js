@@ -39,3 +39,15 @@ describe('WatchStore', () => {
     expect(await store.seeds()).toEqual([{ type: 'series', tmdbId: 3 }, { type: 'movie', tmdbId: 1 }]);
   });
 });
+
+describe('clearEntry', () => {
+  test('forgets a title and all its episodes, nothing else', async () => {
+    const store = await newStore();
+    const rec = (key, entryKey, episodeKey) => ({ key, entryKey, episodeKey, type: 'series', providerId: 'p', position: 1, duration: 1 });
+    await store.save(rec('p:series:i1|s1e1', 'series:i1', 's1e1'));
+    await store.save(rec('p:series:i1|s1e2', 'series:i1', 's1e2'));
+    await store.save(rec('p:series:i10|s1e1', 'series:i10', 's1e1'));
+    expect(await store.clearEntry('p', 'series:i1')).toBe(2);
+    expect((await store.all()).map((r) => r.key)).toEqual(['p:series:i10|s1e1']);
+  });
+});

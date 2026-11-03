@@ -51,9 +51,10 @@ export function createPlayerController({ engine, poll = (fn, ms) => setInterval(
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
-    load(url, { startAt: from = 0, bufferSeconds = 10 } = {}) {
+    load(url, { startAt: from = 0, bufferSeconds = 10, onSubtitle = null } = {}) {
       this.stop();
       startAt = from;
+      handlers.onSubtitle = (text, durationMs) => onSubtitle && onSubtitle(text, durationMs);
       Object.assign(state, { status: 'loading', position: 0, duration: 0, buffering: 0, error: null });
       timer = poll(readClock, 500);
       emit();

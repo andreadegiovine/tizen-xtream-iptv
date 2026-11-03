@@ -27,6 +27,8 @@ import { summarizeWatch, watchStatus } from './services/watchStatus.js';
 import { createDefaultEngine } from './services/playerEngines.js';
 import { createSuggestionsService } from './services/suggestions.js';
 import { createSuggestionsPage } from './ui/pages/suggestionsPage.js';
+import { createFavoritesPage } from './ui/pages/favoritesPage.js';
+import { createFavoritesService } from './services/favorites.js';
 import { createSearchPage } from './ui/pages/searchPage.js';
 import { createDetailPage } from './ui/pages/detailPage.js';
 import { createPlayerPage } from './ui/pages/playerPage.js';
@@ -71,6 +73,7 @@ async function boot() {
     enrich: null,
     meta: null,
   };
+  ctx.favorites = createFavoritesService({ db });
   ctx.trakt = createTraktService({ db, client: createTraktClient() });
   ctx.watch = createWatchState({ store: new WatchStore(db), trakt: ctx.trakt });
   const tmdb = createTmdbService({ db, client: createTmdbClient(), getLanguage: () => i18n.getLocale() });
@@ -123,6 +126,7 @@ async function boot() {
     },
   });
   document.getElementById('topbar').appendChild(topbar.el);
+  ctx.syncSearchLinks = () => topbar.syncSearchLinks();
 
   const router = new Router({
     container: document.getElementById('content'),
@@ -131,6 +135,7 @@ async function boot() {
       comingSoon: (params) => createComingSoonPage(ctx, params),
       search: (params) => createSearchPage(ctx, params),
       suggestions: () => createSuggestionsPage(ctx),
+      favorites: () => createFavoritesPage(ctx),
       detail: (params) => createDetailPage(ctx, params),
       player: (params) => createPlayerPage(ctx, params),
       browse: (params) => createBrowsePage(ctx, params),
