@@ -111,7 +111,7 @@ export function createBrowsePage(ctx, params = {}) {
   let loadToken = 0;
   const counts = new Map(); // sidebar numbers: 'kind:id' → how many titles
 
-  const labels = () => ({ all: t('browse.all'), continue: t('browse.continue'), favorites: t('browse.favorites'), suggestions: t('browse.suggestions'), genres: t('browse.genres'), categories: t('browse.categories') });
+  const labels = () => ({ all: t('browse.all'), continue: t('home.continue'), favorites: t('nav.favorites'), suggestions: t('nav.suggestions'), genres: t('detail.genres'), categories: t('detail.categories') });
 
   function renderCategories() {
     while (catList.firstChild) catList.removeChild(catList.firstChild);

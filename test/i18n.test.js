@@ -16,11 +16,11 @@ describe('i18n', () => {
 
   test('plurals and interpolation', () => {
     const i18n = createI18n({ locales: { 'en-US': en, 'it-IT': it } });
-    expect(i18n.t('series.seasons', { count: 1 })).toBe('1 season');
-    expect(i18n.t('series.seasons', { count: 3 })).toBe('3 seasons');
+    expect(i18n.t('detail.seasons', { count: 1 })).toBe('1 season');
+    expect(i18n.t('detail.seasons', { count: 3 })).toBe('3 seasons');
     i18n.setLocale('it-IT');
-    expect(i18n.t('series.episodes', { count: 1 })).toBe('1 episodio');
-    expect(i18n.t('series.episodes', { count: 12 })).toBe('12 episodi');
+    expect(i18n.t('detail.episodes', { count: 1 })).toBe('1 episodio');
+    expect(i18n.t('detail.episodes', { count: 12 })).toBe('12 episodi');
   });
 
   test('falls back to en-US and then to the key', () => {

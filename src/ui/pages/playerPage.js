@@ -247,7 +247,7 @@ export function createPlayerPage(ctx, params) {
       if (toggle.icon !== name) {
         toggle.icon = name;
         toggle.el.replaceChild(icon(name), toggle.el.firstChild);
-        toggle.el.setAttribute('aria-label', name === 'play' ? t('player.play') : t('player.pause'));
+        toggle.el.setAttribute('aria-label', name === 'play' ? t('detail.play') : t('player.pause'));
       }
     }
     if (state.status === 'playing' && appliedFor !== loadToken) {

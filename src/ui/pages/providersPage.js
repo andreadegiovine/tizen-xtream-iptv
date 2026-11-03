@@ -55,7 +55,7 @@ export function createProvidersPage(ctx, params = {}) {
       cells = buildCells(providers, activeId);
       nodes = cells.map((cell) => {
         if (cell.action === ProviderAction.ADD) {
-          return h('button', { class: 'btn primary provider-add icon-only', type: 'button', 'aria-label': t('providers.add') }, icon('add'));
+          return h('button', { class: 'btn primary provider-add icon-only', type: 'button', 'aria-label': t('setup.title') }, icon('add'));
         }
         const labelKey = cell.action === ProviderAction.USE && cell.disabled ? 'providers.active' : `providers.${cell.action}`;
         // Use / Active keep their label; the others are icons only (categories: the one of the sidebar).
@@ -110,7 +110,7 @@ export function createProvidersPage(ctx, params = {}) {
         const ok = await ctx.dialogs.confirm({
           title: t('providers.removeTitle'),
           message: t('providers.removeMessage', { name: provider.name }),
-          confirmLabel: t('providers.remove'),
+          confirmLabel: t('settings.confirmRemove'),
           cancelLabel: t('setup.cancel'),
         });
         if (!ok) return;

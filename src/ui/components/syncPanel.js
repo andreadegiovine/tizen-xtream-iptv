@@ -17,7 +17,7 @@ export function describeType(state, meta, locale) {
     return t('home.phase.write', { done: formatNumber(state.done, locale), total: formatNumber(state.total, locale) });
   }
   if (ACTIVE_PHASES.has(phase)) return t(`home.phase.${phase}`);
-  if (!meta) return t('home.never');
+  if (!meta) return t('common.never');
   return t('home.updated', {
     items: formatNumber(meta.itemCount, locale),
     entries: formatNumber(meta.entryCount, locale),
@@ -117,7 +117,7 @@ export function createSyncPanel(ctx) {
 export function describeMeta(entry, locale, ready, running = null) {
   if (!ready) return t('settings.notConfigured');
   if (running) return running.queued ? t('operations.queued') : t('meta.running', { time: formatDateTime(running.startedAt, locale) });
-  if (!entry) return t('meta.never');
+  if (!entry) return t('common.never');
   return t(entry.failed ? 'meta.failed' : 'meta.ran', {
     time: formatDateTime(entry.lastSync, locale),
     count: formatNumber(entry.count, locale),
@@ -142,7 +142,7 @@ export function createTmdbPanel(ctx) {
   const ready = () => Boolean(ctx.tmdb && ctx.tmdb.enabled);
   const table = createTable(t('tmdb.title'), [removeButton, button], [
     { name: 'tmdb', label: t('tmdb.download') },
-    { name: 'genres', label: t('meta.genres') },
+    { name: 'genres', label: t('detail.genres') },
     { name: 'count', label: t('tmdb.count') },
   ]);
 
@@ -197,11 +197,11 @@ export function createTraktPanel(ctx) {
     const active = new Map(ctx.operations.list().map((op) => [op.id, op]));
     const [account, sync] = table.rows;
     if (!enabled) account.status.textContent = t('settings.notConfigured');
-    else if (!connected) account.status.textContent = t('settings.notConnected');
+    else if (!connected) account.status.textContent = t('settings.notConfigured');
     else account.status.textContent = (await ctx.trakt.account().catch(() => '')) || t('settings.connected');
     sync.status.classList.toggle('in-progress', active.has('trakt'));
     sync.status.textContent = describeMeta(log.trakt, locale, enabled && connected, active.get('trakt'));
-    if (enabled && !connected && !active.has('trakt')) sync.status.textContent = t('settings.notConnected');
+    if (enabled && !connected && !active.has('trakt')) sync.status.textContent = t('settings.notConfigured');
     removeButton.style.display = connected ? '' : 'none';
     syncButton.style.display = connected ? '' : 'none';
   }

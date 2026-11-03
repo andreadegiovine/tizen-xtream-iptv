@@ -256,7 +256,7 @@ export function createSettingsPage(ctx) {
   };
 
   return {
-    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('settings.title') }), opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'list' }, tmdbTokenRow.el), traktPanel.el, h('div', { class: 'list' }, traktIdRow.el, traktSecretRow.el), devicePanel.el, prefsTitle, h('div', { class: 'list' }, prefs.map((r) => r.el)))),
+    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('nav.settings') }), opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'list' }, tmdbTokenRow.el), traktPanel.el, h('div', { class: 'list' }, traktIdRow.el, traktSecretRow.el), devicePanel.el, prefsTitle, h('div', { class: 'list' }, prefs.map((r) => r.el)))),
     mount() {
       opsPanel.mount();
       tmdbPanel.mount();

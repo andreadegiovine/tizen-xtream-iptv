@@ -43,9 +43,8 @@ export function formatRuntime(minutes) {
   return `${Math.floor(total / 60)}h ${String(total % 60).padStart(2, '0')}m`;
 }
 
-const plural = (key, count) => t(`${key}.${count === 1 ? 'one' : 'other'}`, { count });
-export const seasonsLabel = (count) => plural('detail.seasons', count);
-export const episodesLabel = (count) => plural('detail.episodes', count);
+export const seasonsLabel = (count) => t('detail.seasons', { count });
+export const episodesLabel = (count) => t('detail.episodes', { count });
 
 /**
  * Line under the title: year, rating, then duration (movies) or seasons + episodes (series).

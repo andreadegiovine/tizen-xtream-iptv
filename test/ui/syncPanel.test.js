@@ -7,8 +7,8 @@ describe('home sync text', () => {
     expect(describeType({ phase: 'download' }, null, 'en-US')).toBe('Downloading the list…');
   });
 
-  test('idle shows the last sync or "not synced"', () => {
-    expect(describeType({ phase: 'idle' }, null, 'en-US')).toBe('Not synced yet');
+  test('idle shows the last sync or "never run"', () => {
+    expect(describeType({ phase: 'idle' }, null, 'en-US')).toBe('Never run');
     expect(describeType({ phase: 'done' }, { itemCount: 1500, entryCount: 1200, lastSync: Date.UTC(2026, 10, 2, 12, 0) }, 'en-US')).toMatch(/1,500 items · 1,200 titles · updated /);
   });
 

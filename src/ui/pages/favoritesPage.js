@@ -6,7 +6,7 @@ import { log } from '../../core/logger.js';
 
 /** Titles the user marked with the heart, one carousel per type. */
 export function createFavoritesPage(ctx) {
-  const status = h('p', { class: 'muted search-status', text: t('favorites.loading') });
+  const status = h('p', { class: 'muted search-status', text: t('player.loading') });
   const rows = createTypedRows(ctx, { prefix: 'favorites', onOpen: (entry) => ctx.openEntry(entry, { section: 'favorites' }) });
   let destroyed = false;
 

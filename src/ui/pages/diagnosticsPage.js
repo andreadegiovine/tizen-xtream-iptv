@@ -18,7 +18,7 @@ export function createDiagnosticsPage(ctx) {
   const urlInput = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
   const urlRow = h('label', { class: 'field' }, h('span', { class: 'field-label', text: t('diag.avplayUrl') }), urlInput);
   const playButton = h('button', { class: 'btn', type: 'button', text: t('diag.play') });
-  const stopButton = h('button', { class: 'btn', type: 'button', text: t('diag.stop') });
+  const stopButton = h('button', { class: 'btn', type: 'button', text: t('operations.stop') });
   // The log is focusable too: it is the last stop, so Down scrolls the page all the way to it.
   const focusables = [runButton, urlRow, playButton, stopButton, logBox];
 
@@ -74,7 +74,7 @@ export function createDiagnosticsPage(ctx) {
     el: h(
       'section',
       { class: 'page' },
-      h('h1', { text: t('diag.title') }),
+      h('h1', { text: t('settings.diagnostics') }),
       h('div', { class: 'form' }, runButton, results, urlRow, playButton, stopButton),
       h('h2', { text: t('diag.logs') }),
       logBox,
