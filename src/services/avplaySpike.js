@@ -50,7 +50,9 @@ export function createAvPlaySpike() {
       av.setDisplayRect(0, 0, 1920, 1080);
       av.setListener({
         onbufferingstart: () => emit('buffering started'),
-        onbufferingprogress: (percent) => emit(`buffering ${percent}%`),
+        onbufferingprogress: (percent) => {
+          if (percent % 25 === 0) emit(`buffering ${percent}%`); // every percent would flood the log
+        },
         onbufferingcomplete: () => emit('buffering complete'),
         onstreamcompleted: () => {
           emit('stream completed');

@@ -118,6 +118,7 @@ export function createDetailPage(ctx, params) {
   const actionsEl = h('div', { class: 'detail-actions' });
   const categoriesEl = h('div', { class: 'detail-categories' });
   const tagsEl = h('div', { class: 'detail-categories' });
+  const directorEl = h('div', { class: 'detail-categories' });
   const companiesEl = h('div', { class: 'detail-categories' });
   const episodesEl = h('div', { class: 'detail-section' });
   const castEl = h('div', { class: 'detail-section' });
@@ -128,7 +129,7 @@ export function createDetailPage(ctx, params) {
     { class: 'page detail loading' },
     backdropEl,
     poster,
-    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, categoriesEl, tagsEl, companiesEl, epgEl, episodesEl, castEl, relatedEl),
+    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, categoriesEl, tagsEl, directorEl, companiesEl, epgEl, episodesEl, castEl, relatedEl),
   );
 
   const data = () => ({
@@ -272,7 +273,17 @@ export function createDetailPage(ctx, params) {
   function renderCategories(next) {
     renderChips(categoriesEl, 'detailCategories', categoryItems, 'category', next, t('detail.categories'));
     renderChips(tagsEl, 'detailGenres', entry.type === 'live' ? [] : genreItems(), 'genre', next, t('detail.genres'));
+    renderDirectors();
     renderCompanies();
+  }
+
+  /** Director(s) from TMDB, shown before the production companies when known. */
+  function renderDirectors() {
+    clear(directorEl);
+    const list = entry.type === 'live' || !meta || !meta.directors ? [] : meta.directors;
+    if (!list.length) return;
+    directorEl.appendChild(h('span', { class: 'detail-label', text: t('detail.director') }));
+    list.forEach((name) => directorEl.appendChild(h('span', { class: 'chip', text: name })));
   }
 
   /** Production companies: names as chips, same style as categories and genres but not clickable. */

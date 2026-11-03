@@ -3,7 +3,6 @@ import { log } from '../core/logger.js';
 /** Aspect-ratio modes the player cycles through. */
 export const ASPECT_MODES = ['fit', 'fill', 'zoom'];
 const AVPLAY_DISPLAY = { fit: 'PLAYER_DISPLAY_MODE_LETTER_BOX', fill: 'PLAYER_DISPLAY_MODE_FULL_SCREEN', zoom: 'PLAYER_DISPLAY_MODE_CROPPED_FULL' };
-const SUBTITLE_EVENT_WAIT_MS = 12000; // wait for the first subtitle event before using the player's own rendering
 const CSS_FIT = { fit: 'contain', fill: 'fill', zoom: 'cover' };
 
 /** AVPlay track list → subtitle tracks: [{ index, language }] (language is the 3-letter code or ''). */
@@ -25,7 +24,6 @@ export function parseAvPlayTracks(list) {
 export function createAvPlayEngine() {
   const av = () => (typeof webapis !== 'undefined' ? webapis.avplay : null);
   let element = null;
-  let subtitleSeen = false; // a subtitle event arrived since the track was selected
   let subtitleWatch = null;
   let nativeSubtitles = false; // the player draws them itself (fallback when no event ever arrives)
   let subtitlesOn = false; // a track is selected: events are shown
@@ -59,7 +57,6 @@ export function createAvPlayEngine() {
             eventsLogged += 1;
             log.info('AVPlay subtitle event', JSON.stringify({ duration, type, text: String(text || '').slice(0, 60), on: subtitlesOn }));
           }
-          subtitleSeen = true;
           if (subtitlesOn && !nativeSubtitles && handlers.onSubtitle) handlers.onSubtitle(String(text || ''), Number(duration) || 0);
         },
       });
@@ -103,10 +100,9 @@ export function createAvPlayEngine() {
         return [];
       }
     },
-    /** index = track to show, null = subtitles off. The text is drawn by the app from the player's events. */
+    /** index = track to show, null = subtitles off. The player draws the text itself. */
     setSubtitleTrack(index) {
       stopWatch();
-      subtitleSeen = false;
       eventsLogged = 0;
       try {
         if (index === null) {
@@ -116,27 +112,23 @@ export function createAvPlayEngine() {
           return;
         }
         subtitlesOn = true;
-        nativeSubtitles = false;
         av().setSelectTrack('TEXT', index);
-        log.info('AVPlay subtitle track selected', index);
-        // If the player never reports a line, let it draw them itself rather than showing nothing.
-        subtitleWatch = setTimeout(() => {
-          if (subtitleSeen || !subtitlesOn) return;
-          try {
-            nativeSubtitles = true;
-            av().setSilentSubtitle(false);
-            log.warn('AVPlay sent no subtitle events: using the native subtitles');
-          } catch (err) {
-            log.warn('avplay native subtitles failed', err && err.message);
-          }
-        }, SUBTITLE_EVENT_WAIT_MS);
+        // The player draws the track itself (the app-drawn text from the events never showed on the TV).
+        // Events are still logged, and shown by the app only if the native rendering could not be switched on.
+        try {
+          av().setSilentSubtitle(false);
+          nativeSubtitles = true;
+        } catch (err) {
+          nativeSubtitles = false;
+          log.warn('avplay native subtitles failed', err && err.message);
+        }
+        log.info('AVPlay subtitle track selected', index, nativeSubtitles ? 'native' : 'app');
       } catch (err) {
         log.warn('avplay subtitle selection failed', err && err.message);
       }
     },
     stop() {
       stopWatch();
-      subtitleSeen = false;
       subtitlesOn = false;
       nativeSubtitles = false;
       eventsLogged = 0;

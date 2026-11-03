@@ -73,11 +73,15 @@ export function createDiagnosticsPage(ctx) {
   return {
     el: h(
       'section',
-      { class: 'page' },
-      h('h1', { text: t('settings.diagnostics') }),
-      h('div', { class: 'form' }, runButton, results, urlRow, playButton, stopButton),
-      h('h2', { text: t('diag.logs') }),
-      logBox,
+      { class: 'page framed' },
+      h(
+        'div',
+        { class: 'page-container' },
+        h('h1', { text: t('settings.diagnostics') }),
+        h('div', { class: 'form' }, runButton, results, urlRow, playButton, stopButton),
+        h('h2', { class: 'prefs-title', text: t('diag.logs') }),
+        logBox,
+      ),
     ),
     mount() {
       ctx.focus.register(zone);

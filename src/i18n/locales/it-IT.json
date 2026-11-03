@@ -107,6 +107,7 @@
   "detail.seasonOption": "Stagione {season} ({count})",
   "detail.categories": "Categorie",
   "detail.genres": "Generi",
+  "detail.director": "Regista",
   "detail.companies": "Produzione",
   "settings.metaRemove": "Rimuovi i metadati scaricati",
   "settings.metaRemoveConfirm": "Eliminare i metadati scaricati da TMDB (titoli, locandine, cast, generi)? Verranno scaricati di nuovo in background.",

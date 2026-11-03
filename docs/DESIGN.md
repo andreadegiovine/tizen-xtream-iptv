@@ -95,3 +95,4 @@ Decisions agreed during the design phase. Update this file when a decision chang
 
 ## Preferiti di categorie e generi, record TMDB leggeri (2026-11-03)
 I preferiti possono essere titoli o filtri (`kind` category/genre). Le card dei filtri precedono i titoli e aprono la griglia (`openFilter`). Nel database TMDB resta solo `gridMeta`; i dettagli completi si recuperano con `getFull` e vivono in memoria. I suggerimenti non propongono titoli già visti.
+Il cuore dei preferiti sta nella testata sticky della griglia (titolo · pagina · cuore), zona `browseHead`. I registi arrivano dal record completo TMDB (`directors`).

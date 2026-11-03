@@ -107,6 +107,7 @@
   "detail.seasonOption": "Season {season} ({count})",
   "detail.categories": "Categories",
   "detail.genres": "Genres",
+  "detail.director": "Director",
   "detail.companies": "Production",
   "settings.metaRemove": "Remove downloaded metadata",
   "settings.metaRemoveConfirm": "Delete the metadata downloaded from TMDB (titles, posters, cast, genres)? It will be downloaded again in the background.",

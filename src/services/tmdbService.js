@@ -38,6 +38,14 @@ export function gridMeta(meta) {
   };
 }
 
+/** Movie directors (crew job "Director"); for series the creators, falling back to directors of the crew. */
+function directorsOf(data) {
+  const crew = ((data.credits && data.credits.crew) || []).filter((c) => c.job === 'Director' && c.name).map((c) => c.name);
+  const creators = (Array.isArray(data.created_by) ? data.created_by : []).map((c) => c.name).filter(Boolean);
+  const names = creators.length ? creators : crew;
+  return names.filter((n, i) => names.indexOf(n) === i).slice(0, 4);
+}
+
 /** TMDB payload → what the UI needs. */
 export function normalizeMeta(type, data, language = '') {
   const date = type === 'series' ? data.first_air_date : data.release_date;
@@ -59,6 +67,7 @@ export function normalizeMeta(type, data, language = '') {
     companies: (Array.isArray(data.production_companies) ? data.production_companies : [])
       .map((c) => ({ id: c.id, name: c.name || '', logo: posterUrl(c.logo_path, 'w185') }))
       .filter((c) => c.name),
+    directors: directorsOf(data),
     castList: ((data.credits && data.credits.cast) || [])
       .slice(0, 20)
       .map((c) => ({ name: c.name || '', character: c.character || '', photo: posterUrl(c.profile_path, 'w185') }))

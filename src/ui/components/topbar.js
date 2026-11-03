@@ -28,7 +28,6 @@ export const SECTIONS = [
 ];
 
 // Shown only while a page offers it (a category or genre grid): adds / removes the open grid from the favourites.
-const FAVORITE_ITEM = { id: 'favorite', labelKey: 'detail.favorite', icon: 'heart', iconOnly: true, end: true, action: 'favorite' };
 
 const SECTION_OF_ROUTE = { categories: 'settings', browse: 'home', search: 'search', suggestions: 'suggestions', favorites: 'favorites', detail: 'home', player: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
 
@@ -56,9 +55,7 @@ export function createTopbar(ctx, handlers = {}) {
   let field = null;
   let closeBtn = null;
   let timer = null;
-  let favorite = null; // { owner, active, onToggle }
-  let favoriteOwner = null;
-  const items = () => (favorite ? SECTIONS.concat([FAVORITE_ITEM]) : SECTIONS);
+  const items = () => SECTIONS;
   const indexOf = (id) => Math.max(0, SECTIONS.findIndex((s) => s.id === id));
 
   const zone = new FocusZone({
@@ -68,10 +65,6 @@ export function createTopbar(ctx, handlers = {}) {
     onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
     onActivate: (i) => {
       const section = items()[i];
-      if (section.action === 'favorite') {
-        if (favorite) favorite.onToggle();
-        return;
-      }
       if (section.action === 'search') {
         api.openSearch();
         return;
@@ -104,9 +97,8 @@ export function createTopbar(ctx, handlers = {}) {
         el.appendChild(h('span', { class: 'topbar-item' }, h('span', { class: `skeleton-line${section.iconOnly ? ' icon' : ''}` })));
         return;
       }
-      const isFavorite = section.action === 'favorite';
-      const label = isFavorite && favorite && favorite.active ? t('detail.unfavorite') : t(section.labelKey);
-      const node = h('span', { class: `topbar-item${section.id === currentSection ? ' current' : ''}${section.iconOnly ? ' icon-only' : ''}${isFavorite && favorite && favorite.active ? ' active' : ''}`, 'aria-label': label });
+      const label = t(section.labelKey);
+      const node = h('span', { class: `topbar-item${section.id === currentSection ? ' current' : ''}${section.iconOnly ? ' icon-only' : ''}`, 'aria-label': label });
       if (section.icon) node.appendChild(icon(section.icon));
       if (!section.iconOnly) node.appendChild(h('span', { text: label }));
       nodes.push(node);
@@ -168,18 +160,6 @@ export function createTopbar(ctx, handlers = {}) {
       api.render();
     },
     indexOfSection: indexOf,
-    /**
-     * Heart at the right edge of the bar: `state` = { active, onToggle }, or null to hide it. `owner` identifies the page,
-     * so a page that is being closed does not remove the heart of the page that replaced it.
-     */
-    setFavorite(state, owner = null) {
-      if (state === null && owner !== favoriteOwner) return;
-      favorite = state;
-      favoriteOwner = state ? owner : null;
-      const count = items().length;
-      if (zone.index >= count) zone.index = count - 1;
-      if (!searching) renderNav();
-    },
     isSearching: () => searching,
     getQuery: () => (input ? input.value : ''),
     /** Shows the search field. `silent` keeps the current focus (used when the results page is restored). */

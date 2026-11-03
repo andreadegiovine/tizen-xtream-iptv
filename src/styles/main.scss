@@ -124,12 +124,6 @@ h2 {
     font-weight: 700;
   }
 
-  // The favourite heart is red while the open grid is a favourite.
-  &.active,
-  &.active.focused {
-    color: $accent;
-  }
-
   &.focused {
     background: $text;
     color: $bg;
@@ -810,13 +804,48 @@ h2 {
 }
 
 .browse-title {
-  margin-right: 24px;
   font-size: 38px;
   font-weight: 600;
 }
 
 .browse-count {
   font-size: 30px;
+}
+
+.browse-sep {
+  margin: 0 14px;
+  color: $text-muted;
+  font-size: 30px;
+}
+
+// Heart of the sticky head: add / remove the open category or genre from the favourites.
+.browse-fav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 40px;
+  border-radius: 6px;
+  color: $text-muted;
+  align-self: center;
+
+  .icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  &.active {
+    color: $accent;
+  }
+
+  &.focused {
+    background: $text;
+    color: $bg;
+  }
+
+  &.active.focused {
+    color: $accent;
+  }
 }
 
 .browse-grid {

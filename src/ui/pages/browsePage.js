@@ -18,6 +18,7 @@ export const SIDEBAR_ICON = { all: 'all', continue: 'continue', favorites: 'hear
 /** Placeholder rows shown while the genres load: enough that the "Categories" entry stays below the screen. */
 export const GENRE_SKELETONS = 12;
 const GRID_ZONE = 'browseGrid';
+const HEAD_ZONE = 'browseHead';
 /** Views that are loaded as one in-memory list and paged locally. */
 const LIST_KINDS = ['continue', 'favorites', 'suggestions', 'genre'];
 /** Every media type uses the same 6-column grid of equally sized cards (channels included). */
@@ -87,7 +88,21 @@ export function createBrowsePage(ctx, params = {}) {
   let pageSize = 24;
   const titleEl = h('span', { class: 'browse-title' });
   const count = h('span', { class: 'muted browse-count' });
-  const head = h('div', { class: 'browse-head sticky-head' }, titleEl, count);
+  const sepA = h('span', { class: 'browse-sep', text: '·' });
+  const sepB = h('span', { class: 'browse-sep', text: '·' });
+  const favBtn = h('span', { class: 'browse-fav' }, icon('heart'));
+  const head = h('div', { class: 'browse-head sticky-head' }, titleEl, sepA, count, sepB, favBtn);
+  let favState = null; // { active, onToggle } while a category / genre is open
+  function renderHead() {
+    const hasCount = !!count.textContent;
+    sepA.style.display = hasCount ? '' : 'none';
+    sepB.style.display = favState && hasCount ? '' : 'none';
+    favBtn.style.display = favState ? '' : 'none';
+    favBtn.classList.toggle('active', !!(favState && favState.active));
+    favBtn.setAttribute('aria-label', favState && favState.active ? t('detail.unfavorite') : t('detail.favorite'));
+    if (!favState) favBtn.classList.remove('focused');
+  }
+  renderHead();
   let pages = 1;
   const catList = h('div', { class: 'browse-cats' });
   const gridEl = h('div', { class: `browse-grid ${type}` });
@@ -95,8 +110,7 @@ export function createBrowsePage(ctx, params = {}) {
   let db = null;
   let providerId = null;
   let destroyed = false;
-  const favoriteOwner = {}; // identifies this page's heart in the top bar
-  let genres = [];
+    let genres = [];
   let categories = []; // visible provider categories [{ id, name }]
   let expanded = false; // categories group
   let genresExpanded = true; // genres group: open by default
@@ -207,35 +221,43 @@ export function createBrowsePage(ctx, params = {}) {
     const name = items[selected] ? items[selected].name : '';
     titleEl.textContent = name;
     count.textContent = entries.length ? t('browse.page', { page: formatNumber(page + 1, i18n.getLocale()), pages: formatNumber(Math.max(pages, page + 1), i18n.getLocale()) }) : '';
+    renderHead();
     empty.style.display = entries.length ? 'none' : '';
   }
 
   /** The heart in the top bar follows the open category / genre: it adds or removes it from the favourites. */
   async function syncFavorite() {
-    if (!ctx.topbar || destroyed || !providerId) return;
+    if (destroyed || !providerId) return;
     const item = items[selected];
     if (!item || (item.kind !== 'category' && item.kind !== 'genre')) {
-      ctx.topbar.setFavorite(null, favoriteOwner);
+      favState = null;
+      renderHead();
       return;
     }
     const active = await ctx.favorites.hasFilter(providerId, item.kind, type, item.id).catch(() => false);
     if (destroyed || items[selected] !== item) return;
-    ctx.topbar.setFavorite(
-      {
-        active,
-        onToggle: async () => {
-          await ctx.favorites.toggleFilter(providerId, { kind: item.kind, type, id: item.id, name: item.name });
-          const saved = await ctx.favorites.list(providerId);
-          counts.set('favorites:', saved.filter((f) => f.type === type).length);
-          if (!destroyed) {
-            showCounts();
-            syncFavorite();
-          }
-        },
+    favState = {
+      active,
+      onToggle: async () => {
+        await ctx.favorites.toggleFilter(providerId, { kind: item.kind, type, id: item.id, name: item.name });
+        const saved = await ctx.favorites.list(providerId);
+        counts.set('favorites:', saved.filter((f) => f.type === type).length);
+        if (!destroyed) {
+          showCounts();
+          syncFavorite();
+        }
       },
-      favoriteOwner
-    );
+    };
+    renderHead();
   }
+
+  const headZone = new FocusZone({
+    id: HEAD_ZONE,
+    model: new ListModel({ orientation: 'horizontal', getCount: () => (favState ? 1 : 0) }),
+    onFocus: () => favBtn.classList.add('focused'),
+    onBlur: () => favBtn.classList.remove('focused'),
+    onActivate: () => favState && favState.onToggle(),
+  });
 
   const byKeys = async (keys) => (await Promise.all(keys.map((key) => getEntry(db, key)))).filter(Boolean);
 
@@ -384,16 +406,20 @@ export function createBrowsePage(ctx, params = {}) {
     mount() {
       ctx.focus.register(catsZone);
       ctx.focus.register(gridZone);
+      ctx.focus.register(headZone);
+      ctx.focus.link(HEAD_ZONE, 'up', TOPBAR_ZONE);
+      ctx.focus.link(HEAD_ZONE, 'down', GRID_ZONE);
+      ctx.focus.link(HEAD_ZONE, 'left', CATS_ZONE);
       ctx.focus.link(CATS_ZONE, 'up', TOPBAR_ZONE);
       ctx.focus.link(CATS_ZONE, 'right', GRID_ZONE);
       ctx.focus.link(GRID_ZONE, 'left', CATS_ZONE);
-      ctx.focus.link(GRID_ZONE, 'up', TOPBAR_ZONE);
-      ctx.focus.link(TOPBAR_ZONE, 'down', GRID_ZONE);
+      ctx.focus.link(GRID_ZONE, 'up', HEAD_ZONE);
+      ctx.focus.link(TOPBAR_ZONE, 'down', HEAD_ZONE);
       init().catch((err) => log.warn('Browse init failed', err && err.message));
     },
     destroy() {
       destroyed = true;
-      if (ctx.topbar) ctx.topbar.setFavorite(null, favoriteOwner);
+      ctx.focus.unregister(HEAD_ZONE);
       ctx.focus.unregister(CATS_ZONE);
       ctx.focus.unregister(GRID_ZONE);
     },

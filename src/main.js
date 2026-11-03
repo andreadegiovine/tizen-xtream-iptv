@@ -153,7 +153,6 @@ async function boot() {
       } else focus.focus(TOPBAR_ZONE, topbar.indexOfSection('search'));
     },
   });
-  ctx.topbar = topbar;
   document.getElementById('topbar').appendChild(topbar.el);
   ctx.syncSearchLinks = () => topbar.syncSearchLinks();
 
