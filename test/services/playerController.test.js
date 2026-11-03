@@ -17,11 +17,21 @@ function fakeEngine() {
   };
   return e;
 }
-const make = () => {
+const make = (extra = {}) => {
   const engine = fakeEngine();
   const ticks = [];
-  const c = createPlayerController({ engine, poll: (fn) => { ticks.push(fn); return ticks.length; }, unpoll: () => {} });
-  return { engine, c, tick: () => ticks.forEach((fn) => fn()) };
+  const timeouts = [];
+  const clock = { t: 0 };
+  const c = createPlayerController({
+    engine,
+    poll: (fn) => { ticks.push(fn); return ticks.length; },
+    unpoll: () => {},
+    schedule: (fn, ms) => { timeouts.push({ fn, ms }); return timeouts.length; },
+    unschedule: (id) => { timeouts[id - 1] = null; },
+    now: () => clock.t,
+    ...extra,
+  });
+  return { engine, c, clock, timeouts, tick: () => ticks.forEach((fn) => fn()) };
 };
 
 describe('player controller', () => {
@@ -69,7 +79,7 @@ describe('player controller', () => {
   });
 
   test('errors and end of stream are reported', () => {
-    const { c, engine } = make();
+    const { c, engine } = make({ retryDelays: [] });
     const seen = [];
     c.onChange((s) => seen.push(s.status));
     c.load('u');
@@ -79,6 +89,65 @@ describe('player controller', () => {
     engine.handlers.onPrepared();
     engine.handlers.onEnded();
     expect(c.getState().status).toBe('ended');
+  });
+});
+
+describe('playback recovery', () => {
+  test('an error reopens the stream after a pause and resumes from where it stopped', () => {
+    const { c, engine, tick, timeouts } = make();
+    c.load('http://x/a.mp4');
+    engine.handlers.onPrepared();
+    engine.time = 60000;
+    tick();
+    engine.handlers.onError('network');
+    expect(c.getState()).toMatchObject({ status: 'recovering', attempt: 1, attempts: 4, error: 'network' });
+    expect(timeouts[0].ms).toBe(2000);
+    timeouts[0].fn();
+    expect(c.getState().status).toBe('loading');
+    expect(engine.calls.filter((call) => call[0] === 'start')).toHaveLength(2);
+    engine.handlers.onPrepared();
+    expect(engine.calls.slice(-2)).toEqual([['play'], ['seek', 60000]]);
+    expect(c.getState()).toMatchObject({ status: 'playing', error: null });
+  });
+
+  test('live streams reconnect from the start of the stream (no seek)', () => {
+    const { c, engine, timeouts } = make();
+    engine.duration = 0;
+    c.load('live');
+    engine.handlers.onPrepared();
+    engine.handlers.onError('x');
+    timeouts[0].fn();
+    engine.handlers.onPrepared();
+    expect(engine.calls.some((call) => call[0] === 'seek')).toBe(false);
+  });
+
+  test('pauses grow, then the error is final; stable playback gives the attempts back', () => {
+    const { c, engine, timeouts, clock, tick } = make();
+    c.load('u');
+    engine.handlers.onError('1');
+    timeouts[0].fn();
+    engine.handlers.onError('2');
+    expect(timeouts.map((t) => t && t.ms)).toEqual([2000, 4000]);
+    timeouts[1].fn();
+    engine.handlers.onPrepared();
+    clock.t += 25000;
+    tick();
+    expect(c.getState().attempt).toBe(0);
+    for (let i = 0; i < 4; i += 1) {
+      engine.handlers.onError('again');
+      if (timeouts[timeouts.length - 1]) timeouts[timeouts.length - 1].fn();
+    }
+    engine.handlers.onError('last');
+    expect(c.getState()).toMatchObject({ status: 'error', error: 'last' });
+  });
+
+  test('stop cancels a pending retry', () => {
+    const { c, engine, timeouts } = make();
+    c.load('u');
+    engine.handlers.onError('x');
+    c.stop();
+    expect(timeouts[0]).toBeNull();
+    expect(c.getState().status).toBe('idle');
   });
 });
 

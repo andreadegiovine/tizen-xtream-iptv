@@ -2,9 +2,28 @@
  * Playback state machine on top of an engine (AVPlay on the TV, <video> in a desktop browser).
  * Engine contract: start(url, { bufferSeconds, handlers }), play(), pause(), seekTo(ms), getTime() ms,
  * getDuration() ms, stop(). Handlers: onPrepared, onBuffering(percent), onBufferingDone, onEnded, onError(msg).
+ *
+ * Recovery: when the engine reports an error the stream is opened again by itself, after a growing pause
+ * (`retryDelays`, one attempt each), resuming from where it stopped (on-demand streams). Status "recovering"
+ * with `attempt` / `attempts` in the state; once the attempts are used up the status is "error" (manual retry).
+ * A run of `stableMs` of playback gives the attempts back.
  */
-export function createPlayerController({ engine, poll = (fn, ms) => setInterval(fn, ms), unpoll = (id) => clearInterval(id) }) {
-  const state = { status: 'idle', position: 0, duration: 0, buffering: 0, error: null };
+export const RETRY_DELAYS = [2000, 4000, 8000, 15000];
+
+export function createPlayerController({
+  engine,
+  poll = (fn, ms) => setInterval(fn, ms),
+  unpoll = (id) => clearInterval(id),
+  schedule = (fn, ms) => setTimeout(fn, ms),
+  unschedule = (id) => clearTimeout(id),
+  retryDelays = RETRY_DELAYS,
+  stableMs = 20000,
+  now = Date.now,
+}) {
+  const state = { status: 'idle', position: 0, duration: 0, buffering: 0, error: null, attempt: 0, attempts: retryDelays.length };
+  let current = null; // { url, options } of the stream being played
+  let retryTimer = null;
+  let playingSince = null;
   const listeners = new Set();
   let timer = null;
   let startAt = 0;
@@ -16,6 +35,7 @@ export function createPlayerController({ engine, poll = (fn, ms) => setInterval(
   };
 
   function readClock() {
+    if (state.status === 'playing' && state.attempt > 0 && playingSince !== null && now() - playingSince >= stableMs) state.attempt = 0;
     if (state.status !== 'playing' && state.status !== 'paused') return;
     try {
       state.position = Math.max(0, engine.getTime() / 1000);
@@ -31,7 +51,8 @@ export function createPlayerController({ engine, poll = (fn, ms) => setInterval(
       try {
         engine.play();
         if (startAt > 0) engine.seekTo(startAt * 1000);
-        set({ status: 'playing', buffering: 0 });
+        playingSince = now();
+        set({ status: 'playing', buffering: 0, error: null });
       } catch (err) {
         set({ status: 'error', error: String((err && err.message) || err) });
       }
@@ -42,8 +63,42 @@ export function createPlayerController({ engine, poll = (fn, ms) => setInterval(
       readClock();
       set({ status: 'ended' });
     },
-    onError: (message) => set({ status: 'error', error: String(message) }),
+    onError: (message) => fail(String(message)),
   };
+
+  function open(url, options) {
+    try {
+      engine.start(url, { bufferSeconds: options.bufferSeconds, handlers });
+    } catch (err) {
+      fail(String((err && err.message) || err));
+    }
+  }
+
+  /** Engine error: try again after a pause (resuming where it stopped), or give up when the attempts are used. */
+  function fail(message) {
+    if (!current || state.attempt >= retryDelays.length) {
+      set({ status: 'error', error: message });
+      return;
+    }
+    const delay = retryDelays[state.attempt];
+    const resumeAt = state.duration > 0 && state.position > 0 ? state.position : 0; // live streams just reconnect
+    playingSince = null;
+    set({ status: 'recovering', error: message, attempt: state.attempt + 1, buffering: 0 });
+    try {
+      engine.stop();
+    } catch {
+      /* already gone */
+    }
+    retryTimer = schedule(() => {
+      retryTimer = null;
+      if (state.status !== 'recovering' || !current) return;
+      startAt = resumeAt;
+      state.position = resumeAt;
+      state.duration = resumeAt > 0 ? state.duration : 0;
+      set({ status: 'loading' });
+      open(current.url, current.options);
+    }, delay);
+  }
 
   return {
     getState: () => ({ ...state }),
@@ -54,15 +109,13 @@ export function createPlayerController({ engine, poll = (fn, ms) => setInterval(
     load(url, { startAt: from = 0, bufferSeconds = 10, onSubtitle = null } = {}) {
       this.stop();
       startAt = from;
+      current = { url, options: { bufferSeconds } };
       handlers.onSubtitle = (text, durationMs) => onSubtitle && onSubtitle(text, durationMs);
-      Object.assign(state, { status: 'loading', position: 0, duration: 0, buffering: 0, error: null });
+      Object.assign(state, { status: 'loading', position: 0, duration: 0, buffering: 0, error: null, attempt: 0 });
+      playingSince = null;
       timer = poll(readClock, 500);
       emit();
-      try {
-        engine.start(url, { bufferSeconds, handlers });
-      } catch (err) {
-        set({ status: 'error', error: String((err && err.message) || err) });
-      }
+      open(url, current.options);
     },
     togglePause() {
       if (state.status === 'playing') {
@@ -98,6 +151,9 @@ export function createPlayerController({ engine, poll = (fn, ms) => setInterval(
     stop() {
       if (timer !== null) unpoll(timer);
       timer = null;
+      if (retryTimer !== null) unschedule(retryTimer);
+      retryTimer = null;
+      current = null;
       try {
         engine.stop();
       } catch {

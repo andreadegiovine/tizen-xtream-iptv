@@ -26,6 +26,7 @@ import { faLightbulb } from '@fortawesome/free-solid-svg-icons/faLightbulb';
 import { faPen } from '@fortawesome/free-solid-svg-icons/faPen';
 import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash';
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
+import { faMasksTheater } from '@fortawesome/free-solid-svg-icons/faMasksTheater';
 import { faStop } from '@fortawesome/free-solid-svg-icons/faStop';
 import { faEyeSlash } from '@fortawesome/free-solid-svg-icons/faEyeSlash';
 
@@ -62,6 +63,7 @@ const ICONS = {
   add: faPlus,
   refresh: faRotateRight,
   stop: faStop,
+  genres: faMasksTheater,
   hidden: faEyeSlash,
 };
 

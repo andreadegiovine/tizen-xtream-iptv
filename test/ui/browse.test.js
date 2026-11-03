@@ -52,14 +52,20 @@ describe('paged grid', () => {
 
 
 describe('sidebar', () => {
-  const labels = { all: 'Tutto', continue: 'Continua', favorites: 'Preferiti', suggestions: 'Suggerimenti', categories: 'Categorie' };
+  const labels = { all: 'Tutto', continue: 'Continua', favorites: 'Preferiti', suggestions: 'Suggerimenti', genres: 'Generi', categories: 'Categorie' };
   const cats = [{ id: '1', name: 'A' }, { id: '2', name: 'B' }];
 
-  test('movies: all, continue, favorites, genres, collapsed categories toggle', () => {
+  test('movies: all, continue, favorites, suggestions, open genres group, collapsed categories toggle', () => {
     const items = sidebarItems({ type: 'movie', genres: [{ key: 'animation', name: 'Animazione' }], categories: cats, labels });
-    expect(items.map((i) => i.kind)).toEqual(['all', 'continue', 'favorites', 'suggestions', 'genre', 'toggle']);
+    expect(items.map((i) => i.kind)).toEqual(['all', 'continue', 'favorites', 'suggestions', 'genresToggle', 'genre', 'toggle']);
+    expect(items[5].depth).toBe(1);
+    const closed = sidebarItems({ type: 'movie', genres: [{ key: 'animation', name: 'Animazione' }], categories: cats, genresExpanded: false, labels });
+    expect(closed.map((i) => i.kind)).toEqual(['all', 'continue', 'favorites', 'suggestions', 'genresToggle', 'toggle']);
+    // while the genres load the group is there (placeholders are drawn under it); with none found it disappears
+    expect(sidebarItems({ type: 'movie', genresLoading: true, categories: cats, labels }).map((i) => i.kind)).toContain('genresToggle');
     const open = sidebarItems({ type: 'movie', genres: [], categories: cats, expanded: true, labels });
     expect(open.map((i) => i.kind)).toEqual(['all', 'continue', 'favorites', 'suggestions', 'toggle', 'category', 'category']);
+    expect(open.some((i) => i.kind === 'genresToggle')).toBe(false);
   });
 
   test('live: all plus flat categories', () => {
@@ -68,7 +74,7 @@ describe('sidebar', () => {
 
   test('filter lookup falls back to "show all"', () => {
     const items = sidebarItems({ type: 'movie', genres: [{ key: 'animation', name: 'X' }], categories: [], labels });
-    expect(indexOfFilter(items, { kind: 'genre', id: 'animation' })).toBe(4);
+    expect(indexOfFilter(items, { kind: 'genre', id: 'animation' })).toBe(5);
     expect(indexOfFilter(items, { kind: 'genre', id: 'war' })).toBe(0);
     expect(indexOfFilter(items, null)).toBe(0);
   });

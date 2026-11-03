@@ -36,10 +36,11 @@ export function createSyncLog({ db, now = Date.now, operations = null }) {
         failed = true;
         throw err;
       } finally {
-        end();
+        // The table reads the log when the operation disappears: write it first.
         const log = await kvGet(db, KEY, {});
         log[name] = { lastSync: now(), durationMs: now() - started, count, failed };
         await kvSet(db, KEY, log);
+        end();
       }
     },
     async clear(name) {

@@ -21,10 +21,23 @@ function tizenDisplay(env) {
   });
 }
 
+/** Device-wide memory from Tizen (`getTotalMemory` / `getAvailableMemory`, bytes) when the firmware has them. */
+function tizenMemory(env) {
+  try {
+    const info = env.tizen && env.tizen.systeminfo;
+    if (!info || typeof info.getTotalMemory !== 'function' || typeof info.getAvailableMemory !== 'function') return null;
+    const total = Number(info.getTotalMemory());
+    const available = Number(info.getAvailableMemory());
+    return total > 0 && available >= 0 && available <= total ? { used: total - available, total } : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * What the TV reports about itself, for the "Device" table. Every value can be missing (null) on browsers or
  * firmware that do not expose it: resolution (physical when Tizen says so, plus the page's own size),
- * app memory (JS heap used / limit), storage used / quota of this app, and the device RAM class.
+ * app memory (JS heap used / limit), storage used / quota of this app, and the RAM (used / total, see `memory`).
  */
 export async function collectDeviceInfo(env = globalThis) {
   const screen = env.screen || {};
@@ -39,5 +52,8 @@ export async function collectDeviceInfo(env = globalThis) {
     storage = null;
   }
   const ram = env.navigator && env.navigator.deviceMemory ? env.navigator.deviceMemory * 1024 ** 3 : null;
-  return { panel, page, ratio: env.devicePixelRatio || 1, heap, storage, ram };
+  // RAM: what Tizen says is in use on the device, else what this app's JS heap uses out of the device total.
+  const device = tizenMemory(env);
+  const memory = device ? { ...device, scope: 'device' } : heap && ram ? { used: heap.used, total: ram, scope: 'app' } : null;
+  return { panel, page, ratio: env.devicePixelRatio || 1, heap, storage, ram, memory };
 }

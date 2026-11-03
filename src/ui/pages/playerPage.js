@@ -234,6 +234,7 @@ export function createPlayerPage(ctx, params) {
     let status = '';
     if (state.status === 'loading') status = t('player.loading');
     else if (state.status === 'paused') status = t('player.paused');
+    else if (state.status === 'recovering') status = t('player.recovering', { attempt: state.attempt, attempts: state.attempts });
     else if (state.status === 'error') status = `${t('error.PLAYER')} ${state.error || ''}`.trim();
     else if (state.buffering > 0 && state.buffering < 100) status = t('player.buffering', { percent: state.buffering });
     statusEl.textContent = status;
@@ -251,7 +252,7 @@ export function createPlayerPage(ctx, params) {
       appliedFor = loadToken;
       if (engine.setAspect && aspect !== 'fit') engine.setAspect(aspect);
     }
-    if ((state.status === 'paused' || state.status === 'error') && state.status !== lastStatus) showControls();
+    if ((state.status === 'paused' || state.status === 'error' || state.status === 'recovering') && state.status !== lastStatus) showControls();
     lastStatus = state.status;
     if (state.status === 'ended') onEnded();
   }
@@ -355,7 +356,7 @@ export function createPlayerPage(ctx, params) {
   const handlers = {
     [Action.ENTER]: () => {
       if (countdownTimer) play(neighborEpisode(playlist, index, 1).index);
-      else if (controller.getState().status === 'error') play(index);
+      else if (['error', 'recovering'].includes(controller.getState().status)) play(index);
       else if (isLive) enterFocus();
       else controller.togglePause();
     },

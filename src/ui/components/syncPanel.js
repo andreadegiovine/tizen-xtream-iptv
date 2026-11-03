@@ -41,7 +41,8 @@ export function createSyncPanel(ctx) {
   });
   const info = h('p', { class: 'muted sync-info' });
   const button = refreshButton(t('home.update'));
-  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('home.catalog') }), button), h('div', { class: 'sync' }, rows.map((r) => r.el)), info);
+  const providerName = h('span', { class: 'panel-provider' });
+  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('home.catalog') }, providerName), button), h('div', { class: 'sync' }, rows.map((r) => r.el)), info);
   let persisted = {};
   let providerId = null;
   let wasRunning = false;
@@ -82,6 +83,10 @@ export function createSyncPanel(ctx) {
   return {
     el,
     button,
+    /** Nickname of the active provider, next to the title. */
+    setProviderName(name) {
+      providerName.textContent = name ? ` · ${name}` : '';
+    },
     /** Starts a forced sync unless one is already running. */
     syncNow() {
       if (!ctx.catalog.getState().running) ctx.catalog.start({ force: true });
@@ -109,8 +114,9 @@ export function createSyncPanel(ctx) {
 }
 
 /** One line of the Metadata table: "ready · last run <time> · N items · 3.2 s". */
-export function describeMeta(entry, locale, ready) {
+export function describeMeta(entry, locale, ready, running = null) {
   if (!ready) return t('settings.notConfigured');
+  if (running) return running.queued ? t('operations.queued') : t('meta.running', { time: formatDateTime(running.startedAt, locale) });
   if (!entry) return t('meta.never');
   return t(entry.failed ? 'meta.failed' : 'meta.ran', {
     time: formatDateTime(entry.lastSync, locale),
@@ -136,13 +142,27 @@ export function createMetaPanel(ctx) {
     const log = await ctx.syncLog.get();
     const locale = i18n.getLocale();
     const connected = ctx.trakt && ctx.trakt.enabled ? await ctx.trakt.isConnected().catch(() => false) : false;
+    const active = new Map(ctx.operations.list().map((op) => [op.id, op]));
     rows.forEach((row) => {
-      let text = describeMeta(log[row.name], locale, row.ready());
-      if (row.name === 'trakt' && row.ready() && !connected) text = t('settings.notConnected');
+      let text = describeMeta(log[row.name], locale, row.ready(), active.get(row.name));
+      if (row.name === 'trakt' && row.ready() && !connected && !active.has('trakt')) text = t('settings.notConnected');
+      row.status.classList.toggle('in-progress', active.has(row.name));
       row.status.textContent = text;
     });
   }
-  return { el, button, refresh };
+  let unsubscribe = null;
+  return {
+    el,
+    button,
+    refresh,
+    /** Follows the operations: a row says "running since…" while it works and shows the new result when it ends. */
+    mount() {
+      unsubscribe = ctx.operations.onChange(() => refresh().catch(() => undefined));
+    },
+    destroy() {
+      if (unsubscribe) unsubscribe();
+    },
+  };
 }
 
 /** Text rows of the "Device" table from `collectDeviceInfo()`. */
@@ -155,7 +175,7 @@ export function deviceRows(info) {
     { label: t('device.resolution'), value: resolution },
     { label: t('device.heap'), value: info.heap ? of(info.heap.used, info.heap.limit) : unknown },
     { label: t('device.storage'), value: info.storage ? of(info.storage.used, info.storage.quota) : unknown },
-    { label: t('device.ram'), value: info.ram ? formatBytes(info.ram) : unknown },
+    { label: t('device.ram'), value: info.memory ? of(info.memory.used, info.memory.total) : info.ram ? formatBytes(info.ram) : unknown },
   ];
 }
 
@@ -192,7 +212,7 @@ export function createOperationsPanel(ctx) {
           'div',
           { class: 'sync-row op-row' },
           h('span', { class: 'sync-name', text: t(`operations.${op.id}`) }),
-          h('span', { class: 'sync-status', text: t('operations.since', { time: formatDateTime(op.startedAt, i18n.getLocale()) }) }),
+          h('span', { class: 'sync-status', text: op.queued ? t('operations.queued') : t('operations.since', { time: formatDateTime(op.startedAt, i18n.getLocale()) }) }),
           stop,
         ),
       );

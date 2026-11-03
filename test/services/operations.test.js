@@ -17,6 +17,22 @@ describe('operations registry', () => {
     expect(seen).toEqual([['catalog'], ['catalog', 'genres'], ['genres']]);
   });
 
+  test('a queued entry is promoted in place when it starts, and can be dropped while waiting', () => {
+    const ops = createOperations({ now: () => 5 });
+    const skip = jest.fn();
+    const endQueued = ops.start('tmdb', { queued: true, cancel: skip });
+    expect(ops.list()[0]).toMatchObject({ id: 'tmdb', queued: true });
+    const end = ops.start('tmdb', { startedAt: 9 });
+    expect(ops.list()).toHaveLength(1);
+    expect(ops.list()[0]).toMatchObject({ queued: false, startedAt: 9 });
+    end();
+    expect(ops.list()).toEqual([]);
+    endQueued();
+    ops.start('trakt', { queued: true, cancel: skip });
+    ops.cancel('trakt');
+    expect(skip).toHaveBeenCalledTimes(1);
+  });
+
   test('cancel calls the stop handler and removes the entry', () => {
     const ops = createOperations();
     const cancel = jest.fn();

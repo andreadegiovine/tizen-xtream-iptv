@@ -14,10 +14,15 @@ export function createOperations({ now = Date.now } = {}) {
       handlers.add(handler);
       return () => handlers.delete(handler);
     },
-    /** Registers an operation; returns `end()`. The same id twice keeps the first one. */
-    start(id, { cancel = null, startedAt = now() } = {}) {
-      if (running.has(id)) return () => undefined;
-      const entry = { id, startedAt, cancel };
+    /**
+     * Registers an operation; returns `end()`. `queued` lists it as waiting its turn; starting it again
+     * (not queued) promotes the waiting entry in place. Any other repeated id keeps the first one.
+     */
+    start(id, { cancel = null, startedAt = now(), queued = false } = {}) {
+      const existing = running.get(id);
+      if (existing && !(existing.queued && !queued)) return () => undefined;
+      const entry = existing || { id };
+      Object.assign(entry, { startedAt, cancel, queued });
       running.set(id, entry);
       notify();
       return () => {

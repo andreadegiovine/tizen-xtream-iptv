@@ -522,6 +522,10 @@ h2 {
   }
 }
 
+.sync-status.in-progress {
+  color: $warn;
+}
+
 .sync-row.op-row {
   align-items: center;
 
@@ -1478,5 +1482,27 @@ h2 {
   .skeleton-row {
     display: flex;
     overflow: hidden;
+  }
+}
+
+// Sidebar placeholders: numbers and genres that are still being worked out.
+.browse-cat {
+  .skeleton-line {
+    background: $bg-focus;
+  }
+
+  .browse-cat-count.skeleton-line {
+    width: 44px;
+    height: 18px;
+  }
+
+  &.skeleton-cat {
+    pointer-events: none;
+
+    .browse-cat-name.skeleton-line {
+      flex: none;
+      width: 55%;
+      height: 20px;
+    }
   }
 }

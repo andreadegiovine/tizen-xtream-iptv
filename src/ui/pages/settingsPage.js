@@ -154,17 +154,30 @@ export function createSettingsPage(ctx) {
     metaBusy = true;
     metaPanel.button.classList.add('disabled');
     toast(t('settings.working'), 15000);
+    // Every step that will run is listed at once ("queued"); each one becomes "running" on its turn.
+    const steps = [];
+    if (ctx.tmdb && ctx.tmdb.enabled) steps.push({ id: 'tmdb', run: refreshTmdb });
+    if (ctx.trakt.enabled && (await ctx.trakt.isConnected())) {
+      steps.push({
+        id: 'trakt',
+        run: async () => {
+          await ctx.trakt.flush();
+          await ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal }));
+        },
+      });
+    }
+    steps.push({ id: 'genres', run: () => ctx.genres.backfill() });
+    const skipped = new Set();
+    const ends = steps.map((step) => ctx.operations.start(step.id, { queued: true, cancel: () => skipped.add(step.id) }));
     try {
-      if (ctx.tmdb && ctx.tmdb.enabled) await refreshTmdb();
-      if (ctx.trakt.enabled && (await ctx.trakt.isConnected())) {
-        await ctx.trakt.flush();
-        await ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal }));
+      for (const step of steps) {
+        if (!skipped.has(step.id)) await step.run();
       }
-      await ctx.genres.backfill();
       toast(t('settings.metaDone'));
     } catch (err) {
       log.warn('Metadata update failed', err && err.message);
     } finally {
+      ends.forEach((end) => end());
       metaBusy = false;
       metaPanel.button.classList.remove('disabled');
       metaPanel.refresh().catch(() => undefined);
@@ -283,8 +296,11 @@ export function createSettingsPage(ctx) {
     el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('settings.title') }), opsPanel.el, panel.el, metaPanel.el, devicePanel.el, prefsTitle, h('div', { class: 'list' }, rows.slice(2).map((r) => r.el)))),
     mount() {
       opsPanel.mount();
+      metaPanel.mount();
       panel.mount();
-      ctx.providers.getActiveId().then((id) => {
+      ctx.providers.getActive().then((provider) => {
+        const id = provider && provider.id;
+        panel.setProviderName(provider ? provider.name : '');
         panel.el.style.display = id ? '' : 'none';
         syncRow.el.style.display = id ? '' : 'none';
         if (id) panel.setProvider(id);
@@ -298,6 +314,7 @@ export function createSettingsPage(ctx) {
     },
     destroy() {
       opsPanel.destroy();
+      metaPanel.destroy();
       panel.destroy();
       ctx.focus.unregister(ZONE_ID);
     },

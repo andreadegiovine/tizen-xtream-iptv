@@ -180,7 +180,7 @@
   "device.resolution": "Resolution",
   "device.heap": "App memory",
   "device.storage": "Storage",
-  "device.ram": "Device RAM",
+  "device.ram": "RAM (used / total)",
   "device.unknown": "not available",
   "device.of": "{used} of {total}",
   "common.empty": "No content available...",
@@ -197,5 +197,9 @@
   "operations.epg": "TV guide (EPG)",
   "operations.tmdb": "TMDB update",
   "operations.trakt": "Trakt sync",
-  "providers.categories": "Visible categories"
+  "providers.categories": "Visible categories",
+  "operations.queued": "Queued",
+  "meta.running": "Running since {time}",
+  "browse.genres": "Genres",
+  "player.recovering": "Playback problem, trying again… ({attempt}/{attempts})"
 }
