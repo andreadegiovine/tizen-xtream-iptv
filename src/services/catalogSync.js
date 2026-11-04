@@ -12,7 +12,7 @@ import { MediaType } from './mediaType.js';
 import { XtreamClient } from './xtreamClient.js';
 import { projectItem } from './itemProjector.js';
 import { buildEntries, buildEntryCategoryRows, buildEntryGenreRows } from './grouping.js';
-import { LIVE_LAYOUT, DEFAULT_GROUPING, groupLiveItems, annotateGroupKeys, buildLiveAllRows } from './liveGrouping.js';
+import { LIVE_LAYOUT, DEFAULT_GROUPING, groupLiveItems, annotateGroupKeys, buildLiveAllRows, cleanChannelNames, compileTerms } from './liveGrouping.js';
 import { buildNetworks, annotateNetworkKeys, networkCounts } from './liveNetworks.js';
 
 export const LIST_TTL_MS = 12 * 60 * 60 * 1000;
@@ -34,9 +34,12 @@ function groupCounts(entries, groups, networks = []) {
 
 /** Groups, networks and the marks on the channels for a live list: { groups, networks }. */
 function buildLiveComposites(entries, items, excludedCategories, grouping) {
+  const g = grouping || DEFAULT_GROUPING;
+  // The words to remove (tags included) are taken out of the channel names whenever channels are grouped or gathered in networks.
+  if (g.enabled || (g.networks && g.networks.enabled)) cleanChannelNames(entries, compileTerms(g.terms));
   const groups = groupLiveItems(items, { excludedCategories, grouping });
   annotateGroupKeys(entries, groups);
-  const networks = buildNetworks(entries, groups, (grouping && grouping.networks) || undefined);
+  const networks = buildNetworks(entries, groups, g.networks || { enabled: false, links: [] }); // a config without `networks` leaves them off
   annotateNetworkKeys(entries, groups, networks);
   return { groups, networks };
 }
@@ -87,7 +90,7 @@ export async function writeEntries(db, type, entries, { onBatch, groups = [], ne
   let categoryRows = buildEntryCategoryRows(entries);
   if (type === MediaType.LIVE) {
     // Live TV "show all": the groups plus the channels that are in none (they live in a pseudo category).
-    categoryRows = categoryRows.concat(buildLiveAllRows(entries, groups));
+    categoryRows = categoryRows.concat(buildLiveAllRows(entries, groups, networks));
     await replaceRows(db, 'groups', type, groups.concat(networks)); // networks sit in the same store, keys `live:n…`
   }
   await replaceRows(db, 'entry_cat', type, categoryRows);

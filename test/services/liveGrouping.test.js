@@ -16,7 +16,7 @@ const yoyo = [
 
 describe('terms', () => {
   test('parsed from text, defaults when empty', () => {
-    expect(parseTerms('HD, Full  HD ; hd\n4K')).toEqual(['hd', 'full hd', '4k']);
+    expect(parseTerms('HD, Full  HD ; hd\n4K')).toEqual(['HD', 'Full HD', '4K']); // the case written is kept
     expect(resolveTerms('')).toEqual(Array.from(DEFAULT_TERMS));
     expect(resolveTerms('xx')).toEqual(['xx']);
   });

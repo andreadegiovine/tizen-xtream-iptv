@@ -11,7 +11,7 @@ import { describeType } from '../../src/ui/components/syncPanel.js';
 import { createCard } from '../../src/ui/components/card.js';
 
 const ch = (id, name, extra = {}) => ({ id, name, categoryId: '1', added: 1000 + id, icon: `l${id}.png`, epgChannelId: null, ...extra });
-const channels = [ch(1, 'Rai 1 HD'), ch(2, 'Rai 2 HD'), ch(3, 'Rai 3'), ch(4, 'Rai Yoyo'), ch(5, 'Canale 5'), ch(6, 'Sport Italia'), ch(7, 'Sky Uno'), ch(8, 'Sky Cinema')];
+const channels = [ch(1, 'Rai 1 HD'), ch(2, 'Rai 2 HD'), ch(3, 'Rai 3'), ch(4, 'Rai Yoyo'), ch(5, 'Canale 5'), ch(6, 'Sport Italia'), ch(7, 'Sky Uno')];
 
 function build(items, options) {
   const entries = buildEntries('live', items.map((i) => ({ ...i, tmdbId: null, ext: '', genre: '' })));
@@ -28,7 +28,7 @@ test('the first word names a network when enough channels share it', () => {
   expect(networkToken('5 Stelle')).toBe('');
   expect(networkToken('TV')).toBe('');
   const { entries, networks } = build(channels);
-  expect(networks.map((n) => n.name)).toEqual(['Rai']); // Sky has only two
+  expect(networks.map((n) => n.name)).toEqual(['Rai']); // Sky has only one
   expect(networks[0]).toMatchObject({ key: 'live:nrai', isNetwork: true, channelCount: 4 });
   expect(networks[0].memberKeys).toEqual(['live:i1', 'live:i2', 'live:i3', 'live:i4']);
   expect(entries.find((e) => e.defaultId === 2).networkKey).toBe('live:nrai');
@@ -94,4 +94,37 @@ test('networks come first among the channels, have their own badge and a line in
   expect(card.el.querySelector('.card-status .icon-network')).not.toBeNull();
   const text = describeType({ phase: 'done' }, { itemCount: 5321, groupCount: 681, groupedCount: 2220, networkCount: 12, networkedCount: 840, lastSync: Date.UTC(2026, 10, 4, 12, 0) }, 'en-US');
   expect(text).toMatch(/^5,321 items · 681 groups \(2,220 channels\) · 12 networks \(840 channels\) · updated /);
+});
+
+test('"show all" lists the networks, then the groups in none, then the channels in no group and no network', async () => {
+  const { buildLiveAllRows } = await import('../../src/services/liveGrouping.js');
+  const items = [ch(1, 'Rai 1'), ch(2, 'Rai 2'), ch(3, 'Zeta'), ch(4, 'Zeta', { epgChannelId: 'z' }), ch(5, 'Zeta HD', { epgChannelId: 'z' }), ch(6, 'Other', { added: 99999 })];
+  const { entries, groups, networks } = build(items);
+  const rows = buildLiveAllRows(entries, groups, networks);
+  const sorted = rows.slice().sort((a, b) => b.added - a.added).map((r) => r.entryKey);
+  expect(networks.map((n) => n.key)).toEqual(['live:nrai']);
+  expect(sorted[0]).toBe('live:nrai');
+  expect(sorted[1].startsWith('live:g')).toBe(true); // a group in no network, ahead of the newer lone channels
+  expect(sorted).not.toContain('live:i1'); // in a network: only the network is listed
+  expect(sorted.slice(2)).toEqual(['live:i6']);
+});
+
+test('a tag typed as [DVS] keeps its case and is taken out of the names, so the network is not named after it', async () => {
+  const { parseTerms, compileTerms, resolveTerms, channelBase, cleanChannelNames } = await import('../../src/services/liveGrouping.js');
+  expect(parseTerms('[DVS], hd')).toEqual(['[DVS]', 'hd']);
+  expect(channelBase('[DVS] BEACHSOCCER-3', compileTerms(resolveTerms('[DVS]'))).display).toBe('BEACHSOCCER-3');
+  const items = [ch(1, '[DVS] A LIGA HIPERMOTION 1'), ch(2, '[DVS] BEACHSOCCER-3'), ch(3, '[DVS] BEACHSOCCER-4')];
+  const entries = buildEntries('live', items.map((i) => ({ ...i, tmdbId: null, ext: '', genre: '' })));
+  cleanChannelNames(entries, compileTerms(['[DVS]']));
+  expect(entries.map((e) => e.name).sort()).toEqual(['A LIGA HIPERMOTION 1', 'BEACHSOCCER-3', 'BEACHSOCCER-4']);
+  expect(entries[0].searchKeys.length).toBeGreaterThan(1); // the old spelling can still be searched
+  expect(buildNetworks(entries, [], {}).map((n) => n.name)).toEqual(['Beachsoccer']);
+});
+
+test('terms can be /regular expressions/ (commas allowed inside), a bad one is ignored', async () => {
+  const { parseTerms, compileTerms, channelBase } = await import('../../src/services/liveGrouping.js');
+  expect(parseTerms('hd, /^\\[[^\\]]{1,5}\\]\\s*/, 4k')).toEqual(['hd', '/^\\[[^\\]]{1,5}\\]\\s*/', '4k']);
+  const regex = compileTerms(['/^\\[[^\\]]+\\]/', '/(/', 'hd']);
+  expect(channelBase('[XYZ] Canale Uno HD', regex).display).toBe('Canale Uno');
+  expect(compileTerms(['/(/'])).toBeNull();
 });

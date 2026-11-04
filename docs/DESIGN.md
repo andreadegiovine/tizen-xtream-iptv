@@ -111,6 +111,9 @@ Canali Live raggruppati: `src/services/liveGrouping.js` (puro) decide i gruppi d
 
 ## Reti Live TV
 
-- Una rete raccoglie i canali e i gruppi che iniziano con la stessa parola (≥ 3 elementi; `networkToken` scarta parole generiche, numeri e parole corte). È calcolata nella stessa sync/rebuild dei gruppi (`buildNetworks` dopo `groupLiveItems`) e salvata nello store `groups` con chiave `live:n<id>` (`isCompositeKey` vale per gruppi e reti); non compare in "Mostra tutto".
+- Una rete raccoglie i canali e i gruppi che iniziano con la stessa parola (≥ 2 elementi; `networkToken` scarta parole generiche, numeri e parole corte). È calcolata nella stessa sync/rebuild dei gruppi (`buildNetworks` dopo `groupLiveItems`) e salvata nello store `groups` con chiave `live:n<id>` (`isCompositeKey` vale per gruppi e reti); in "Mostra tutto" è elencata per prima (poi i gruppi senza rete, poi i canali senza gruppo né rete; i membri di una rete non si ripetono).
 - Aggiunte a mano: `[streamId, reteId]` in `liveNetworkLinks:<provider>` (`linkNetwork`/`unlinkNetwork`), valide solo per reti esistenti; si tolgono solo quelle. Un'unità (gruppo o canale) appartiene alla rete se uno dei suoi stream è collegato.
 - I canali e i gruppi portano `networkKey`. Preferiti = record titolo con la chiave della rete; collezioni = chiave tra gli `entryKeys`. `ctx.openEntry` apre la pagina `network` per le reti.
+
+- Le parole da rimuovere dai nomi (`liveGroupPatterns`) mantengono il maiuscolo/minuscolo scritto e accettano `/regex/`; si applicano ai nomi dei canali singoli (`cleanChannelNames`) e dei gruppi, prima di calcolare reti e gruppi.
+- Una rete si può aggiungere ai preferiti (record titolo con la chiave `live:n…`) e fissare nella sidebar Live (`pins` con `kind: 'network'`).

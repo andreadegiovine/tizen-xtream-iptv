@@ -1,8 +1,8 @@
 import { NETWORK_PREFIX } from './liveGrouping.js';
 import { makeSearchKey } from './titleNormalizer.js';
 
-/** Fewest channels or groups sharing a first word for it to be a network by itself. */
-export const MIN_NETWORK_UNITS = 3;
+/** Fewest channels or groups sharing a first word for a network to exist (with fewer it is dropped). */
+export const MIN_NETWORK_UNITS = 2;
 
 /** First words too generic to name a network ("Sport 1", "Sport Italia" are not one broadcaster). */
 const GENERIC = new Set([
@@ -37,7 +37,7 @@ function unitsOf(entries, groups) {
 }
 
 /**
- * Networks of Live TV: every channel or group whose name starts with the same word (Rai 1, Rai 2, Rai 3 → "Rai").
+ * Networks of Live TV: every channel or group whose name starts with the same word (Rai 1, Rai 2, Rai 3 → "Rai"; at least two).
  * Hand-made links `[streamId, networkId]` put a channel in an existing network, whatever its name.
  * Returns rows for the `groups` store: { key: 'live:n<id>', isNetwork, name, icon, memberKeys, manualKeys, channelCount, added, ... }.
  */

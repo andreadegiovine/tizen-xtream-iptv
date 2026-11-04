@@ -20,15 +20,46 @@ export const DEFAULT_TERMS = Object.freeze([
   '2160p', '1080p', '1080i', '720p', '576p', '480p', '50fps', '60fps', 'raw', 'hq', 'lq', 'backup',
 ]);
 
-/** "HD, FHD ; 4K" → ['hd', 'fhd', '4k']. */
+/** A term written as `/pattern/` is a regular expression. */
+const REGEX_TERM = /^\/(.+)\/$/;
+
+/**
+ * "HD, [DVS] ; /^\[[^\]]+\]/ ; 4K" → ['HD', '[DVS]', '/^\[[^\]]+\]/', '4K'. Terms are split on comma, semicolon or newline (not inside a
+ * `/regex/`), keep the case they were written in (matching ignores it) and appear once.
+ */
 export function parseTerms(text) {
+  const source = String(text == null ? '' : text);
+  const isSeparator = (ch) => ch === ',' || ch === ';' || ch === '\n';
+  const found = [];
+  let at = 0;
+  while (at < source.length) {
+    while (at < source.length && (isSeparator(source[at]) || /\s/.test(source[at]))) at += 1;
+    if (at >= source.length) break;
+    let end = -1;
+    if (source[at] === '/') {
+      // a pattern ends at the slash that is followed by a separator or the end, so slashes inside it are fine
+      for (let i = at + 1; i < source.length; i += 1) {
+        if (source[i] === '/' && (i + 1 === source.length || /[\s,;]/.test(source[i + 1]))) {
+          end = i + 1;
+          break;
+        }
+      }
+    }
+    if (end < 0) {
+      end = at;
+      while (end < source.length && !isSeparator(source[end])) end += 1;
+    }
+    const raw = source.slice(at, end).trim();
+    found.push(REGEX_TERM.test(raw) ? raw : raw.replace(/\s+/g, ' '));
+    at = end;
+  }
   const seen = new Set();
-  String(text == null ? '' : text)
-    .split(/[,;\n]/)
-    .map((term) => term.trim().toLowerCase().replace(/\s+/g, ' '))
-    .filter(Boolean)
-    .forEach((term) => seen.add(term));
-  return Array.from(seen);
+  return found.filter((term) => {
+    const key = term.toLowerCase();
+    if (!term || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export const termsText = (terms) => terms.join(', ');
@@ -41,14 +72,32 @@ export function resolveTerms(text) {
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** One regular expression for all the terms (longest first, whole words only); null without terms. */
+/**
+ * One regular expression for the plain terms (longest first, whole words only, case ignored); null without terms.
+ * The `/regex/` terms are compiled apart and kept in its `extra` list: channelBase() applies them too.
+ */
 export function compileTerms(terms) {
-  const parts = Array.from(terms || [])
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length)
-    .map((term) => escapeRegExp(term).replace(/ /g, '\\s+'));
-  if (!parts.length) return null;
-  return new RegExp(`(^|[^\\p{L}\\p{N}])(?:${parts.join('|')})(?=$|[^\\p{L}\\p{N}])`, 'giu');
+  const list = Array.from(terms || []).filter(Boolean);
+  const extra = [];
+  const plain = [];
+  list.forEach((term) => {
+    const match = REGEX_TERM.exec(term);
+    if (!match) {
+      plain.push(term);
+      return;
+    }
+    try {
+      const rx = new RegExp(match[1], 'giu');
+      if (!rx.test('')) extra.push(rx); // a pattern that matches nothing at all would only scramble the names
+    } catch {
+      /* not a valid pattern: ignored */
+    }
+  });
+  if (!plain.length && !extra.length) return null;
+  const parts = plain.sort((a, b) => b.length - a.length).map((term) => escapeRegExp(term).replace(/ /g, '\\s+'));
+  const regex = parts.length ? new RegExp(`(^|[^\\p{L}\\p{N}])(?:${parts.join('|')})(?=$|[^\\p{L}\\p{N}])`, 'giu') : /(?!)/u;
+  regex.extra = extra;
+  return regex;
 }
 
 /**
@@ -71,6 +120,10 @@ export function channelBase(name, regex) {
   if (regex) {
     regex.lastIndex = 0;
     text = text.replace(regex, '$1 ');
+    (regex.extra || []).forEach((rx) => {
+      rx.lastIndex = 0;
+      text = text.replace(rx, ' ');
+    });
   }
   text = text.replace(/[[(]\s*[\])]/g, ' '); // brackets left empty
   const display = normalizeTitle(text).cleanTitle.replace(/\s+/g, ' ').trim() || original;
@@ -246,17 +299,32 @@ export function annotateGroupKeys(entries, groups) {
   });
 }
 
-/** Rows of the "show all" view of Live TV: the groups and the channels that are in none (one row each, newest first by `added`). */
-export function buildLiveAllRows(entries, groups) {
+/** Rows of the "show all" view of Live TV, in this order of priority: the networks, then the groups that are in none, then the channels that are in no group and no network. */
+export const ALL_TIER = 1e13; // added to `added` so that the index (newest first) lists a tier before the next
+
+export function buildLiveAllRows(entries, groups, networks = []) {
+  const inNetwork = new Set();
+  networks.forEach((network) => network.memberKeys.forEach((key) => inNetwork.add(key)));
   const grouped = new Set();
   groups.forEach((group) => group.memberIds.forEach((id) => grouped.add(id)));
   const rows = [];
-  entries.forEach((entry) => {
-    if (grouped.has(entry.defaultId)) return;
-    rows.push({ key: `${entry.key}|${LIVE_ALL}`, entryKey: entry.key, type: 'live', categoryId: LIVE_ALL, added: entry.added });
-  });
-  groups.forEach((group) => rows.push({ key: `${group.key}|${LIVE_ALL}`, entryKey: group.key, type: 'live', categoryId: LIVE_ALL, added: group.added }));
+  const add = (entryKey, added, tier) => rows.push({ key: `${entryKey}|${LIVE_ALL}`, entryKey, type: 'live', categoryId: LIVE_ALL, added: added + tier * ALL_TIER });
+  networks.forEach((network) => add(network.key, network.added, 2));
+  groups.forEach((group) => inNetwork.has(group.key) || add(group.key, group.added, 1));
+  entries.forEach((entry) => grouped.has(entry.defaultId) || inNetwork.has(entry.key) || add(entry.key, entry.added, 0));
   return rows;
+}
+
+/** Takes the removable words (and tags) out of the names of the channels and keeps the old spelling searchable. */
+export function cleanChannelNames(entries, regex) {
+  if (!regex) return;
+  entries.forEach((entry) => {
+    const { display } = channelBase(entry.name, regex);
+    if (display === entry.name) return;
+    const key = makeSearchKey(display);
+    entry.name = display;
+    if (key && !entry.searchKeys.includes(key)) entry.searchKeys = entry.searchKeys.concat(key);
+  });
 }
 
 /** What the catalog sync needs: { enabled, terms, links, splits, networks: { enabled, links } }. The default when nothing is configured. */

@@ -254,12 +254,14 @@ export function createBrowsePage(ctx, params = {}) {
   async function syncFavorite() {
     if (destroyed || !providerId) return;
     const item = items[selected];
-    if (!item || (item.kind !== 'category' && item.kind !== 'genre')) {
+    if (!item || (item.kind !== 'category' && item.kind !== 'genre' && item.kind !== 'network')) {
       favState = null;
       renderHead();
       return;
     }
-    const active = await ctx.favorites.hasFilter(providerId, item.kind, type, item.id).catch(() => false);
+    // A network is a title of its own (the same record as the heart on its page); categories and genres are favourite filters.
+    const isNetwork = item.kind === 'network';
+    const active = await (isNetwork ? ctx.favorites.has(providerId, item.id) : ctx.favorites.hasFilter(providerId, item.kind, type, item.id)).catch(() => false);
     const pinActive = await ctx.pins.has(providerId, item.kind, type, item.id).catch(() => false);
     if (destroyed || items[selected] !== item) return;
     const target = { kind: item.kind, type, id: item.id, name: item.name };
@@ -267,7 +269,7 @@ export function createBrowsePage(ctx, params = {}) {
       active,
       pinActive,
       onToggle: async () => {
-        const now = await ctx.favorites.toggleFilter(providerId, target);
+        const now = await (isNetwork ? ctx.favorites.toggle(providerId, item.id, type) : ctx.favorites.toggleFilter(providerId, target));
         const saved = await ctx.favorites.list(providerId);
         counts.set('favorites:', saved.filter((f) => f.type === type).length);
         if (!destroyed) {
@@ -416,7 +418,6 @@ export function createBrowsePage(ctx, params = {}) {
     const excluded = await ctx.settings.getExcluded(providerId, type);
     pinned = await ctx.pins.list(providerId, type).catch(() => []);
     categories = (await listCategories(db, type)).filter((c) => !excluded.has(String(c.id))).map((c) => ({ id: c.id, name: c.name }));
-    pinned = pinned.filter((p) => p.kind !== 'category' || !excluded.has(String(p.id))); // a hidden category is not pinned in the sidebar
     const filter = params.filter || null;
     const wantsGenre = filter && filter.kind === 'genre';
     const loadGenres = async () => {
@@ -430,6 +431,8 @@ export function createBrowsePage(ctx, params = {}) {
     }
     expanded = Boolean(filter && filter.kind === 'category');
     networks = type === 'live' ? await listNetworks(db).catch(() => []) : [];
+    // A hidden category or a network that no longer exists is not pinned in the sidebar.
+    pinned = pinned.filter((p) => (p.kind !== 'category' || !excluded.has(String(p.id))) && (p.kind !== 'network' || networks.some((n) => n.key === p.id)));
     items = sidebarItems({ type, genres, categories, pinned, networks, networksExpanded, expanded, genresExpanded, genresLoading, labels: labels() });
     selected = indexOfFilter(items, filter);
     renderCategories();
