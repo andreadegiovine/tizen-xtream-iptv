@@ -1,67 +1,63 @@
 import { NETWORK_PREFIX } from './liveGrouping.js';
-import { makeSearchKey } from './titleNormalizer.js';
 
-/** Fewest channels or groups sharing a first word for a network to exist (with fewer it is dropped). */
+/** Fewest channels or groups for a network to exist (with fewer it is dropped). */
 export const MIN_NETWORK_UNITS = 2;
+/** Least share (%) of every name that the common beginning of the network must be. Found on the names of real reports: 50 keeps "Rai 1/2/3" and "Eurosport 01/02" together and "Tele Arena" apart from "Tele Universo". */
+export const DEFAULT_SIMILARITY = 50;
+/** Most characters a name can have beyond the common beginning of its network. Above 13 nothing more is gathered, only wrong things. */
+export const DEFAULT_MAX_DIFF = 13;
+/** Shortest network name, in letters and digits. */
+const MIN_NAME_CHARS = 3;
 
-/** First words too generic to name a network ("Sport 1", "Sport Italia" are not one broadcaster). */
+/** Names too generic to be a network on their own ("Sport 1", "Sport 2" are not one broadcaster). */
 const GENERIC = new Set([
-  'tv', 'canale', 'channel', 'la', 'il', 'lo', 'le', 'the', 'radio', 'sport', 'sports', 'news', 'music', 'musica', 'play', 'free', 'super',
-  'kids', 'cinema', 'film', 'movie', 'movies', 'premium', 'live', 'event', 'eventi', 'ppv', 'uk', 'usa', 'it', 'de', 'fr', 'es',
+  'tv', 'canale', 'channel', 'radio', 'sport', 'sports', 'news', 'music', 'musica', 'play', 'free', 'super', 'kids', 'cinema', 'film',
+  'movie', 'movies', 'premium', 'live', 'event', 'eventi', 'ppv',
 ]);
 
-/** Tokens that only tell a version of the same channel apart: numbers and quality marks ("Rai 1 HD" → "1", "hd"). */
-const SUFFIX = /^(\d+|hd|fhd|uhd|sd|4k|8k|hevc|h265|h264|raw)$/;
-/** Most words a network name can have; longer prefixes are channel titles, not broadcasters. */
-const MAX_WORDS = 3;
-/** A prefix is extended to its next word when that word holds this share of the units (and at most one unit stays out). */
-const EXTEND_SHARE = 0.8;
-/** Different second words needed to call a single word a network without numbered channels ("Sky Uno", "Sky Cinema", "Sky Sport")... */
-const MIN_DISTINCT = 3;
-/** ...and the proof also needs sub-families (at least this many second words shared by 2+ units: "Sky Cinema …", "Sky Sport …") or this many units. */
-const MIN_FAMILIES = 3;
-const BIG_NETWORK = 20;
-/** Discarded names kept in the Diagnostics report. */
-const MAX_REPORT_REJECTED = 150;
-/** Words a network name cannot end with: it goes on ("Aldo Giovanni e" → "Aldo Giovanni e Giacomo"). */
-const STOP = new Set(['e', 'ed', 'di', 'del', 'della', 'dei', 'delle', 'da', 'al', 'alla', 'ai', 'in', 'il', 'lo', 'la', 'le', 'un', 'una', 'de', 'and', 'of', 'the', 'del', 'con', 'per']);
-/** Most words of a name that was extended through such words. */
-const MAX_STOP_WORDS = 5;
-/** Quality marks and "channel": they do not make a channel a different one ("Harry Potter" = "Harry Potter Channel"). */
-const SAME = new Set(['hd', 'fhd', 'uhd', 'sd', '4k', '8k', 'hevc', 'h265', 'h264', 'raw', 'channel']);
-
-/** Words of a channel name: [{ key, word }] with the normalized key and the word as written. */
-function wordsOf(name) {
-  const words = [];
-  String(name || '')
-    .trim()
-    .split(/\s+/)
-    .forEach((word) => {
-      const pieces = makeSearchKey(word).split(' ').filter(Boolean); // "Rai_1" → rai, 1
-      const written = word.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-      pieces.forEach((key, i) => words.push({ key, word: written.length === pieces.length ? written[i] : key, plus: i === 0 && /^\+\d/.test(word) })); // "+1": the same channel one hour later
-    });
-  return words;
+/** A name for comparing: lowercase letters and digits only, accents removed ("Rai 3 +1" → "rai31"), and where each word starts. */
+function analyseName(name) {
+  const text = String(name || '').normalize('NFD');
+  const pos = []; // text position of each character of the key
+  const starts = new Set(); // key positions where a word of the written name starts
+  let key = '';
+  let boundary = true;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (/\p{M}/u.test(ch)) continue;
+    if (/[\p{L}\p{N}]/u.test(ch)) {
+      if (boundary) starts.add(key.length);
+      pos.push(i);
+      key += ch.toLowerCase();
+      boundary = false;
+    } else boundary = true;
+  }
+  return { key, pos, starts, text };
 }
 
-/** First word of a channel name when it can name a network (3+ letters, not a number, not generic), else ''. */
-export function networkToken(name) {
-  const token = (wordsOf(name)[0] || { key: '' }).key;
-  return token.length >= 3 && !/^\d+$/.test(token) && !GENERIC.has(token) ? token : '';
+const commonLength = (a, b) => {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i;
+};
+
+/** The written name of the first `cut` characters of a unit's key: "AMAZON PRIME" in capitals becomes "Amazon Prime", acronyms stay. */
+function writtenName(info, cut) {
+  let end = info.pos[cut - 1] + 1;
+  while (end < info.text.length && /\p{M}/u.test(info.text[end])) end++;
+  const text = info.text.slice(info.pos[0], end).normalize('NFC');
+  if (text !== text.toUpperCase() || text === text.toLowerCase()) return text;
+  return text.replace(/\p{L}+/gu, (word) => (word.length <= 3 ? word : word.charAt(0) + word.slice(1).toLowerCase()));
 }
 
-/** One written form of a word out of many: the most common, preferring one that is not all caps ("AMAZON" vs "Amazon"). */
-function voteWord(forms, key) {
-  const count = new Map();
-  forms.forEach((f) => count.set(f, (count.get(f) || 0) + 1));
-  const ranked = Array.from(count).sort((a, b) => {
-    const capsA = a[0] === a[0].toUpperCase() && a[0] !== a[0].toLowerCase() ? 1 : 0;
-    const capsB = b[0] === b[0].toUpperCase() && b[0] !== b[0].toLowerCase() ? 1 : 0;
-    return capsA - capsB || b[1] - a[1] || (a[0] < b[0] ? -1 : 1);
+/** Where the name ends: at the end of a word for every member; if it cuts a word in two ("amazonprime1" of "…1" and "…10"), the word is left out. */
+function wordEnd(members, length) {
+  if (members.every((u) => length >= u.info.key.length || u.info.starts.has(length))) return length;
+  let start = 0;
+  members[0].info.starts.forEach((p) => {
+    if (p <= length && p > start) start = p;
   });
-  const word = ranked[0] ? ranked[0][0] : key;
-  if (word === word.toLowerCase() || (word === word.toUpperCase() && word.length > 4)) return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-  return word;
+  return start >= MIN_NAME_CHARS ? start : length;
 }
 
 /** What a network holds: a group or a channel that is in none (one card each in the lists). */
@@ -78,110 +74,63 @@ function unitsOf(entries, groups) {
 }
 
 /**
- * Finds the networks: the longest run of first words (at most three) that channels and groups share, with proof.
- * "Rai 1", "Rai 2" → Rai (numbered versions); "Sky Uno", "Sky Cinema", "Sky Sport" → Sky (many different second words);
- * "Amazon Prime 1", "Amazon Prime 2" → Amazon Prime (one second word holds almost everything: the name is that long).
- * One number alone is part of a name ("Rete 4"), the same channel twice is not a network, a name never ends with "e" or "di".
- * A word with few units and no proof ("Alessandro Borghese …" next to "Alessandro Siani") is not a network, but its longer
- * parts can be ("Alessandro Borghese"). Returns { networks: [{ id, name, units, proof }], rejected: [{ name, units, reason }] }.
+ * Finds the networks by what the names have in common at the beginning. The names are compared as lowercase letters and digits
+ * without spaces or accents; sorted, a name joins the network before it while the common beginning of all of them stays at least
+ * `similarity`% of every name and no name goes more than `maxDiff` characters beyond it. The network is named by that common beginning.
+ * Returns { networks: [{ id, name, units }], rejected: [{ name, units, reason, sample }] }: gatherings of one name written many ways
+ * ("duplicates") and of a generic word ("generic") are not networks.
  */
-export function analyzeNetworks(units, { min = MIN_NETWORK_UNITS } = {}) {
-  units.forEach((unit) => {
-    unit.words = wordsOf(unit.name);
+export function analyzeNetworks(units, { similarity = DEFAULT_SIMILARITY, maxDiff = DEFAULT_MAX_DIFF, min = MIN_NETWORK_UNITS } = {}) {
+  const items = units
+    .map((unit) => ({ unit, info: analyseName(unit.name) }))
+    .filter((item) => item.info.key)
+    .sort((a, b) => (a.info.key < b.info.key ? -1 : a.info.key > b.info.key ? 1 : 0));
+  const fits = (list, length) => length >= MIN_NAME_CHARS && list.every((u) => 100 * length >= similarity * u.info.key.length && u.info.key.length - length <= maxDiff);
+  const gatherings = [];
+  let members = [];
+  let prefix = '';
+  items.forEach((item) => {
+    if (members.length) {
+      const length = commonLength(prefix, item.info.key);
+      if (fits(members.concat(item), length)) {
+        members.push(item);
+        prefix = prefix.slice(0, length);
+        return;
+      }
+      gatherings.push({ members, prefix });
+    }
+    members = [item];
+    prefix = item.info.key;
   });
-  // "Real Time" and "RealTime", "Disney Plus" and "Disneyplus": when another channel starts with the glued word, the two words are one.
-  const firsts = new Set(units.map((unit) => (unit.words[0] ? unit.words[0].key : '')).filter(Boolean));
-  units.forEach((unit) => {
-    const [a, b] = unit.words;
-    if (a && b && !a.plus && !b.plus && firsts.has(a.key + b.key)) unit.words.splice(0, 2, { key: a.key + b.key, word: a.word + b.word, plus: false });
-  });
-  const networks = [];
+  if (members.length) gatherings.push({ members, prefix });
+
+  const networks = new Map();
   const rejected = [];
-  const wordAt = (unit, depth) => (unit.words[depth] ? unit.words[depth].key : '');
-  const nameable = (key, depth) => (key.length >= 2 || (depth > 0 && /^[a-z]$/.test(key))) && !SUFFIX.test(key) && !(depth === 0 && (key.length < 3 || GENERIC.has(key) || /^\d+$/.test(key)));
-  const split = (list, depth) => {
-    const children = new Map();
-    list.forEach((unit) => {
-      const key = wordAt(unit, depth);
-      if (!key) return;
-      if (!children.has(key)) children.set(key, []);
-      children.get(key).push(unit);
+  gatherings
+    .filter((g) => g.members.length >= min)
+    .forEach(({ members: list, prefix: common }) => {
+      const length = wordEnd(list, common.length);
+      const id = common.slice(0, length);
+      const mixed = list.find((u) => writtenName(u.info, length) !== writtenName(u.info, length).toUpperCase()) || list[0];
+      const name = writtenName(mixed.info, length);
+      const sample = list.slice(0, 3).map((u) => u.unit.name);
+      if (new Set(list.map((u) => u.info.key)).size < 2) rejected.push({ name, units: list.length, reason: 'duplicates', sample });
+      else if (GENERIC.has(id) || /^\d+$/.test(id)) rejected.push({ name, units: list.length, reason: 'generic', sample });
+      else if (networks.has(id)) networks.get(id).units.push(...list.map((u) => u.unit));
+      else networks.set(id, { id, name, units: list.map((u) => u.unit) });
     });
-    return children;
-  };
-  const suffixOnly = (unit, depth) => unit.words.length > depth && unit.words.slice(depth).every((w) => SUFFIX.test(w.key));
-  /** What makes a channel a different one: its words without quality marks, "channel" and "+1". */
-  const signature = (unit) => unit.words.filter((w) => !w.plus && !SAME.has(w.key)).map((w) => w.key).join(' ');
-  const reject = (list, label, reason) => rejected.push({ name: label, units: list.length, reason, sample: list.slice(0, 3).map((u) => u.name) });
-
-  const visit = (list, depth, prefix) => {
-    // list: units sharing the first `depth` words (prefix); look at what comes next.
-    const children = split(list, depth);
-    const named = Array.from(children).filter(([key]) => nameable(key, depth));
-    const top = named.slice().sort((a, b) => b[1].length - a[1].length)[0];
-    const label = prefix.join(' ');
-    const dominant = Boolean(top) && top[1].length >= min && top[1].length >= EXTEND_SHARE * list.length;
-
-    // One next word holds (almost) all the units: the network name is that long ("Amazon" → "Amazon Prime", "UEFA Nation" → "UEFA Nation League").
-    if (depth < MAX_WORDS && dominant) return visit(top[1], depth + 1, prefix.concat(top[0]));
-    // A name never ends with "e", "di", "al"…: it goes on while the units agree ("Aldo Giovanni e Giacomo").
-    const open = STOP.has(prefix[depth - 1]);
-    if (depth < MAX_STOP_WORDS && ((open && top && top[1].length >= min) || (depth >= 2 && dominant && STOP.has(top[0])))) return visit(top[1], depth + 1, prefix.concat(top[0]));
-    if (open) return reject(list, label, 'noProof');
-
-    if (new Set(list.map(signature)).size < 2) return reject(list, label, 'duplicates'); // the same channel more than once is not a network
-    let proof = '';
-    if (depth >= 2) proof = 'specific';
-    else {
-      const numbers = new Set();
-      list.filter((unit) => suffixOnly(unit, depth)).forEach((unit) => {
-        const number = unit.words.slice(depth).find((w) => !w.plus && /^\d+$/.test(w.key));
-        if (number) numbers.add(number.key);
-      });
-      const families = named.filter(([, sub]) => sub.length >= 2).length;
-      if (numbers.size >= 2) proof = 'numbered'; // "Rai 1", "Rai 2" (one number alone is a name: "Rete 4", "Italia 1")
-      else if (named.length >= MIN_DISTINCT && list.length >= MIN_DISTINCT && (families >= MIN_FAMILIES || list.length >= BIG_NETWORK)) proof = 'distinct';
-    }
-    if (proof && list.length >= min) {
-      const name = prefix.map((key, i) => (i > 0 && STOP.has(key) ? key : voteWord(list.map((unit) => unit.words[i] && unit.words[i].word).filter(Boolean), key))).join(' ');
-      networks.push({ id: prefix.join('-'), name, units: list, proof, words: prefix.length });
-      return undefined;
-    }
-    if (depth < MAX_WORDS) {
-      let deeper = false;
-      named.forEach(([key, sub]) => {
-        if (sub.length >= min) {
-          deeper = true;
-          visit(sub, depth + 1, prefix.concat(key));
-        }
-      });
-      return reject(list, label, deeper ? 'split' : 'noProof');
-    }
-    return reject(list, label, 'noProof');
-  };
-
-  const first = new Map();
-  units.forEach((unit) => {
-    const key = unit.words[0] && nameable(unit.words[0].key, 0) ? unit.words[0].key : '';
-    if (!key) return;
-    if (!first.has(key)) first.set(key, []);
-    first.get(key).push(unit);
-  });
-  first.forEach((list, key) => {
-    if (list.length >= min) visit(list, 1, [key]);
-  });
-  return { networks, rejected };
+  return { networks: Array.from(networks.values()), rejected };
 }
 
 /**
  * Networks of Live TV (see analyzeNetworks). Hand-made links `[streamId, networkId]` put a channel in an existing network, whatever its name.
  * Returns rows for the `groups` store: { key: 'live:n<id>', isNetwork, name, icon, memberKeys, manualKeys, channelCount, added, ... };
- * `report` (when given an object) receives { networks, rejected } for the Diagnostics page.
+ * `report` (when given an object) receives what the Diagnostics page shows.
  */
-export function buildNetworks(entries, groups, { enabled = true, links = [], min = MIN_NETWORK_UNITS, report = null } = {}) {
+export function buildNetworks(entries, groups, { enabled = true, links = [], min = MIN_NETWORK_UNITS, similarity = DEFAULT_SIMILARITY, maxDiff = DEFAULT_MAX_DIFF, report = null } = {}) {
   if (!enabled) return [];
   const units = unitsOf(entries, groups);
-  const analysis = analyzeNetworks(units, { min });
+  const analysis = analyzeNetworks(units, { similarity, maxDiff, min });
   const known = new Map(analysis.networks.map((n) => [n.id, n]));
   const linkOf = new Map((links || []).map(([id, network]) => [id, network]));
   const members = new Map(); // network id → [{ unit, manual }]
@@ -197,21 +146,20 @@ export function buildNetworks(entries, groups, { enabled = true, links = [], min
   const rows = Array.from(members, ([id, list]) => {
     list.sort((a, b) => (a.unit.name < b.unit.name ? -1 : a.unit.name > b.unit.name ? 1 : 0));
     const icon = list.find(({ unit }) => unit.icon && own.get(unit.key) === id) || list.find(({ unit }) => unit.icon);
-    const network = known.get(id);
     return {
       key: `${NETWORK_PREFIX}${id}`,
       type: 'live',
       isNetwork: true,
       networkId: id,
       tmdbId: null,
-      name: network.name,
+      name: known.get(id).name,
       year: null,
       rating: null,
       added: Math.max(...list.map(({ unit }) => unit.added || 0)),
       defaultId: null,
       members: [],
       categoryIds: [],
-      searchKeys: [id.replace(/-/g, ' ')],
+      searchKeys: [id],
       genres: [],
       icon: icon ? icon.unit.icon : '',
       epgChannelId: null,
@@ -221,13 +169,16 @@ export function buildNetworks(entries, groups, { enabled = true, links = [], min
     };
   }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   if (report) {
-    const proofOf = new Map(analysis.networks.map((n) => [n.id, n.proof]));
-    report.networks = rows.map((row) => ({ name: row.name, proof: proofOf.get(row.networkId), units: row.memberKeys.length, channels: row.channelCount, manual: row.manualKeys.length, sample: members.get(row.networkId).slice(0, 3).map(({ unit }) => unit.name) }));
+    report.params = { similarity, maxDiff };
+    report.networks = rows.map((row) => ({ name: row.name, id: row.networkId, units: row.memberKeys.length, channels: row.channelCount, manual: row.manualKeys.length, sample: members.get(row.networkId).slice(0, 3).map(({ unit }) => unit.name) }));
     report.rejected = analysis.rejected.slice().sort((a, b) => b.units - a.units).slice(0, MAX_REPORT_REJECTED); // the biggest first: they matter most
     report.unassigned = units.filter((unit) => !own.has(unit.key)).length;
   }
   return rows;
 }
+
+/** Discarded gatherings kept in the Diagnostics report. */
+const MAX_REPORT_REJECTED = 150;
 
 /** Marks the groups and the channels that belong to a network (`networkKey`); a channel inside a group takes its group's network. */
 export function annotateNetworkKeys(entries, groups, networks) {
@@ -248,9 +199,10 @@ export function networkCounts(networks) {
 
 /** Text of the networks report (what the Diagnostics page shows); `tr(key, vars)` translates the labels. */
 export function formatNetworkReport(report, tr) {
-  const lines = [tr('diag.networks.summary', { n: report.networks.length, u: report.unassigned || 0, r: report.rejected.length })];
+  const params = report.params || {};
+  const lines = [tr('diag.networks.summary', { n: report.networks.length, u: report.unassigned || 0, r: report.rejected.length, s: params.similarity, d: params.maxDiff })];
   report.networks.forEach((n) => {
-    lines.push(`+ ${n.name} [${tr(`diag.networks.${n.proof}`)}] ${n.units}/${n.channels}${n.manual ? ` (+${n.manual})` : ''}: ${n.sample.join(' | ')}`);
+    lines.push(`+ ${n.name} [${n.id}] ${n.units}/${n.channels}${n.manual ? ` (+${n.manual})` : ''}: ${n.sample.join(' | ')}`);
   });
   report.rejected.forEach((r) => {
     lines.push(`- ${r.name} (${r.units}) ${tr(`diag.networks.${r.reason}`)}: ${r.sample.join(' | ')}`);

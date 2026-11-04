@@ -1,4 +1,4 @@
-import { buildNetworks, annotateNetworkKeys, networkToken, networkCounts, formatNetworkReport } from '../../src/services/liveNetworks.js';
+import { buildNetworks, analyzeNetworks, annotateNetworkKeys, networkCounts, formatNetworkReport } from '../../src/services/liveNetworks.js';
 import { buildChannelGroups, annotateGroupKeys, createLiveGroupingService } from '../../src/services/liveGrouping.js';
 import { buildEntries } from '../../src/services/grouping.js';
 import { openProviderDb } from '../../src/db/providerDb.js';
@@ -22,18 +22,14 @@ function build(items, options) {
   return { entries, groups, networks };
 }
 
-test('the first word names a network when enough channels share it', () => {
-  expect(networkToken('Rai 1 HD')).toBe('rai');
-  expect(networkToken('Sport Italia')).toBe(''); // generic
-  expect(networkToken('5 Stelle')).toBe('');
-  expect(networkToken('TV')).toBe('');
+test('channels whose names begin the same way make a network (the common beginning is its name)', () => {
   const { entries, networks } = build(channels);
-  expect(networks.map((n) => n.name)).toEqual(['Rai']); // Sky has only one
-  expect(networks[0]).toMatchObject({ key: 'live:nrai', isNetwork: true, channelCount: 4 });
-  expect(networks[0].memberKeys).toEqual(['live:i1', 'live:i2', 'live:i3', 'live:i4']);
+  expect(networks.map((n) => n.name)).toEqual(['Rai']); // Rai Yoyo is too far from "Rai 1": the common beginning is under half of it
+  expect(networks[0]).toMatchObject({ key: 'live:nrai', isNetwork: true, channelCount: 3 });
+  expect(networks[0].memberKeys).toEqual(['live:i1', 'live:i2', 'live:i3']);
   expect(entries.find((e) => e.defaultId === 2).networkKey).toBe('live:nrai');
   expect(entries.find((e) => e.defaultId === 5).networkKey).toBeUndefined();
-  expect(networkCounts(networks)).toEqual({ networkCount: 1, networkedCount: 4 });
+  expect(networkCounts(networks)).toEqual({ networkCount: 1, networkedCount: 3 });
 });
 
 test('a group counts once for the network and a channel in a group takes the group network', () => {
@@ -60,7 +56,7 @@ test('networks are stored with the groups, found by key, and kept out of the mer
   const client = { getCategories: async () => [{ category_id: '1', category_name: 'All' }], getStreams: async () => rows };
   const db = await openProviderDb('live-networks-1');
   const meta = await syncType({ db, client, type: 'live' });
-  expect(meta).toMatchObject({ networkCount: 1, networkedCount: 4 });
+  expect(meta).toMatchObject({ networkCount: 1, networkedCount: 3 });
   expect((await listNetworks(db)).map((n) => n.key)).toEqual(['live:nrai']);
   expect((await getEntry(db, 'live:nrai')).name).toBe('Rai');
   expect((await getEntry(db, 'live:i2')).networkKey).toBe('live:nrai');
@@ -136,7 +132,7 @@ test('underscores in channel names become spaces', async () => {
   expect(channelBase('IT_Rai_Yoyo_HD', compileTerms(['hd'])).display).toBe('IT Rai Yoyo');
   const entries = buildEntries('live', [ch(1, 'Rai_1'), ch(2, 'Rai_2')].map((i) => ({ ...i, tmdbId: null, ext: '', genre: '' })));
   expect(entries.map((e) => e.name).sort()).toEqual(['Rai 1', 'Rai 2']);
-  expect(networkToken('Rai_1')).toBe('rai');
+  expect(buildNetworks(entries, [], {}).map((n) => n.name)).toEqual(['Rai']);
 });
 
 test('a term made of symbols ("==", "[DVS]") is removed wherever it is, words still match whole', async () => {
@@ -147,52 +143,46 @@ test('a term made of symbols ("==", "[DVS]") is removed wherever it is, words st
   expect(channelBase('Chd Hd', regex).display).toBe('Chd'); // "hd" inside a word stays
 });
 
-test('a word shared by unrelated shows is not a network, its longer common name can be', () => {
-  const items = [ch(1, 'Alessandro Borghese 4 ristoranti'), ch(2, 'Alessandro Borghese Celebrity Chef Channel 1'), ch(3, 'Alessandro Borghese Celebrity Chef Channel 2'), ch(4, 'Alessandro Siani Channel')];
-  const { networks } = build(items);
-  expect(networks.map((n) => n.name)).toEqual(['Alessandro Borghese']);
-  expect(networks[0].memberKeys).toEqual(['live:i1', 'live:i2', 'live:i3']);
+test('the network is named by what all its names have in common, as written, whole words only', () => {
+  const alessandro = [ch(1, 'Alessandro Borghese 4 ristoranti'), ch(2, 'Alessandro Borghese Celebrity Chef Channel 1'), ch(3, 'Alessandro Borghese Celebrity Chef Channel 2'), ch(4, 'Alessandro Siani Channel')];
+  expect(build(alessandro).networks.map((n) => n.name)).toEqual(['Alessandro Borghese Celebrity Chef Channel']);
+  const amazon = build([ch(1, 'AMAZON PRIME 1'), ch(2, 'Amazon Prime 2'), ch(3, 'Amazon Prime Movies')]).networks;
+  expect(amazon.map((n) => [n.name, n.networkId])).toEqual([['Amazon Prime', 'amazonprime']]);
+  expect(build([ch(1, 'AMICHEVOLI 01'), ch(2, 'AMICHEVOLI 02'), ch(3, 'AMICHEVOLI 03')]).networks.map((n) => n.name)).toEqual(['Amichevoli']); // not "Amichevoli 0"
+  expect(build([ch(1, 'Café TV 1'), ch(2, 'Cafe TV 2')]).networks.map((n) => n.name)).toEqual(['Café TV']); // accents and symbols do not count
+  expect(build([ch(1, 'Real Time 1'), ch(2, 'Real Time 2'), ch(3, 'RealTime 3')]).networks[0]).toMatchObject({ name: 'Real Time', channelCount: 3 }); // spaces do not count
 });
 
-test('the network takes the whole common name and the most common written form', () => {
-  const items = [ch(1, 'AMAZON PRIME 1'), ch(2, 'Amazon Prime 2'), ch(3, 'Amazon Prime Movies')];
-  const { networks } = build(items);
-  expect(networks.map((n) => [n.name, n.networkId])).toEqual([['Amazon Prime', 'amazon-prime']]);
-  const sky = [ch(1, 'Sky Cinema Uno'), ch(2, 'Sky Cinema Due'), ch(3, 'Sky Sport Uno'), ch(4, 'Sky Sport Due'), ch(5, 'Sky Calcio Uno'), ch(6, 'Sky Calcio Due'), ch(7, 'Sky Arte')];
-  expect(build(sky).networks.map((n) => n.name)).toEqual(['Sky']); // different second words, in three families (with two, the families are the networks)
-  expect(build([ch(1, 'Tele Arena'), ch(2, 'Tele Liberta'), ch(3, 'Tele Lombardia')]).networks).toEqual([]); // unrelated channels sharing a word
-  expect(build([ch(1, 'Sky Uno'), ch(2, 'Sky Cinema')]).networks).toEqual([]); // two different shows: no proof
+test('similarity and the most different characters decide what is gathered', () => {
+  const units = (names) => names.map((name, i) => ({ key: `k${i}`, name, ids: [i], icon: '', added: 1 }));
+  const rai = units(['Rai 1 HD', 'Rai 2 HD', 'Rai Sport HD']);
+  expect(analyzeNetworks(rai, { similarity: 50 }).networks.map((n) => n.name)).toEqual(['Rai']); // "Rai" is half of "Rai 1 HD"; "Rai Sport HD" (a quarter) stays out
+  expect(analyzeNetworks(units(['Tele Arena Siena (Toscana)', 'Tele Universo (Campania)'])).networks).toEqual([]); // "tele" is a fifth of each
+  expect(analyzeNetworks(units(['Eurosport 01', 'Eurosport 02'])).networks).toHaveLength(1);
+  expect(analyzeNetworks(units(['Rai 1 HD', 'Rai 2 HD']), { similarity: 80 }).networks).toEqual([]); // stricter: apart
+  expect(analyzeNetworks(units(['Eurosport 1', 'Eurosport 2 Plus Extra Large']), { maxDiff: 6 }).networks).toEqual([]); // too far beyond the common part
 });
 
-test('the report says what was grouped and what was left out', () => {
+test('the same name more than once, and generic names, are not networks; the report says why, biggest first', () => {
   const report = {};
-  const items = [...channels, ch(8, 'Zeta Uno'), ch(9, 'Zeta Due')];
+  const items = [...channels, ch(8, 'Aaa'), ch(9, 'Aaa'), ch(10, 'Bbb'), ch(11, 'Bbb'), ch(12, 'Bbb'), ch(13, 'Sport 1'), ch(14, 'Sport 2')];
   buildNetworks(buildEntries('live', items.map((i) => ({ ...i, tmdbId: null, ext: '', genre: '' }))), [], { report });
-  expect(report.networks[0]).toMatchObject({ name: 'Rai', proof: 'numbered', units: 4 });
-  expect(report.rejected.map((r) => r.name)).toContain('zeta');
+  expect(report.networks[0]).toMatchObject({ name: 'Rai', id: 'rai', units: 3 });
+  expect(report.rejected.map((r) => [r.name, r.reason])).toEqual([['Bbb', 'duplicates'], ['Aaa', 'duplicates'], ['Sport', 'generic']]);
+  expect(report.params).toEqual({ similarity: 50, maxDiff: 13 });
   const text = formatNetworkReport(report, (key) => key);
-  expect(text).toContain('+ Rai');
-  expect(text).toContain('- zeta');
+  expect(text).toContain('+ Rai [rai] 3/3');
+  expect(text).toContain('- Bbb (3) diag.networks.duplicates');
 });
 
-test('one number is a name, the same channel twice is not a network, names do not end with "e" or "di"', () => {
-  expect(build([ch(1, 'Rete 4'), ch(2, 'Rete 4 +1'), ch(3, 'RETE 4 HD')]).networks).toEqual([]);
-  expect(build([ch(1, 'Harry Potter'), ch(2, 'Harry Potter Channel')]).networks).toEqual([]);
-  expect(build([ch(1, 'Aldo Giovanni e Giacomo Channel'), ch(2, "Aldo Giovanni e Giacomo Film"), ch(3, 'Aldo Giovanni e Giacomo Show')]).networks.map((n) => n.name)).toEqual(['Aldo Giovanni e Giacomo']);
-  expect(build([ch(1, 'Serie A 01'), ch(2, 'Serie A 02')]).networks.map((n) => n.name)).toEqual(['Serie A']);
-});
-
-test('the same name with or without spaces is one network', () => {
-  const { networks } = build([ch(1, 'Real Time 1'), ch(2, 'Real Time 2'), ch(3, 'RealTime 3')]);
-  expect(networks).toHaveLength(1);
-  expect(networks[0].channelCount).toBe(3);
-});
-
-test('the name goes on while the next word is shared by most units, and the report lists the biggest discarded names first', () => {
-  const nation = [ch(1, 'UEFA Nation League 1 TV'), ch(2, 'UEFA Nation League 2 TV'), ch(3, 'UEFA Nation League 3 TV'), ch(4, 'UEFA Champions Stellina')];
-  expect(build(nation).networks.map((n) => n.name)).toEqual(['UEFA Nation League']);
-  const items = [ch(1, 'Aaa Uno'), ch(2, 'Aaa Due'), ch(3, 'Bbb Uno'), ch(4, 'Bbb Due'), ch(5, 'Bbb Tre')];
-  const report = {};
-  buildNetworks(buildEntries('live', items.map((i) => ({ ...i, tmdbId: null, ext: '', genre: '' }))), [], { report });
-  expect(report.rejected.map((r) => r.name)).toEqual(['bbb', 'aaa']);
+test('the network preferences are whole numbers inside a range, a bad value brings back the default, and reach the sync config', async () => {
+  const { SettingsService } = await import('../../src/services/settings.js');
+  const settings = new SettingsService(await openAppDb('network-prefs'));
+  expect(await settings.get()).toMatchObject({ liveNetworkSimilarity: 50, liveNetworkMaxDiff: 13 });
+  expect(await settings.update({ liveNetworkSimilarity: '65', liveNetworkMaxDiff: 7.4 })).toMatchObject({ liveNetworkSimilarity: 65, liveNetworkMaxDiff: 7 });
+  expect(await settings.update({ liveNetworkSimilarity: 500, liveNetworkMaxDiff: -3 })).toMatchObject({ liveNetworkSimilarity: 100, liveNetworkMaxDiff: 0 });
+  expect(await settings.update({ liveNetworkSimilarity: 'abc', liveNetworkMaxDiff: '' })).toMatchObject({ liveNetworkSimilarity: 50, liveNetworkMaxDiff: 13 });
+  await settings.update({ liveNetworkSimilarity: 70, liveNetworkMaxDiff: 5 });
+  const svc = createLiveGroupingService({ db: await openAppDb('network-prefs-svc'), settings });
+  expect((await svc.config('p')).networks).toMatchObject({ enabled: true, similarity: 70, maxDiff: 5 });
 });

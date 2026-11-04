@@ -371,7 +371,7 @@ export function createLiveGroupingService({ db, settings }) {
         terms: resolveTerms(s.liveGroupPatterns),
         links: await read(linksKey(providerId)),
         splits: await read(splitsKey(providerId)),
-        networks: { enabled: s.liveNetworks, links: await read(networkLinksKey(providerId)) },
+        networks: { enabled: s.liveNetworks, links: await read(networkLinksKey(providerId)), similarity: s.liveNetworkSimilarity, maxDiff: s.liveNetworkMaxDiff },
       };
     },
     /** Streams added to a group by hand. */

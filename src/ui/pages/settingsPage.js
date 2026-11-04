@@ -14,6 +14,7 @@ import { log } from '../../core/logger.js';
 import { rebuildEntries } from '../../services/catalogSync.js';
 import { rebuildLive } from '../../services/rebuildLive.js';
 import { DEFAULT_TERMS, parseTerms, termsText } from '../../services/liveGrouping.js';
+import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from '../../services/liveNetworks.js';
 import { icon } from '../icons.js';
 
 const ZONE_ID = 'settings';
@@ -319,6 +320,39 @@ export function createSettingsPage(ctx) {
     },
   };
 
+  /** A number field (with its reset button, a second row like the one of the words) for a network setting; Enter saves and rebuilds Live TV. */
+  function numberRows({ key, labelKey, resetKey, fallback }) {
+    const input = h('input', { class: 'value-input', type: 'text', inputmode: 'numeric', autocomplete: 'off', spellcheck: 'false', placeholder: String(fallback) });
+    const reset = h('button', { class: 'btn danger icon-only row-reset', type: 'button', 'aria-label': t(resetKey), title: t(resetKey) }, icon('remove'));
+    const show = () => ctx.settings.get().then((s) => { input.value = String(s[key]); });
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation(); // the text field owns its keys
+      if (event.keyCode === 13 || event.keyCode === IME_DONE) {
+        event.preventDefault();
+        input.blur();
+        ctx.settings.update({ [key]: input.value.trim() }).then(show).then(regroup);
+      } else if (event.keyCode === IME_CANCEL) {
+        input.blur();
+        show();
+      }
+    });
+    return [
+      { el: h('div', { class: 'row' }, h('span', { text: t(labelKey) }), input, reset), refresh: show, activate: async () => input.focus() },
+      {
+        secondary: 'right',
+        el: reset,
+        refresh: async () => undefined,
+        async activate() {
+          await ctx.settings.update({ [key]: fallback });
+          await show();
+          await regroup();
+        },
+      },
+    ];
+  }
+  const [similarityRow, similarityResetRow] = numberRows({ key: 'liveNetworkSimilarity', labelKey: 'settings.liveNetworkSimilarity', resetKey: 'settings.liveNetworkReset', fallback: DEFAULT_SIMILARITY });
+  const [maxDiffRow, maxDiffResetRow] = numberRows({ key: 'liveNetworkMaxDiff', labelKey: 'settings.liveNetworkMaxDiff', resetKey: 'settings.liveNetworkReset', fallback: DEFAULT_MAX_DIFF });
+
   const prefs = [
     optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
     optionRow({ ctx, labelKey: 'settings.gridItems', key: 'gridItems', options: GRID_OPTIONS }),
@@ -330,6 +364,10 @@ export function createSettingsPage(ctx) {
     pinRow,
     liveGrouping,
     liveNetworks,
+    similarityRow,
+    similarityResetRow,
+    maxDiffRow,
+    maxDiffResetRow,
     patternsRow,
     patternsResetRow,
     optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }),
