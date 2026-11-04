@@ -67,11 +67,12 @@ describe('syncType', () => {
     db.close();
   });
 
-  test('excluded categories are applied to entries but items are still stored', async () => {
+  test('excluded categories are not kept: no items, no entries, and the counts leave them out', async () => {
     const db = await newDb();
     const client = makeClient({ movie: [movie(1, 'A', { category_id: '9' }), movie(2, 'B')] });
-    await syncType({ db, client, type: 'movie', excludedCategories: new Set(['9']) });
-    expect(await dbGetAll(db, 'items')).toHaveLength(2);
+    const meta = await syncType({ db, client, type: 'movie', excludedCategories: new Set(['9']) });
+    expect(await dbGetAll(db, 'items')).toHaveLength(1);
+    expect(meta).toMatchObject({ itemCount: 1, entryCount: 1 });
     expect((await dbGetAll(db, 'entries')).map((e) => e.name)).toEqual(['B']);
     db.close();
   });
@@ -197,8 +198,8 @@ describe('rebuildEntries', () => {
     expect(await rebuildEntries({ db, type: 'movie', excludedCategories: new Set(['9']) })).toBe(1);
     expect((await dbGetAll(db, 'entries')).map((e) => e.name)).toEqual(['B']);
     expect((await dbGetAll(db, 'entry_cat')).map((r) => r.key)).toEqual(['movie:i2|1']);
-    expect(await dbGetAll(db, 'items')).toHaveLength(2);
-    expect((await dbGet(db, 'meta', 'sync:movie')).entryCount).toBe(1);
+    expect(await dbGetAll(db, 'items')).toHaveLength(1); // what was stored for the hidden category is dropped
+    expect(await dbGet(db, 'meta', 'sync:movie')).toMatchObject({ entryCount: 1, itemCount: 1 });
     db.close();
     client.getStreams.mockClear();
     expect(client.getStreams).not.toHaveBeenCalled();

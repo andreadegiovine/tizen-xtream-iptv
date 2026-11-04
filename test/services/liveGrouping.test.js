@@ -1,4 +1,4 @@
-import { buildChannelGroups, buildLiveAllRows, annotateGroupKeys, parseTerms, resolveTerms, DEFAULT_TERMS, qualityRank, channelBase, compileTerms, LIVE_ALL } from '../../src/services/liveGrouping.js';
+import { manualIds, buildChannelGroups, buildLiveAllRows, annotateGroupKeys, parseTerms, resolveTerms, DEFAULT_TERMS, qualityRank, channelBase, compileTerms, LIVE_ALL } from '../../src/services/liveGrouping.js';
 import { buildEntries } from '../../src/services/grouping.js';
 import { openProviderDb, deleteProviderDb } from '../../src/db/providerDb.js';
 import { syncType, rebuildEntries } from '../../src/services/catalogSync.js';
@@ -105,5 +105,24 @@ describe('manual links and EPG ids', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].memberIds.sort((a, b) => a - b)).toEqual([133, 9000, 25310, 25311, 461110]);
     expect(groups[0].defaultId).toBe(25311);
+  });
+});
+
+describe('removing a channel from a group', () => {
+  test('a channel taken out by hand is not joined again by the rules', () => {
+    expect(buildChannelGroups(yoyo, { splits: [133] })[0].memberIds).not.toContain(133);
+    expect(buildChannelGroups(yoyo, { splits: [133] })[0].memberIds).toHaveLength(3);
+  });
+  test('manual streams: the moved channel, and the target only when it was a lone channel', () => {
+    expect([...manualIds([[1, 2], [3, 4, 1]])].sort()).toEqual([1, 3, 4]);
+  });
+  test('group counts are stored in the live meta', async () => {
+    const db = await openProviderDb('live-groups-2');
+    const rows = [...yoyo, ch(7, 'Other', { categoryId: '2', icon: '' }), ch(8, 'Hidden', { categoryId: '99' })].map((c) => ({ stream_id: c.id, name: c.name, category_id: c.categoryId, added: String(c.added), stream_icon: c.icon, epg_channel_id: c.epgChannelId }));
+    const client = { getCategories: async () => [], getStreams: async () => rows };
+    const meta = await syncType({ db, client, type: 'live', excludedCategories: new Set(['99']) });
+    expect(meta).toMatchObject({ itemCount: 5, groupCount: 1, groupedCount: 4, singleCount: 1 });
+    db.close();
+    await deleteProviderDb('live-groups-2');
   });
 });

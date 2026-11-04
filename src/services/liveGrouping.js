@@ -104,14 +104,15 @@ const MAX_NAME_BUCKET = 40; // a name shared by more channels than this is too g
 
 /**
  * Groups the versions of the same channel. Signals, strongest first:
- *   1. links made by hand (always honoured);
+ *   1. links made by hand (always honoured); channels taken out by hand (`splits`) are left alone by the rules below;
  *   2. same EPG id and same cleaned name;
  *   3. same cleaned name and the same category or the same logo, unless the EPG ids say they differ.
  * A cluster never holds two different EPG ids (except by hand). When in doubt channels stay apart:
  * a duplicate in the list is harmless, a channel swallowed by the wrong group is not.
  * Returns grouped entries (type live, `isGroup`), the best version first.
  */
-export function buildChannelGroups(items, { excludedCategories = new Set(), terms = DEFAULT_TERMS, links = [] } = {}) {
+export function buildChannelGroups(items, { excludedCategories = new Set(), terms = DEFAULT_TERMS, links = [], splits = [] } = {}) {
+  const apart = new Set(splits || []); // taken out of a group by hand: the rules do not join them again
   const regex = compileTerms(terms);
   const info = new Map();
   items.forEach((item) => {
@@ -153,7 +154,7 @@ export function buildChannelGroups(items, { excludedCategories = new Set(), term
   // 2. same EPG id + same name
   const byEpg = new Map();
   info.forEach((entry, id) => {
-    if (!entry.epg || !entry.base) return;
+    if (apart.has(id) || !entry.epg || !entry.base) return;
     const key = `${entry.epg}\u0000${entry.base}`;
     if (!byEpg.has(key)) byEpg.set(key, []);
     byEpg.get(key).push(id);
@@ -163,7 +164,7 @@ export function buildChannelGroups(items, { excludedCategories = new Set(), term
   // 3. same name + category or logo
   const byName = new Map();
   info.forEach((entry, id) => {
-    if (!entry.base) return;
+    if (apart.has(id) || !entry.base) return;
     if (!byName.has(entry.base)) byName.set(entry.base, []);
     byName.get(entry.base).push(id);
   });
@@ -254,30 +255,59 @@ export function buildLiveAllRows(entries, groups) {
 }
 
 /** What the catalog sync needs: { enabled, terms, links }. The default when nothing is configured. */
-export const DEFAULT_GROUPING = Object.freeze({ enabled: true, terms: DEFAULT_TERMS, links: [] });
+export const DEFAULT_GROUPING = Object.freeze({ enabled: true, terms: DEFAULT_TERMS, links: [], splits: [] });
 
 /** Grouped entries for a sync / rebuild: none when the feature is off. */
 export function groupLiveItems(items, { excludedCategories, grouping = DEFAULT_GROUPING } = {}) {
   if (!grouping || !grouping.enabled) return [];
-  return buildChannelGroups(items, { excludedCategories, terms: grouping.terms, links: grouping.links });
+  return buildChannelGroups(items, { excludedCategories, terms: grouping.terms, links: grouping.links, splits: grouping.splits });
 }
 
 const linksKey = (providerId) => `liveLinks:${providerId}`;
+const splitsKey = (providerId) => `liveSplits:${providerId}`;
 
-/** Reads the grouping settings and keeps the links made by hand (they survive syncs). */
+/** The streams a user added to a group by hand: the one that was moved, and the target too when it was a lone channel (link = [id, target, 1]). */
+export function manualIds(links) {
+  const ids = new Set();
+  (links || []).forEach(([a, b, both]) => {
+    ids.add(a);
+    if (both) ids.add(b);
+  });
+  return ids;
+}
+
+/** Reads the grouping settings and keeps what was done by hand (links and removals survive syncs). */
 export function createLiveGroupingService({ db, settings }) {
+  const read = async (key) => {
+    const value = await kvGet(db, key, []);
+    return Array.isArray(value) ? value : [];
+  };
   return {
     async config(providerId) {
       const s = await settings.get();
-      const links = await kvGet(db, linksKey(providerId), []);
-      return { enabled: s.liveGrouping, terms: resolveTerms(s.liveGroupPatterns), links: Array.isArray(links) ? links : [] };
+      return { enabled: s.liveGrouping, terms: resolveTerms(s.liveGroupPatterns), links: await read(linksKey(providerId)), splits: await read(splitsKey(providerId)) };
     },
-    /** Joins two channels (stream ids) for good. */
-    async link(providerId, a, b) {
-      const links = await kvGet(db, linksKey(providerId), []);
-      if (!links.some(([x, y]) => (x === a && y === b) || (x === b && y === a))) links.push([a, b]);
+    /** Streams added to a group by hand. */
+    async manual(providerId) {
+      return manualIds(await read(linksKey(providerId)));
+    },
+    /** Joins a channel to another one (or to a group, `targetIsGroup`) for good. */
+    async link(providerId, a, b, targetIsGroup = true) {
+      const links = (await read(linksKey(providerId))).filter(([x, y]) => !((x === a && y === b) || (x === b && y === a)));
+      links.push(targetIsGroup ? [a, b] : [a, b, 1]);
       await kvSet(db, linksKey(providerId), links);
+      await kvSet(db, splitsKey(providerId), (await read(splitsKey(providerId))).filter((id) => id !== a && id !== b));
     },
-    removeProvider: (providerId) => kvDelete(db, linksKey(providerId)),
+    /** Takes a channel that was added by hand out of its group (and keeps it out). */
+    async unlink(providerId, id) {
+      await kvSet(db, linksKey(providerId), (await read(linksKey(providerId))).filter(([x, y]) => x !== id && y !== id));
+      const splits = await read(splitsKey(providerId));
+      if (!splits.includes(id)) splits.push(id);
+      await kvSet(db, splitsKey(providerId), splits);
+    },
+    async removeProvider(providerId) {
+      await kvDelete(db, linksKey(providerId));
+      await kvDelete(db, splitsKey(providerId));
+    },
   };
 }

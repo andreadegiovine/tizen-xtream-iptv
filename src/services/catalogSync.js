@@ -25,6 +25,18 @@ export function shouldSync(meta, now = Date.now(), ttlMs = LIST_TTL_MS) {
   return !meta || !meta.lastSync || !meta.genres || now - meta.lastSync > ttlMs; // `genres`: lists synced before genres existed are refreshed once
 }
 
+/** How many channels are in groups, how many groups there are and how many channels stand alone. */
+function groupCounts(entries, groups) {
+  const grouped = groups.reduce((sum, group) => sum + group.memberIds.length, 0);
+  return { groupCount: groups.length, groupedCount: grouped, singleCount: entries.length - grouped };
+}
+
+/** Makes the next sync of a type download it again (a hidden category was shown again: its items were never kept). */
+export async function markStale(db, type) {
+  const meta = await getSyncMeta(db, type);
+  if (meta) await dbPut(db, 'meta', { ...meta, lastSync: 0 });
+}
+
 export function getSyncMeta(db, type) {
   return dbGet(db, 'meta', metaKey(type));
 }
@@ -78,13 +90,18 @@ export async function writeEntries(db, type, entries, { onBatch, groups = [] } =
 
 /** Rebuilds the grid entries from the stored items (used when the excluded categories change). */
 export async function rebuildEntries({ db, type, excludedCategories = new Set(), cleanTitles = true, grouping = DEFAULT_GROUPING, emit = () => {} }) {
-  const items = await dbGetAllRange(db, 'items', IDBKeyRange.bound(`${type}:`, `${type}:\uffff`));
+  let items = await dbGetAllRange(db, 'items', IDBKeyRange.bound(`${type}:`, `${type}:\uffff`));
+  if (excludedCategories.size) {
+    // Hidden categories are not kept: drop what was stored for them before they were hidden.
+    await dbDeleteMany(db, 'items', items.filter((item) => excludedCategories.has(item.categoryId)).map((item) => item.key));
+    items = items.filter((item) => !excludedCategories.has(item.categoryId));
+  }
   const entries = buildEntries(type, items, { excludedCategories, cleanTitles });
   const groups = type === MediaType.LIVE ? groupLiveItems(items, { excludedCategories, grouping }) : [];
   if (type === MediaType.LIVE) annotateGroupKeys(entries, groups);
   await writeEntries(db, type, entries, { groups });
   const previous = (await getSyncMeta(db, type)) || { key: metaKey(type), type };
-  await dbPut(db, 'meta', { ...previous, entryCount: entries.length, ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, groupCount: groups.length } : {}) });
+  await dbPut(db, 'meta', { ...previous, itemCount: items.length, entryCount: entries.length, ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, ...groupCounts(entries, groups) } : {}) });
   emit({ event: 'progress', mediaType: type, phase: 'rebuilt', done: entries.length, total: entries.length });
   return entries.length;
 }
@@ -133,15 +150,17 @@ export async function syncType({
     const item = projectItem(type, row);
     if (item) byKey.set(item.key, item);
   });
-  const items = Array.from(byKey.values());
+  const projected = Array.from(byKey.values());
   const rawCount = raw.length;
   raw.length = 0; // let the big raw list be collected before the heavy writes
 
   // Never let a glitchy empty answer wipe a catalog we already have.
   const previous = await getSyncMeta(db, type);
-  if (items.length === 0 && previous && previous.itemCount > 0) {
+  if (projected.length === 0 && previous && previous.itemCount > 0) {
     throw new AppError(ErrorCode.BAD_RESPONSE, 'The provider returned an empty list', { details: { rawCount } });
   }
+  // Channels / titles of the categories the user hid are not kept at all: they do not count and cost no space.
+  const items = excludedCategories.size ? projected.filter((item) => !excludedCategories.has(item.categoryId)) : projected;
 
   const writeStart = now();
   const onBatch = async (done, total) => {
@@ -171,7 +190,7 @@ export async function syncType({
     genres: true,
     itemCount: items.length,
     entryCount: entries.length,
-    ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, groupCount: groups.length } : {}),
+    ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, ...groupCounts(entries, groups) } : {}),
     categoryCount: categories.length,
     excludedCount: excludedCategories.size,
     fetchMs,

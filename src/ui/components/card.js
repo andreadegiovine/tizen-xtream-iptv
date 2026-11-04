@@ -90,10 +90,14 @@ export function createCard(entry, type, meta = {}) {
 
   function setStatus(status) {
     while (statusBadge.firstChild) statusBadge.removeChild(statusBadge.firstChild);
-    if (status === 'watched') statusBadge.appendChild(icon('check'));
-    else if (status === 'partial') statusBadge.appendChild(icon('hourglass'));
-    statusBadge.classList.toggle('visible', status === 'watched' || status === 'partial');
-    statusBadge.classList.toggle('partial', status === 'partial');
+    // A grouped Live TV channel carries its own badge, in the place of the watched one.
+    const shown = entry && entry.isGroup ? 'group' : status;
+    if (shown === 'group') statusBadge.appendChild(icon('group'));
+    else if (shown === 'watched') statusBadge.appendChild(icon('check'));
+    else if (shown === 'partial') statusBadge.appendChild(icon('hourglass'));
+    statusBadge.classList.toggle('visible', shown === 'group' || shown === 'watched' || shown === 'partial');
+    statusBadge.classList.toggle('partial', shown === 'partial');
+    statusBadge.classList.toggle('group', shown === 'group');
   }
 
   function update(next = {}) {
@@ -116,6 +120,7 @@ export function createCard(entry, type, meta = {}) {
     }
   }
 
+  if (entry && entry.isGroup) setStatus(null);
   const fields = { ...meta };
   delete fields.placeholder;
   delete fields.square;

@@ -101,6 +101,7 @@ export function createDetailPage(ctx, params) {
   let categoryNames = new Map();
   let db = null;
   let mergeAvailable = false; // grouping is on: a single channel can be merged by hand
+  let manualIds = new Set(); // streams added to a group by hand
   let related = []; // catalog entries "you might also like"
   let favorite = false;
   let selectedMember = null;
@@ -189,13 +190,38 @@ export function createDetailPage(ctx, params) {
     const picked = await ctx.dialogs.search({ title: t('merge.title'), placeholder: t('search.placeholder'), emptyLabel: t('common.empty'), run: createMergeSearch(db, entry.defaultId) });
     if (!picked || destroyed) return;
     try {
-      await ctx.liveGrouping.link(providerId, entry.defaultId, picked.memberId);
+      await ctx.liveGrouping.link(providerId, entry.defaultId, picked.memberId, picked.group);
       await rebuildLive(ctx);
+      manualIds = await ctx.liveGrouping.manual(providerId);
       entry = (await getEntry(db, entry.key)) || entry;
       if (!destroyed) build();
       ctx.notices.success(t('notice.done'), { key: 'merge' });
     } catch (err) {
       log.warn('Merge failed', err && err.message);
+      ctx.notices.error(t('notice.failed'), { key: 'merge' });
+    }
+  }
+
+  /** Takes the selected version out of the group, when it was added by hand. */
+  async function ungroupChannel() {
+    const gone = selectedMember;
+    try {
+      await ctx.liveGrouping.unlink(providerId, gone.id);
+      await rebuildLive(ctx);
+      manualIds = await ctx.liveGrouping.manual(providerId);
+      ctx.notices.success(t('notice.removed'), { key: 'merge' });
+      const next = await getEntry(db, entry.key);
+      if (destroyed) return;
+      if (!next) {
+        ctx.router.back(); // the group had only two channels: it is gone
+        return;
+      }
+      entry = next;
+      selectedMember = entry.members.find((m) => m.id === entry.defaultId) || entry.members[0];
+      updateCategoryItems();
+      build();
+    } catch (err) {
+      log.warn('Ungroup failed', err && err.message);
       ctx.notices.error(t('notice.failed'), { key: 'merge' });
     }
   }
@@ -479,6 +505,9 @@ export function createDetailPage(ctx, params) {
     if (buttons.length && entry.type === 'live' && !entry.isGroup && !entry.groupKey && mergeAvailable) {
       buttons.push({ id: 'merge', icon: 'merge', label: t('merge.title'), run: mergeChannel });
     }
+    if (buttons.length && entry.isGroup && selectedMember && manualIds.has(selectedMember.id)) {
+      buttons.push({ id: 'ungroup', icon: 'remove', label: t('merge.remove'), run: ungroupChannel });
+    }
     buttons.note = note;
     if (buttons.length) next.push({ id: 'detailActions', zone: createActions(buttons, 0) });
     else clear(actionsEl);
@@ -491,6 +520,7 @@ export function createDetailPage(ctx, params) {
   }
 
   function fillText() {
+    poster.classList.toggle('square', Boolean(entry && entry.type === 'live'));
     const d = data();
     titleEl.textContent = d.title;
     clear(metaEl);
@@ -544,6 +574,7 @@ export function createDetailPage(ctx, params) {
     fillText();
     favorite = await ctx.favorites.has(providerId, entry.key);
     mergeAvailable = entry.type === 'live' && ctx.liveGrouping ? (await ctx.settings.get()).liveGrouping : false;
+    if (entry.type === 'live' && ctx.liveGrouping) manualIds = await ctx.liveGrouping.manual(providerId);
     await reloadRecords();
     build();
 
