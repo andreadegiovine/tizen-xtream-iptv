@@ -130,11 +130,8 @@ export function createCategoriesPage(ctx, params = {}) {
 
   const multiButton = h('button', { class: 'btn icon-only categories-multi', type: 'button', 'aria-label': t('categories.multi'), title: t('categories.multi') }, icon('checkDouble'));
   let multiFocused = false;
-  /** Focused look when it holds the focus; only a white outline while the multiple selection is on. */
-  const showMulti = () => {
-    multiButton.classList.toggle('focused', multiFocused);
-    multiButton.classList.toggle('armed', armed);
-  };
+  /** Focused look (white background, dark icon) when it holds the focus and for as long as the multiple selection is on. */
+  const showMulti = () => multiButton.classList.toggle('focused', armed || multiFocused);
   const multiZone = new FocusZone({
     id: MULTI_ZONE,
     model: new ListModel({ orientation: 'vertical', getCount: () => 1 }),
