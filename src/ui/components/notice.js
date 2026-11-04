@@ -29,8 +29,10 @@ export function createNoticeService({ focus, root = document.body, isDialogOpen 
   function release() {
     if (!registered || focusable().length) return;
     registered = false;
+    // Give the focus back only when the notices still hold it: a dialog opened meanwhile keeps it.
+    const held = focus.activeId === NOTICE_ZONE;
     focus.unregister(NOTICE_ZONE);
-    if (previous && previous.id && focus.zones.has(previous.id)) focus.focus(previous.id, previous.index);
+    if (held && previous && previous.id && focus.zones.has(previous.id)) focus.focus(previous.id, previous.index);
     previous = null;
   }
 
@@ -101,6 +103,8 @@ export function createNoticeService({ focus, root = document.body, isDialogOpen 
     error: (message, options = {}) => show({ ...options, type: NoticeType.ERROR, message }),
     close,
     isOpen: () => list.length > 0,
+    /** The zone that had the focus before the notices took it (null when they do not hold it). */
+    underlying: () => (registered && previous && previous.id ? { ...previous } : null),
     hasFocus: () => registered && focus.activeId === NOTICE_ZONE,
     /** Back key: closes the newest notice. */
     dismissTop() {

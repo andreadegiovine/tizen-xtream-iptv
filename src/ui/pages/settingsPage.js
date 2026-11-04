@@ -5,7 +5,7 @@ import { changePin } from '../components/pinFlows.js';
 import { TIME_FORMATS, DATE_FORMATS, formatClockTime, formatClockDate } from '../../core/clock.js';
 import { t, i18n, detectLocale } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
-import { ListModel } from '../focus/models.js';
+import { Dir } from '../focus/models.js';
 import { LANGUAGE_OPTIONS, GRID_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SUGGESTION_SOURCE_OPTIONS } from '../../services/settings.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
@@ -205,6 +205,7 @@ export function createSettingsPage(ctx) {
   const syncRow = { el: panel.button, refresh: async () => undefined, activate: async () => panel.syncNow() };
   const metaRow = { el: tmdbPanel.button, refresh: async () => undefined, activate: updateMetadata };
   const metaRemoveRow = {
+    secondary: true,
     el: tmdbPanel.removeButton,
     refresh: async () => undefined,
     async activate() {
@@ -220,7 +221,7 @@ export function createSettingsPage(ctx) {
   };
   const traktConnectRow = { el: traktPanel.connectButton, refresh: async () => undefined, activate: connectTrakt };
   const traktSyncRow = { el: traktPanel.syncButton, refresh: async () => undefined, activate: syncTrakt };
-  const traktRemoveRow = { el: traktPanel.removeButton, refresh: async () => undefined, activate: removeTrakt };
+  const traktRemoveRow = { secondary: true, el: traktPanel.removeButton, refresh: async () => undefined, activate: removeTrakt };
   const tmdbTokenRow = textRow({ ctx, label: t('settings.tmdbKey'), field: 'tmdbKey' });
   const traktIdRow = textRow({ ctx, label: t('settings.traktId'), field: 'traktId' });
   const traktSecretRow = textRow({ ctx, label: t('settings.traktSecret'), field: 'traktSecret', secret: true });
@@ -264,11 +265,30 @@ export function createSettingsPage(ctx) {
   rows.forEach((row) => row.refresh());
 
   // Stop buttons of the running operations come first, then the fixed rows; the list changes while the page is open.
+  // Up / Down visit one button per line (the right-most); the buttons at its left are reached with Left / Right.
+  const linesModel = (getRows) => ({
+    navigate(dir, index) {
+      const list = getRows();
+      let from = index;
+      while (from > 0 && list[from].secondary) from -= 1; // a left button belongs to the line of its primary
+      const step = (d) => {
+        for (let i = from + d; i >= 0 && i < list.length; i += d) if (!list[i].secondary) return { type: 'move', index: i };
+        return { type: 'exit', dir };
+      };
+      if (dir === Dir.DOWN) return step(1);
+      if (dir === Dir.UP) {
+        return step(-1);
+      }
+      if (dir === Dir.LEFT) return index + 1 < list.length && list[index + 1].secondary ? { type: 'move', index: index + 1 } : { type: 'exit', dir };
+      if (dir === Dir.RIGHT) return list[index].secondary ? { type: 'move', index: index - 1 } : { type: 'exit', dir };
+      return { type: 'exit', dir };
+    },
+  });
   const all = () => opsPanel.rows.concat(visibleRows());
   let focusedEl = null;
   const zone = new FocusZone({
     id: ZONE_ID,
-    model: new ListModel({ orientation: 'vertical', getCount: () => all().length }),
+    model: linesModel(() => all()),
     onFocus: (i) => {
       const row = all()[i];
       focusedEl = row.el;

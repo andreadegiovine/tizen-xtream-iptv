@@ -35,6 +35,7 @@ import { createDefaultEngine } from './services/playerEngines.js';
 import { createYouTubeEngine } from './services/youtubeEngine.js';
 import { createSyncLog } from './services/syncLog.js';
 import { createOperations } from './services/operations.js';
+import { countEntries } from './services/catalogQuery.js';
 import { createGenreIndex } from './services/genreIndex.js';
 import { createGenreWorker } from './services/createGenreWorker.js';
 import { createSuggestionsService } from './services/suggestions.js';
@@ -115,7 +116,22 @@ async function boot() {
   ctx.meta = { forEntry: (entry) => tmdb.forEntry(entry) };
   const epg = createEpgService({ active, providers, createWorker: createEpgWorker, operations: ctx.operations });
   ctx.epg = epg;
+  // Favourite categories and genres show how many titles they hold; a grey sweep stands in until it is known.
+  const filterTotals = (type) => (filterTotals.cache[type] = filterTotals.cache[type] || ctx.genres.counts(type).catch(() => new Map()));
+  filterTotals.cache = {};
+  const fillFilterCounts = (entries, cards) => {
+    entries.forEach((entry, i) => {
+      if (!entry.filterKind || !cards[i]) return;
+      cards[i].update({ countLoading: true });
+      const job = entry.filterKind === 'genre'
+        ? filterTotals(entry.type).then((map) => map.get(String(entry.filterId)) || 0)
+        : active.get().then((current) => (current ? countEntries(current.db, { type: entry.type, categoryId: entry.filterId }) : 0));
+      job.then((n) => cards[i].update({ count: n })).catch(() => cards[i].update({ count: null }));
+    });
+    filterTotals.cache = {}; // fresh numbers at the next page
+  };
   ctx.enrich = (entries, cards, type, keepQueue = false) => {
+    fillFilterCounts(entries, cards);
     const totals = new Map();
     let summaries = null;
     const paint = (i) => {
@@ -238,7 +254,7 @@ async function boot() {
     ctx.genres.backfill().catch(() => undefined); // metadata and genres in the new language
   });
 
-  const dialogs = createDialogService({ focus });
+  const dialogs = createDialogService({ focus, underlying: () => (ctx.notices ? ctx.notices.underlying() : null) });
   ctx.dialogs = dialogs;
   const notices = createNoticeService({ focus, isDialogOpen: () => dialogs.isOpen() });
   ctx.notices = notices;

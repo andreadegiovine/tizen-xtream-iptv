@@ -1,6 +1,8 @@
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
 import { lazySrc } from '../lazyImage.js';
+import { i18n } from '../../i18n/index.js';
+import { formatNumber } from '../../core/format.js';
 
 let isAdultEntry = () => false;
 /** The app tells the cards which entries are adult content: their poster is never shown (a lock stands in for it). */
@@ -44,7 +46,7 @@ export function createCard(entry, type, meta = {}) {
   else if (meta.placeholder) poster.appendChild(h('div', { class: 'card-placeholder' }, icon(meta.placeholder)));
   poster.append(ratingBadge, statusBadge);
   const el = h('div', { class: `card ${type}` }, poster, title, sub, bar);
-  const state = { year: entry.year, seasons: null, episodes: null, tag: '', subtitle: '' };
+  const state = { year: entry.year, seasons: null, episodes: null, tag: '', subtitle: '', count: null, countLoading: false };
   let img = null;
 
   function setPoster(url) {
@@ -63,6 +65,18 @@ export function createCard(entry, type, meta = {}) {
     if (img.dataset.src !== url) {
       poster.classList.add('loading'); // skeleton until the picture is there
       lazySrc(img, url);
+    }
+  }
+
+  /** The meta line, plus (favourite categories / genres) a number after a dot: a grey sweep stands in until it is known. */
+  function renderSub() {
+    const text = cardMeta(state);
+    sub.textContent = text;
+    if (state.countLoading) {
+      if (text) sub.appendChild(document.createTextNode(' · '));
+      sub.appendChild(h('span', { class: 'skeleton-line card-count-skeleton' }));
+    } else if (state.count !== null && state.count !== undefined) {
+      sub.appendChild(document.createTextNode(`${text ? ' · ' : ''}${formatNumber(state.count, i18n.getLocale())}`));
     }
   }
 
@@ -86,7 +100,12 @@ export function createCard(entry, type, meta = {}) {
     ['year', 'seasons', 'episodes', 'tag', 'subtitle'].forEach((key) => {
       if (next[key] !== undefined && next[key] !== null) state[key] = next[key];
     });
-    if (['year', 'seasons', 'episodes', 'tag', 'subtitle'].some((key) => next[key] !== undefined)) sub.textContent = cardMeta(state);
+    if (next.count !== undefined) {
+      state.count = next.count;
+      state.countLoading = false;
+    }
+    if (next.countLoading !== undefined) state.countLoading = next.countLoading;
+    if (['year', 'seasons', 'episodes', 'tag', 'subtitle', 'count', 'countLoading'].some((key) => next[key] !== undefined)) renderSub();
     if (next.poster) setPoster(next.poster);
     if (next.rating !== undefined) setRating(next.rating);
     if (next.status !== undefined) setStatus(next.status);

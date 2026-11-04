@@ -62,7 +62,14 @@ export function createPagedGridModel({ columns, getCount, hasNext, hasPrevious, 
  */
 export function sidebarItems({ type, genres = [], categories = [], pinned = [], expanded = false, genresExpanded = true, genresLoading = false, labels }) {
   const items = [{ kind: 'all', name: labels.all }];
-  if (type === 'live') return items.concat(categories.map((c) => ({ kind: 'category', id: c.id, name: c.name })));
+  if (type === 'live') {
+    items.push({ kind: 'favorites', name: labels.favorites });
+    if (categories.length) {
+      items.push({ kind: 'toggle', name: labels.categories, expanded });
+      if (expanded) categories.forEach((c) => items.push({ kind: 'category', id: c.id, name: c.name, depth: 1 }));
+    }
+    return items;
+  }
   items.push({ kind: 'continue', name: labels.continue }, { kind: 'favorites', name: labels.favorites }, { kind: 'suggestions', name: labels.suggestions });
   // Pinned categories and genres sit between the suggestions and the genres.
   pinned.forEach((p) => items.push({ kind: p.kind, id: String(p.id), name: p.name, pinned: true }));
@@ -184,6 +191,7 @@ export function createBrowsePage(ctx, params = {}) {
     const safe = (job) => job().catch(() => undefined);
     await safe(async () => set('all:', await countEntries(db, { type })));
     if (type === 'live') {
+      await safe(async () => set('favorites:', (await ctx.favorites.list(providerId)).filter((f) => f.type === type).length));
       await Promise.all(categories.map((c) => safe(async () => set(`category:${c.id}`, await countEntries(db, { type, categoryId: c.id })))));
       return;
     }
@@ -405,7 +413,7 @@ export function createBrowsePage(ctx, params = {}) {
       await loadGenres();
       genresLoading = false;
     }
-    expanded = Boolean(filter && filter.kind === 'category');
+    expanded = type === 'live' || Boolean(filter && filter.kind === 'category');
     items = sidebarItems({ type, genres, categories, pinned, expanded, genresExpanded, genresLoading, labels: labels() });
     selected = indexOfFilter(items, filter);
     renderCategories();

@@ -11,8 +11,14 @@ export const DIALOG_ZONE = 'dialog';
  * Modal confirmation dialog. It traps focus (its zone has no links) and gives focus back to the
  * zone that owned it. Left = cancel (default focus), right = confirm.
  */
-export function createDialogService({ focus, root = document.body }) {
+export function createDialogService({ focus, root = document.body, underlying = () => null }) {
   let current = null;
+
+  /** Where the focus goes back to: when a notice holds it, the zone below that notice (the notice may be gone by then). */
+  function snapshot() {
+    const under = focus.activeId === 'notices' ? underlying() : null;
+    return under || { id: focus.activeId, index: focus.active ? focus.active.index : 0 };
+  }
 
   function close(result) {
     if (!current) return;
@@ -28,7 +34,7 @@ export function createDialogService({ focus, root = document.body }) {
   /** `content` (a DOM node) replaces the plain `message` paragraph. */
   function confirm({ title, message, content = null, confirmLabel, cancelLabel }) {
     if (current) return current.promise;
-    const previous = { id: focus.activeId, index: focus.active ? focus.active.index : 0 };
+    const previous = snapshot();
     const buttons = [
       h('button', { class: 'btn', type: 'button', text: cancelLabel }),
       h('button', { class: 'btn primary', type: 'button', text: confirmLabel }),
@@ -59,7 +65,7 @@ export function createDialogService({ focus, root = document.body }) {
   /** Modal list of options (custom dropdown). Resolves with the chosen value, or null when dismissed. */
   function choose({ title, options, selected }) {
     if (current) return current.promise;
-    const previous = { id: focus.activeId, index: focus.active ? focus.active.index : 0 };
+    const previous = snapshot();
     const nodes = options.map((option, i) =>
       h('div', { class: `choice${option.value === selected ? ' current' : ''}`, text: option.label, 'data-i': i }),
     );
@@ -92,7 +98,7 @@ export function createDialogService({ focus, root = document.body }) {
    */
   function pin({ title, message = '', validate = null }) {
     if (current) return current.promise;
-    const previous = { id: focus.activeId, index: focus.active ? focus.active.index : 0 };
+    const previous = snapshot();
     let digits = '';
     let busy = false;
     const dots = Array.from({ length: PIN_LENGTH }, () => h('span', { class: 'pin-dot' }));

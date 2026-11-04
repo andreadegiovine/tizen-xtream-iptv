@@ -45,3 +45,14 @@ test('adult entries never show a poster: a lock stands in for it', () => {
   expect(normal.el.querySelector('.card-placeholder.locked')).toBeNull();
   setAdultCheck(null);
 });
+
+test('a favourite filter card shows a skeleton after the dot until the count is known', () => {
+  const card = createCard({ name: 'Drama', icon: '', filterKind: 'genre' }, 'movie', { placeholder: 'genres', subtitle: 'Genre' });
+  expect(card.el.querySelector('.card-meta').textContent).toBe('Genre');
+  card.update({ countLoading: true });
+  expect(card.el.querySelector('.card-meta').textContent).toBe('Genre · ');
+  expect(card.el.querySelector('.card-meta .skeleton-line')).not.toBeNull();
+  card.update({ count: 1033 });
+  expect(card.el.querySelector('.card-meta .skeleton-line')).toBeNull();
+  expect(card.el.querySelector('.card-meta').textContent).toMatch(/^Genre · 1.?033$/);
+});

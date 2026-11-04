@@ -34,7 +34,7 @@ export function buildCells(providers, activeId) {
   return cells;
 }
 
-/** "Valid until 22/10/2026" / "Expired on ..." from the expiry date saved with the provider, or null when unknown. */
+/** "Expires on 22/10/2026" / "Expired on ..." from the expiry date saved with the provider, or null when unknown. */
 export function validity(provider, now = Date.now()) {
   const at = provider && Number(provider.expiresAt);
   if (!at) return null;

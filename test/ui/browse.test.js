@@ -68,8 +68,9 @@ describe('sidebar', () => {
     expect(open.some((i) => i.kind === 'genresToggle')).toBe(false);
   });
 
-  test('live: all plus flat categories', () => {
-    expect(sidebarItems({ type: 'live', categories: cats, labels }).map((i) => i.kind)).toEqual(['all', 'category', 'category']);
+  test('live: all, favourites and a categories group', () => {
+    expect(sidebarItems({ type: 'live', categories: cats, labels }).map((i) => i.kind)).toEqual(['all', 'favorites', 'toggle']);
+    expect(sidebarItems({ type: 'live', categories: cats, expanded: true, labels }).map((i) => i.kind)).toEqual(['all', 'favorites', 'toggle', 'category', 'category']);
   });
 
   test('filter lookup falls back to "show all"', () => {
