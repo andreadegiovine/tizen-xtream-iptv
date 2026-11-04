@@ -5,14 +5,15 @@ export const ASPECT_MODES = ['fit', 'fill', 'zoom'];
 const AVPLAY_DISPLAY = { fit: 'PLAYER_DISPLAY_MODE_LETTER_BOX', fill: 'PLAYER_DISPLAY_MODE_FULL_SCREEN', zoom: 'PLAYER_DISPLAY_MODE_CROPPED_FULL' };
 const CSS_FIT = { fit: 'contain', fill: 'fill', zoom: 'cover' };
 
-/** AVPlay track list → subtitle tracks: [{ index, language }] (language is the 3-letter code or ''). */
-export function parseAvPlayTracks(list) {
+/** AVPlay track list → tracks of one kind: [{ index, language }] (language is the 3-letter code or ''). */
+export function parseAvPlayTracks(list, kind = 'TEXT') {
   return (Array.isArray(list) ? list : [])
-    .filter((track) => track && track.type === 'TEXT')
+    .filter((track) => track && track.type === kind)
     .map((track) => {
       let language = '';
       try {
-        language = String(JSON.parse(track.extra_info || '{}').track_lang || '');
+        const info = JSON.parse(track.extra_info || '{}');
+        language = String((kind === 'AUDIO' ? info.language : info.track_lang) || '');
       } catch {
         /* extra_info is not JSON on some firmware */
       }
@@ -98,6 +99,30 @@ export function createAvPlayEngine() {
         return parseAvPlayTracks(all);
       } catch {
         return [];
+      }
+    },
+    getAudioTracks() {
+      try {
+        const api = av();
+        const tracks = parseAvPlayTracks(api.getTotalTrackInfo(), 'AUDIO');
+        let current = -1;
+        try {
+          const now = api.getCurrentStreamInfo().find((info) => info.type === 'AUDIO');
+          if (now) current = Number(now.index);
+        } catch {
+          /* not available on every firmware: the first track is assumed */
+        }
+        return tracks.map((track) => ({ ...track, current: track.index === current }));
+      } catch {
+        return [];
+      }
+    },
+    setAudioTrack(index) {
+      try {
+        av().setSelectTrack('AUDIO', index);
+        log.info('AVPlay audio track selected', index);
+      } catch (err) {
+        log.warn('avplay audio selection failed', err && err.message);
       }
     },
     /** index = track to show, null = subtitles off. The player draws the text itself. */
@@ -190,6 +215,16 @@ export function createHtml5Engine() {
         .map((track, index) => ({ index, language: track.language || '', kind: track.kind }))
         .filter((track) => track.kind === 'subtitles' || track.kind === 'captions')
         .map(({ index, language }) => ({ index, language }));
+    },
+    getAudioTracks() {
+      const list = video && video.audioTracks ? Array.from(video.audioTracks) : [];
+      return list.map((track, index) => ({ index, language: track.language || '', current: Boolean(track.enabled) }));
+    },
+    setAudioTrack(index) {
+      if (!video || !video.audioTracks) return;
+      Array.from(video.audioTracks).forEach((track, i) => {
+        track.enabled = i === index;
+      });
     },
     // Like AVPlay, the page draws the line: the track is "hidden" and its cues are handed to the page.
     setSubtitleTrack(index) {

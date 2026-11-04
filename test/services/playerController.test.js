@@ -181,6 +181,8 @@ describe('subtitles and aspect helpers', () => {
     ];
     expect(parseAvPlayTracks(list)).toEqual([{ index: 2, language: 'eng' }, { index: 3, language: '' }]);
     expect(parseAvPlayTracks(undefined)).toEqual([]);
+    const audio = [{ type: 'AUDIO', index: 1, extra_info: JSON.stringify({ language: 'ita' }) }, { type: 'AUDIO', index: 6, extra_info: '{}' }, { type: 'TEXT', index: 2, extra_info: '{}' }];
+    expect(parseAvPlayTracks(audio, 'AUDIO')).toEqual([{ index: 1, language: 'ita' }, { index: 6, language: '' }]);
   });
 });
 

@@ -42,6 +42,7 @@ export function createPlayerPage(ctx, params) {
   let providerId = null; // known once playback started, so saving on exit needs no await
   let aspect = 'fit';
   let subtitle = -1; // -1 = off
+  let audioTrack = null; // null = the file's default
   let appliedFor = 0; // load token the aspect mode was last applied to
   let focusMode = false; // the D-pad moves over the controls (progress pointer + buttons) instead of seeking
   let barFocus = false; // focus on the progress pointer (otherwise on a button)
@@ -75,13 +76,17 @@ export function createPlayerPage(ctx, params) {
     { id: 'forward', icon: 'forward', label: () => t('player.forward'), vodOnly: true, group: 'start', run: () => controller.seekBy(SEEK_LONG) },
     { id: 'aspect', icon: 'aspect', label: () => t('player.aspect'), group: 'end', run: () => cycleAspect() },
     { id: 'subtitles', icon: 'subtitles', label: () => t('player.subtitles'), group: 'end', run: () => openSubtitles() },
-  ].filter((def) => !(isLive && def.vodOnly) && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles')));
+    { id: 'audio', icon: 'audio', label: () => t('player.audio'), group: 'end', hidden: true, run: () => openAudio() }, // shown once the file has several audio tracks
+  ].filter((def) => !(isLive && def.vodOnly) && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles' || def.id === 'audio')));
   buttonDefs.forEach((def) => {
     def.el = h('button', { class: 'player-btn', type: 'button', 'aria-label': def.label() }, icon(def.icon));
   });
+  buttonDefs.forEach((def) => {
+    if (def.hidden) def.el.style.display = 'none';
+  });
   const buttonEl = (id) => (buttonDefs.find((d) => d.id === id) || {}).el;
   // Full-width progress bar, then one row: back, play/pause, forward and the time on the left, aspect ratio and subtitles on the right.
-  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('back'), buttonEl('toggle'), buttonEl('forward'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles')));
+  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('back'), buttonEl('toggle'), buttonEl('forward'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio')));
   const top = h('div', { class: 'player-top' }, titleEl, nowEl);
   const controls = h('div', { class: 'player-controls' }, ...(isLive ? [] : [seek]), row);
   const el = h('section', { class: 'player' }, top, controls, statusEl, nextEl, flashEl, subtitleEl);
@@ -176,13 +181,24 @@ export function createPlayerPage(ctx, params) {
     flashTimer = setTimeout(() => flashEl.classList.remove('visible'), 2000);
   }
 
+  const shown = () => buttonDefs.filter((d) => !d.hidden);
+  function setAudioVisible(visible) {
+    const def = buttonDefs.find((d) => d.id === 'audio');
+    if (!def || def.hidden === !visible) return;
+    def.hidden = !visible;
+    def.el.style.display = visible ? '' : 'none';
+    if (focusIndex >= shown().length) focusIndex = shown().length - 1;
+    paintFocus();
+  }
+
   function paintFocus() {
-    buttonDefs.forEach((def, i) => def.el.classList.toggle('focused', focusMode && !barFocus && i === focusIndex));
+    const list = shown();
+    buttonDefs.forEach((def) => def.el.classList.toggle('focused', focusMode && !barFocus && list[focusIndex] === def));
     seek.classList.toggle('focused', focusMode && barFocus);
   }
 
   /** Position of play / pause among the buttons (the first button for live channels). */
-  const startIndex = () => Math.max(0, buttonDefs.findIndex((d) => d.id === 'toggle'));
+  const startIndex = () => Math.max(0, shown().findIndex((d) => d.id === 'toggle'));
 
   /** Controls get the focus on play / pause. */
   function enterFocus() {
@@ -250,6 +266,25 @@ export function createPlayerPage(ctx, params) {
     }, 150);
   }
 
+  async function openAudio() {
+    const tracks = engine.getAudioTracks ? engine.getAudioTracks() : [];
+    if (tracks.length < 2) {
+      flash(t('player.audio.none'));
+      return;
+    }
+    const now = tracks.find((track) => track.current) || tracks[0];
+    const options = tracks.map((track, i) => ({ label: subtitleLabel(track, i + 1, t('player.audio.track')), value: track.index }));
+    const value = await ctx.dialogs.choose({ title: t('player.audio'), options, selected: audioTrack === null ? now.index : audioTrack });
+    if (value === null || destroyed) return;
+    audioTrack = value;
+    showControls();
+    const chosen = options.find((o) => o.value === value);
+    flash(`${t('player.audio')}: ${chosen ? chosen.label : ''}`);
+    setTimeout(() => {
+      if (!destroyed && engine.setAudioTrack) engine.setAudioTrack(value);
+    }, 150);
+  }
+
   function render(state) {
     if (destroyed) return;
     lastState = state;
@@ -281,6 +316,7 @@ export function createPlayerPage(ctx, params) {
     if (state.status === 'playing' && appliedFor !== loadToken) {
       appliedFor = loadToken;
       if (engine.setAspect && aspect !== 'fit') engine.setAspect(aspect);
+      if (engine.getAudioTracks) setAudioVisible(engine.getAudioTracks().length > 1);
     }
     if ((state.status === 'paused' || state.status === 'error' || state.status === 'recovering') && state.status !== lastStatus) showControls();
     lastStatus = state.status;
@@ -314,6 +350,8 @@ export function createPlayerPage(ctx, params) {
     const token = (loadToken += 1);
     cancelCountdown();
     subtitle = -1;
+    audioTrack = null;
+    setAudioVisible(false);
     showSubtitle('');
     titleEl.textContent = [title, current().title].filter(Boolean).join(' · ');
     nowEl.textContent = '';
@@ -428,11 +466,11 @@ export function createPlayerPage(ctx, params) {
         stepScrub(SCRUB_STEP);
         return;
       }
-      focusIndex = Math.min(buttonDefs.length - 1, focusIndex + 1);
+      focusIndex = Math.min(shown().length - 1, focusIndex + 1);
       paintFocus();
     },
     [Action.ENTER]: () => {
-      if (!barFocus) buttonDefs[focusIndex].run();
+      if (!barFocus) shown()[focusIndex].run();
       else if (scrub !== null) endScrub(true);
       else controller.togglePause();
     },
