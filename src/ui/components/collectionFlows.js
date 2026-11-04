@@ -12,6 +12,7 @@ export async function addToCollection(ctx, { providerId, entry }) {
     placeholder: t('collections.namePlaceholder'),
     emptyLabel: t('common.empty'),
     minLength: 0,
+    autoFocus: false,
     createLabel: (name) => t('collections.create', { name }),
     run: async (text) => (await ctx.collections.search(providerId, text)).map((c) => ({ key: c.id, name: c.name, collectionId: c.id })),
   });

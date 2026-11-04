@@ -3,6 +3,7 @@ import { t } from '../../i18n/index.js';
 import { createTypedRows } from '../components/typedRows.js';
 import { getEntry, listCategories } from '../../services/catalogQuery.js';
 import { openFilter, favoriteFilterEntries } from '../../services/favoriteFilters.js';
+import { collectionEntry, isCollectionKey } from '../../services/collections.js';
 import { log } from '../../core/logger.js';
 
 /** Titles, categories and genres the user marked with the heart, one carousel per type (categories and genres first). */
@@ -10,7 +11,11 @@ export function createFavoritesPage(ctx) {
   const status = h('p', { class: 'muted search-status', text: t('player.loading') });
   const rows = createTypedRows(ctx, {
     prefix: 'favorites',
-    onOpen: (entry) => (entry.filterKind ? openFilter(ctx, entry, { push: true }) : ctx.openEntry(entry, { section: 'favorites' })),
+    onOpen: (entry) => {
+      if (entry.collectionId) ctx.router.push('collection', { id: entry.collectionId, section: 'favorites' });
+      else if (entry.filterKind) openFilter(ctx, entry, { push: true });
+      else ctx.openEntry(entry, { section: 'favorites' });
+    },
   });
   let destroyed = false;
 
@@ -21,6 +26,11 @@ export function createFavoritesPage(ctx) {
     const entries = await favoriteFilterEntries(saved, (type) => listCategories(current.db, type));
     for (const item of saved) {
       if (item.kind) continue;
+      if (isCollectionKey(item.entryKey)) {
+        const collection = await ctx.collections.get(item.entryKey.slice('collection:'.length));
+        if (collection) entries.push(await collectionEntry(current.db, collection, getEntry, (count) => t('collections.items', { count })));
+        continue;
+      }
       const entry = await getEntry(current.db, item.entryKey);
       if (entry) entries.push(entry); // gone from the catalog after a sync: skipped, not deleted
     }

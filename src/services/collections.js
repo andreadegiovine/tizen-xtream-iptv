@@ -93,3 +93,16 @@ export function unionGenres(lists) {
 export async function collectionGenres(db, entryKeys, genresOf) {
   return unionGenres(await Promise.all(entryKeys.map((key) => genresOf(db, key).catch(() => []))));
 }
+
+/** A collection as a card entry (`type: 'collection'`): the picture is the first member that has one. `getEntry(db, key)` reads the catalog. */
+export async function collectionEntry(db, collection, getEntry, countLabel) {
+  let icon = '';
+  for (const key of collection.entryKeys.slice(0, 6)) {
+    const entry = await getEntry(db, key).catch(() => null);
+    if (entry && entry.icon) {
+      icon = entry.icon;
+      break;
+    }
+  }
+  return { key: collectionKey(collection.id), type: 'collection', name: collection.name, icon, collectionId: collection.id, subtitle: countLabel(collection.entryKeys.length) };
+}

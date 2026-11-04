@@ -51,3 +51,27 @@ test('collections page: one card per collection and a click opens it', async () 
   expect(ctx.router.push).toHaveBeenCalledWith('collection', { id: a.id, section: 'collections' });
   page.destroy();
 });
+
+test('search shows the collections whose name matches, and Favorites lists the favourite ones, first', async () => {
+  const { createSearchPage } = await import('../../src/ui/pages/searchPage.js');
+  const { createFavoritesPage } = await import('../../src/ui/pages/favoritesPage.js');
+  const ctx = await setup();
+  const a = await ctx.collections.create('p', 'Marvel', []);
+  await ctx.collections.create('p', 'Other', []);
+  await ctx.favorites.toggle('p', `collection:${a.id}`, 'collection');
+  ctx.search = { search: async () => [{ key: 'movie:i1', type: 'movie', name: 'Marvelous', icon: '' }] };
+  ctx.syncSearchLinks = () => undefined;
+  const search = createSearchPage(ctx, { query: 'marv' });
+  search.mount();
+  await tick();
+  const titles = Array.from(search.el.querySelectorAll('.carousel-title')).map((n) => n.textContent);
+  expect(titles[0]).toBe('Collections');
+  expect(search.el.querySelector('.carousel .card-title').textContent).toBe('Marvel');
+  search.destroy();
+  const favorites = createFavoritesPage(ctx);
+  favorites.mount();
+  await tick();
+  expect(favorites.el.querySelector('.carousel-title').textContent).toBe('Collections');
+  expect(favorites.el.querySelectorAll('.card')).toHaveLength(1);
+  favorites.destroy();
+});

@@ -99,6 +99,7 @@ export function createDetailPage(ctx, params) {
   let info = null; // provider details (plot, cast, seasons...)
   let meta = null; // TMDB (localized text, rating, credits)
   let categoryItems = []; // [{ id, name }]
+  let collectionItems = []; // collections that hold this title: [{ id, name }]
   let categoryNames = new Map();
   let db = null;
   let mergeAvailable = false; // grouping is on: a single channel can be merged by hand
@@ -123,6 +124,7 @@ export function createDetailPage(ctx, params) {
   const versionEl = h('div', { class: 'detail-version' });
   const plotEl = h('p', { class: 'detail-plot' });
   const actionsEl = h('div', { class: 'detail-actions' });
+  const collectionsEl = h('div', { class: 'detail-categories' });
   const categoriesEl = h('div', { class: 'detail-categories' });
   const tagsEl = h('div', { class: 'detail-categories' });
   const directorEl = h('div', { class: 'detail-categories' });
@@ -136,7 +138,7 @@ export function createDetailPage(ctx, params) {
     { class: 'page detail loading' },
     backdropEl,
     poster,
-    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, categoriesEl, tagsEl, directorEl, companiesEl, epgEl, episodesEl, castEl, relatedEl),
+    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, collectionsEl, categoriesEl, tagsEl, directorEl, companiesEl, epgEl, episodesEl, castEl, relatedEl),
   );
 
   const data = () => ({
@@ -186,6 +188,13 @@ export function createDetailPage(ctx, params) {
   function updateCategoryItems() {
     const ids = entry.isGroup && selectedMember ? [selectedMember.categoryId] : entry.categoryIds || [];
     categoryItems = ids.filter((id) => categoryNames.has(id)).map((id) => ({ id, name: categoryNames.get(id) }));
+  }
+
+  /** The collections that hold this title, as chips before the categories. */
+  async function loadCollections() {
+    if (!ctx.collections || !entry) return;
+    collectionItems = (await ctx.collections.list(providerId)).filter((c) => c.entryKeys.includes(entry.key)).map((c) => ({ id: c.id, name: c.name }));
+    if (!destroyed) build();
   }
 
   /** Merges this channel with another one (or with a group) chosen in a search box; the link is kept across syncs. */
@@ -309,7 +318,7 @@ export function createDetailPage(ctx, params) {
   }
 
   /** A row of chips; the clickable ones form a horizontal focus zone that opens the matching browse view. */
-  function renderChips(container, zoneId, chipItems, kind, next, label) {
+  function renderChips(container, zoneId, chipItems, kind, next, label, open = null) {
     clear(container);
     if (chipItems.length) container.appendChild(h('span', { class: 'detail-label', text: label }));
     const nodes = chipItems.map((item) => h('span', { class: `chip${item.id !== undefined ? ' link' : ''}`, text: item.name }));
@@ -325,6 +334,10 @@ export function createDetailPage(ctx, params) {
       },
       onBlur: (i) => links[i] && links[i].node.classList.remove('focused'),
       onActivate: (i) => {
+        if (open) {
+          open(links[i].item);
+          return;
+        }
         const section = { movie: 'movies', series: 'series', live: 'live' }[entry.type];
         ctx.router.push('browse', { type: entry.type, section, filter: { kind, id: String(links[i].item.id) } });
       },
@@ -333,6 +346,7 @@ export function createDetailPage(ctx, params) {
   }
 
   function renderCategories(next) {
+    renderChips(collectionsEl, 'detailCollections', collectionItems, 'collection', next, t('nav.collections'), (item) => ctx.router.push('collection', { id: item.id, section: params.section || 'collections' }));
     renderChips(categoriesEl, 'detailCategories', categoryItems, 'category', next, t('detail.categories'));
     renderChips(tagsEl, 'detailGenres', entry.type === 'live' ? [] : genreItems(), 'genre', next, t('detail.genres'));
     renderDirectors();
@@ -512,7 +526,9 @@ export function createDetailPage(ctx, params) {
       buttons.push({ id: 'favorite', icon: 'heart', active: favorite, label: favorite ? t('detail.unfavorite') : t('detail.favorite'), run: toggleFavorite });
     }
     if (buttons.length) {
-      buttons.push({ id: 'collection', icon: 'collectionAdd', label: t('collections.add'), run: () => addToCollection(ctx, { providerId, entry }) });
+      buttons.push({ id: 'collection', icon: 'collectionAdd', label: t('collections.add'), run: async () => {
+        if (await addToCollection(ctx, { providerId, entry }) && !destroyed) await loadCollections();
+      } });
     }
     if (buttons.length && entry.type === 'live' && !entry.isGroup && !entry.groupKey && mergeAvailable) {
       buttons.push({ id: 'merge', icon: 'merge', label: t('merge.title'), run: mergeChannel });
@@ -592,6 +608,7 @@ export function createDetailPage(ctx, params) {
     }
     fillText();
     favorite = await ctx.favorites.has(providerId, entry.key);
+    if (ctx.collections) collectionItems = (await ctx.collections.list(providerId)).filter((c) => c.entryKeys.includes(entry.key)).map((c) => ({ id: c.id, name: c.name }));
     mergeAvailable = entry.type === 'live' && ctx.liveGrouping ? (await ctx.settings.get()).liveGrouping : false;
     if (entry.type === 'live' && ctx.liveGrouping) manualIds = await ctx.liveGrouping.manual(providerId);
     await reloadRecords();

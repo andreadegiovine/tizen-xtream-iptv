@@ -95,9 +95,10 @@ export function createDialogService({ focus, root = document.body }) {
    * Search box + results list. `run(query)` returns [{ key, name, group, count }] (groups are highlighted). OK on the field opens the
    * keyboard, Done moves to the results. Resolves with the chosen result, or null when dismissed.
    * `minLength` is how many characters start a search (0: the list is there as soon as the dialog opens). With `createLabel(text)`
+   * `autoFocus: false` does not open the keyboard on the field when the dialog opens (the first result takes the focus once listed). With `createLabel(text)`
    * the first result is a "create" row (`{ create: true, name: text }`) as long as something is typed.
    */
-  function search({ title, placeholder = '', run, emptyLabel = '', minLength = 2, createLabel = null }) {
+  function search({ title, placeholder = '', run, emptyLabel = '', minLength = 2, createLabel = null, autoFocus = true }) {
     if (current) return current.promise;
     const previous = snapshot();
     let results = [];
@@ -166,8 +167,8 @@ export function createDialogService({ focus, root = document.body }) {
     });
     current.promise = promise;
     focus.focus(DIALOG_ZONE, 0);
-    if (minLength === 0) query();
-    input.focus();
+    if (minLength === 0) query().then(() => !autoFocus && results.length && current && current.overlay === overlay && focus.focus(DIALOG_ZONE, 1));
+    if (autoFocus) input.focus();
     return promise;
   }
 

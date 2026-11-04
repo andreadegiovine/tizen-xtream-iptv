@@ -2,6 +2,8 @@ import { h } from '../dom.js';
 import { t } from '../../i18n/index.js';
 import { createTypedRows } from '../components/typedRows.js';
 import { createSkeletonCard } from '../components/card.js';
+import { collectionEntry } from '../../services/collections.js';
+import { getEntry } from '../../services/catalogQuery.js';
 import { log } from '../../core/logger.js';
 
 const PER_TYPE = 20;
@@ -12,18 +14,27 @@ const PER_TYPE = 20;
  */
 export function createSearchPage(ctx, params = {}) {
   const status = h('p', { class: 'muted search-status' });
-  const rows = createTypedRows(ctx, { prefix: 'search', limit: PER_TYPE, onOpen: (entry) => ctx.openEntry(entry, { section: 'search' }) });
+  const rows = createTypedRows(ctx, { prefix: 'search', limit: PER_TYPE, onOpen: (entry) => (entry.collectionId ? ctx.router.push('collection', { id: entry.collectionId, section: 'search' }) : ctx.openEntry(entry, { section: 'search' })) });
   const skeleton = h('div', { class: 'search-skeleton' }, h('div', { class: 'skeleton-line title' }), h('div', { class: 'skeleton-row' }, [0, 1, 2, 3, 4, 5].map(() => createSkeletonCard())));
   skeleton.style.display = 'none';
   let query = '';
   let token = 0;
   let destroyed = false;
 
+  /** Collections whose name matches, as card entries (shown first, in their own carousel). */
+  async function matchingCollections(text) {
+    const current = await ctx.active.get();
+    if (!current) return [];
+    const list = await ctx.collections.search(current.provider.id, text);
+    return Promise.all(list.slice(0, PER_TYPE).map((c) => collectionEntry(current.db, c, getEntry, (count) => t('collections.items', { count }))));
+  }
+
   async function run() {
     const mine = (token += 1);
     if (query.length >= 2) skeleton.style.display = '';
     try {
       const found = query.length < 2 ? [] : await ctx.search.search(query, { limit: PER_TYPE * 6 });
+      if (query.length >= 2 && ctx.collections) found.push(...(await matchingCollections(query)));
       if (destroyed || mine !== token) return;
       rows.set(found);
       skeleton.style.display = 'none';

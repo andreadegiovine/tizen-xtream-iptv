@@ -51,3 +51,14 @@ test('edit box: rename and mark titles to take out; Back cancels', async () => {
   dialogs.dismiss();
   expect(await second).toBeNull();
 });
+
+test('the collections box does not put the cursor in the field when it opens: the first collection has the focus', async () => {
+  const { root, focus, dialogs } = setup();
+  const run = async () => [{ key: 'c1', name: 'Marvel', collectionId: 'c1' }];
+  const promise = dialogs.search({ title: 'Add', run, minLength: 0, autoFocus: false, createLabel: (name) => name });
+  await tick();
+  expect(document.activeElement).not.toBe(root.querySelector('input'));
+  expect(focus.active.index).toBe(1);
+  focus.handle(Action.ENTER);
+  expect((await promise).collectionId).toBe('c1');
+});
