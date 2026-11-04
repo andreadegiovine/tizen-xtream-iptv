@@ -88,3 +88,10 @@ test('sidebar: pinned entries sit between suggestions and genres', () => {
   expect(items[4]).toMatchObject({ pinned: true, id: 'drama' });
   expect(items[5]).toMatchObject({ pinned: true, id: '7' });
 });
+
+test('sidebar: pinned categories sit after the favourites on Live TV', () => {
+  const labels = { all: 'All', favorites: 'F', categories: 'Cat' };
+  const items = sidebarItems({ type: 'live', categories: [{ id: 3, name: 'Sport' }], pinned: [{ kind: 'category', id: 3, name: 'Sport' }], labels });
+  expect(items.map((i) => i.kind)).toEqual(['all', 'favorites', 'category', 'toggle']);
+  expect(items[2]).toMatchObject({ pinned: true, id: '3' });
+});

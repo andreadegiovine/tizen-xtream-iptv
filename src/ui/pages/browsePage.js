@@ -58,12 +58,13 @@ export function createPagedGridModel({ columns, getCount, hasNext, hasPrevious, 
 
 /**
  * Sidebar entries. Movies and series: show all, continue watching, favourites, suggestions, a "Genres"
- * entry (open by default) with the genres, then a "Categories" entry that expands into the provider categories. Channels: show all + the categories.
+ * entry (open by default) with the genres, then a "Categories" entry that expands into the provider categories. Channels: show all, favourites, pinned categories and the categories.
  */
 export function sidebarItems({ type, genres = [], categories = [], pinned = [], expanded = false, genresExpanded = true, genresLoading = false, labels }) {
   const items = [{ kind: 'all', name: labels.all }];
   if (type === 'live') {
     items.push({ kind: 'favorites', name: labels.favorites });
+    pinned.forEach((p) => items.push({ kind: p.kind, id: String(p.id), name: p.name, pinned: true }));
     if (categories.length) {
       items.push({ kind: 'toggle', name: labels.categories, expanded });
       if (expanded) categories.forEach((c) => items.push({ kind: 'category', id: c.id, name: c.name, depth: 1 }));
@@ -252,7 +253,7 @@ export function createBrowsePage(ctx, params = {}) {
       return;
     }
     const active = await ctx.favorites.hasFilter(providerId, item.kind, type, item.id).catch(() => false);
-    const pinActive = type === 'live' ? false : await ctx.pins.has(providerId, item.kind, type, item.id).catch(() => false);
+    const pinActive = await ctx.pins.has(providerId, item.kind, type, item.id).catch(() => false);
     if (destroyed || items[selected] !== item) return;
     const target = { kind: item.kind, type, id: item.id, name: item.name };
     favState = {
@@ -268,20 +269,17 @@ export function createBrowsePage(ctx, params = {}) {
         }
         ctx.notices.success(t(now ? 'notice.added' : 'notice.removed'), { key: 'favorite' });
       },
-      onPin:
-        type === 'live'
-          ? null
-          : async () => {
-              const now = await ctx.pins.toggle(providerId, target);
-              pinned = await ctx.pins.list(providerId, type);
-              if (!destroyed) rebuildSidebar();
-              ctx.notices.success(t(now ? 'notice.added' : 'notice.removed'), { key: 'pin' });
-            },
+      onPin: async () => {
+        const now = await ctx.pins.toggle(providerId, target);
+        pinned = await ctx.pins.list(providerId, type);
+        if (!destroyed) rebuildSidebar();
+        ctx.notices.success(t(now ? 'notice.added' : 'notice.removed'), { key: 'pin' });
+      },
     };
     renderHead();
   }
 
-  /** Buttons of the head, left to right: pin (not for channels) and heart. */
+  /** Buttons of the head, left to right: pin and heart. */
   const headButtons = () => (favState ? (favState.onPin ? [{ el: pinBtn, run: favState.onPin }] : []).concat([{ el: favBtn, run: favState.onToggle }]) : []);
 
   const headZone = new FocusZone({
@@ -404,8 +402,9 @@ export function createBrowsePage(ctx, params = {}) {
     providerId = current.provider.id;
     pageSize = (await ctx.settings.get()).gridItems;
     const excluded = await ctx.settings.getExcluded(providerId, type);
-    pinned = type === 'live' ? [] : await ctx.pins.list(providerId, type).catch(() => []);
+    pinned = await ctx.pins.list(providerId, type).catch(() => []);
     categories = (await listCategories(db, type)).filter((c) => !excluded.has(String(c.id))).map((c) => ({ id: c.id, name: c.name }));
+    pinned = pinned.filter((p) => p.kind !== 'category' || !excluded.has(String(p.id))); // a hidden category is not pinned in the sidebar
     const filter = params.filter || null;
     const wantsGenre = filter && filter.kind === 'genre';
     const loadGenres = async () => {
