@@ -16,8 +16,16 @@ const SUFFIX = /^(\d+|hd|fhd|uhd|sd|4k|8k|hevc|h265|h264|raw)$/;
 const MAX_WORDS = 3;
 /** A prefix is extended to its next word when that word holds this share of the units (and at most one unit stays out). */
 const EXTEND_SHARE = 0.8;
-/** Distinct second words needed to call a single word a network without numbered channels ("Sky Uno", "Sky Cinema", "Sky Sport"). */
+/** Different second words needed to call a single word a network without numbered channels ("Sky Uno", "Sky Cinema", "Sky Sport")... */
 const MIN_DISTINCT = 3;
+/** ...and the proof also needs sub-families (at least two second words shared by 2+ units: "Sky Cinema …", "Sky Sport …") or this many units. */
+const BIG_NETWORK = 20;
+/** Words a network name cannot end with: it goes on ("Aldo Giovanni e" → "Aldo Giovanni e Giacomo"). */
+const STOP = new Set(['e', 'ed', 'di', 'del', 'della', 'dei', 'delle', 'da', 'al', 'alla', 'ai', 'in', 'il', 'lo', 'la', 'le', 'un', 'una', 'de', 'and', 'of', 'the', 'del', 'con', 'per']);
+/** Most words of a name that was extended through such words. */
+const MAX_STOP_WORDS = 5;
+/** Quality marks and "channel": they do not make a channel a different one ("Harry Potter" = "Harry Potter Channel"). */
+const SAME = new Set(['hd', 'fhd', 'uhd', 'sd', '4k', '8k', 'hevc', 'h265', 'h264', 'raw', 'channel']);
 
 /** Words of a channel name: [{ key, word }] with the normalized key and the word as written. */
 function wordsOf(name) {
@@ -28,7 +36,7 @@ function wordsOf(name) {
     .forEach((word) => {
       const pieces = makeSearchKey(word).split(' ').filter(Boolean); // "Rai_1" → rai, 1
       const written = word.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-      pieces.forEach((key, i) => words.push({ key, word: written.length === pieces.length ? written[i] : key }));
+      pieces.forEach((key, i) => words.push({ key, word: written.length === pieces.length ? written[i] : key, plus: i === 0 && /^\+\d/.test(word) })); // "+1": the same channel one hour later
     });
   return words;
 }
@@ -70,6 +78,7 @@ function unitsOf(entries, groups) {
  * Finds the networks: the longest run of first words (at most three) that channels and groups share, with proof.
  * "Rai 1", "Rai 2" → Rai (numbered versions); "Sky Uno", "Sky Cinema", "Sky Sport" → Sky (many different second words);
  * "Amazon Prime 1", "Amazon Prime 2" → Amazon Prime (one second word holds almost everything: the name is that long).
+ * One number alone is part of a name ("Rete 4"), the same channel twice is not a network, a name never ends with "e" or "di".
  * A word with few units and no proof ("Alessandro Borghese …" next to "Alessandro Siani") is not a network, but its longer
  * parts can be ("Alessandro Borghese"). Returns { networks: [{ id, name, units, proof }], rejected: [{ name, units, reason }] }.
  */
@@ -77,10 +86,16 @@ export function analyzeNetworks(units, { min = MIN_NETWORK_UNITS } = {}) {
   units.forEach((unit) => {
     unit.words = wordsOf(unit.name);
   });
+  // "Real Time" and "RealTime", "Disney Plus" and "Disneyplus": when another channel starts with the glued word, the two words are one.
+  const firsts = new Set(units.map((unit) => (unit.words[0] ? unit.words[0].key : '')).filter(Boolean));
+  units.forEach((unit) => {
+    const [a, b] = unit.words;
+    if (a && b && !a.plus && !b.plus && firsts.has(a.key + b.key)) unit.words.splice(0, 2, { key: a.key + b.key, word: a.word + b.word, plus: false });
+  });
   const networks = [];
   const rejected = [];
   const wordAt = (unit, depth) => (unit.words[depth] ? unit.words[depth].key : '');
-  const nameable = (key, depth) => key.length >= 2 && !SUFFIX.test(key) && !(depth === 0 && (key.length < 3 || GENERIC.has(key) || /^\d+$/.test(key)));
+  const nameable = (key, depth) => (key.length >= 2 || (depth > 0 && /^[a-z]$/.test(key))) && !SUFFIX.test(key) && !(depth === 0 && (key.length < 3 || GENERIC.has(key) || /^\d+$/.test(key)));
   const split = (list, depth) => {
     const children = new Map();
     list.forEach((unit) => {
@@ -92,25 +107,40 @@ export function analyzeNetworks(units, { min = MIN_NETWORK_UNITS } = {}) {
     return children;
   };
   const suffixOnly = (unit, depth) => unit.words.length > depth && unit.words.slice(depth).every((w) => SUFFIX.test(w.key));
+  /** What makes a channel a different one: its words without quality marks, "channel" and "+1". */
+  const signature = (unit) => unit.words.filter((w) => !w.plus && !SAME.has(w.key)).map((w) => w.key).join(' ');
+  const reject = (list, label, reason) => rejected.push({ name: label, units: list.length, reason, sample: list.slice(0, 3).map((u) => u.name) });
 
   const visit = (list, depth, prefix) => {
     // list: units sharing the first `depth` words (prefix); look at what comes next.
     const children = split(list, depth);
-    const numbered = list.filter((unit) => suffixOnly(unit, depth)).length;
     const named = Array.from(children).filter(([key]) => nameable(key, depth));
-    const top = named.sort((a, b) => b[1].length - a[1].length)[0];
+    const top = named.slice().sort((a, b) => b[1].length - a[1].length)[0];
     const label = prefix.join(' ');
+    const dominant = Boolean(top) && top[1].length >= min && top[1].length >= EXTEND_SHARE * list.length && list.length - top[1].length <= 1;
 
     // One second word holds (almost) all the units: the network name is that long ("Amazon" → "Amazon Prime").
-    if (depth === 1 && top && top[1].length >= min && top[1].length >= EXTEND_SHARE * list.length && list.length - top[1].length <= 1) {
-      return visit(top[1], 2, prefix.concat(top[0]));
-    }
+    if (depth === 1 && dominant) return visit(top[1], 2, prefix.concat(top[0]));
+    // A name never ends with "e", "di", "al"…: it goes on while the units agree ("Aldo Giovanni e Giacomo").
+    const open = STOP.has(prefix[depth - 1]);
+    if (depth < MAX_STOP_WORDS && ((open && top && top[1].length >= min) || (depth >= 2 && dominant && STOP.has(top[0])))) return visit(top[1], depth + 1, prefix.concat(top[0]));
+    if (open) return reject(list, label, 'noProof');
+
+    if (new Set(list.map(signature)).size < 2) return reject(list, label, 'duplicates'); // the same channel more than once is not a network
     let proof = '';
     if (depth >= 2) proof = 'specific';
-    else if (numbered >= 2) proof = 'numbered';
-    else if (named.length >= MIN_DISTINCT && list.length >= MIN_DISTINCT) proof = 'distinct';
+    else {
+      const numbers = new Set();
+      list.filter((unit) => suffixOnly(unit, depth)).forEach((unit) => {
+        const number = unit.words.slice(depth).find((w) => !w.plus && /^\d+$/.test(w.key));
+        if (number) numbers.add(number.key);
+      });
+      const families = named.filter(([, sub]) => sub.length >= 2).length;
+      if (numbers.size >= 2) proof = 'numbered'; // "Rai 1", "Rai 2" (one number alone is a name: "Rete 4", "Italia 1")
+      else if (named.length >= MIN_DISTINCT && list.length >= MIN_DISTINCT && (families >= 2 || list.length >= BIG_NETWORK)) proof = 'distinct';
+    }
     if (proof && list.length >= min) {
-      const name = prefix.map((key, i) => voteWord(list.map((unit) => unit.words[i] && unit.words[i].word).filter(Boolean), key)).join(' ');
+      const name = prefix.map((key, i) => (i > 0 && STOP.has(key) ? key : voteWord(list.map((unit) => unit.words[i] && unit.words[i].word).filter(Boolean), key))).join(' ');
       networks.push({ id: prefix.join('-'), name, units: list, proof, words: prefix.length });
       return undefined;
     }
@@ -122,11 +152,9 @@ export function analyzeNetworks(units, { min = MIN_NETWORK_UNITS } = {}) {
           visit(sub, depth + 1, prefix.concat(key));
         }
       });
-      rejected.push({ name: label, units: list.length, reason: deeper ? 'split' : 'noProof', sample: list.slice(0, 3).map((u) => u.name) });
-      return undefined;
+      return reject(list, label, deeper ? 'split' : 'noProof');
     }
-    rejected.push({ name: label, units: list.length, reason: 'noProof', sample: list.slice(0, 3).map((u) => u.name) });
-    return undefined;
+    return reject(list, label, 'noProof');
   };
 
   const first = new Map();
@@ -139,7 +167,7 @@ export function analyzeNetworks(units, { min = MIN_NETWORK_UNITS } = {}) {
   first.forEach((list, key) => {
     if (list.length >= min) visit(list, 1, [key]);
   });
-  return { networks, rejected: rejected.filter((r) => r.reason === 'noProof' || r.reason === 'split') };
+  return { networks, rejected };
 }
 
 /**

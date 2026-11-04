@@ -158,7 +158,9 @@ test('the network takes the whole common name and the most common written form',
   const items = [ch(1, 'AMAZON PRIME 1'), ch(2, 'Amazon Prime 2'), ch(3, 'Amazon Prime Movies')];
   const { networks } = build(items);
   expect(networks.map((n) => [n.name, n.networkId])).toEqual([['Amazon Prime', 'amazon-prime']]);
-  expect(build([ch(1, 'Sky Uno'), ch(2, 'Sky Cinema'), ch(3, 'Sky Sport 24')]).networks.map((n) => n.name)).toEqual(['Sky']);
+  const sky = [ch(1, 'Sky Cinema Uno'), ch(2, 'Sky Cinema Due'), ch(3, 'Sky Sport Uno'), ch(4, 'Sky Sport Due'), ch(5, 'Sky Arte')];
+  expect(build(sky).networks.map((n) => n.name)).toEqual(['Sky']); // different second words, in families
+  expect(build([ch(1, 'Tele Arena'), ch(2, 'Tele Liberta'), ch(3, 'Tele Lombardia')]).networks).toEqual([]); // unrelated channels sharing a word
   expect(build([ch(1, 'Sky Uno'), ch(2, 'Sky Cinema')]).networks).toEqual([]); // two different shows: no proof
 });
 
@@ -171,4 +173,17 @@ test('the report says what was grouped and what was left out', () => {
   const text = formatNetworkReport(report, (key) => key);
   expect(text).toContain('+ Rai');
   expect(text).toContain('- zeta');
+});
+
+test('one number is a name, the same channel twice is not a network, names do not end with "e" or "di"', () => {
+  expect(build([ch(1, 'Rete 4'), ch(2, 'Rete 4 +1'), ch(3, 'RETE 4 HD')]).networks).toEqual([]);
+  expect(build([ch(1, 'Harry Potter'), ch(2, 'Harry Potter Channel')]).networks).toEqual([]);
+  expect(build([ch(1, 'Aldo Giovanni e Giacomo Channel'), ch(2, "Aldo Giovanni e Giacomo Film"), ch(3, 'Aldo Giovanni e Giacomo Show')]).networks.map((n) => n.name)).toEqual(['Aldo Giovanni e Giacomo']);
+  expect(build([ch(1, 'Serie A 01'), ch(2, 'Serie A 02')]).networks.map((n) => n.name)).toEqual(['Serie A']);
+});
+
+test('the same name with or without spaces is one network', () => {
+  const { networks } = build([ch(1, 'Real Time 1'), ch(2, 'Real Time 2'), ch(3, 'RealTime 3')]);
+  expect(networks).toHaveLength(1);
+  expect(networks[0].channelCount).toBe(3);
 });

@@ -35,6 +35,7 @@
   "diag.networks.numbered": "numbered",
   "diag.networks.distinct": "different words",
   "diag.networks.specific": "specific name",
+  "diag.networks.duplicates": "same names",
   "diag.networks.noProof": "no proof",
   "diag.networks.split": "split into longer names",
   "diag.logs": "Recent log",

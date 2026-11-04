@@ -35,6 +35,7 @@
   "diag.networks.numbered": "numerati",
   "diag.networks.distinct": "parole diverse",
   "diag.networks.specific": "nome specifico",
+  "diag.networks.duplicates": "nomi uguali",
   "diag.networks.noProof": "nessuna prova",
   "diag.networks.split": "diviso in nomi piu lunghi",
   "diag.logs": "Log recente",
