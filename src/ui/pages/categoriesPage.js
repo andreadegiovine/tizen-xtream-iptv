@@ -125,7 +125,7 @@ export function createCategoriesPage(ctx, params = {}) {
     base = null;
     armed = false;
     showMulti();
-    ctx.notices.info(t('categories.multiOff'), { key: 'multi' });
+    ctx.notices.info(t('common.cancelled'), { key: 'multi' });
   }
 
   const multiButton = h('button', { class: 'btn icon-only categories-multi', type: 'button', 'aria-label': t('categories.multi'), title: t('categories.multi') }, icon('checkDouble'));
@@ -150,7 +150,7 @@ export function createCategoriesPage(ctx, params = {}) {
       }
       armed = true;
       showMulti();
-      ctx.notices.info(t('categories.multiOn'), { key: 'multi' });
+      ctx.notices.info(t('common.active'), { key: 'multi' });
     },
   });
 
@@ -223,7 +223,7 @@ export function createCategoriesPage(ctx, params = {}) {
       if (!destroyed) ctx.notices.success(t('notice.saved'), { key: 'categories' });
     } catch (err) {
       log.warn('Applying categories failed', err && err.message);
-      ctx.notices.error(t('notice.failed'), { key: 'categories' });
+      ctx.notices.error(t('error.UNKNOWN'), { key: 'categories' });
     } finally {
       busy = false;
     }

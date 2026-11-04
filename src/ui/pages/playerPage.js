@@ -254,7 +254,7 @@ export function createPlayerPage(ctx, params) {
     }
     const options = [
       { label: t('player.subtitles.off'), value: -1 },
-      ...tracks.map((track, i) => ({ label: subtitleLabel(track, i + 1, t('player.subtitles.track')), value: track.index })),
+      ...tracks.map((track, i) => ({ label: subtitleLabel(track, i + 1, t('player.track')), value: track.index })),
     ];
     const value = await ctx.dialogs.choose({ title: t('player.subtitles'), options, selected: subtitle });
     if (value === null || destroyed) return;
@@ -276,7 +276,7 @@ export function createPlayerPage(ctx, params) {
       return;
     }
     const now = tracks.find((track) => track.current) || tracks[0];
-    const options = tracks.map((track, i) => ({ label: subtitleLabel(track, i + 1, t('player.audio.track')), value: track.index }));
+    const options = tracks.map((track, i) => ({ label: subtitleLabel(track, i + 1, t('player.track')), value: track.index }));
     const value = await ctx.dialogs.choose({ title: t('player.audio'), options, selected: audioTrack === null ? now.index : audioTrack });
     if (value === null || destroyed) return;
     audioTrack = value;

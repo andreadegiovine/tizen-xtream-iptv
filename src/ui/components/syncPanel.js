@@ -16,6 +16,7 @@ export function describeType(state, meta, locale) {
   if (phase === 'write') {
     return t('home.phase.write', { done: formatNumber(state.done, locale), total: formatNumber(state.total, locale) });
   }
+  if (phase === 'queued') return t('common.queued');
   if (ACTIVE_PHASES.has(phase)) return t(`home.phase.${phase}`);
   if (!meta) return t('common.never');
   if (meta.groupCount > 0 && meta.groupedCount !== undefined) {
@@ -43,10 +44,14 @@ export function createSyncPanel(ctx) {
     const status = h('span', { class: 'sync-status' });
     return { type, status, el: h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t(LABEL_KEY[type]) }), status) };
   });
+  const engineStatus = h('span', { class: 'sync-status' });
+  const timingStatus = h('span', { class: 'sync-status' });
+  const engineRow = h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t('home.engine') }), engineStatus);
+  const timingRow = h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t('home.syncTiming') }), timingStatus);
   const info = h('p', { class: 'muted sync-info' });
   const button = refreshButton(t('home.update'));
   const providerName = h('span', { class: 'panel-provider' });
-  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('home.catalog') }, providerName), button), h('div', { class: 'sync' }, rows.map((r) => r.el)), info);
+  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('home.catalog') }, providerName), button), h('div', { class: 'sync' }, rows.map((r) => r.el), engineRow, timingRow), info);
   let persisted = {};
   let providerId = null;
   let wasRunning = false;
@@ -67,19 +72,12 @@ export function createSyncPanel(ctx) {
       row.status.textContent = describeType(state.types[row.type], persisted[row.type], locale);
     });
     const meta = TYPES.map((type) => persisted[type]).filter(Boolean);
-    const lines = [];
-    if (state.mode) lines.push(t('home.engine', { mode: t(`home.engine.${state.mode}`) }));
-    if (state.paused) lines.push(t('home.paused'));
-    if (meta.length) {
-      lines.push(
-        t('home.timing', {
-          fetch: formatSeconds(meta.reduce((sum, m) => sum + (m.fetchMs || 0), 0)),
-          items: formatSeconds(meta.reduce((sum, m) => sum + (m.itemsMs || 0), 0)),
-          entries: formatSeconds(meta.reduce((sum, m) => sum + (m.entriesMs || 0), 0)),
-        }),
-      );
-    }
-    if (state.error) lines.push(t(`error.${state.error.code}`));
+    const total = (key) => formatSeconds(meta.reduce((sum, m) => sum + (m[key] || 0), 0));
+    engineStatus.textContent = [state.mode ? t(`home.engine.${state.mode}`) : '', state.paused ? t('home.paused') : ''].filter(Boolean).join(' · ');
+    engineRow.style.display = engineStatus.textContent ? '' : 'none';
+    timingStatus.textContent = meta.length ? t('home.timing', { fetch: total('fetchMs'), items: total('itemsMs'), entries: total('entriesMs') }) : '';
+    timingRow.style.display = meta.length ? '' : 'none';
+    const lines = state.error ? [t(`error.${state.error.code}`)] : [];
     info.textContent = lines.join(' · ');
     button.classList.toggle('disabled', state.running);
   }
@@ -120,7 +118,7 @@ export function createSyncPanel(ctx) {
 /** One line of the Metadata table: "ready · last run <time> · N items · 3.2 s". */
 export function describeMeta(entry, locale, ready, running = null) {
   if (!ready) return t('settings.notConfigured');
-  if (running) return running.queued ? t('operations.queued') : t('meta.running', { time: formatDateTime(running.startedAt, locale) });
+  if (running) return running.queued ? t('common.queued') : t('meta.running', { time: formatDateTime(running.startedAt, locale) });
   if (!entry) return t('common.never');
   return t(entry.failed ? 'meta.failed' : 'meta.ran', {
     time: formatDateTime(entry.lastSync, locale),
@@ -274,7 +272,7 @@ export function createOperationsPanel(ctx) {
           'div',
           { class: 'sync-row op-row' },
           h('span', { class: 'sync-name', text: t(`operations.${op.id}`) }),
-          h('span', { class: 'sync-status', text: op.queued ? t('operations.queued') : t('operations.since', { time: formatDateTime(op.startedAt, i18n.getLocale()) }) }),
+          h('span', { class: 'sync-status', text: op.queued ? t('common.queued') : t('operations.since', { time: formatDateTime(op.startedAt, i18n.getLocale()) }) }),
           stop,
         ),
       );

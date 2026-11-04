@@ -336,6 +336,44 @@ h2 {
   }
 }
 
+.list .row .toggle {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 64px;
+  height: 32px;
+  border-radius: 16px;
+  background: $bg-focus;
+  transition: background 0.12s ease-out;
+
+  .toggle-knob {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: $text;
+    transition: transform 0.12s ease-out;
+  }
+
+  &.on {
+    background: $accent;
+
+    .toggle-knob {
+      transform: translateX(32px);
+    }
+  }
+}
+
+.list .row.focused .toggle:not(.on) {
+  background: $text-muted;
+
+  .toggle-knob {
+    background: $bg;
+  }
+}
+
 .list .row .value-input {
   flex: 1;
   min-width: 0;
@@ -1899,11 +1937,6 @@ h2 {
   height: 48px;
   margin: -8px -12px -8px 16px;
   padding: 0;
-
-  &.focused {
-    background: $text;
-    color: $bg;
-  }
 }
 
 // Search box dialog (merge channels): groups stand out.

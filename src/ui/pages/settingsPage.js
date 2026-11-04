@@ -107,6 +107,16 @@ export function optionRow({ labelKey, key, options, format = String, ctx }) {
   };
 }
 
+/** On/off switch shown at the right of a settings row. */
+function toggle() {
+  return h('span', { class: 'toggle', role: 'switch', 'aria-checked': 'false' }, h('span', { class: 'toggle-knob' }));
+}
+
+function setToggle(el, on) {
+  el.classList.toggle('on', Boolean(on));
+  el.setAttribute('aria-checked', on ? 'true' : 'false');
+}
+
 export function createSettingsPage(ctx) {
   const language = (v) => (v === 'auto' ? t('settings.language.auto') : v);
   const seconds = (v) => `${v} s`;
@@ -114,14 +124,14 @@ export function createSettingsPage(ctx) {
   const timeName = (v) => (v === 'auto' ? t('settings.format.auto') : `${v === '12h' ? t('settings.time.12h') : t('settings.time.24h')} (${formatClockTime(now, v)})`);
   const dateName = (v) => (v === 'auto' ? t('settings.format.auto') : `${t(`settings.date.${v}`)} (${formatClockDate(now, v)})`);
 
-  const autoplayValue = h('span', { class: 'value' });
+  const autoplayValue = toggle();
   const autoplay = {
     el: h('div', { class: 'row' }, h('span', { text: t('settings.autoplayNext') }), autoplayValue),
-    refresh: () => ctx.settings.get().then((s) => { autoplayValue.textContent = s.autoplayNext ? t('common.on') : t('common.off'); }),
+    refresh: () => ctx.settings.get().then((s) => { setToggle(autoplayValue, s.autoplayNext); }),
     async activate() {
       const s = await ctx.settings.get();
       const next = await ctx.settings.update({ autoplayNext: !s.autoplayNext });
-      autoplayValue.textContent = next.autoplayNext ? t('common.on') : t('common.off');
+      setToggle(autoplayValue, next.autoplayNext);
       ctx.notices.success(t('notice.saved'), { key: 'setting' });
     },
   };
@@ -234,7 +244,7 @@ export function createSettingsPage(ctx) {
 
   const pinValue = h('span', { class: 'value' });
   const pinRow = {
-    el: h('div', { class: 'row' }, h('span', { text: t('settings.parentalPin') }), pinValue),
+    el: h('div', { class: 'row' }, h('span', { text: t('parental.enterPin') }), pinValue),
     refresh: () => ctx.parental.hasPin().then((has) => { pinValue.textContent = has ? '••••' : t('parental.notSet'); }),
     async activate() {
       await changePin({ dialogs: ctx.dialogs, parental: ctx.parental, notices: ctx.notices });
@@ -242,14 +252,14 @@ export function createSettingsPage(ctx) {
     },
   };
 
-  const groupingValue = h('span', { class: 'value' });
+  const groupingValue = toggle();
   const liveGrouping = {
     el: h('div', { class: 'row' }, h('span', { text: t('settings.liveGrouping') }), groupingValue),
-    refresh: () => ctx.settings.get().then((s) => { groupingValue.textContent = s.liveGrouping ? t('common.on') : t('common.off'); }),
+    refresh: () => ctx.settings.get().then((s) => { setToggle(groupingValue, s.liveGrouping); }),
     async activate() {
       const s = await ctx.settings.get();
       const next = await ctx.settings.update({ liveGrouping: !s.liveGrouping });
-      groupingValue.textContent = next.liveGrouping ? t('common.on') : t('common.off');
+      setToggle(groupingValue, next.liveGrouping);
       await regroup();
     },
   };
@@ -261,13 +271,13 @@ export function createSettingsPage(ctx) {
       ctx.notices.success(t('notice.saved'), { key: 'setting' });
     } catch (err) {
       log.warn('Regrouping failed', err && err.message);
-      ctx.notices.error(t('notice.failed'), { key: 'setting' });
+      ctx.notices.error(t('error.UNKNOWN'), { key: 'setting' });
     }
   }
 
   // Words removed from channel names: the field shows the defaults as its placeholder, the button at its right brings them back.
   const patternsInput = h('input', { class: 'value-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: termsText(DEFAULT_TERMS) });
-  const patternsReset = h('button', { class: 'btn icon-only row-reset', type: 'button', 'aria-label': t('settings.liveGroupReset'), title: t('settings.liveGroupReset') }, icon('refresh'));
+  const patternsReset = h('button', { class: 'btn danger icon-only row-reset', type: 'button', 'aria-label': t('settings.liveGroupReset'), title: t('settings.liveGroupReset') }, icon('remove'));
   const showPatterns = () => ctx.settings.get().then((s) => { patternsInput.value = s.liveGroupPatterns; });
   patternsInput.addEventListener('keydown', (event) => {
     event.stopPropagation(); // the text field owns its keys

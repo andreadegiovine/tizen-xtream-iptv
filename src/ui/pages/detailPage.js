@@ -200,7 +200,7 @@ export function createDetailPage(ctx, params) {
       ctx.notices.success(t('notice.done'), { key: 'merge' });
     } catch (err) {
       log.warn('Merge failed', err && err.message);
-      ctx.notices.error(t('notice.failed'), { key: 'merge' });
+      ctx.notices.error(t('error.UNKNOWN'), { key: 'merge' });
     }
   }
 
@@ -230,7 +230,7 @@ export function createDetailPage(ctx, params) {
       build();
     } catch (err) {
       log.warn('Ungroup failed', err && err.message);
-      ctx.notices.error(t('notice.failed'), { key: 'merge' });
+      ctx.notices.error(t('error.UNKNOWN'), { key: 'merge' });
     }
   }
 
@@ -450,7 +450,7 @@ export function createDetailPage(ctx, params) {
       ctx.notices.success(t('notice.done'), { key: 'watched' });
     } catch (err) {
       log.warn('Mark watched failed', err && err.message);
-      ctx.notices.error(t('notice.failed'), { key: 'watched' });
+      ctx.notices.error(t('error.UNKNOWN'), { key: 'watched' });
     }
   }
 
@@ -461,7 +461,7 @@ export function createDetailPage(ctx, params) {
       ctx.notices.success(t(favorite ? 'notice.added' : 'notice.removed'), { key: 'favorite' });
     } catch (err) {
       log.warn('Favorite failed', err && err.message);
-      ctx.notices.error(t('notice.failed'), { key: 'favorite' });
+      ctx.notices.error(t('error.UNKNOWN'), { key: 'favorite' });
     }
   }
 

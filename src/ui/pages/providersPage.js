@@ -57,7 +57,7 @@ export function createProvidersPage(ctx, params = {}) {
         if (cell.action === ProviderAction.ADD) {
           return h('button', { class: 'btn primary provider-add icon-only', type: 'button', 'aria-label': t('setup.title') }, icon('add'));
         }
-        const labelKey = cell.action === ProviderAction.USE && cell.disabled ? 'providers.active' : `providers.${cell.action}`;
+        const labelKey = cell.action === ProviderAction.USE && cell.disabled ? 'common.active' : `providers.${cell.action}`;
         // Use / Active keep their label; the others are icons only (categories: the one of the sidebar).
         const iconName = { [ProviderAction.CATEGORIES]: 'categories', [ProviderAction.EDIT]: 'edit', [ProviderAction.REMOVE]: 'remove' }[cell.action];
         return h(
@@ -155,7 +155,7 @@ export function createProvidersPage(ctx, params = {}) {
   });
 
   return {
-    el: h('section', { class: 'page framed providers' }, h('div', { class: 'page-container' }, h('h1', { text: t('providers.title') }), list)),
+    el: h('section', { class: 'page framed providers' }, h('div', { class: 'page-container' }, h('h1', { text: t('nav.provider') }), list)),
     mount() {
       ctx.focus.register(zone);
       ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);

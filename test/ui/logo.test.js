@@ -8,8 +8,8 @@ test('tizen/icon.svg is the same drawing as the top bar mark (square, no wordmar
   expect(file).not.toMatch(/rx="224"|<text/);
 });
 
-test('the logo holds the mark and the name', () => {
+test('the logo holds the mark and is named for screen readers', () => {
   const logo = createLogo();
   expect(logo.querySelector('.logo-mark svg')).not.toBeNull();
-  expect(logo.textContent).toContain('XTREAM');
+  expect(logo.getAttribute('aria-label')).toBe('Xtream IPTV');
 });
