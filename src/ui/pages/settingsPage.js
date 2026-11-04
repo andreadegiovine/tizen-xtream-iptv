@@ -267,6 +267,7 @@ export function createSettingsPage(ctx) {
   // Stop buttons of the running operations come first, then the fixed rows; the list changes while the page is open.
   // Up / Down visit one button per line (the right-most); the buttons at its left are reached with Left / Right.
   const linesModel = (getRows) => ({
+    getCount: () => getRows().length,
     navigate(dir, index) {
       const list = getRows();
       let from = index;

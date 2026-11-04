@@ -1837,3 +1837,21 @@ h2 {
     }
   }
 }
+
+// Category chooser: the multiple-selection button stays at the left of the list while it scrolls.
+.categories-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+
+  .categories-side {
+    position: sticky;
+    top: 108px;
+    flex: none;
+  }
+
+  .list {
+    flex: 1;
+    min-width: 0;
+  }
+}

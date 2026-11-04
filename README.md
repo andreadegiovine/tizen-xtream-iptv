@@ -120,8 +120,7 @@ tizen install -n dist/XtreamIPTV.wgt -t <tv-name>
 ### Releases
 
 Publishing a GitHub release runs `.github/workflows/release.yml`: it validates the tag (`v1.2.3`),
-stamps the version, runs lint and tests, builds, and uploads the signed `.wgt` and an unsigned `.zip`
-of `dist/` with their checksums.
+stamps the version, runs lint and tests, builds, and uploads the signed `.wgt` with its checksum.
 
 ## For developers
 

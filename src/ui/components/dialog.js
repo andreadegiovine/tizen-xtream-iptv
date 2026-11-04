@@ -11,13 +11,12 @@ export const DIALOG_ZONE = 'dialog';
  * Modal confirmation dialog. It traps focus (its zone has no links) and gives focus back to the
  * zone that owned it. Left = cancel (default focus), right = confirm.
  */
-export function createDialogService({ focus, root = document.body, underlying = () => null }) {
+export function createDialogService({ focus, root = document.body }) {
   let current = null;
 
-  /** Where the focus goes back to: when a notice holds it, the zone below that notice (the notice may be gone by then). */
+  /** Where the focus goes back to when the dialog closes. */
   function snapshot() {
-    const under = focus.activeId === 'notices' ? underlying() : null;
-    return under || { id: focus.activeId, index: focus.active ? focus.active.index : 0 };
+    return { id: focus.activeId, index: focus.active ? focus.active.index : 0 };
   }
 
   function close(result) {

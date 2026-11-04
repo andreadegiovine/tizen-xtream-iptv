@@ -1,4 +1,4 @@
-import { toggleId } from '../../src/ui/pages/categoriesPage.js';
+import { toggleId, flipRange } from '../../src/ui/pages/categoriesPage.js';
 import { optionRow } from '../../src/ui/pages/settingsPage.js';
 
 test('toggleId does not mutate and flips membership', () => {
@@ -28,4 +28,11 @@ test('option row ignores a dismissed list', async () => {
   const ctx = { settings: { get: async () => ({ bufferSeconds: 10 }), update }, dialogs: { choose: async () => null } };
   await optionRow({ ctx, labelKey: 'settings.buffer', key: 'bufferSeconds', options: [2, 5, 10] }).activate();
   expect(update).not.toHaveBeenCalled();
+});
+
+test('flipRange flips the ids between two rows against the base, in either order', () => {
+  const base = new Set(['b']);
+  expect([...flipRange(base, ['a', 'b', 'c', 'd'], 0, 2)].sort()).toEqual(['a', 'c']);
+  expect([...flipRange(base, ['a', 'b', 'c', 'd'], 2, 0)].sort()).toEqual(['a', 'c']);
+  expect([...base]).toEqual(['b']);
 });

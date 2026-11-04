@@ -11,6 +11,8 @@ import { icon } from '../icons.js';
 import { log } from '../../core/logger.js';
 
 const ZONE_ID = 'categories';
+const MULTI_ZONE = 'categoriesMulti';
+const SAVE_DELAY_MS = 2000; // changes are saved this long after the last one
 const TYPES = ['movie', 'series', 'live'];
 const TYPE_LABEL = { movie: 'nav.movies', series: 'nav.series', live: 'nav.live' };
 
@@ -22,7 +24,14 @@ export function toggleId(set, id) {
   return next;
 }
 
-/** Choose the categories to hide per media type; applying rebuilds the grids without re-downloading. */
+/** Pure: the ids between two row positions (inclusive, either order) flipped against `base`. */
+export function flipRange(base, ids, from, to) {
+  let next = new Set(base);
+  for (let k = Math.min(from, to); k <= Math.max(from, to); k += 1) if (k >= 0 && k < ids.length) next = toggleId(next, ids[k]);
+  return next;
+}
+
+/** Choose the categories to hide per media type; changes are saved 2 s after the last one and rebuild the grids without re-downloading. */
 export function createCategoriesPage(ctx, params = {}) {
   const status = h('p', { class: 'muted search-status' });
   const list = h('div', { class: 'list categories-list' });
@@ -36,11 +45,16 @@ export function createCategoriesPage(ctx, params = {}) {
   let ownDb = false; // opened here (not the active provider's shared handle): closed on leave
   let destroyed = false;
   let busy = false;
+  let saveTimer = null;
+  let armed = false; // multiple selection switched on
+  let anchor = null; // row where the selection started
+  let base = null; // excluded set when the selection started
 
   const zone = new FocusZone({
     id: ZONE_ID,
     model: new ListModel({ orientation: 'vertical', getCount: () => rows.length }),
     onFocus: (i) => {
+      if (anchor !== null && i >= 1) preview(i);
       rows[i].el.classList.add('focused');
       ensureVisible(rows[i].el, { first: i === 0 });
     },
@@ -65,20 +79,91 @@ export function createCategoriesPage(ctx, params = {}) {
       show();
       return {
         el,
+        show,
         activate() {
+          if (armed) {
+            multiClick(rows.findIndex((r) => r.el === el));
+            return;
+          }
           excluded = toggleId(excluded, c.id);
           show();
-          status.textContent = '';
+          scheduleSave();
         },
       };
     });
-    const apply = { el: h('button', { class: 'btn primary', type: 'button', text: t('categories.apply') }), activate: applyChanges };
-    rows = [typeRow, apply, ...catRows];
+    rows = [typeRow, ...catRows];
     rows.forEach((r) => list.appendChild(r.el));
     if (ctx.focus.activeId === ZONE_ID) ctx.focus.focus(ZONE_ID, Math.min(focusIndex, rows.length - 1));
   }
 
+  /** Multiple selection: the first OK on a category starts it, moving down flips the ones passed, the second OK confirms. */
+  function multiClick(i) {
+    if (anchor === null) {
+      anchor = i;
+      base = new Set(excluded);
+      preview(i);
+      return;
+    }
+    anchor = null;
+    base = null;
+    armed = false;
+    scheduleSave();
+  }
+
+  function preview(i) {
+    excluded = flipRange(base, categories.map((c) => c.id), anchor - 1, i - 1);
+    rows.forEach((r) => r.show && r.show());
+  }
+
+  function cancelMulti() {
+    if (anchor !== null) {
+      excluded = base;
+      rows.forEach((r) => r.show && r.show());
+    }
+    anchor = null;
+    base = null;
+    armed = false;
+    ctx.notices.info(t('categories.multiOff'));
+  }
+
+  const multiButton = h('button', { class: 'btn icon-only categories-multi', type: 'button', 'aria-label': t('categories.multi'), title: t('categories.multi') }, icon('check'));
+  const multiZone = new FocusZone({
+    id: MULTI_ZONE,
+    model: new ListModel({ orientation: 'vertical', getCount: () => 1 }),
+    onFocus: () => multiButton.classList.add('focused'),
+    onBlur: () => multiButton.classList.remove('focused'),
+    onActivate() {
+      if (armed) {
+        cancelMulti();
+        return;
+      }
+      armed = true;
+      ctx.notices.info(t('categories.multiOn'));
+      ctx.focus.focus(ZONE_ID, Math.min(1, rows.length - 1));
+    },
+  });
+
+  function scheduleSave() {
+    status.textContent = '';
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      applyChanges();
+    }, SAVE_DELAY_MS);
+  }
+
+  /** Saves at once what is waiting for the timer. */
+  async function flush() {
+    if (saveTimer === null) return;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    await applyChanges();
+  }
+
   async function loadType(nextType) {
+    await flush();
+    armed = false;
+    anchor = null;
     type = nextType;
     if (!db) {
       const activeProvider = await ctx.active.get();
@@ -104,8 +189,8 @@ export function createCategoriesPage(ctx, params = {}) {
   }
 
   async function applyChanges() {
-    if (busy) return;
-    if (ctx.catalog.getState().running && ctx.catalog.getState().providerId === providerId) {
+    if (busy || (ctx.catalog.getState().running && ctx.catalog.getState().providerId === providerId)) {
+      scheduleSave(); // try again later
       status.textContent = t('categories.busy');
       return;
     }
@@ -128,9 +213,18 @@ export function createCategoriesPage(ctx, params = {}) {
   }
 
   return {
-    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('settings.categories') }), status, list)),
+    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('settings.categories') }), status, h('div', { class: 'categories-body' }, h('div', { class: 'categories-side' }, multiButton), list))),
+    /** Back cancels the multiple selection instead of leaving the page. */
+    onBack() {
+      if (!armed) return false;
+      cancelMulti();
+      return true;
+    },
     mount() {
       ctx.focus.register(zone);
+      ctx.focus.register(multiZone);
+      ctx.focus.link(ZONE_ID, 'left', MULTI_ZONE);
+      ctx.focus.link(MULTI_ZONE, 'right', ZONE_ID);
       ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
       ctx.focus.link(TOPBAR_ZONE, 'down', ZONE_ID);
       loadType(type).then(() => ctx.focus.focus(ZONE_ID, 0));
@@ -138,7 +232,11 @@ export function createCategoriesPage(ctx, params = {}) {
     destroy() {
       destroyed = true;
       ctx.focus.unregister(ZONE_ID);
-      if (ownDb && db) db.close();
+      ctx.focus.unregister(MULTI_ZONE);
+      // Leaving with a save waiting: do it now, the database is closed afterwards.
+      flush().finally(() => {
+        if (ownDb && db) db.close();
+      });
     },
   };
 }

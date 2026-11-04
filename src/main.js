@@ -254,9 +254,9 @@ async function boot() {
     ctx.genres.backfill().catch(() => undefined); // metadata and genres in the new language
   });
 
-  const dialogs = createDialogService({ focus, underlying: () => (ctx.notices ? ctx.notices.underlying() : null) });
+  const dialogs = createDialogService({ focus });
   ctx.dialogs = dialogs;
-  const notices = createNoticeService({ focus, isDialogOpen: () => dialogs.isOpen() });
+  const notices = createNoticeService();
   ctx.notices = notices;
   // Operations tell when they start and finish (the Trakt sync reports its own result).
   ctx.operations.onEvent(({ kind, id }) => {
@@ -288,8 +288,8 @@ async function boot() {
   input.registerTizenKeys();
   input.onAction((action) => {
     if (action === Action.BACK) {
-      if (notices.isOpen() && !dialogs.isOpen()) notices.dismissTop();
-      else onBack();
+      if (router.page && router.page.onBack && router.page.onBack()) return;
+      onBack();
       return;
     }
     // A page may own some keys (the player owns every key except Back).
