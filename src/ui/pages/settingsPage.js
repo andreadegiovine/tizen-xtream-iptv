@@ -13,7 +13,7 @@ import { createSyncPanel, createTmdbPanel, createTraktPanel, createDevicePanel, 
 import { log } from '../../core/logger.js';
 import { rebuildEntries } from '../../services/catalogSync.js';
 import { rebuildLive } from '../../services/rebuildLive.js';
-import { DEFAULT_TERMS, parseTerms, termsText } from '../../services/liveGrouping.js';
+import { parseTerms, termsText } from '../../services/liveGrouping.js';
 import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from '../../services/liveNetworks.js';
 import { icon } from '../icons.js';
 
@@ -289,7 +289,7 @@ export function createSettingsPage(ctx) {
   }
 
   // Words removed from channel names: the field shows the defaults as its placeholder, the button at its right brings them back.
-  const patternsInput = h('input', { class: 'value-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: termsText(DEFAULT_TERMS) });
+  const patternsInput = h('input', { class: 'value-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: t('settings.liveGroupPlaceholder') });
   const patternsReset = h('button', { class: 'btn danger icon-only row-reset', type: 'button', 'aria-label': t('settings.liveGroupReset'), title: t('settings.liveGroupReset') }, icon('remove'));
   const showPatterns = () => ctx.settings.get().then((s) => { patternsInput.value = s.liveGroupPatterns; });
   patternsInput.addEventListener('keydown', (event) => {
@@ -298,7 +298,7 @@ export function createSettingsPage(ctx) {
       event.preventDefault();
       patternsInput.blur();
       const text = termsText(parseTerms(patternsInput.value));
-      ctx.settings.update({ liveGroupPatterns: text === termsText(DEFAULT_TERMS) ? '' : text }).then(showPatterns).then(regroup);
+      ctx.settings.update({ liveGroupPatterns: text }).then(showPatterns).then(regroup);
     } else if (event.keyCode === IME_CANCEL) {
       patternsInput.blur();
       showPatterns();

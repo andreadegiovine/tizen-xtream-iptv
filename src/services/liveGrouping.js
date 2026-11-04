@@ -64,10 +64,21 @@ export function parseTerms(text) {
 
 export const termsText = (terms) => terms.join(', ');
 
-/** The terms to use: the ones the user wrote, otherwise the defaults. */
+/** The terms to use: the defaults and, in addition, the ones the user wrote. */
 export function resolveTerms(text) {
-  const own = parseTerms(text);
-  return own.length ? own : Array.from(DEFAULT_TERMS);
+  const known = new Set(DEFAULT_TERMS.map((term) => term.toLowerCase()));
+  return DEFAULT_TERMS.concat(parseTerms(text).filter((term) => !known.has(term.toLowerCase())));
+}
+
+/** A word repeated right after itself counts once, the later one stays ("Dazn: Dazn 1" → "Dazn 1"). */
+export function dropRepeatedWords(text) {
+  const out = [];
+  String(text || '').split(/\s+/).filter(Boolean).forEach((word) => {
+    const key = makeSearchKey(word);
+    if (key && out.length && makeSearchKey(out[out.length - 1]) === key) out.pop();
+    out.push(word);
+  });
+  return out.join(' ');
 }
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -133,7 +144,7 @@ export function channelBase(name, regex) {
     });
   }
   text = text.replace(/[[(]\s*[\])]/g, ' '); // brackets left empty
-  const display = normalizeTitle(text).cleanTitle.replace(/\s+/g, ' ').trim() || original;
+  const display = dropRepeatedWords(normalizeTitle(text).cleanTitle) || original;
   // "+1" / "+24" mark another feed of the channel: they must survive the punctuation clean-up.
   const base = makeSearchKey(display.replace(/\+\s*(\d)/g, ' plus$1').replace(/\+/g, ' plus '));
   return { display, base };

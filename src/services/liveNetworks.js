@@ -15,24 +15,25 @@ const GENERIC = new Set([
   'movie', 'movies', 'premium', 'live', 'event', 'eventi', 'ppv',
 ]);
 
-/** A name for comparing: lowercase letters and digits only, accents removed ("Rai 3 +1" → "rai31"), and where each word starts. */
+/**
+ * A name for comparing: its words (letters and digits; every other character separates them), a word repeated right after itself
+ * counts once ("Dazn: Dazn 1" → "Dazn 1"), and the key is those words lowercase, without accents and spaces ("rai31"). `starts` are the
+ * key positions where a word starts.
+ */
 function analyseName(name) {
-  const text = String(name || '').normalize('NFD');
-  const pos = []; // text position of each character of the key
-  const starts = new Set(); // key positions where a word of the written name starts
-  let key = '';
-  let boundary = true;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (/\p{M}/u.test(ch)) continue;
-    if (/[\p{L}\p{N}]/u.test(ch)) {
-      if (boundary) starts.add(key.length);
-      pos.push(i);
-      key += ch.toLowerCase();
-      boundary = false;
-    } else boundary = true;
-  }
-  return { key, pos, starts, text };
+  const words = [];
+  (String(name || '').normalize('NFC').match(/[\p{L}\p{N}]+/gu) || []).forEach((text) => {
+    const key = text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+    if (words.length && words[words.length - 1].key === key) words.pop(); // the repeat replaces the first
+    words.push({ text, key });
+  });
+  const starts = new Set();
+  let length = 0;
+  words.forEach((word) => {
+    starts.add(length);
+    length += word.key.length;
+  });
+  return { key: words.map((w) => w.key).join(''), words, starts };
 }
 
 const commonLength = (a, b) => {
@@ -41,23 +42,25 @@ const commonLength = (a, b) => {
   return i;
 };
 
-/** The written name of the first `cut` characters of a unit's key: "AMAZON PRIME" in capitals becomes "Amazon Prime", acronyms stay. */
+/** The written name of the first `cut` characters of a unit: its words with single spaces; in capitals ("AMAZON PRIME") it becomes "Amazon Prime", acronyms stay. */
 function writtenName(info, cut) {
-  let end = info.pos[cut - 1] + 1;
-  while (end < info.text.length && /\p{M}/u.test(info.text[end])) end++;
-  const text = info.text.slice(info.pos[0], end).normalize('NFC');
+  const words = [];
+  let length = 0;
+  for (let i = 0; i < info.words.length && length < cut; i++) {
+    words.push(info.words[i].text);
+    length += info.words[i].key.length;
+  }
+  const text = words.join(' ');
   if (text !== text.toUpperCase() || text === text.toLowerCase()) return text;
   return text.replace(/\p{L}+/gu, (word) => (word.length <= 3 ? word : word.charAt(0) + word.slice(1).toLowerCase()));
 }
 
-/** Where the name ends: at the end of a word for every member; if it cuts a word in two ("amazonprime1" of "…1" and "…10"), the word is left out. */
+/** Where the name ends so that it ends a word for every member ("amazonprime1" of "…1" and "…10": before the number); 0 when there is no such place. */
 function wordEnd(members, length) {
-  if (members.every((u) => length >= u.info.key.length || u.info.starts.has(length))) return length;
-  let start = 0;
-  members[0].info.starts.forEach((p) => {
-    if (p <= length && p > start) start = p;
-  });
-  return start >= MIN_NAME_CHARS ? start : length;
+  const ends = (u, p) => p >= u.info.key.length || u.info.starts.has(p);
+  if (members.every((u) => ends(u, length))) return length;
+  for (let p = length - 1; p >= MIN_NAME_CHARS; p--) if (members.every((u) => u.info.starts.has(p))) return p;
+  return 0;
 }
 
 /** What a network holds: a group or a channel that is in none (one card each in the lists). */
@@ -78,7 +81,7 @@ function unitsOf(entries, groups) {
  * without spaces or accents; sorted, a name joins the network before it while the common beginning of all of them stays at least
  * `similarity`% of every name and no name goes more than `maxDiff` characters beyond it. The network is named by that common beginning.
  * Returns { networks: [{ id, name, units }], rejected: [{ name, units, reason, sample }] }: gatherings of one name written many ways
- * ("duplicates") and of a generic word ("generic") are not networks.
+ * ("duplicates", also "X" and "X Channel"), of a generic word ("generic") and whose common part cuts a word ("partial") are not networks.
  */
 export function analyzeNetworks(units, { similarity = DEFAULT_SIMILARITY, maxDiff = DEFAULT_MAX_DIFF, min = MIN_NETWORK_UNITS } = {}) {
   const items = units
@@ -110,11 +113,13 @@ export function analyzeNetworks(units, { similarity = DEFAULT_SIMILARITY, maxDif
     .filter((g) => g.members.length >= min)
     .forEach(({ members: list, prefix: common }) => {
       const length = wordEnd(list, common.length);
-      const id = common.slice(0, length);
-      const mixed = list.find((u) => writtenName(u.info, length) !== writtenName(u.info, length).toUpperCase()) || list[0];
-      const name = writtenName(mixed.info, length);
       const sample = list.slice(0, 3).map((u) => u.unit.name);
-      if (new Set(list.map((u) => u.info.key)).size < 2) rejected.push({ name, units: list.length, reason: 'duplicates', sample });
+      const shown = length ? length : common.length;
+      const mixed = list.find((u) => writtenName(u.info, shown) !== writtenName(u.info, shown).toUpperCase()) || list[0];
+      const name = writtenName(mixed.info, shown);
+      const id = common.slice(0, length);
+      if (new Set(list.map((u) => u.info.key.replace(/(?<=.{3})channel$/, ''))).size < 2) rejected.push({ name, units: list.length, reason: 'duplicates', sample });
+      else if (!length) rejected.push({ name, units: list.length, reason: 'partial', sample });
       else if (GENERIC.has(id) || /^\d+$/.test(id)) rejected.push({ name, units: list.length, reason: 'generic', sample });
       else if (networks.has(id)) networks.get(id).units.push(...list.map((u) => u.unit));
       else networks.set(id, { id, name, units: list.map((u) => u.unit) });

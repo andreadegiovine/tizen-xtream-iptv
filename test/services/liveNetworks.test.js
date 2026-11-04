@@ -186,3 +186,17 @@ test('the network preferences are whole numbers inside a range, a bad value brin
   const svc = createLiveGroupingService({ db: await openAppDb('network-prefs-svc'), settings });
   expect((await svc.config('p')).networks).toMatchObject({ enabled: true, similarity: 70, maxDiff: 5 });
 });
+
+test('words repeated right after themselves count once, special characters are spaces, names stop at a whole word', async () => {
+  const { channelBase, compileTerms, dropRepeatedWords } = await import('../../src/services/liveGrouping.js');
+  expect(dropRepeatedWords('Dazn: Dazn 1')).toBe('Dazn 1');
+  expect(channelBase('DAZN: DAZN 1', compileTerms([])).display).toBe('DAZN 1');
+  const named = (names) => build(names.map((name, i) => ch(i + 1, name))).networks.map((n) => n.name);
+  expect(named(['DAZN: DAZN 1', 'Dazn 2'])).toEqual(['Dazn']); // as "Dazn 1" and "Dazn 2"
+  expect(named(['[Dazn] Events 1', 'Dazn-Events 2', 'DAZN | Events 3'])).toEqual(['Dazn Events']);
+  expect(named(['* Veneto *', 'Venezia'])).toEqual([]); // "vene" would cut both words
+  expect(named(['Harry Potter', 'Harry Potter Channel'])).toEqual([]); // one channel written two ways
+  const report = {};
+  buildNetworks(buildEntries('live', [ch(1, '* Veneto *'), ch(2, 'Venezia')].map((i) => ({ ...i, tmdbId: null, ext: '', genre: '' }))), [], { report });
+  expect(report.rejected[0]).toMatchObject({ reason: 'partial', units: 2 });
+});
