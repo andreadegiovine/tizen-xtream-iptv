@@ -32,7 +32,7 @@ export function textRow({ label, field, secret = false, ctx }) {
       const before = ctx.apiKeys.getStored(field);
       const titlesChange = field === 'tmdbKey' && Boolean(before.trim()) !== Boolean(input.value.trim());
       ctx.apiKeys.set({ [field]: input.value }).then(() => (titlesChange ? rebuildTitles(ctx) : undefined)).then(() => {
-        ctx.notices.success(t('settings.saved'));
+        ctx.notices.success(t('notice.saved'));
         // A new TMDB key starts the first metadata run at once (genres and TMDB data of what was watched).
         if (field === 'tmdbKey' && input.value.trim() && input.value.trim() !== before && ctx.genres) {
           ctx.genres
@@ -99,6 +99,7 @@ export function optionRow({ labelKey, key, options, format = String, ctx }) {
       show(chosen);
       if (key === 'language') i18n.setLocale(chosen === 'auto' ? detectLocale(navigator.language) : chosen);
       if ((key === 'timeFormat' || key === 'dateFormat') && ctx.refreshClock) ctx.refreshClock();
+      ctx.notices.success(t('notice.saved'), { key: 'setting' });
     },
   };
 }
@@ -118,6 +119,7 @@ export function createSettingsPage(ctx) {
       const s = await ctx.settings.get();
       const next = await ctx.settings.update({ autoplayNext: !s.autoplayNext });
       autoplayValue.textContent = next.autoplayNext ? t('common.on') : t('common.off');
+      ctx.notices.success(t('notice.saved'), { key: 'setting' });
     },
   };
 
@@ -162,7 +164,7 @@ export function createSettingsPage(ctx) {
     if (!ok) return;
     await ctx.trakt.disconnect();
     await ctx.watch.removeTraktData();
-    ctx.notices.success(t('settings.removed'));
+    ctx.notices.success(t('notice.removed'));
     await traktPanel.refresh();
     ctx.focus.focus(ZONE_ID, visibleRows().indexOf(traktConnectRow) + opsPanel.rows.length); // the remove / sync buttons are gone
   }
@@ -215,7 +217,7 @@ export function createSettingsPage(ctx) {
       await ctx.tmdb.clearAll();
       await ctx.genres.clearTmdb();
       await ctx.syncLog.clear('tmdb');
-      ctx.notices.success(t('settings.removed'));
+      ctx.notices.success(t('notice.removed'));
       tmdbPanel.refresh().catch(() => undefined);
     },
   };

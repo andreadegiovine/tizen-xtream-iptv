@@ -100,6 +100,7 @@ export function createProvidersPage(ctx, params = {}) {
         await ctx.refreshAdult();
         ctx.catalog.start(); // cancels the running job and syncs the new provider if its list is stale
         await render(cells.indexOf(cell));
+        ctx.notices.success(t('notice.done'), { key: 'provider' });
         break;
       case ProviderAction.CATEGORIES:
         ctx.router.push('categories', { providerId: provider.id, section: 'provider' });
@@ -130,6 +131,7 @@ export function createProvidersPage(ctx, params = {}) {
           }
         }
         await render(0);
+        ctx.notices.success(t('notice.removed'), { key: 'provider' });
         break;
       }
       default:

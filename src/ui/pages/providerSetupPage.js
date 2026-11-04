@@ -55,12 +55,14 @@ export function createProviderSetupPage(ctx, params = {}) {
         await ctx.providers.update(editing.id, data);
         // Different server or account: its catalog may differ, so refresh the active provider.
         if (changed && (await ctx.providers.getActiveId()) === editing.id) ctx.catalog.start({ force: true });
+        ctx.notices.success(t('notice.saved'), { key: 'provider' });
         if (!destroyed) ctx.router.reset('providers', { section: 'provider' });
       } else {
         const provider = await ctx.providers.add(data);
         await ctx.providers.setActiveId(provider.id);
         await ctx.refreshAdult();
         ctx.catalog.start({ force: true });
+        ctx.notices.success(t('notice.added'), { key: 'provider' });
         if (!destroyed) {
           if (params.firstRun) ctx.router.reset('home', { section: 'home' });
           else ctx.router.reset('providers', { section: 'provider' });

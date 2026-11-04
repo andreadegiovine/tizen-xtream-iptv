@@ -386,8 +386,10 @@ export function createDetailPage(ctx, params) {
       }
       await reloadRecords();
       if (!destroyed) build();
+      ctx.notices.success(t('notice.done'), { key: 'watched' });
     } catch (err) {
       log.warn('Mark watched failed', err && err.message);
+      ctx.notices.error(t('notice.failed'), { key: 'watched' });
     }
   }
 
@@ -395,7 +397,7 @@ export function createDetailPage(ctx, params) {
     try {
       favorite = await ctx.favorites.toggle(providerId, entry.key, entry.type);
       if (!destroyed) build();
-      ctx.notices.success(t(favorite ? 'notice.favoriteAdded' : 'notice.favoriteRemoved'), { key: 'favorite' });
+      ctx.notices.success(t(favorite ? 'notice.added' : 'notice.removed'), { key: 'favorite' });
     } catch (err) {
       log.warn('Favorite failed', err && err.message);
       ctx.notices.error(t('notice.failed'), { key: 'favorite' });

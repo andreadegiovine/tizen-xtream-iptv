@@ -4,6 +4,7 @@ import { faGear } from '@fortawesome/free-solid-svg-icons/faGear';
 import { faServer } from '@fortawesome/free-solid-svg-icons/faServer';
 import { faXmark } from '@fortawesome/free-solid-svg-icons/faXmark';
 import { faStar } from '@fortawesome/free-solid-svg-icons/faStar';
+import { faCheckDouble } from '@fortawesome/free-solid-svg-icons/faCheckDouble';
 import { faCheck } from '@fortawesome/free-solid-svg-icons/faCheck';
 import { faHourglassHalf } from '@fortawesome/free-solid-svg-icons/faHourglassHalf';
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
@@ -48,6 +49,7 @@ const ICONS = {
   close: faXmark,
   star: faStar,
   check: faCheck,
+  checkDouble: faCheckDouble,
   hourglass: faHourglassHalf,
   play: faPlay,
   pause: faPause,

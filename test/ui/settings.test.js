@@ -13,6 +13,7 @@ test('option row shows the value, saves the choice made in the list', async () =
   const store = { gridItems: 24 };
   const ctx = {
     settings: { get: async () => ({ ...store }), update: async (patch) => Object.assign(store, patch) },
+    notices: { success: jest.fn() },
     dialogs: { choose: jest.fn(async ({ options, selected }) => { expect(selected).toBe(24); return options[2].value; }) },
   };
   const row = optionRow({ ctx, labelKey: 'settings.gridItems', key: 'gridItems', options: [12, 24, 36] });
@@ -21,6 +22,7 @@ test('option row shows the value, saves the choice made in the list', async () =
   await row.activate();
   expect(store.gridItems).toBe(36);
   expect(row.el.textContent).toContain('36');
+  expect(ctx.notices.success).toHaveBeenCalledTimes(1);
 });
 
 test('option row ignores a dismissed list', async () => {

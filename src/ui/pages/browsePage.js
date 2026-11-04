@@ -266,7 +266,7 @@ export function createBrowsePage(ctx, params = {}) {
           showCounts();
           syncFavorite();
         }
-        ctx.notices.success(t(now ? 'notice.favoriteAdded' : 'notice.favoriteRemoved'), { key: 'favorite' });
+        ctx.notices.success(t(now ? 'notice.added' : 'notice.removed'), { key: 'favorite' });
       },
       onPin:
         type === 'live'
@@ -275,7 +275,7 @@ export function createBrowsePage(ctx, params = {}) {
               const now = await ctx.pins.toggle(providerId, target);
               pinned = await ctx.pins.list(providerId, type);
               if (!destroyed) rebuildSidebar();
-              ctx.notices.success(t(now ? 'notice.pinAdded' : 'notice.pinRemoved'), { key: 'pin' });
+              ctx.notices.success(t(now ? 'notice.added' : 'notice.removed'), { key: 'pin' });
             },
     };
     renderHead();

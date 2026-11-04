@@ -27,7 +27,7 @@ export async function changePin({ dialogs, parental, notices }) {
     if (!(await askPin({ dialogs, parental, title: t('parental.currentPin') }))) return false;
   }
   const saved = await createPin({ dialogs, parental });
-  if (saved && notices) notices.success(t('parental.saved'), { key: 'parental' });
+  if (saved && notices) notices.success(t('notice.saved'), { key: 'parental' });
   return saved;
 }
 

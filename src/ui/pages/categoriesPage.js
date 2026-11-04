@@ -107,6 +107,7 @@ export function createCategoriesPage(ctx, params = {}) {
     anchor = null;
     base = null;
     armed = false;
+    showMulti();
     scheduleSave();
   }
 
@@ -123,23 +124,33 @@ export function createCategoriesPage(ctx, params = {}) {
     anchor = null;
     base = null;
     armed = false;
-    ctx.notices.info(t('categories.multiOff'));
+    showMulti();
+    ctx.notices.info(t('categories.multiOff'), { key: 'multi' });
   }
 
-  const multiButton = h('button', { class: 'btn icon-only categories-multi', type: 'button', 'aria-label': t('categories.multi'), title: t('categories.multi') }, icon('check'));
+  const multiButton = h('button', { class: 'btn icon-only categories-multi', type: 'button', 'aria-label': t('categories.multi'), title: t('categories.multi') }, icon('checkDouble'));
+  let multiFocused = false;
+  /** The button looks focused while the multiple selection is on, as well as when it holds the focus. */
+  const showMulti = () => multiButton.classList.toggle('focused', armed || multiFocused);
   const multiZone = new FocusZone({
     id: MULTI_ZONE,
     model: new ListModel({ orientation: 'vertical', getCount: () => 1 }),
-    onFocus: () => multiButton.classList.add('focused'),
-    onBlur: () => multiButton.classList.remove('focused'),
+    onFocus: () => {
+      multiFocused = true;
+      showMulti();
+    },
+    onBlur: () => {
+      multiFocused = false;
+      showMulti();
+    },
     onActivate() {
       if (armed) {
         cancelMulti();
         return;
       }
       armed = true;
-      ctx.notices.info(t('categories.multiOn'));
-      ctx.focus.focus(ZONE_ID, Math.min(1, rows.length - 1));
+      showMulti();
+      ctx.notices.info(t('categories.multiOn'), { key: 'multi' });
     },
   });
 
@@ -163,6 +174,7 @@ export function createCategoriesPage(ctx, params = {}) {
   async function loadType(nextType) {
     await flush();
     armed = false;
+    showMulti();
     anchor = null;
     type = nextType;
     if (!db) {
@@ -195,7 +207,6 @@ export function createCategoriesPage(ctx, params = {}) {
       return;
     }
     busy = true;
-    status.textContent = t('categories.applying');
     try {
       await ctx.settings.setExcluded(providerId, type, Array.from(excluded));
       if (excluded.size !== original.size || Array.from(excluded).some((id) => !original.has(id))) {
@@ -203,10 +214,11 @@ export function createCategoriesPage(ctx, params = {}) {
         ctx.search.invalidate();
       }
       original = new Set(excluded);
-      status.textContent = t('categories.done');
+      status.textContent = '';
+      if (!destroyed) ctx.notices.success(t('notice.saved'), { key: 'categories' });
     } catch (err) {
       log.warn('Applying categories failed', err && err.message);
-      status.textContent = t('error.STORAGE');
+      ctx.notices.error(t('notice.failed'), { key: 'categories' });
     } finally {
       busy = false;
     }
