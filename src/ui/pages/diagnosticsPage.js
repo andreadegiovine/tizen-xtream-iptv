@@ -20,7 +20,13 @@ export function createDiagnosticsPage(ctx) {
   const playButton = h('button', { class: 'btn', type: 'button', text: t('diag.play') });
   const stopButton = h('button', { class: 'btn', type: 'button', text: t('operations.stop') });
   // The log is focusable too: it is the last stop, so Down scrolls the page all the way to it.
-  const focusables = [runButton, urlRow, playButton, stopButton, logBox];
+  // Subtitle lab: pick a text track, then try one way of showing it (see avplaySpike.selectText).
+  let labTrack = 0;
+  const subtitleOverlay = h('div', { class: 'diag-subtitle' });
+  const modeButtons = ['events', 'native', 'before', 'late', 'off'].map((mode) => ({ mode, el: h('button', { class: 'btn', type: 'button', text: t(`diag.sub.${mode}`) }) }));
+  const trackButton = h('button', { class: 'btn', type: 'button', text: t('diag.sub.track', { n: '…' }) });
+  const focusables = [runButton, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el), logBox];
+  const FIRST_MODE = 5;
 
   function renderLog() {
     logBox.textContent = log
@@ -52,10 +58,18 @@ export function createDiagnosticsPage(ctx) {
     onActivate: async (i) => {
       if (i === 0) run();
       else if (i === 1) urlInput.focus();
-      else if (i === 2) {
+      else if (i === 4) {
+        const tracks = spike.textTracks();
+        labTrack = tracks.length ? (labTrack + 1) % tracks.length : 0;
+        trackButton.textContent = t('diag.sub.track', { n: tracks.length ? tracks[labTrack].index : '-' });
+        log.info('avplay', `subtitle lab: ${tracks.length} text tracks, using ${tracks.length ? tracks[labTrack].index : '-'}`);
+      } else if (i >= FIRST_MODE && i < FIRST_MODE + modeButtons.length) {
+        const tracks = spike.textTracks();
+        spike.selectText(tracks.length ? tracks[labTrack % tracks.length].index : 0, modeButtons[i - FIRST_MODE].mode);
+      } else if (i === 2) {
         const { bufferSeconds } = await ctx.settings.get();
         ctx.catalog.pause(); // background sync must not compete with the stream
-        spike.play(urlInput.value.trim(), { bufferSeconds });
+        spike.play(urlInput.value.trim(), { bufferSeconds, onSubtitle: (text) => { subtitleOverlay.textContent = text; } });
       } else if (i === 3) {
         spike.stop();
         ctx.catalog.resume();
@@ -74,11 +88,12 @@ export function createDiagnosticsPage(ctx) {
     el: h(
       'section',
       { class: 'page framed' },
+      subtitleOverlay,
       h(
         'div',
         { class: 'page-container' },
         h('h1', { text: t('settings.diagnostics') }),
-        h('div', { class: 'form' }, runButton, results, urlRow, playButton, stopButton),
+        h('div', { class: 'form' }, runButton, results, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el)),
         h('h2', { class: 'prefs-title', text: t('diag.logs') }),
         logBox,
       ),

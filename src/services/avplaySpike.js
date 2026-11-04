@@ -33,7 +33,7 @@ export function createAvPlaySpike() {
     document.body.classList.remove('video-active');
   }
 
-  function play(url, { bufferSeconds = 10, onEvent = () => {} } = {}) {
+  function play(url, { bufferSeconds = 10, onEvent = () => {}, onSubtitle = null } = {}) {
     const av = avplay();
     if (!av) {
       onEvent('AVPlay is not available in this environment');
@@ -59,6 +59,12 @@ export function createAvPlaySpike() {
           stop();
         },
         onerror: (error) => emit(`error: ${error}`),
+        // Subtitle lab: every event is logged (not just the first ones) and handed to the page.
+        onsubtitlechange: (duration, text, type, attributes) => {
+          emit(`subtitle event ${JSON.stringify({ duration, type, text: String(text || '').slice(0, 80), attributes })}`);
+          if (onSubtitle) onSubtitle(String(text || ''), Number(duration) || 0);
+        },
+        onevent: (type, data) => emit(`event ${type} ${JSON.stringify(data)}`),
       });
       try {
         av.setBufferingParam('PLAYER_BUFFER_FOR_PLAY', 'PLAYER_BUFFER_SIZE_IN_SECOND', bufferSeconds);
@@ -79,5 +85,54 @@ export function createAvPlaySpike() {
     }
   }
 
-  return { play, stop };
+  /** Text tracks as AVPlay lists them: [{ index, extra_info }]. */
+  function textTracks() {
+    const av = avplay();
+    try {
+      return (av.getTotalTrackInfo() || []).filter((track) => track.type === 'TEXT');
+    } catch (err) {
+      log.warn('avplay getTotalTrackInfo failed', err && err.message);
+      return [];
+    }
+  }
+
+  /**
+   * Subtitle lab: tries one way of showing a text track and logs what AVPlay reports.
+   * modes: 'events' (silent, the page draws), 'native' (the player draws), 'late' (select, then switch native on 1 s later),
+   * 'before' (native on, then select), 'off'.
+   */
+  function selectText(index, mode) {
+    const av = avplay();
+    if (!av) return;
+    const step = (name, fn) => {
+      try {
+        fn();
+        log.info('avplay', `${name} ok`);
+      } catch (err) {
+        log.warn('avplay', `${name} failed: ${err && err.message}`);
+      }
+    };
+    const info = () => step('getCurrentStreamInfo', () => log.info('avplay', JSON.stringify(av.getCurrentStreamInfo())));
+    if (mode === 'off') {
+      step('setSilentSubtitle(true)', () => av.setSilentSubtitle(true));
+      return;
+    }
+    log.info('avplay', `subtitle lab: track ${index}, mode ${mode}`);
+    if (mode === 'events') {
+      step('setSilentSubtitle(true)', () => av.setSilentSubtitle(true));
+      step(`setSelectTrack(TEXT, ${index})`, () => av.setSelectTrack('TEXT', index));
+    } else if (mode === 'native') {
+      step(`setSelectTrack(TEXT, ${index})`, () => av.setSelectTrack('TEXT', index));
+      step('setSilentSubtitle(false)', () => av.setSilentSubtitle(false));
+    } else if (mode === 'before') {
+      step('setSilentSubtitle(false)', () => av.setSilentSubtitle(false));
+      step(`setSelectTrack(TEXT, ${index})`, () => av.setSelectTrack('TEXT', index));
+    } else if (mode === 'late') {
+      step(`setSelectTrack(TEXT, ${index})`, () => av.setSelectTrack('TEXT', index));
+      setTimeout(() => step('setSilentSubtitle(false) (1 s later)', () => av.setSilentSubtitle(false)), 1000);
+    }
+    setTimeout(info, 1500);
+  }
+
+  return { play, stop, textTracks, selectText };
 }
