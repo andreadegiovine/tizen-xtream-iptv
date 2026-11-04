@@ -220,7 +220,7 @@ export function buildChannelGroups(items, { excludedCategories = new Set(), term
       added: Math.max(...members.map((m) => m.item.added)),
       defaultId: best.item.id,
       memberIds: members.map((m) => m.item.id),
-      members: members.map((m) => ({ id: m.item.id, ext: '', categoryId: m.item.categoryId, name: m.item.name, entryKey: `live:i${m.item.id}` })),
+      members: members.map((m) => ({ id: m.item.id, ext: '', categoryId: m.item.categoryId, name: m.item.name, icon: m.item.icon, entryKey: `live:i${m.item.id}` })),
       categoryIds,
       searchKeys,
       genres: [],

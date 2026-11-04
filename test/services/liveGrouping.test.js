@@ -2,6 +2,8 @@ import { manualIds, buildChannelGroups, buildLiveAllRows, annotateGroupKeys, par
 import { buildEntries } from '../../src/services/grouping.js';
 import { openProviderDb, deleteProviderDb } from '../../src/db/providerDb.js';
 import { syncType, rebuildEntries } from '../../src/services/catalogSync.js';
+import { loadSearchRows, searchRows } from '../../src/services/searchIndex.js';
+import { describeType } from '../../src/ui/components/syncPanel.js';
 import { pageEntries, getEntry, countEntries, createMergeSearch } from '../../src/services/catalogQuery.js';
 
 const ch = (id, name, extra = {}) => ({ id, name, categoryId: '81', added: 1000 + id, icon: 'logo.png', epgChannelId: null, ...extra });
@@ -124,5 +126,22 @@ describe('removing a channel from a group', () => {
     expect(meta).toMatchObject({ itemCount: 5, groupCount: 1, groupedCount: 4, singleCount: 1 });
     db.close();
     await deleteProviderDb('live-groups-2');
+  });
+});
+
+describe('search and catalog line', () => {
+  test('search finds the groups and the channels in none, not the channels inside a group', async () => {
+    const db = await openProviderDb('live-groups-3');
+    const rows = [...yoyo, ch(7, 'Yoyo Extra', { categoryId: '2', icon: '', epgChannelId: 'x' })].map((c) => ({ stream_id: c.id, name: c.name, category_id: c.categoryId, added: String(c.added), stream_icon: c.icon, epg_channel_id: c.epgChannelId }));
+    await syncType({ db, client: { getCategories: async () => [], getStreams: async () => rows }, type: 'live' });
+    const found = searchRows(await loadSearchRows(db, ['live']), 'yoyo').map((r) => [r.key, Boolean(r.isGroup)]);
+    expect(found.sort()).toEqual([['live:g:rai_yoyo', true], ['live:i7', false]]);
+    db.close();
+    await deleteProviderDb('live-groups-3');
+  });
+
+  test('the live line: items, groups (channels in them) and the time', () => {
+    const text = describeType({ phase: 'idle' }, { itemCount: 5321, entryCount: 3000, groupCount: 683, groupedCount: 2219, lastSync: 0, layout: 2 }, 'en-US');
+    expect(text).toMatch(/^5,?321 items · 683 groups \(2,?219 channels\) · updated /);
   });
 });

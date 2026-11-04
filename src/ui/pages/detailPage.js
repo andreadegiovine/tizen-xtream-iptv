@@ -114,6 +114,7 @@ export function createDetailPage(ctx, params) {
   let autoFocus = null; // { id, index } of a row the page focused by itself before the play button existed
 
   let backdropUrl = '';
+  let posterUrl = '';
   const poster = h('div', { class: 'detail-poster loading' });
   const backdropEl = h('div', { class: 'detail-backdrop' });
   const titleEl = h('h1', { class: 'detail-title' });
@@ -176,6 +177,7 @@ export function createDetailPage(ctx, params) {
     if (value === null || destroyed) return;
     selectedMember = entry.members.find((m) => m.id === value);
     updateCategoryItems();
+    fillText(); // the picture follows the version
     build();
   }
 
@@ -200,6 +202,12 @@ export function createDetailPage(ctx, params) {
       log.warn('Merge failed', err && err.message);
       ctx.notices.error(t('notice.failed'), { key: 'merge' });
     }
+  }
+
+  /** A channel that is in a group: opens the group's page. */
+  async function openGroup() {
+    const group = await getEntry(db, entry.groupKey);
+    if (group && !destroyed) ctx.openEntry(group, { section: params.section });
   }
 
   /** Takes the selected version out of the group, when it was added by hand. */
@@ -505,6 +513,9 @@ export function createDetailPage(ctx, params) {
     if (buttons.length && entry.type === 'live' && !entry.isGroup && !entry.groupKey && mergeAvailable) {
       buttons.push({ id: 'merge', icon: 'merge', label: t('merge.title'), run: mergeChannel });
     }
+    if (buttons.length && entry.type === 'live' && !entry.isGroup && entry.groupKey) {
+      buttons.push({ id: 'group', icon: 'group', label: t('merge.openGroup'), run: openGroup });
+    }
     if (buttons.length && entry.isGroup && selectedMember && manualIds.has(selectedMember.id)) {
       buttons.push({ id: 'ungroup', icon: 'remove', label: t('merge.remove'), run: ungroupChannel });
     }
@@ -530,8 +541,12 @@ export function createDetailPage(ctx, params) {
       else metaEl.appendChild(h('span', { text: part.text }));
     });
     plotEl.textContent = (meta && meta.overview) || (info && info.plot) || '';
-    const img = (meta && meta.poster) || (info && info.cover) || (entry && entry.icon);
-    if (img && !poster.firstChild) {
+    const logo = entry && entry.isGroup && selectedMember && selectedMember.icon ? selectedMember.icon : entry && entry.icon;
+    const img = (meta && meta.poster) || (info && info.cover) || logo;
+    if (img && img !== posterUrl) {
+      posterUrl = img;
+      clear(poster);
+      poster.classList.add('loading');
       const node = h('img', { src: img, alt: '', referrerpolicy: 'no-referrer' });
       node.addEventListener('load', () => poster.classList.remove('loading'));
       node.addEventListener('error', () => {

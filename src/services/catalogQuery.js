@@ -80,19 +80,14 @@ export function createMergeSearch(db, skipId) {
   let cache = null;
   const load = () => {
     if (!cache) {
-      cache = (async () => {
-        const rows = await loadSearchRows(db, ['live']);
-        const groups = await requestToPromise(db.transaction('groups', 'readonly').objectStore('groups').getAll());
-        const groupRows = groups.map((g) => ({ key: g.key, type: 'live', name: g.name, icon: g.icon, defaultId: g.defaultId, members: g.members, keys: g.searchKeys, added: g.added, group: true }));
-        return { rows: rows.filter((r) => !r.groupKey && r.defaultId !== skipId), groupRows };
-      })();
+      cache = loadSearchRows(db, ['live']).then((rows) => ({ rows: rows.filter((r) => r.defaultId !== skipId) }));
     }
     return cache;
   };
   return async (query, limit = 30) => {
-    const { rows, groupRows } = await load();
-    const groups = searchRows(groupRows, query, { limit });
-    const singles = searchRows(rows, query, { limit });
+    const { rows } = await load();
+    const groups = searchRows(rows.filter((r) => r.group), query, { limit });
+    const singles = searchRows(rows.filter((r) => !r.group), query, { limit });
     return groups.concat(singles).slice(0, limit).map((row) => ({ key: row.key, name: row.name, icon: row.icon, group: Boolean(row.group), memberId: row.defaultId, count: row.group ? row.members.length : 1 }));
   };
 }

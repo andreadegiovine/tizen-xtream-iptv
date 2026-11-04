@@ -18,6 +18,10 @@ export function describeType(state, meta, locale) {
   }
   if (ACTIVE_PHASES.has(phase)) return t(`home.phase.${phase}`);
   if (!meta) return t('common.never');
+  if (meta.groupCount > 0 && meta.groupedCount !== undefined) {
+    // Live TV with grouped channels: "5321 items · 683 groups (2219 channels) · updated …"
+    return t('home.updatedLive', { items: formatNumber(meta.itemCount, locale), groups: formatNumber(meta.groupCount, locale), grouped: formatNumber(meta.groupedCount, locale), time: formatDateTime(meta.lastSync, locale) });
+  }
   return t('home.updated', {
     items: formatNumber(meta.itemCount, locale),
     entries: formatNumber(meta.entryCount, locale),
@@ -39,11 +43,6 @@ export function createSyncPanel(ctx) {
     const status = h('span', { class: 'sync-status' });
     return { type, status, el: h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t(LABEL_KEY[type]) }), status) };
   });
-  // Live TV channels in groups and alone (shown once the list has been stored).
-  const groupsStatus = h('span', { class: 'sync-status' });
-  const groupsRow = h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t('home.liveGroupsLabel') }), groupsStatus);
-  groupsRow.style.display = 'none';
-  rows.push({ type: 'groups', status: groupsStatus, el: groupsRow, skip: true });
   const info = h('p', { class: 'muted sync-info' });
   const button = refreshButton(t('home.update'));
   const providerName = h('span', { class: 'panel-provider' });
@@ -65,13 +64,8 @@ export function createSyncPanel(ctx) {
     const state = ctx.catalog.getState();
     const locale = i18n.getLocale();
     rows.forEach((row) => {
-      if (row.skip) return;
       row.status.textContent = describeType(state.types[row.type], persisted[row.type], locale);
     });
-    const live = persisted.live;
-    const hasGroups = Boolean(live && live.layout && live.groupedCount !== undefined);
-    groupsRow.style.display = hasGroups ? '' : 'none';
-    if (hasGroups) groupsStatus.textContent = t('home.liveGroups', { groups: formatNumber(live.groupCount, locale), grouped: formatNumber(live.groupedCount, locale), single: formatNumber(live.singleCount, locale) });
     const meta = TYPES.map((type) => persisted[type]).filter(Boolean);
     const lines = [];
     if (state.mode) lines.push(t('home.engine', { mode: t(`home.engine.${state.mode}`) }));

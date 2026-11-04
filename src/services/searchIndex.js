@@ -8,7 +8,12 @@ export async function loadSearchRows(db, types) {
     const tx = db.transaction('entries', 'readonly');
     const all = await requestToPromise(tx.objectStore('entries').index('byTypeAdded').getAll(IDBKeyRange.bound([type, 0], [type, Number.MAX_SAFE_INTEGER])));
     for (const entry of all) {
+      if (entry.groupKey) continue; // a channel in a group is found through the group
       rows.push({ key: entry.key, type, name: entry.name, year: entry.year, icon: entry.icon, rating: entry.rating, tmdbId: entry.tmdbId, defaultId: entry.defaultId, members: entry.members, categoryIds: entry.categoryIds, keys: entry.searchKeys || [makeSearchKey(entry.name)], added: entry.added, groupKey: entry.groupKey || null });
+    }
+    if (type === 'live') {
+      const groups = await requestToPromise(db.transaction('groups', 'readonly').objectStore('groups').getAll());
+      groups.forEach((group) => rows.push({ key: group.key, type, name: group.name, year: null, icon: group.icon, rating: null, tmdbId: null, defaultId: group.defaultId, members: group.members, categoryIds: group.categoryIds, keys: group.searchKeys, added: group.added, isGroup: true, group: true }));
     }
   }
   return rows;
