@@ -114,6 +114,15 @@ export function listGenres(db, type) {
   });
 }
 
+/** Genres of one entry (provider and TMDB sources merged): [{ key, name }]. */
+export async function entryGenres(db, entryKey) {
+  const range = IDBKeyRange.bound(`${entryKey}|`, `${entryKey}|\uffff`);
+  const lists = await Promise.all(GENRE_STORES.map((name) => requestToPromise(db.transaction(name, 'readonly').objectStore(name).getAll(range))));
+  const out = new Map();
+  lists.forEach((rows) => rows.forEach((row) => row.genreKey && !out.has(row.genreKey) && out.set(row.genreKey, { key: row.genreKey, name: row.name })));
+  return Array.from(out.values());
+}
+
 /** Entry keys of a genre, newest first, from both sources without duplicates. */
 export async function genreEntryKeys(db, type, genreKey) {
   const range = IDBKeyRange.bound([type, genreKey, 0], [type, genreKey, MAX_ADDED]);

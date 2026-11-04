@@ -43,6 +43,9 @@ import { createSuggestionsService } from './services/suggestions.js';
 import { createSuggestionsPage } from './ui/pages/suggestionsPage.js';
 import { createFavoritesPage } from './ui/pages/favoritesPage.js';
 import { createFavoritesService } from './services/favorites.js';
+import { createCollectionsService } from './services/collections.js';
+import { createCollectionsPage } from './ui/pages/collectionsPage.js';
+import { createCollectionPage } from './ui/pages/collectionPage.js';
 import { createPinsService } from './services/pins.js';
 import { createSearchPage } from './ui/pages/searchPage.js';
 import { createDetailPage } from './ui/pages/detailPage.js';
@@ -92,6 +95,7 @@ async function boot() {
     meta: null,
   };
   ctx.favorites = createFavoritesService({ db });
+  ctx.collections = createCollectionsService({ db });
   ctx.pins = createPinsService({ db });
   ctx.parental = createParentalService({ db });
   setAdultCheck((entry) => ctx.parental.isAdult(entry));
@@ -210,6 +214,8 @@ async function boot() {
       search: (params) => createSearchPage(ctx, params),
       suggestions: () => createSuggestionsPage(ctx),
       favorites: () => createFavoritesPage(ctx),
+      collections: (params) => createCollectionsPage(ctx, params),
+      collection: (params) => createCollectionPage(ctx, params),
       detail: (params) => createDetailPage(ctx, params),
       player: (params) => createPlayerPage(ctx, params),
       browse: (params) => createBrowsePage(ctx, params),

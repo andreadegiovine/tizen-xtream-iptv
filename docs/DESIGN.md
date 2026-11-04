@@ -101,3 +101,10 @@ Il cuore dei preferiti sta nella testata sticky della griglia (titolo · pagina 
 Le notice usano un solo servizio (`ctx.notices`): a destra, al centro, senza focus (si chiudono da sole, le permanenti con un clic); in riproduzione solo quelle `scope: 'playback'`. L'orologio è nella topbar (non focalizzabile), formati in `settings`. I fissati sono `pins` (kv) e compaiono nella sidebar tra Suggerimenti e Generi. Il PIN parental è salvato con hash salato; un titolo è adulto se una sua categoria ha un nome adulti, e la scheda si apre solo da `ctx.openEntry`, che chiede il PIN.
 
 Canali Live raggruppati: `src/services/liveGrouping.js` (puro) decide i gruppi durante il sync/rebuild; i gruppi sono nello store `groups`, le righe di "Mostra tutto" (`@all`) in `entry_cat`. `getEntry` e `pageEntries` leggono da `groups` per le chiavi `live:g…`. I collegamenti manuali sono nel kv `liveLinks:<provider>`.
+
+## Collezioni
+
+- Una collezione (`src/services/collections.js`, `kv` `collections`) è un insieme con nome di elementi di un provider: film, serie, canali e gruppi Live (si salvano le chiavi `entryKeys`; quelle non più nel catalogo si saltano senza cancellarle).
+- I generi non sono salvati: sono l'unione dei generi degli elementi (`entryGenres` legge `entry_genre` e `entry_genre_tmdb` per prefisso di chiave; i canali non ne hanno).
+- Preferiti: record `favorites` con chiave `collection:<id>` e tipo `collection` (non compaiono nelle pagine per tipo). Generi fissati: `pins` con tipo `collection`.
+- Pagina "Collezioni" (sidebar + griglia) e scheda `collection` (conteggio, generi, Preferiti/Modifica/Elimina, carosello). L'aggiunta parte dalla scheda di un titolo con `dialogs.search` (lo stesso box dell'unione dei canali, con `createLabel` per la riga "crea"); la modifica usa `dialogs.editCollection`.

@@ -94,8 +94,10 @@ export function createDialogService({ focus, root = document.body }) {
   /**
    * Search box + results list. `run(query)` returns [{ key, name, group, count }] (groups are highlighted). OK on the field opens the
    * keyboard, Done moves to the results. Resolves with the chosen result, or null when dismissed.
+   * `minLength` is how many characters start a search (0: the list is there as soon as the dialog opens). With `createLabel(text)`
+   * the first result is a "create" row (`{ create: true, name: text }`) as long as something is typed.
    */
-  function search({ title, placeholder = '', run, emptyLabel = '' }) {
+  function search({ title, placeholder = '', run, emptyLabel = '', minLength = 2, createLabel = null }) {
     if (current) return current.promise;
     const previous = snapshot();
     let results = [];
@@ -112,17 +114,20 @@ export function createDialogService({ focus, root = document.body }) {
 
     function paint() {
       while (list.firstChild) list.removeChild(list.firstChild);
-      nodes = results.map((r) => h('div', { class: `choice${r.group ? ' merge-group' : ''}` }, r.group ? icon('all') : null, h('span', { text: r.group ? `${r.name} (${r.count})` : r.name })));
+      nodes = results.map((r) => {
+        if (r.create) return h('div', { class: 'choice merge-group' }, icon('add'), h('span', { text: createLabel(r.name) }));
+        return h('div', { class: `choice${r.group ? ' merge-group' : ''}` }, r.group ? icon('all') : null, h('span', { text: r.group ? `${r.name} (${r.count})` : r.name }));
+      });
       nodes.forEach((n) => list.appendChild(n));
-      status.textContent = !results.length && input.value.trim().length >= 2 ? emptyLabel : '';
+      status.textContent = !results.length && input.value.trim().length >= Math.max(1, minLength) ? emptyLabel : '';
     }
 
     async function query() {
       const mine = (token += 1);
       const text = input.value.trim();
-      const found = text.length < 2 ? [] : await run(text).catch(() => []);
+      const found = text.length < minLength ? [] : await run(text).catch(() => []);
       if (mine !== token || !current || current.overlay !== overlay) return;
-      results = found;
+      results = createLabel && text ? [{ create: true, name: text }].concat(found) : found;
       paint();
     }
 
@@ -161,7 +166,61 @@ export function createDialogService({ focus, root = document.body }) {
     });
     current.promise = promise;
     focus.focus(DIALOG_ZONE, 0);
+    if (minLength === 0) query();
     input.focus();
+    return promise;
+  }
+
+  /**
+   * Edit box of a collection: its name, the titles it holds (OK marks one to be taken out) and Save / Cancel.
+   * Resolves with `{ name, remove: [keys] }`, or null when cancelled.
+   */
+  function editCollection({ title, name, items, nameLabel, saveLabel, cancelLabel }) {
+    if (current) return current.promise;
+    const previous = snapshot();
+    const gone = new Set();
+    const input = h('input', { class: 'value-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', value: name, 'aria-label': nameLabel });
+    const field = h('div', { class: 'choice search-field' }, icon('edit'), input);
+    const rows = items.map((item) => h('div', { class: 'choice edit-item' }, h('span', { text: item.name }), icon('remove')));
+    const list = h('div', { class: 'choice-list' }, rows);
+    const buttons = [h('button', { class: 'btn', type: 'button', text: cancelLabel }), h('button', { class: 'btn primary', type: 'button', text: saveLabel })];
+    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog search-dialog' }, h('h2', { text: title }), field, list, h('div', { class: 'dialog-actions stacked' }, buttons)));
+    root.appendChild(overlay);
+    const total = () => 1 + items.length + 2;
+    const nodeAt = (i) => (i === 0 ? field : i <= items.length ? rows[i - 1] : buttons[i - 1 - items.length]);
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.keyCode === 13 || event.keyCode === 65376) {
+        event.preventDefault();
+        input.blur();
+        focus.focus(DIALOG_ZONE, items.length + 2); // Save
+      } else if (event.keyCode === 65385) input.blur();
+    });
+    const zone = new FocusZone({
+      id: DIALOG_ZONE,
+      model: new ListModel({ orientation: 'vertical', getCount: total }),
+      onFocus: (i) => {
+        nodeAt(i).classList.add('focused');
+        nodeAt(i).scrollIntoView({ block: 'nearest' });
+      },
+      onBlur: (i) => nodeAt(i) && nodeAt(i).classList.remove('focused'),
+      onActivate: (i) => {
+        if (i === 0) input.focus();
+        else if (i <= items.length) {
+          const key = items[i - 1].key;
+          if (gone.has(key)) gone.delete(key);
+          else gone.add(key);
+          rows[i - 1].classList.toggle('removed', gone.has(key));
+        } else if (i === items.length + 1) close(null);
+        else close({ name: input.value.trim() || name, remove: Array.from(gone) });
+      },
+    });
+    focus.register(zone);
+    const promise = new Promise((resolve) => {
+      current = { overlay, previous, resolve, promise: null, cancelValue: null };
+    });
+    current.promise = promise;
+    focus.focus(DIALOG_ZONE, items.length ? 1 : 2);
     return promise;
   }
 
@@ -243,6 +302,7 @@ export function createDialogService({ focus, root = document.body }) {
     confirm,
     choose,
     search,
+    editCollection,
     pin,
     isOpen: () => current !== null,
     /** Back key: closes the dialog as "cancel". */

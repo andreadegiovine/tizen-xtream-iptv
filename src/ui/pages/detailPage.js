@@ -14,6 +14,7 @@ import { formatClock } from '../../services/playerController.js';
 import { formatRating } from '../components/card.js';
 import { youtubeId } from '../../services/trailer.js';
 import { mergeGenres } from '../../services/genres.js';
+import { addToCollection } from '../components/collectionFlows.js';
 import { log } from '../../core/logger.js';
 
 /** Label of one stream choice: the channel's own name for grouped channels, otherwise "#123 · mkv". */
@@ -509,6 +510,9 @@ export function createDetailPage(ctx, params) {
     }
     if (buttons.length) {
       buttons.push({ id: 'favorite', icon: 'heart', active: favorite, label: favorite ? t('detail.unfavorite') : t('detail.favorite'), run: toggleFavorite });
+    }
+    if (buttons.length) {
+      buttons.push({ id: 'collection', icon: 'collectionAdd', label: t('collections.add'), run: () => addToCollection(ctx, { providerId, entry }) });
     }
     if (buttons.length && entry.type === 'live' && !entry.isGroup && !entry.groupKey && mergeAvailable) {
       buttons.push({ id: 'merge', icon: 'merge', label: t('merge.title'), run: mergeChannel });

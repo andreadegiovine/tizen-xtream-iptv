@@ -122,6 +122,7 @@ export function createProvidersPage(ctx, params = {}) {
         if (ctx.favorites) await ctx.favorites.removeProvider(provider.id);
         if (ctx.liveGrouping) await ctx.liveGrouping.removeProvider(provider.id);
         if (ctx.pins) await ctx.pins.removeProvider(provider.id);
+        if (ctx.collections) await ctx.collections.removeProvider(provider.id);
         if (wasActive) {
           const next = await ctx.providers.getActive();
           if (next) ctx.catalog.start();

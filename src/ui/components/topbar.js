@@ -23,6 +23,7 @@ export const SECTIONS = [
   { id: 'series', labelKey: 'nav.series', route: 'browse', params: { type: 'series' } },
   { id: 'live', labelKey: 'nav.live', route: 'browse', params: { type: 'live' } },
   { id: 'favorites', labelKey: 'nav.favorites', route: 'favorites' },
+  { id: 'collections', labelKey: 'nav.collections', route: 'collections' },
   { id: 'suggestions', labelKey: 'nav.suggestions', route: 'suggestions' },
   { id: 'provider', labelKey: 'nav.provider', route: 'providers', icon: 'provider', iconOnly: true, end: true },
   { id: 'settings', labelKey: 'nav.settings', route: 'settings', icon: 'settings', iconOnly: true, end: true },
@@ -30,7 +31,7 @@ export const SECTIONS = [
 
 // Shown only while a page offers it (a category or genre grid): adds / removes the open grid from the favourites.
 
-const SECTION_OF_ROUTE = { categories: 'settings', browse: 'home', search: 'search', suggestions: 'suggestions', favorites: 'favorites', detail: 'home', player: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
+const SECTION_OF_ROUTE = { categories: 'settings', browse: 'home', search: 'search', suggestions: 'suggestions', favorites: 'favorites', collections: 'collections', collection: 'collections', detail: 'home', player: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
 
 /** Section a router entry belongs to: explicit `params.section`, otherwise derived from the route name. */
 export function sectionForEntry(entry) {

@@ -221,5 +221,18 @@
   "common.cancelled": "Cancelled",
   "player.track": "Track {n}",
   "common.queued": "Queued",
-  "home.syncTiming": "Timing"
+  "home.syncTiming": "Timing",
+  "nav.collections": "Collections",
+  "collections.add": "Add to a collection",
+  "collections.create": "Create the collection “{name}”",
+  "collections.namePlaceholder": "Search or create a collection...",
+  "collections.items_one": "{count} item",
+  "collections.items_other": "{count} items",
+  "collections.empty": "No collections yet. Create one from the page of a title.",
+  "collections.emptyCollection": "No items in this collection.",
+  "collections.edit": "Edit the collection",
+  "collections.delete": "Delete the collection",
+  "collections.deleteConfirm": "Delete “{name}”? The items stay in the catalog.",
+  "collections.name": "Name",
+  "collections.save": "Save"
 }

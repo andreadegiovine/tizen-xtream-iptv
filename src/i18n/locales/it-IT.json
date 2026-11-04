@@ -221,5 +221,18 @@
   "common.cancelled": "Annullato",
   "player.track": "Traccia {n}",
   "common.queued": "In coda",
-  "home.syncTiming": "Tempistiche"
+  "home.syncTiming": "Tempistiche",
+  "nav.collections": "Collezioni",
+  "collections.add": "Aggiungi a una collezione",
+  "collections.create": "Crea la collezione “{name}”",
+  "collections.namePlaceholder": "Cerca o crea una collezione...",
+  "collections.items_one": "{count} elemento",
+  "collections.items_other": "{count} elementi",
+  "collections.empty": "Nessuna collezione. Creane una dalla scheda di un titolo.",
+  "collections.emptyCollection": "Nessun elemento nella collezione.",
+  "collections.edit": "Modifica la collezione",
+  "collections.delete": "Elimina la collezione",
+  "collections.deleteConfirm": "Eliminare “{name}”? Gli elementi restano nel catalogo.",
+  "collections.name": "Nome",
+  "collections.save": "Salva"
 }

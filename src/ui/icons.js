@@ -27,6 +27,8 @@ import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons/faClockRota
 import { faLayerGroup } from '@fortawesome/free-solid-svg-icons/faLayerGroup';
 import { faLightbulb } from '@fortawesome/free-solid-svg-icons/faLightbulb';
 import { faPen } from '@fortawesome/free-solid-svg-icons/faPen';
+import { faFolder } from '@fortawesome/free-solid-svg-icons/faFolder';
+import { faFolderPlus } from '@fortawesome/free-solid-svg-icons/faFolderPlus';
 import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash';
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
 import { faMasksTheater } from '@fortawesome/free-solid-svg-icons/faMasksTheater';
@@ -75,6 +77,8 @@ const ICONS = {
   edit: faPen,
   remove: faTrash,
   add: faPlus,
+  folder: faFolder,
+  collectionAdd: faFolderPlus,
   refresh: faRotateRight,
   stop: faStop,
   genres: faMasksTheater,
