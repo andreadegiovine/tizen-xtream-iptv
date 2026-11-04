@@ -94,6 +94,26 @@ h2 {
   }
 }
 
+.topbar-clock {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 0 0 28px;
+  line-height: 1.1;
+
+  .clock-time {
+    font-size: 30px;
+    font-weight: 700;
+  }
+
+  .clock-date {
+    margin-top: 2px;
+    color: $text-muted;
+    font-size: 18px;
+  }
+}
+
 .topbar-item {
   display: flex;
   align-items: center;
@@ -394,6 +414,75 @@ h2 {
   }
 }
 
+.pin-dialog {
+  min-width: 460px;
+  text-align: center;
+
+  .pin-dots {
+    display: flex;
+    justify-content: center;
+    margin: 18px 0 8px;
+  }
+
+  .pin-dot {
+    width: 28px;
+    height: 28px;
+    margin: 0 12px;
+    border: 3px solid $text-muted;
+    border-radius: 50%;
+
+    &.filled {
+      border-color: $text;
+      background: $text;
+    }
+  }
+
+  .pin-error {
+    min-height: 32px;
+    margin: 0 0 12px;
+    color: $fail;
+    font-size: 22px;
+  }
+
+  .pin-pad {
+    display: flex;
+    flex-wrap: wrap;
+    width: 360px;
+    margin: 0 auto;
+  }
+
+  .pin-key {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 112px;
+    height: 72px;
+    margin: 4px;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-radius: 6px;
+    font-size: 32px;
+    font-weight: 700;
+    transition: transform 0.12s ease-out;
+
+    .icon {
+      width: 30px;
+      height: 30px;
+    }
+
+    &.focused {
+      border-color: $text;
+      background: $text;
+      color: $bg;
+      transform: scale(1.06);
+    }
+  }
+}
+
+.card-placeholder.locked {
+  color: rgba(255, 255, 255, 0.4);
+}
+
 .dialog-backdrop {
   position: fixed;
   top: 0;
@@ -466,18 +555,94 @@ h2 {
   }
 }
 
-#toast {
+// Standard notices: right edge, centred vertically.
+.notices {
   position: fixed;
+  top: 50%;
   right: $safe-x;
-  bottom: 48px;
-  padding: 12px 24px;
-  border-radius: 6px;
-  background: $bg-focus;
-  opacity: 0;
-  transition: opacity 0.2s;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 520px;
+  max-height: 80%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
 
-  &.visible {
-    opacity: 1;
+.notice {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: 8px 0;
+  padding: 18px 24px;
+  border: 3px solid transparent;
+  border-left: 8px solid $text-muted;
+  border-radius: 6px;
+  background: $bg-raised;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  font-size: 24px;
+  pointer-events: auto;
+  transition: transform 0.12s ease-out;
+
+  .notice-icon {
+    display: flex;
+    flex: none;
+    margin-right: 18px;
+
+    .icon {
+      width: 34px;
+      height: 34px;
+    }
+  }
+
+  .notice-title {
+    margin-bottom: 4px;
+    font-weight: 700;
+  }
+
+  .notice-text {
+    line-height: 1.3;
+    word-break: break-word;
+  }
+
+  &.info {
+    border-left-color: #3b9cf0;
+
+    .notice-icon {
+      color: #3b9cf0;
+    }
+  }
+
+  &.success {
+    border-left-color: $ok;
+
+    .notice-icon {
+      color: $ok;
+    }
+  }
+
+  &.warning {
+    border-left-color: $warn;
+
+    .notice-icon {
+      color: $warn;
+    }
+  }
+
+  &.error {
+    border-left-color: $fail;
+
+    .notice-icon {
+      color: $fail;
+    }
+  }
+
+  &.focused {
+    border-color: $text;
+    background: $bg-focus;
+    transform: scale(1.04);
   }
 }
 
@@ -562,7 +727,6 @@ h2 {
     flex: none;
 
     .btn {
-      width: 200px;
       margin: 0 0 0 12px;
     }
   }
@@ -833,9 +997,14 @@ h2 {
 }
 
 // Heart of the sticky head: the .icon-btn look of the title page, a bit smaller to fit the head.
-.browse-fav.icon-btn {
+.browse-head-actions {
+  display: flex;
   align-self: center;
   margin-left: auto; // right edge of the head
+}
+
+.browse-fav.icon-btn {
+  align-self: center;
   width: 84px;
   height: 46px;
   margin-right: 6px; // room for the focus scale
@@ -1059,7 +1228,19 @@ h2 {
     background: rgba(255, 255, 255, 0.25);
   }
 
+  // Buffered range: a lighter band behind the played part.
+  .player-buffer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 100%;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.45);
+  }
+
   .player-fill {
+    position: relative;
     width: 0;
     height: 100%;
     border-radius: 5px;

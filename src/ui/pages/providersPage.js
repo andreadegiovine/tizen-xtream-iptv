@@ -97,6 +97,7 @@ export function createProvidersPage(ctx, params = {}) {
       case ProviderAction.USE:
         if (cell.disabled) return;
         await ctx.providers.setActiveId(provider.id);
+        await ctx.refreshAdult();
         ctx.catalog.start(); // cancels the running job and syncs the new provider if its list is stale
         await render(cells.indexOf(cell));
         break;
@@ -118,6 +119,7 @@ export function createProvidersPage(ctx, params = {}) {
         ctx.active.release(); // an open connection would block deleting the provider's database
         await ctx.providers.remove(provider.id);
         if (ctx.favorites) await ctx.favorites.removeProvider(provider.id);
+        if (ctx.pins) await ctx.pins.removeProvider(provider.id);
         if (wasActive) {
           const next = await ctx.providers.getActive();
           if (next) ctx.catalog.start();

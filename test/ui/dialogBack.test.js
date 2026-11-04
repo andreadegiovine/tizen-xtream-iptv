@@ -123,3 +123,33 @@ describe('topbar sections', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
+
+describe('PIN dialog', () => {
+  const press = (root, digit) => {
+    const keys = Array.from(root.querySelectorAll('.pin-key'));
+    keys.find((k) => k.textContent === String(digit)).click;
+    document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 48 + digit, bubbles: true }));
+  };
+
+  test('four digits resolve with the PIN; a rejected PIN clears the dots and shows the error', async () => {
+    const { root, focus, dialogs } = setup();
+    document.body.appendChild(root);
+    const promise = dialogs.pin({ title: 'PIN', validate: async (pin) => (pin === '1234' ? '' : 'Wrong') });
+    [9, 9, 9, 9].forEach((d) => press(root, d));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.querySelector('.pin-error').textContent).toBe('Wrong');
+    expect(root.querySelectorAll('.pin-dot.filled')).toHaveLength(0);
+    [1, 2, 3, 4].forEach((d) => press(root, d));
+    expect(await promise).toBe('1234');
+    expect(dialogs.isOpen()).toBe(false);
+    expect(focus.activeId).toBe('page');
+  });
+
+  test('Back cancels with null', async () => {
+    const { root, dialogs } = setup();
+    document.body.appendChild(root);
+    const promise = dialogs.pin({ title: 'PIN' });
+    dialogs.dismiss();
+    expect(await promise).toBeNull();
+  });
+});

@@ -59,6 +59,7 @@ export function createProviderSetupPage(ctx, params = {}) {
       } else {
         const provider = await ctx.providers.add(data);
         await ctx.providers.setActiveId(provider.id);
+        await ctx.refreshAdult();
         ctx.catalog.start({ force: true });
         if (!destroyed) {
           if (params.firstRun) ctx.router.reset('home', { section: 'home' });

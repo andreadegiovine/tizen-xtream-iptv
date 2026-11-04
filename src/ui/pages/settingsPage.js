@@ -1,6 +1,8 @@
 import { createCodePrompt } from '../components/codePrompt.js';
 import { resetApp } from '../../services/resetApp.js';
-import { h, toast } from '../dom.js';
+import { h } from '../dom.js';
+import { changePin } from '../components/pinFlows.js';
+import { TIME_FORMATS, DATE_FORMATS, formatClockTime, formatClockDate } from '../../core/clock.js';
 import { t, i18n, detectLocale } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
@@ -30,7 +32,7 @@ export function textRow({ label, field, secret = false, ctx }) {
       const before = ctx.apiKeys.getStored(field);
       const titlesChange = field === 'tmdbKey' && Boolean(before.trim()) !== Boolean(input.value.trim());
       ctx.apiKeys.set({ [field]: input.value }).then(() => (titlesChange ? rebuildTitles(ctx) : undefined)).then(() => {
-        toast(t('settings.saved'));
+        ctx.notices.success(t('settings.saved'));
         // A new TMDB key starts the first metadata run at once (genres and TMDB data of what was watched).
         if (field === 'tmdbKey' && input.value.trim() && input.value.trim() !== before && ctx.genres) {
           ctx.genres
@@ -96,6 +98,7 @@ export function optionRow({ labelKey, key, options, format = String, ctx }) {
       await ctx.settings.update({ [key]: chosen });
       show(chosen);
       if (key === 'language') i18n.setLocale(chosen === 'auto' ? detectLocale(navigator.language) : chosen);
+      if ((key === 'timeFormat' || key === 'dateFormat') && ctx.refreshClock) ctx.refreshClock();
     },
   };
 }
@@ -103,6 +106,9 @@ export function optionRow({ labelKey, key, options, format = String, ctx }) {
 export function createSettingsPage(ctx) {
   const language = (v) => (v === 'auto' ? t('settings.language.auto') : v);
   const seconds = (v) => `${v} s`;
+  const now = new Date();
+  const timeName = (v) => (v === 'auto' ? t('settings.format.auto') : `${v === '12h' ? t('settings.time.12h') : t('settings.time.24h')} (${formatClockTime(now, v)})`);
+  const dateName = (v) => (v === 'auto' ? t('settings.format.auto') : `${t(`settings.date.${v}`)} (${formatClockDate(now, v)})`);
 
   const autoplayValue = h('span', { class: 'value' });
   const autoplay = {
@@ -119,11 +125,11 @@ export function createSettingsPage(ctx) {
   /** Trakt device-code login: shows the code, waits for the approval on another device, then imports the history. */
   async function connectTrakt() {
     if (!ctx.trakt.enabled) {
-      toast(t('trakt.needKeys'));
+      ctx.notices.warning(t('trakt.needKeys'));
       return;
     }
     if (await ctx.trakt.isConnected()) {
-      toast(t('settings.connected'));
+      ctx.notices.info(t('settings.connected'));
       return;
     }
     const controller = new AbortController();
@@ -146,9 +152,8 @@ export function createSettingsPage(ctx) {
   }
 
   async function syncTrakt() {
-    toast(t('settings.working'), 15000);
     await ctx.trakt.flush();
-    toast(t('settings.traktSyncDone', { count: await ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal })) }));
+    ctx.notices.success(t('settings.traktSyncDone', { count: await ctx.syncLog.track('trakt', (signal) => ctx.watch.importFromTrakt({ signal })) }));
     traktPanel.refresh().catch(() => undefined);
   }
 
@@ -157,7 +162,7 @@ export function createSettingsPage(ctx) {
     if (!ok) return;
     await ctx.trakt.disconnect();
     await ctx.watch.removeTraktData();
-    toast(t('settings.removed'));
+    ctx.notices.success(t('settings.removed'));
     await traktPanel.refresh();
     ctx.focus.focus(ZONE_ID, visibleRows().indexOf(traktConnectRow) + opsPanel.rows.length); // the remove / sync buttons are gone
   }
@@ -167,7 +172,6 @@ export function createSettingsPage(ctx) {
     if (metaBusy) return;
     metaBusy = true;
     tmdbPanel.button.classList.add('disabled');
-    toast(t('settings.working'), 15000);
     // Every step that will run is listed at once ("queued"); each one becomes "running" on its turn.
     const steps = [];
     if (ctx.tmdb && ctx.tmdb.enabled) steps.push({ id: 'tmdb', run: () => ctx.genres.download() });
@@ -178,7 +182,6 @@ export function createSettingsPage(ctx) {
       for (const step of steps) {
         if (!skipped.has(step.id)) await step.run();
       }
-      toast(t('settings.metaDone'));
     } catch (err) {
       log.warn('Metadata update failed', err && err.message);
     } finally {
@@ -211,7 +214,7 @@ export function createSettingsPage(ctx) {
       await ctx.tmdb.clearAll();
       await ctx.genres.clearTmdb();
       await ctx.syncLog.clear('tmdb');
-      toast(t('settings.removed'));
+      ctx.notices.success(t('settings.removed'));
       tmdbPanel.refresh().catch(() => undefined);
     },
   };
@@ -223,12 +226,25 @@ export function createSettingsPage(ctx) {
   const traktSecretRow = textRow({ ctx, label: t('settings.traktSecret'), field: 'traktSecret', secret: true });
   const prefsTitle = h('h2', { class: 'prefs-title', text: t('settings.preferences') });
 
+  const pinValue = h('span', { class: 'value' });
+  const pinRow = {
+    el: h('div', { class: 'row' }, h('span', { text: t('settings.parentalPin') }), pinValue),
+    refresh: () => ctx.parental.hasPin().then((has) => { pinValue.textContent = has ? '••••' : t('parental.notSet'); }),
+    async activate() {
+      await changePin({ dialogs: ctx.dialogs, parental: ctx.parental, notices: ctx.notices });
+      await pinRow.refresh();
+    },
+  };
+
   const prefs = [
     optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
     optionRow({ ctx, labelKey: 'settings.gridItems', key: 'gridItems', options: GRID_OPTIONS }),
     optionRow({ ctx, labelKey: 'settings.carouselItems', key: 'carouselItems', options: CAROUSEL_OPTIONS }),
     optionRow({ ctx, labelKey: 'settings.buffer', key: 'bufferSeconds', options: BUFFER_OPTIONS, format: seconds }),
     autoplay,
+    optionRow({ ctx, labelKey: 'settings.timeFormat', key: 'timeFormat', options: TIME_FORMATS, format: timeName }),
+    optionRow({ ctx, labelKey: 'settings.dateFormat', key: 'dateFormat', options: DATE_FORMATS, format: dateName }),
+    pinRow,
     optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }),
     diagnostics,
     actionRow({

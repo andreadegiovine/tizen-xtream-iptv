@@ -17,6 +17,19 @@ describe('operations registry', () => {
     expect(seen).toEqual([['catalog'], ['catalog', 'genres'], ['genres']]);
   });
 
+  test('lifecycle events: start (when it really runs), end and cancel', () => {
+    const ops = createOperations({ now: () => 1 });
+    const seen = [];
+    ops.onEvent((e) => seen.push(`${e.kind}:${e.id}`));
+    const endQueued = ops.start('tmdb', { queued: true });
+    ops.start('catalog')();
+    ops.start('genres');
+    ops.cancel('genres');
+    ops.start('tmdb')();
+    endQueued();
+    expect(seen).toEqual(['start:catalog', 'end:catalog', 'start:genres', 'cancel:genres', 'start:tmdb', 'end:tmdb']);
+  });
+
   test('a queued entry is promoted in place when it starts, and can be dropped while waiting', () => {
     const ops = createOperations({ now: () => 5 });
     const skip = jest.fn();

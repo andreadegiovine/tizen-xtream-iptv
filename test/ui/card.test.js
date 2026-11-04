@@ -1,4 +1,4 @@
-import { createCard, cardMeta, formatRating } from '../../src/ui/components/card.js';
+import { createCard, cardMeta, formatRating, setAdultCheck } from '../../src/ui/components/card.js';
 
 test('meta line: year, seasons, episodes, tag; subtitle wins', () => {
   expect(cardMeta({ year: 2019, seasons: 7, episodes: 87 })).toBe('2019 · S7 · E87');
@@ -33,4 +33,15 @@ test('card shows title and meta on separate lines, rating and status badges', ()
 test('no rating → no badge', () => {
   const card = createCard({ name: 'X', rating: null }, 'movie');
   expect(card.el.querySelector('.card-rating').classList.contains('visible')).toBe(false);
+});
+
+test('adult entries never show a poster: a lock stands in for it', () => {
+  setAdultCheck((entry) => entry.adult === true);
+  const locked = createCard({ name: 'X', icon: 'http://img/x.jpg', adult: true }, 'movie');
+  locked.update({ poster: 'http://img/y.jpg' });
+  expect(locked.el.querySelector('img')).toBeNull();
+  expect(locked.el.querySelector('.card-placeholder.locked')).not.toBeNull();
+  const normal = createCard({ name: 'Y', icon: 'http://img/y.jpg' }, 'movie');
+  expect(normal.el.querySelector('.card-placeholder.locked')).toBeNull();
+  setAdultCheck(null);
 });

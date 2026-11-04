@@ -4,6 +4,7 @@ import { icon } from '../icons.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
 import { createLogo } from './logo.js';
+import { formatClockTime, formatClockDate } from '../../core/clock.js';
 
 export const TOPBAR_ZONE = 'topbar';
 export const SEARCH_BAR_ZONE = 'topbarSearch';
@@ -104,7 +105,40 @@ export function createTopbar(ctx, handlers = {}) {
       nodes.push(node);
       el.appendChild(node);
     });
+    clockTime = h('span', { class: 'clock-time' });
+    clockDate = h('span', { class: 'clock-date' });
+    el.appendChild(h('span', { class: 'topbar-clock', 'aria-hidden': 'true' }, clockTime, clockDate));
+    paintClock();
     if (ctx.focus.activeId === TOPBAR_ZONE && nodes[zone.index]) nodes[zone.index].classList.add('focused');
+  }
+
+  // Time over date, at the right edge after the settings icon; it follows the system format unless Settings says otherwise.
+  let clockTime = null;
+  let clockDate = null;
+  let clockFormats = { timeFormat: 'auto', dateFormat: 'auto' };
+  let clockTimer = null;
+  function paintClock() {
+    if (!clockTime) return;
+    const now = new Date();
+    clockTime.textContent = formatClockTime(now, clockFormats.timeFormat);
+    clockDate.textContent = formatClockDate(now, clockFormats.dateFormat);
+  }
+  function scheduleClock() {
+    clearTimeout(clockTimer);
+    const wait = 60000 - (Date.now() % 60000) + 50; // wake just after the minute changes
+    clockTimer = setTimeout(() => {
+      paintClock();
+      scheduleClock();
+    }, wait);
+  }
+  async function refreshClock() {
+    try {
+      const { timeFormat, dateFormat } = await ctx.settings.get();
+      clockFormats = { timeFormat, dateFormat };
+    } catch {
+      /* keep the system formats */
+    }
+    paintClock();
   }
 
   function renderSearch(initial) {
@@ -160,6 +194,7 @@ export function createTopbar(ctx, handlers = {}) {
       api.render();
     },
     indexOfSection: indexOf,
+    refreshClock,
     isSearching: () => searching,
     getQuery: () => (input ? input.value : ''),
     /** Shows the search field. `silent` keeps the current focus (used when the results page is restored). */
@@ -205,5 +240,7 @@ export function createTopbar(ctx, handlers = {}) {
   };
 
   renderNav();
+  refreshClock();
+  scheduleClock();
   return api;
 }

@@ -206,6 +206,14 @@ export function createHtml5Engine() {
     },
     getTime: () => (video ? video.currentTime * 1000 : 0),
     getDuration: () => (video && Number.isFinite(video.duration) ? video.duration * 1000 : 0),
+    /** End (ms) of the buffered range that holds the current position, or null when the engine cannot tell. */
+    getBufferedEnd() {
+      if (!video || !video.buffered) return null;
+      for (let i = 0; i < video.buffered.length; i += 1) {
+        if (video.currentTime >= video.buffered.start(i) - 0.25 && video.currentTime <= video.buffered.end(i)) return video.buffered.end(i) * 1000;
+      }
+      return null;
+    },
     setAspect(mode) {
       if (video) video.style.objectFit = CSS_FIT[mode] || 'contain';
     },

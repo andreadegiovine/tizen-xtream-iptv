@@ -2,6 +2,12 @@ import { h } from '../dom.js';
 import { icon } from '../icons.js';
 import { lazySrc } from '../lazyImage.js';
 
+let isAdultEntry = () => false;
+/** The app tells the cards which entries are adult content: their poster is never shown (a lock stands in for it). */
+export function setAdultCheck(fn) {
+  isAdultEntry = typeof fn === 'function' ? fn : () => false;
+}
+
 /** "2019 · S7 · E87": year, then seasons/episodes for series, then an optional tag. A `subtitle` (e.g. the program on air) replaces all. */
 export function cardMeta({ year, seasons, episodes, tag, subtitle } = {}) {
   if (subtitle) return subtitle;
@@ -33,14 +39,16 @@ export function createCard(entry, type, meta = {}) {
   const title = h('div', { class: 'card-title' });
   const sub = h('div', { class: 'card-meta' });
   const bar = h('div', { class: 'card-progress' }, h('span'));
-  if (meta.placeholder) poster.appendChild(h('div', { class: 'card-placeholder' }, icon(meta.placeholder)));
+  const locked = Boolean(entry && isAdultEntry(entry));
+  if (locked) poster.appendChild(h('div', { class: 'card-placeholder locked' }, icon('lock')));
+  else if (meta.placeholder) poster.appendChild(h('div', { class: 'card-placeholder' }, icon(meta.placeholder)));
   poster.append(ratingBadge, statusBadge);
   const el = h('div', { class: `card ${type}` }, poster, title, sub, bar);
   const state = { year: entry.year, seasons: null, episodes: null, tag: '', subtitle: '' };
   let img = null;
 
   function setPoster(url) {
-    if (!url) return;
+    if (!url || locked) return;
     if (!img) {
       img = h('img', { alt: '', referrerpolicy: 'no-referrer' });
       const done = () => poster.classList.remove('loading');

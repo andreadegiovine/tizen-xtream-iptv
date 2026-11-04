@@ -96,3 +96,6 @@ Decisions agreed during the design phase. Update this file when a decision chang
 ## Preferiti di categorie e generi, record TMDB leggeri (2026-11-03)
 I preferiti possono essere titoli o filtri (`kind` category/genre). Le card dei filtri precedono i titoli e aprono la griglia (`openFilter`). Nel database TMDB resta solo `gridMeta`; i dettagli completi si recuperano con `getFull` e vivono in memoria. I suggerimenti non propongono titoli già visti.
 Il cuore dei preferiti sta nella testata sticky della griglia (titolo · pagina · cuore), zona `browseHead`. I registi arrivano dal record completo TMDB (`directors`).
+
+## Notice, orologio, fissati e parental control (2026-11-04)
+Le notice usano un solo servizio (`ctx.notices`): a destra, al centro, con focus proprio; in riproduzione solo quelle `scope: 'playback'`. L'orologio è nella topbar (non focalizzabile), formati in `settings`. I fissati sono `pins` (kv) e compaiono nella sidebar tra Suggerimenti e Generi. Il PIN parental è salvato con hash salato; un titolo è adulto se una sua categoria ha un nome adulti, e la scheda si apre solo da `ctx.openEntry`, che chiede il PIN.

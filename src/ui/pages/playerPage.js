@@ -60,10 +60,11 @@ export function createPlayerPage(ctx, params) {
   const statusEl = h('div', { class: 'player-status' });
   const nowEl = h('div', { class: 'player-now' });
   const timeEl = h('span', { class: 'player-time' });
+  const buffer = h('div', { class: 'player-buffer' });
   const fill = h('div', { class: 'player-fill' });
   const knob = h('div', { class: 'player-knob' });
   const tip = h('div', { class: 'player-tip' });
-  const bar = h('div', { class: 'player-bar' }, fill, knob, tip);
+  const bar = h('div', { class: 'player-bar' }, buffer, fill, knob, tip);
   const seek = h('div', { class: 'player-seek' }, bar);
   const nextEl = h('div', { class: 'player-next' });
   const flashEl = h('div', { class: 'player-flash' });
@@ -109,8 +110,10 @@ export function createPlayerPage(ctx, params) {
     }, CONTROLS_MS);
   }
 
-  function drawProgress(position, duration) {
+  function drawProgress(position, duration, bufferedEnd = null) {
     const pct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0;
+    const bufferPct = duration > 0 && bufferedEnd !== null ? Math.min(100, Math.max(pct, (bufferedEnd / duration) * 100)) : 0;
+    buffer.style.width = `${bufferPct}%`;
     fill.style.width = `${pct}%`;
     knob.style.left = `${pct}%`;
     tip.style.left = `${pct}%`;
@@ -129,7 +132,7 @@ export function createPlayerPage(ctx, params) {
     scrub = scrubTarget(seconds, 0, lastState.duration);
     seek.classList.add('scrubbing');
     tip.classList.add('visible');
-    drawProgress(scrub, lastState.duration);
+    drawProgress(scrub, lastState.duration, lastState.bufferedEnd);
   }
 
   function endScrub(commit) {
@@ -246,7 +249,7 @@ export function createPlayerPage(ctx, params) {
   async function openSubtitles() {
     const tracks = engine.getSubtitleTracks ? engine.getSubtitleTracks() : [];
     if (!tracks.length) {
-      flash(t('player.subtitles.none'));
+      ctx.notices.warning(t('player.subtitles.none'), { scope: 'playback', key: 'track' });
       return;
     }
     const options = [
@@ -260,7 +263,7 @@ export function createPlayerPage(ctx, params) {
     showControls();
     // The engine call can stall the picture for a moment: let the list close first.
     const chosen = options.find((o) => o.value === value);
-    flash(`${t('player.subtitles')}: ${chosen ? chosen.label : ''}`);
+    ctx.notices.info(`${t('player.subtitles')}: ${chosen ? chosen.label : ''}`, { scope: 'playback', key: 'track' });
     setTimeout(() => {
       if (!destroyed && engine.setSubtitleTrack) engine.setSubtitleTrack(value < 0 ? null : value);
     }, 150);
@@ -269,7 +272,7 @@ export function createPlayerPage(ctx, params) {
   async function openAudio() {
     const tracks = engine.getAudioTracks ? engine.getAudioTracks() : [];
     if (tracks.length < 2) {
-      flash(t('player.audio.none'));
+      ctx.notices.warning(t('player.audio.none'), { scope: 'playback', key: 'track' });
       return;
     }
     const now = tracks.find((track) => track.current) || tracks[0];
@@ -279,7 +282,7 @@ export function createPlayerPage(ctx, params) {
     audioTrack = value;
     showControls();
     const chosen = options.find((o) => o.value === value);
-    flash(`${t('player.audio')}: ${chosen ? chosen.label : ''}`);
+    ctx.notices.info(`${t('player.audio')}: ${chosen ? chosen.label : ''}`, { scope: 'playback', key: 'track' });
     setTimeout(() => {
       if (!destroyed && engine.setAudioTrack) engine.setAudioTrack(value);
     }, 150);
@@ -289,7 +292,7 @@ export function createPlayerPage(ctx, params) {
     if (destroyed) return;
     lastState = state;
     if (scrub === null) {
-      drawProgress(state.position, state.duration);
+      drawProgress(state.position, state.duration, state.bufferedEnd);
       if (!isLive && lastPosition !== null && Math.abs(state.position - lastPosition) > 3) {
         showControls();
         flashTip();
@@ -319,6 +322,7 @@ export function createPlayerPage(ctx, params) {
       if (engine.getAudioTracks) setAudioVisible(engine.getAudioTracks().length > 1);
     }
     if ((state.status === 'paused' || state.status === 'error' || state.status === 'recovering') && state.status !== lastStatus) showControls();
+    if (state.status === 'error' && lastStatus !== 'error') ctx.notices.error(`${t('error.PLAYER')} ${state.error || ''}`.trim(), { scope: 'playback', key: 'player-error' });
     lastStatus = state.status;
     if (state.status === 'ended') onEnded();
   }

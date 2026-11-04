@@ -31,6 +31,11 @@ trailers, cast and guides, all in a clean, modern interface designed for a 1920x
   history and keep watched titles in sync, or remove everything with one button.
 - **Continue watching, favorites and suggestions.** Resume rows, a favorites page, watched marks and
   recommendations based on what you watch (TMDB or Trakt).
+- **Parental control.** A PIN set on the first start hides the posters of adult categories and asks for
+  the PIN before opening them; change it in Settings > Preferences.
+- **Pinned categories and genres.** Pin the ones you use most to the sidebar, or add them to the favorites.
+- **Notices.** Errors, warnings and confirmations (finished updates, subscription ending soon) appear in
+  one place at the right of the screen, and never cover the video except for playback errors.
 - **Local search.** Search movies, series and channels from the top bar, using the on-screen keyboard of the TV.
 - **Several providers.** Add as many as you like and switch at any time; each has its own database.
 - **Private by design.** No account, no analytics. TMDB and Trakt keys are typed in Settings and

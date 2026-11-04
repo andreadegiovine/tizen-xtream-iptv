@@ -79,3 +79,11 @@ describe('sidebar', () => {
     expect(indexOfFilter(items, null)).toBe(0);
   });
 });
+
+test('sidebar: pinned entries sit between suggestions and genres', () => {
+  const labels = { all: 'All', continue: 'C', favorites: 'F', suggestions: 'S', genres: 'G', categories: 'Cat' };
+  const items = sidebarItems({ type: 'movie', genres: [{ key: 'drama', name: 'Drama' }], pinned: [{ kind: 'genre', id: 'drama', name: 'Drama' }, { kind: 'category', id: 7, name: 'Premiere' }], labels });
+  expect(items.map((i) => i.kind)).toEqual(['all', 'continue', 'favorites', 'suggestions', 'genre', 'category', 'genresToggle', 'genre']);
+  expect(items[4]).toMatchObject({ pinned: true, id: 'drama' });
+  expect(items[5]).toMatchObject({ pinned: true, id: '7' });
+});

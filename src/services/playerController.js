@@ -20,7 +20,7 @@ export function createPlayerController({
   stableMs = 20000,
   now = Date.now,
 }) {
-  const state = { status: 'idle', position: 0, duration: 0, buffering: 0, error: null, attempt: 0, attempts: retryDelays.length };
+  const state = { status: 'idle', position: 0, duration: 0, bufferedEnd: null, buffering: 0, error: null, attempt: 0, attempts: retryDelays.length };
   let current = null; // { url, options } of the stream being played
   let retryTimer = null;
   let playingSince = null;
@@ -40,6 +40,9 @@ export function createPlayerController({
     try {
       state.position = Math.max(0, engine.getTime() / 1000);
       state.duration = Math.max(0, engine.getDuration() / 1000);
+      // AVPlay does not report its buffer: only engines with getBufferedEnd() fill it.
+      const end = engine.getBufferedEnd ? engine.getBufferedEnd() : null;
+      state.bufferedEnd = end === null || end === undefined ? null : Math.max(0, end / 1000);
     } catch {
       /* engine not ready */
     }

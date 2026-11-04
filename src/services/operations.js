@@ -5,11 +5,18 @@
 export function createOperations({ now = Date.now } = {}) {
   const running = new Map();
   const handlers = new Set();
+  const listeners = new Set();
+  const emit = (kind, id) => listeners.forEach((fn) => fn({ kind, id }));
   const notify = () => handlers.forEach((handler) => handler(list()));
   const list = () => Array.from(running.values()).sort((a, b) => a.startedAt - b.startedAt);
 
   return {
     list,
+    /** Lifecycle events: { kind: 'start' | 'end' | 'cancel', id } (an operation waiting its turn starts when it is promoted). */
+    onEvent(handler) {
+      listeners.add(handler);
+      return () => listeners.delete(handler);
+    },
     onChange(handler) {
       handlers.add(handler);
       return () => handlers.delete(handler);
@@ -25,10 +32,12 @@ export function createOperations({ now = Date.now } = {}) {
       Object.assign(entry, { startedAt, cancel, queued });
       running.set(id, entry);
       notify();
+      if (!queued) emit('start', id);
       return () => {
         if (running.get(id) === entry) {
           running.delete(id);
           notify();
+          if (!entry.queued) emit('end', id);
         }
       };
     },
@@ -41,6 +50,7 @@ export function createOperations({ now = Date.now } = {}) {
         if (entry.cancel) entry.cancel();
       } finally {
         notify();
+        if (!entry.queued) emit('cancel', id);
       }
       return true;
     },

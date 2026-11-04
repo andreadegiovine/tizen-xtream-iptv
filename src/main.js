@@ -8,6 +8,12 @@ import { FocusManager } from './ui/focus/FocusManager.js';
 import { Router } from './ui/router.js';
 import { createTopbar, TOPBAR_ZONE, sectionForEntry, isSearchable } from './ui/components/topbar.js';
 import { createDialogService } from './ui/components/dialog.js';
+import { createNoticeService } from './ui/components/notice.js';
+import { setAdultCheck } from './ui/components/card.js';
+import { createParentalService } from './services/parental.js';
+import { unlockAdult, createPin } from './ui/components/pinFlows.js';
+import { subscriptionStatus } from './services/subscription.js';
+import { formatDate } from './core/format.js';
 import { createBackHandler } from './ui/backHandler.js';
 import { ProviderStore } from './services/providerStore.js';
 import { SettingsService } from './services/settings.js';
@@ -35,6 +41,7 @@ import { createSuggestionsService } from './services/suggestions.js';
 import { createSuggestionsPage } from './ui/pages/suggestionsPage.js';
 import { createFavoritesPage } from './ui/pages/favoritesPage.js';
 import { createFavoritesService } from './services/favorites.js';
+import { createPinsService } from './services/pins.js';
 import { createSearchPage } from './ui/pages/searchPage.js';
 import { createDetailPage } from './ui/pages/detailPage.js';
 import { createPlayerPage } from './ui/pages/playerPage.js';
@@ -81,6 +88,13 @@ async function boot() {
     meta: null,
   };
   ctx.favorites = createFavoritesService({ db });
+  ctx.pins = createPinsService({ db });
+  ctx.parental = createParentalService({ db });
+  setAdultCheck((entry) => ctx.parental.isAdult(entry));
+  ctx.refreshAdult = async () => {
+    const current = await active.get();
+    if (current) await ctx.parental.loadCategories(current.db).catch((err) => log.warn('Adult categories failed', err && err.message));
+  };
   ctx.apiKeys = createApiKeys({ db });
   await ctx.apiKeys.load();
   ctx.trakt = createTraktService({ db, client: createTraktClient({ getCredentials: () => ({ clientId: ctx.apiKeys.get().traktId, clientSecret: ctx.apiKeys.get().traktSecret }) }) });
@@ -125,7 +139,19 @@ async function boot() {
         .catch(() => undefined);
     }
   };
-  ctx.openEntry = (entry, extra = {}) => ctx.router.push('detail', { entryKey: entry.key, type: entry.type, ...extra });
+  let gateOpen = false; // one PIN dialog at a time (a second OK press must not stack another)
+  ctx.openEntry = async (entry, extra = {}) => {
+    if (ctx.parental.isAdult(entry)) {
+      if (gateOpen) return;
+      gateOpen = true;
+      try {
+        if (!(await unlockAdult({ dialogs: ctx.dialogs, parental: ctx.parental, notices: ctx.notices }))) return;
+      } finally {
+        gateOpen = false;
+      }
+    }
+    ctx.router.push('detail', { entryKey: entry.key, type: entry.type, ...extra });
+  };
 
   const topbar = createTopbar(ctx, {
     onTyping: () => {
@@ -155,6 +181,7 @@ async function boot() {
   });
   document.getElementById('topbar').appendChild(topbar.el);
   ctx.syncSearchLinks = () => topbar.syncSearchLinks();
+  ctx.refreshClock = () => topbar.refreshClock();
 
   const router = new Router({
     container: document.getElementById('content'),
@@ -181,6 +208,7 @@ async function boot() {
       topbar.syncSearchLinks();
       topbar.setSkeleton(entry.name === 'providerSetup' && Boolean(entry.params.firstRun));
       topbar.setVisible(entry.name !== 'player');
+      if (ctx.notices) ctx.notices.setPlayback(entry.name === 'player');
       topbar.setCurrentSection(section);
       // Pages with their own zone take focus in mount(). When the user switched section from the bar,
       // or the page has no zone, the focus stays on (or returns to) the bar, on the current section.
@@ -196,6 +224,7 @@ async function boot() {
     if (!state.running) endCatalogOp();
     if (wasSyncing && !state.running && !state.cancelled) {
       ctx.search.invalidate();
+      ctx.refreshAdult();
       ctx.genres.backfill().catch(() => undefined); // the genre worker finds genres the lists did not carry
       // The guide only matters once the channel list is in place; at most once a day.
       if (!state.error) epg.maybeSync().catch(() => undefined);
@@ -211,6 +240,16 @@ async function boot() {
 
   const dialogs = createDialogService({ focus });
   ctx.dialogs = dialogs;
+  const notices = createNoticeService({ focus, isDialogOpen: () => dialogs.isOpen() });
+  ctx.notices = notices;
+  // Operations tell when they start and finish (the Trakt sync reports its own result).
+  ctx.operations.onEvent(({ kind, id }) => {
+    if (id === 'trakt' && kind === 'end') return;
+    const name = t(`operations.${id}`);
+    if (kind === 'start') notices.info(t('notice.opStart', { name }), { key: `op:${id}` });
+    else if (kind === 'end') notices.success(t('notice.opEnd', { name }), { key: `op:${id}` });
+    else notices.warning(t('notice.opCancel', { name }), { key: `op:${id}` });
+  });
   const onBack = createBackHandler({
     dialogs: {
       isOpen: () => dialogs.isOpen() || topbar.isSearching(),
@@ -233,7 +272,8 @@ async function boot() {
   input.registerTizenKeys();
   input.onAction((action) => {
     if (action === Action.BACK) {
-      onBack();
+      if (notices.isOpen() && !dialogs.isOpen()) notices.dismissTop();
+      else onBack();
       return;
     }
     // A page may own some keys (the player owns every key except Back).
@@ -245,14 +285,35 @@ async function boot() {
   log.info('Xtream IPTV started');
   ctx.trakt.flush().catch(() => undefined); // history that could not be sent last time
   const hasProvider = await providers.getActive();
+  if (hasProvider) await ctx.refreshAdult();
   if (hasProvider) {
     router.reset('home', { section: 'home' });
+    showSubscriptionNotice(notices, hasProvider);
     // Stale-while-revalidate: the cached catalog is usable at once, lists older than 12 h refresh in background.
     catalog.start();
     ctx.genres.backfill().catch(() => undefined);
   } else {
     router.reset('providerSetup', { firstRun: true });
   }
+  // The parental PIN is set the first time the app opens (asked again at the next start if it was skipped).
+  setTimeout(() => {
+    ctx.parental
+      .hasPin()
+      .then((has) => (has ? null : createPin({ dialogs: ctx.dialogs, parental: ctx.parental })))
+      .catch((err) => log.warn('PIN setup failed', err && err.message));
+  }, 800);
+}
+
+/** At every start: a warning when the subscription ends in less than 10 days (an error when it has ended). */
+function showSubscriptionNotice(notices, provider) {
+  const status = subscriptionStatus(provider);
+  if (!status) return;
+  const date = formatDate(status.until, i18n.getLocale());
+  let key = 'notice.subscriptionLeft';
+  if (status.expired) key = 'notice.subscriptionExpired';
+  else if (status.days === 0) key = 'notice.subscriptionToday';
+  else if (status.days === 1) key = 'notice.subscriptionOne';
+  notices.show({ type: status.type, title: provider.name, message: t(key, { days: status.days, date }), permanent: true, key: 'subscription' });
 }
 
 boot().catch((err) => {

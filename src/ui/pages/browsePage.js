@@ -60,10 +60,12 @@ export function createPagedGridModel({ columns, getCount, hasNext, hasPrevious, 
  * Sidebar entries. Movies and series: show all, continue watching, favourites, suggestions, a "Genres"
  * entry (open by default) with the genres, then a "Categories" entry that expands into the provider categories. Channels: show all + the categories.
  */
-export function sidebarItems({ type, genres = [], categories = [], expanded = false, genresExpanded = true, genresLoading = false, labels }) {
+export function sidebarItems({ type, genres = [], categories = [], pinned = [], expanded = false, genresExpanded = true, genresLoading = false, labels }) {
   const items = [{ kind: 'all', name: labels.all }];
   if (type === 'live') return items.concat(categories.map((c) => ({ kind: 'category', id: c.id, name: c.name })));
   items.push({ kind: 'continue', name: labels.continue }, { kind: 'favorites', name: labels.favorites }, { kind: 'suggestions', name: labels.suggestions });
+  // Pinned categories and genres sit between the suggestions and the genres.
+  pinned.forEach((p) => items.push({ kind: p.kind, id: String(p.id), name: p.name, pinned: true }));
   if (genres.length || genresLoading) {
     items.push({ kind: 'genresToggle', name: labels.genres, expanded: genresExpanded });
     if (genresExpanded) genres.forEach((g) => items.push({ kind: 'genre', id: String(g.key), name: g.name, depth: 1 }));
@@ -90,16 +92,22 @@ export function createBrowsePage(ctx, params = {}) {
   const titleEl = h('span', { class: 'browse-title' });
   const count = h('span', { class: 'muted browse-count' });
   const sepA = h('span', { class: 'browse-sep', text: '·' });
+  const pinBtn = h('span', { class: 'icon-btn browse-fav browse-pin' }, icon('pin'));
   const favBtn = h('span', { class: 'icon-btn browse-fav' }, icon('heart'));
-  const head = h('div', { class: 'browse-head sticky-head' }, titleEl, sepA, count, favBtn);
-  let favState = null; // { active, onToggle } while a category / genre is open
+  const head = h('div', { class: 'browse-head sticky-head' }, titleEl, sepA, count, h('span', { class: 'browse-head-actions' }, pinBtn, favBtn));
+  let favState = null; // { active, onToggle, pinActive, onPin } while a category / genre is open
   function renderHead() {
     const hasCount = !!count.textContent;
     sepA.style.display = hasCount ? '' : 'none';
     favBtn.style.display = favState ? '' : 'none';
     favBtn.classList.toggle('active', !!(favState && favState.active));
     favBtn.setAttribute('aria-label', favState && favState.active ? t('detail.unfavorite') : t('detail.favorite'));
+    const canPin = Boolean(favState && favState.onPin);
+    pinBtn.style.display = canPin ? '' : 'none';
+    pinBtn.classList.toggle('active', canPin && favState.pinActive);
+    pinBtn.setAttribute('aria-label', canPin && favState.pinActive ? t('browse.unpin') : t('browse.pin'));
     if (!favState) favBtn.classList.remove('focused');
+    if (!canPin) pinBtn.classList.remove('focused');
   }
   renderHead();
   let pages = 1;
@@ -110,6 +118,7 @@ export function createBrowsePage(ctx, params = {}) {
   let providerId = null;
   let destroyed = false;
     let genres = [];
+  let pinned = []; // pinned categories / genres of this media type
   let categories = []; // visible provider categories [{ id, name }]
   let expanded = false; // categories group
   let genresExpanded = true; // genres group: open by default
@@ -134,7 +143,8 @@ export function createBrowsePage(ctx, params = {}) {
     catNodes = items.map((item, i) => {
       const node = h('div', { class: `browse-cat${i === selected ? ' current' : ''}${item.depth ? ' sub' : ''}` });
       // Only entries with an icon get the icon slot: the others start at the left edge.
-      if (SIDEBAR_ICON[item.kind]) node.appendChild(h('span', { class: 'browse-cat-icon' }, icon(SIDEBAR_ICON[item.kind])));
+      const iconName = item.pinned ? 'pin' : SIDEBAR_ICON[item.kind];
+      if (iconName) node.appendChild(h('span', { class: 'browse-cat-icon' }, icon(iconName)));
       node.appendChild(h('span', { class: 'browse-cat-name', text: item.name }));
       const text = countText(item);
       node.appendChild(h('span', { class: `browse-cat-count${text === '' && countsLoading ? ' skeleton-line' : ''}`, text }));
@@ -197,7 +207,7 @@ export function createBrowsePage(ctx, params = {}) {
   /** Rebuilds the sidebar keeping the same entry selected (genres arrive late, categories expand). */
   function rebuildSidebar(focusKey) {
     const keep = items[selected];
-    items = sidebarItems({ type, genres, categories, expanded, genresExpanded, genresLoading, labels: labels() });
+    items = sidebarItems({ type, genres, categories, pinned, expanded, genresExpanded, genresLoading, labels: labels() });
     const same = keep ? items.findIndex((item) => item.kind === keep.kind && String(item.id) === String(keep.id)) : -1;
     selected = same >= 0 ? same : 0;
     renderCategories();
@@ -234,28 +244,44 @@ export function createBrowsePage(ctx, params = {}) {
       return;
     }
     const active = await ctx.favorites.hasFilter(providerId, item.kind, type, item.id).catch(() => false);
+    const pinActive = type === 'live' ? false : await ctx.pins.has(providerId, item.kind, type, item.id).catch(() => false);
     if (destroyed || items[selected] !== item) return;
+    const target = { kind: item.kind, type, id: item.id, name: item.name };
     favState = {
       active,
+      pinActive,
       onToggle: async () => {
-        await ctx.favorites.toggleFilter(providerId, { kind: item.kind, type, id: item.id, name: item.name });
+        const now = await ctx.favorites.toggleFilter(providerId, target);
         const saved = await ctx.favorites.list(providerId);
         counts.set('favorites:', saved.filter((f) => f.type === type).length);
         if (!destroyed) {
           showCounts();
           syncFavorite();
         }
+        ctx.notices.success(t(now ? 'notice.favoriteAdded' : 'notice.favoriteRemoved'), { key: 'favorite' });
       },
+      onPin:
+        type === 'live'
+          ? null
+          : async () => {
+              const now = await ctx.pins.toggle(providerId, target);
+              pinned = await ctx.pins.list(providerId, type);
+              if (!destroyed) rebuildSidebar();
+              ctx.notices.success(t(now ? 'notice.pinAdded' : 'notice.pinRemoved'), { key: 'pin' });
+            },
     };
     renderHead();
   }
 
+  /** Buttons of the head, left to right: pin (not for channels) and heart. */
+  const headButtons = () => (favState ? (favState.onPin ? [{ el: pinBtn, run: favState.onPin }] : []).concat([{ el: favBtn, run: favState.onToggle }]) : []);
+
   const headZone = new FocusZone({
     id: HEAD_ZONE,
-    model: new ListModel({ orientation: 'horizontal', getCount: () => (favState ? 1 : 0) }),
-    onFocus: () => favBtn.classList.add('focused'),
-    onBlur: () => favBtn.classList.remove('focused'),
-    onActivate: () => favState && favState.onToggle(),
+    model: new ListModel({ orientation: 'horizontal', getCount: () => headButtons().length }),
+    onFocus: (i) => headButtons()[i] && headButtons()[i].el.classList.add('focused'),
+    onBlur: (i) => headButtons()[i] && headButtons()[i].el.classList.remove('focused'),
+    onActivate: (i) => headButtons()[i] && headButtons()[i].run(),
   });
 
   const byKeys = async (keys) => (await Promise.all(keys.map((key) => getEntry(db, key)))).filter(Boolean);
@@ -366,6 +392,7 @@ export function createBrowsePage(ctx, params = {}) {
     providerId = current.provider.id;
     pageSize = (await ctx.settings.get()).gridItems;
     const excluded = await ctx.settings.getExcluded(providerId, type);
+    pinned = type === 'live' ? [] : await ctx.pins.list(providerId, type).catch(() => []);
     categories = (await listCategories(db, type)).filter((c) => !excluded.has(String(c.id))).map((c) => ({ id: c.id, name: c.name }));
     const filter = params.filter || null;
     const wantsGenre = filter && filter.kind === 'genre';
@@ -379,7 +406,7 @@ export function createBrowsePage(ctx, params = {}) {
       genresLoading = false;
     }
     expanded = Boolean(filter && filter.kind === 'category');
-    items = sidebarItems({ type, genres, categories, expanded, genresExpanded, genresLoading, labels: labels() });
+    items = sidebarItems({ type, genres, categories, pinned, expanded, genresExpanded, genresLoading, labels: labels() });
     selected = indexOfFilter(items, filter);
     renderCategories();
     syncFavorite();

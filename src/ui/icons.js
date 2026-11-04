@@ -30,6 +30,13 @@ import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
 import { faMasksTheater } from '@fortawesome/free-solid-svg-icons/faMasksTheater';
 import { faStop } from '@fortawesome/free-solid-svg-icons/faStop';
 import { faEyeSlash } from '@fortawesome/free-solid-svg-icons/faEyeSlash';
+import { faCircleInfo } from '@fortawesome/free-solid-svg-icons/faCircleInfo';
+import { faTriangleExclamation } from '@fortawesome/free-solid-svg-icons/faTriangleExclamation';
+import { faCircleXmark } from '@fortawesome/free-solid-svg-icons/faCircleXmark';
+import { faCircleCheck } from '@fortawesome/free-solid-svg-icons/faCircleCheck';
+import { faThumbtack } from '@fortawesome/free-solid-svg-icons/faThumbtack';
+import { faLock } from '@fortawesome/free-solid-svg-icons/faLock';
+import { faDeleteLeft } from '@fortawesome/free-solid-svg-icons/faDeleteLeft';
 
 // Font Awesome Free (CC BY 4.0 / SIL OFL): only the icons listed here end up in the bundle.
 // They are inlined as SVG, so there are no font files to ship or load on the TV.
@@ -67,6 +74,13 @@ const ICONS = {
   stop: faStop,
   genres: faMasksTheater,
   hidden: faEyeSlash,
+  info: faCircleInfo,
+  warning: faTriangleExclamation,
+  error: faCircleXmark,
+  success: faCircleCheck,
+  pin: faThumbtack,
+  lock: faLock,
+  backspace: faDeleteLeft,
 };
 
 export const iconNames = Object.keys(ICONS);

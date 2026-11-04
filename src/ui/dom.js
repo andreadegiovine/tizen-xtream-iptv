@@ -15,12 +15,3 @@ export function h(tag, attrs = {}, ...children) {
   });
   return el;
 }
-
-export function toast(message, ms = 3000) {
-  const el = document.getElementById('toast');
-  if (!el) return;
-  el.textContent = message;
-  el.classList.add('visible');
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => el.classList.remove('visible'), ms);
-}
