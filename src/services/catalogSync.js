@@ -12,6 +12,7 @@ import { MediaType } from './mediaType.js';
 import { XtreamClient } from './xtreamClient.js';
 import { projectItem } from './itemProjector.js';
 import { buildEntries, buildEntryCategoryRows, buildEntryGenreRows } from './grouping.js';
+import { LIVE_LAYOUT, DEFAULT_GROUPING, groupLiveItems, annotateGroupKeys, buildLiveAllRows } from './liveGrouping.js';
 
 export const LIST_TTL_MS = 12 * 60 * 60 * 1000;
 export const BATCH_SIZE = 2000;
@@ -46,6 +47,7 @@ const ranges = {
   entry_cat: (type) => ({ index: 'byCatAdded', range: IDBKeyRange.bound([type], [type, []]) }),
   entry_genre: (type) => ({ index: 'byGenreAdded', range: IDBKeyRange.bound([type], [type, []]) }),
   entry_genre_tmdb: (type) => ({ index: 'byGenreAdded', range: IDBKeyRange.bound([type], [type, []]) }),
+  groups: (type) => ({ range: IDBKeyRange.bound(`${type}:`, `${type}:\uffff`) }),
   categories: (type) => ({ range: IDBKeyRange.bound(`${type}:`, `${type}:￿`) }),
 };
 
@@ -58,9 +60,15 @@ async function replaceRows(db, store, type, rows, { onBatch } = {}) {
 }
 
 /** Entries + their per-category rows. Shared by the sync and by "exclusions changed". */
-export async function writeEntries(db, type, entries, { onBatch } = {}) {
+export async function writeEntries(db, type, entries, { onBatch, groups = [] } = {}) {
   await replaceRows(db, 'entries', type, entries, { onBatch });
-  await replaceRows(db, 'entry_cat', type, buildEntryCategoryRows(entries));
+  let categoryRows = buildEntryCategoryRows(entries);
+  if (type === MediaType.LIVE) {
+    // Live TV "show all": the groups plus the channels that are in none (they live in a pseudo category).
+    categoryRows = categoryRows.concat(buildLiveAllRows(entries, groups));
+    await replaceRows(db, 'groups', type, groups);
+  }
+  await replaceRows(db, 'entry_cat', type, categoryRows);
   await replaceRows(db, 'entry_genre', type, buildEntryGenreRows(entries));
   // TMDB genres follow the metadata, not the sync: only forget the ones of titles that left the catalog.
   const present = new Set(entries.map((entry) => entry.key));
@@ -69,12 +77,14 @@ export async function writeEntries(db, type, entries, { onBatch } = {}) {
 }
 
 /** Rebuilds the grid entries from the stored items (used when the excluded categories change). */
-export async function rebuildEntries({ db, type, excludedCategories = new Set(), cleanTitles = true, emit = () => {} }) {
+export async function rebuildEntries({ db, type, excludedCategories = new Set(), cleanTitles = true, grouping = DEFAULT_GROUPING, emit = () => {} }) {
   const items = await dbGetAllRange(db, 'items', IDBKeyRange.bound(`${type}:`, `${type}:\uffff`));
   const entries = buildEntries(type, items, { excludedCategories, cleanTitles });
-  await writeEntries(db, type, entries);
+  const groups = type === MediaType.LIVE ? groupLiveItems(items, { excludedCategories, grouping }) : [];
+  if (type === MediaType.LIVE) annotateGroupKeys(entries, groups);
+  await writeEntries(db, type, entries, { groups });
   const previous = (await getSyncMeta(db, type)) || { key: metaKey(type), type };
-  await dbPut(db, 'meta', { ...previous, entryCount: entries.length });
+  await dbPut(db, 'meta', { ...previous, entryCount: entries.length, ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, groupCount: groups.length } : {}) });
   emit({ event: 'progress', mediaType: type, phase: 'rebuilt', done: entries.length, total: entries.length });
   return entries.length;
 }
@@ -98,6 +108,7 @@ export async function syncType({
   type,
   excludedCategories = new Set(),
   cleanTitles = true,
+  grouping = DEFAULT_GROUPING,
   signal,
   emit = () => {},
   gate = () => Promise.resolve(),
@@ -145,8 +156,10 @@ export async function syncType({
   progress('entries');
   const entriesStart = now();
   const entries = buildEntries(type, items, { excludedCategories, cleanTitles });
+  const groups = type === MediaType.LIVE ? groupLiveItems(items, { excludedCategories, grouping }) : [];
+  if (type === MediaType.LIVE) annotateGroupKeys(entries, groups);
   const buildMs = now() - entriesStart;
-  await writeEntries(db, type, entries);
+  await writeEntries(db, type, entries, { groups });
   const entriesMs = now() - entriesStart;
   await replaceRows(db, 'categories', type, categories);
   const writeMs = now() - writeStart;
@@ -158,6 +171,7 @@ export async function syncType({
     genres: true,
     itemCount: items.length,
     entryCount: entries.length,
+    ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, groupCount: groups.length } : {}),
     categoryCount: categories.length,
     excludedCount: excludedCategories.size,
     fetchMs,
@@ -173,17 +187,19 @@ export async function syncType({
 }
 
 /** Syncs several media types in order. A failing type does not stop the others, except auth/abort errors. */
-export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, cleanTitles = true, force = false, signal, emit = () => {}, gate, now = Date.now }) {
+export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, cleanTitles = true, grouping = DEFAULT_GROUPING, force = false, signal, emit = () => {}, gate, now = Date.now }) {
   const results = [];
   for (const type of types) {
     try {
       throwIfAborted(signal);
-      if (!force && !shouldSync(await getSyncMeta(db, type), now())) {
+      const stored = await getSyncMeta(db, type);
+      const oldLayout = type === MediaType.LIVE && stored && stored.layout !== LIVE_LAYOUT; // lists of an older layout are downloaded again once
+      if (!force && !oldLayout && !shouldSync(stored, now())) {
         emit({ event: 'progress', mediaType: type, phase: 'skipped' });
         results.push({ type, skipped: true });
         continue;
       }
-      const meta = await syncType({ db, client, type, excludedCategories: excluded[type] || new Set(), cleanTitles, signal, emit, gate, now });
+      const meta = await syncType({ db, client, type, excludedCategories: excluded[type] || new Set(), cleanTitles, grouping, signal, emit, gate, now });
       results.push({ type, meta });
     } catch (err) {
       const error = toAppError(err);
@@ -199,7 +215,7 @@ export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, c
  * Entry point shared by the Web Worker and the main-thread fallback:
  * opens the provider database, checks the account, syncs, and always ends with a `done` event.
  */
-export async function runSyncForProvider({ provider, types, excluded, cleanTitles = true, force, signal, emit = () => {}, gate, openDb = openProviderDb, makeClient }) {
+export async function runSyncForProvider({ provider, types, excluded, cleanTitles = true, grouping = DEFAULT_GROUPING, force, signal, emit = () => {}, gate, openDb = openProviderDb, makeClient }) {
   let db = null;
   let results = [];
   let failure = null;
@@ -209,7 +225,7 @@ export async function runSyncForProvider({ provider, types, excluded, cleanTitle
     const auth = await client.authenticate();
     emit({ event: 'account', expiresAt: (auth && auth.user && auth.user.expiresAt) || null });
     db = await openDb(provider.id);
-    results = await runSync({ db, client, types, excluded, cleanTitles, force, signal, emit, gate });
+    results = await runSync({ db, client, types, excluded, cleanTitles, grouping, force, signal, emit, gate });
   } catch (err) {
     const error = toAppError(err);
     failure = { code: error.code, message: error.message };

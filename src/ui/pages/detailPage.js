@@ -7,7 +7,8 @@ import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { createCarousel } from '../components/carousel.js';
 import { createSelectField } from '../components/selectField.js';
-import { getEntry, listCategories } from '../../services/catalogQuery.js';
+import { getEntry, listCategories, createMergeSearch } from '../../services/catalogQuery.js';
+import { rebuildLive } from '../../services/rebuildLive.js';
 import { watchKey, shouldResume, isWatched } from '../../services/watchStore.js';
 import { formatClock } from '../../services/playerController.js';
 import { formatRating } from '../components/card.js';
@@ -15,8 +16,8 @@ import { youtubeId } from '../../services/trailer.js';
 import { mergeGenres } from '../../services/genres.js';
 import { log } from '../../core/logger.js';
 
-/** Label of one stream choice: "#123 · mkv". */
-export const streamLabel = (member) => `#${member.id}${member.ext ? ` · ${member.ext}` : ''}`;
+/** Label of one stream choice: the channel's own name for grouped channels, otherwise "#123 · mkv". */
+export const streamLabel = (member) => member.name || `#${member.id}${member.ext ? ` · ${member.ext}` : ''}`;
 
 /** Flat, ordered episode list across seasons. */
 export function flattenEpisodes(seasons) {
@@ -97,6 +98,9 @@ export function createDetailPage(ctx, params) {
   let info = null; // provider details (plot, cast, seasons...)
   let meta = null; // TMDB (localized text, rating, credits)
   let categoryItems = []; // [{ id, name }]
+  let categoryNames = new Map();
+  let db = null;
+  let mergeAvailable = false; // grouping is on: a single channel can be merged by hand
   let related = []; // catalog entries "you might also like"
   let favorite = false;
   let selectedMember = null;
@@ -170,7 +174,30 @@ export function createDetailPage(ctx, params) {
     });
     if (value === null || destroyed) return;
     selectedMember = entry.members.find((m) => m.id === value);
+    updateCategoryItems();
     build();
+  }
+
+  /** The categories shown are the ones of the version that is selected (a grouped channel changes them with the version). */
+  function updateCategoryItems() {
+    const ids = entry.isGroup && selectedMember ? [selectedMember.categoryId] : entry.categoryIds || [];
+    categoryItems = ids.filter((id) => categoryNames.has(id)).map((id) => ({ id, name: categoryNames.get(id) }));
+  }
+
+  /** Merges this channel with another one (or with a group) chosen in a search box; the link is kept across syncs. */
+  async function mergeChannel() {
+    const picked = await ctx.dialogs.search({ title: t('merge.title'), placeholder: t('search.placeholder'), emptyLabel: t('common.empty'), run: createMergeSearch(db, entry.defaultId) });
+    if (!picked || destroyed) return;
+    try {
+      await ctx.liveGrouping.link(providerId, entry.defaultId, picked.memberId);
+      await rebuildLive(ctx);
+      entry = (await getEntry(db, entry.key)) || entry;
+      if (!destroyed) build();
+      ctx.notices.success(t('notice.done'), { key: 'merge' });
+    } catch (err) {
+      log.warn('Merge failed', err && err.message);
+      ctx.notices.error(t('notice.failed'), { key: 'merge' });
+    }
   }
 
   async function chooseSeason() {
@@ -411,7 +438,7 @@ export function createDetailPage(ctx, params) {
 
     // Version dropdown, right under the subtitle and before the plot.
     clear(versionEl);
-    if (entry.type === 'movie' && entry.members.length > 1) {
+    if ((entry.type === 'movie' || entry.isGroup) && entry.members.length > 1) {
       const select = createSelectField({ id: 'detailVersion', label: '', text: `${streamLabel(selectedMember)} (${entry.members.length})`, onOpen: chooseStream });
       versionEl.appendChild(select.el);
       next.push({ id: 'detailVersion', zone: select.zone });
@@ -448,6 +475,9 @@ export function createDetailPage(ctx, params) {
     }
     if (buttons.length) {
       buttons.push({ id: 'favorite', icon: 'heart', active: favorite, label: favorite ? t('detail.unfavorite') : t('detail.favorite'), run: toggleFavorite });
+    }
+    if (buttons.length && entry.type === 'live' && !entry.isGroup && !entry.groupKey && mergeAvailable) {
+      buttons.push({ id: 'merge', icon: 'merge', label: t('merge.title'), run: mergeChannel });
     }
     buttons.note = note;
     if (buttons.length) next.push({ id: 'detailActions', zone: createActions(buttons, 0) });
@@ -500,18 +530,20 @@ export function createDetailPage(ctx, params) {
     const current = await ctx.active.get();
     if (!current || destroyed) return;
     providerId = current.provider.id;
+    db = current.db;
     entry = await getEntry(current.db, params.entryKey);
     if (!entry || destroyed) return;
     selectedMember = entry.members.find((m) => m.id === entry.defaultId) || entry.members[0];
     try {
       const categories = await listCategories(current.db, entry.type);
-      const names = new Map(categories.map((c) => [c.id, c.name]));
-      categoryItems = (entry.categoryIds || []).filter((id) => names.has(id)).map((id) => ({ id, name: names.get(id) }));
+      categoryNames = new Map(categories.map((c) => [c.id, c.name]));
+      updateCategoryItems();
     } catch (err) {
       log.warn('Categories failed', err && err.message);
     }
     fillText();
     favorite = await ctx.favorites.has(providerId, entry.key);
+    mergeAvailable = entry.type === 'live' && ctx.liveGrouping ? (await ctx.settings.get()).liveGrouping : false;
     await reloadRecords();
     build();
 

@@ -1066,6 +1066,10 @@ h2 {
     }
   }
 
+  &.square .card-poster {
+    padding-bottom: 100%; // channel logos in Live TV
+  }
+
   &.live .card-poster img {
     object-fit: contain;
     padding: 12%;
@@ -1859,5 +1863,66 @@ h2 {
   .list {
     flex: 1;
     min-width: 0;
+  }
+}
+
+// Settings: a small button at the right of a field (restore the defaults).
+.list .row .btn.row-reset {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  margin: -8px -12px -8px 16px;
+  padding: 0;
+
+  &.focused {
+    background: $text;
+    color: $bg;
+  }
+}
+
+// Search box dialog (merge channels): groups stand out.
+.dialog.search-dialog {
+  width: 720px;
+
+  .search-field {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 12px;
+
+    .icon {
+      flex: none;
+      width: 26px;
+      height: 26px;
+    }
+
+    .value-input {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+    }
+  }
+
+  .choice-list {
+    max-height: 520px;
+    overflow: hidden;
+  }
+
+  .choice.merge-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-left: 6px solid $accent;
+    font-weight: 700;
+
+    .icon {
+      flex: none;
+      width: 24px;
+      height: 24px;
+    }
   }
 }

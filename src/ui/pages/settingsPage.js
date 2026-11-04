@@ -12,6 +12,9 @@ import { ensureVisible } from '../scroll.js';
 import { createSyncPanel, createTmdbPanel, createTraktPanel, createDevicePanel, createOperationsPanel } from '../components/syncPanel.js';
 import { log } from '../../core/logger.js';
 import { rebuildEntries } from '../../services/catalogSync.js';
+import { rebuildLive } from '../../services/rebuildLive.js';
+import { DEFAULT_TERMS, parseTerms, termsText } from '../../services/liveGrouping.js';
+import { icon } from '../icons.js';
 
 const ZONE_ID = 'settings';
 const IME_DONE = 65376;
@@ -207,7 +210,7 @@ export function createSettingsPage(ctx) {
   const syncRow = { el: panel.button, refresh: async () => undefined, activate: async () => panel.syncNow() };
   const metaRow = { el: tmdbPanel.button, refresh: async () => undefined, activate: updateMetadata };
   const metaRemoveRow = {
-    secondary: true,
+    secondary: 'left',
     el: tmdbPanel.removeButton,
     refresh: async () => undefined,
     async activate() {
@@ -223,7 +226,7 @@ export function createSettingsPage(ctx) {
   };
   const traktConnectRow = { el: traktPanel.connectButton, refresh: async () => undefined, activate: connectTrakt };
   const traktSyncRow = { el: traktPanel.syncButton, refresh: async () => undefined, activate: syncTrakt };
-  const traktRemoveRow = { secondary: true, el: traktPanel.removeButton, refresh: async () => undefined, activate: removeTrakt };
+  const traktRemoveRow = { secondary: 'left', el: traktPanel.removeButton, refresh: async () => undefined, activate: removeTrakt };
   const tmdbTokenRow = textRow({ ctx, label: t('settings.tmdbKey'), field: 'tmdbKey' });
   const traktIdRow = textRow({ ctx, label: t('settings.traktId'), field: 'traktId' });
   const traktSecretRow = textRow({ ctx, label: t('settings.traktSecret'), field: 'traktSecret', secret: true });
@@ -239,6 +242,61 @@ export function createSettingsPage(ctx) {
     },
   };
 
+  const groupingValue = h('span', { class: 'value' });
+  const liveGrouping = {
+    el: h('div', { class: 'row' }, h('span', { text: t('settings.liveGrouping') }), groupingValue),
+    refresh: () => ctx.settings.get().then((s) => { groupingValue.textContent = s.liveGrouping ? t('common.on') : t('common.off'); }),
+    async activate() {
+      const s = await ctx.settings.get();
+      const next = await ctx.settings.update({ liveGrouping: !s.liveGrouping });
+      groupingValue.textContent = next.liveGrouping ? t('common.on') : t('common.off');
+      await regroup();
+    },
+  };
+
+  /** Rebuilds Live TV with the grouping settings as they are now. */
+  async function regroup() {
+    try {
+      await rebuildLive(ctx);
+      ctx.notices.success(t('notice.saved'), { key: 'setting' });
+    } catch (err) {
+      log.warn('Regrouping failed', err && err.message);
+      ctx.notices.error(t('notice.failed'), { key: 'setting' });
+    }
+  }
+
+  // Words removed from channel names: the field shows the defaults as its placeholder, the button at its right brings them back.
+  const patternsInput = h('input', { class: 'value-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: termsText(DEFAULT_TERMS) });
+  const patternsReset = h('button', { class: 'btn icon-only row-reset', type: 'button', 'aria-label': t('settings.liveGroupReset'), title: t('settings.liveGroupReset') }, icon('refresh'));
+  const showPatterns = () => ctx.settings.get().then((s) => { patternsInput.value = s.liveGroupPatterns; });
+  patternsInput.addEventListener('keydown', (event) => {
+    event.stopPropagation(); // the text field owns its keys
+    if (event.keyCode === 13 || event.keyCode === IME_DONE) {
+      event.preventDefault();
+      patternsInput.blur();
+      const text = termsText(parseTerms(patternsInput.value));
+      ctx.settings.update({ liveGroupPatterns: text === termsText(DEFAULT_TERMS) ? '' : text }).then(showPatterns).then(regroup);
+    } else if (event.keyCode === IME_CANCEL) {
+      patternsInput.blur();
+      showPatterns();
+    }
+  });
+  const patternsRow = {
+    el: h('div', { class: 'row' }, h('span', { text: t('settings.liveGroupPatterns') }), patternsInput, patternsReset),
+    refresh: showPatterns,
+    activate: async () => patternsInput.focus(),
+  };
+  const patternsResetRow = {
+    secondary: 'right',
+    el: patternsReset,
+    refresh: async () => undefined,
+    async activate() {
+      await ctx.settings.update({ liveGroupPatterns: '' });
+      await showPatterns();
+      await regroup();
+    },
+  };
+
   const prefs = [
     optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
     optionRow({ ctx, labelKey: 'settings.gridItems', key: 'gridItems', options: GRID_OPTIONS }),
@@ -248,6 +306,9 @@ export function createSettingsPage(ctx) {
     optionRow({ ctx, labelKey: 'settings.timeFormat', key: 'timeFormat', options: TIME_FORMATS, format: timeName }),
     optionRow({ ctx, labelKey: 'settings.dateFormat', key: 'dateFormat', options: DATE_FORMATS, format: dateName }),
     pinRow,
+    liveGrouping,
+    patternsRow,
+    patternsResetRow,
     optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }),
     diagnostics,
     actionRow({
@@ -267,23 +328,30 @@ export function createSettingsPage(ctx) {
   rows.forEach((row) => row.refresh());
 
   // Stop buttons of the running operations come first, then the fixed rows; the list changes while the page is open.
-  // Up / Down visit one button per line (the right-most); the buttons at its left are reached with Left / Right.
+  // Up / Down visit one control per line (the right-most button, or the field with a button at its right);
+  // the controls at the left (`secondary: 'left'`) or at the right (`'right'`) of it are reached with Left / Right.
   const linesModel = (getRows) => ({
     getCount: () => getRows().length,
     navigate(dir, index) {
       const list = getRows();
       let from = index;
-      while (from > 0 && list[from].secondary) from -= 1; // a left button belongs to the line of its primary
+      while (from > 0 && list[from].secondary) from -= 1; // a side control belongs to the line of its main one
       const step = (d) => {
         for (let i = from + d; i >= 0 && i < list.length; i += d) if (!list[i].secondary) return { type: 'move', index: i };
         return { type: 'exit', dir };
       };
       if (dir === Dir.DOWN) return step(1);
-      if (dir === Dir.UP) {
-        return step(-1);
+      if (dir === Dir.UP) return step(-1);
+      const next = list[index + 1];
+      const here = list[index];
+      if (dir === Dir.LEFT) {
+        if (here.secondary === 'right') return { type: 'move', index: index - 1 };
+        return next && next.secondary === 'left' ? { type: 'move', index: index + 1 } : { type: 'exit', dir };
       }
-      if (dir === Dir.LEFT) return index + 1 < list.length && list[index + 1].secondary ? { type: 'move', index: index + 1 } : { type: 'exit', dir };
-      if (dir === Dir.RIGHT) return list[index].secondary ? { type: 'move', index: index - 1 } : { type: 'exit', dir };
+      if (dir === Dir.RIGHT) {
+        if (here.secondary === 'left') return { type: 'move', index: index - 1 };
+        return next && next.secondary === 'right' ? { type: 'move', index: index + 1 } : { type: 'exit', dir };
+      }
       return { type: 'exit', dir };
     },
   });
@@ -315,7 +383,7 @@ export function createSettingsPage(ctx) {
   };
 
   return {
-    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('nav.settings') }), opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'list' }, tmdbTokenRow.el), traktPanel.el, h('div', { class: 'list' }, traktIdRow.el, traktSecretRow.el), devicePanel.el, prefsTitle, h('div', { class: 'list' }, prefs.map((r) => r.el)))),
+    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('nav.settings') }), opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'list' }, tmdbTokenRow.el), traktPanel.el, h('div', { class: 'list' }, traktIdRow.el, traktSecretRow.el), devicePanel.el, prefsTitle, h('div', { class: 'list' }, prefs.filter((r) => !r.secondary).map((r) => r.el)))),
     mount() {
       opsPanel.mount();
       tmdbPanel.mount();

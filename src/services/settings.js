@@ -17,6 +17,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   suggestionSource: 'tmdb',
   timeFormat: 'auto',
   dateFormat: 'auto',
+  liveGrouping: true, // Live TV: versions of the same channel shown as one
+  liveGroupPatterns: '', // words removed from channel names to compare them; empty = the defaults
   excluded: {},
 });
 
@@ -32,6 +34,8 @@ function sanitize(raw) {
     suggestionSource: pick(raw.suggestionSource, SUGGESTION_SOURCE_OPTIONS, DEFAULT_SETTINGS.suggestionSource),
     timeFormat: pick(raw.timeFormat, TIME_FORMATS, DEFAULT_SETTINGS.timeFormat),
     dateFormat: pick(raw.dateFormat, DATE_FORMATS, DEFAULT_SETTINGS.dateFormat),
+    liveGrouping: typeof raw.liveGrouping === 'boolean' ? raw.liveGrouping : DEFAULT_SETTINGS.liveGrouping,
+    liveGroupPatterns: typeof raw.liveGroupPatterns === 'string' ? raw.liveGroupPatterns.slice(0, 600) : '',
     excluded: raw.excluded && typeof raw.excluded === 'object' ? raw.excluded : {},
   };
 }

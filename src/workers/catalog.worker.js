@@ -20,6 +20,7 @@ self.onmessage = function (event) {
         types: message.types,
         excluded: toSets(message.excluded),
         cleanTitles: message.cleanTitles !== false,
+        grouping: message.grouping || undefined,
         force: message.force,
         signal: controller.signal,
         emit: (payload) => self.postMessage(payload),

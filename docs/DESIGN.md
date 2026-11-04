@@ -99,3 +99,5 @@ Il cuore dei preferiti sta nella testata sticky della griglia (titolo · pagina 
 
 ## Notice, orologio, fissati e parental control (2026-11-04)
 Le notice usano un solo servizio (`ctx.notices`): a destra, al centro, senza focus (si chiudono da sole, le permanenti con un clic); in riproduzione solo quelle `scope: 'playback'`. L'orologio è nella topbar (non focalizzabile), formati in `settings`. I fissati sono `pins` (kv) e compaiono nella sidebar tra Suggerimenti e Generi. Il PIN parental è salvato con hash salato; un titolo è adulto se una sua categoria ha un nome adulti, e la scheda si apre solo da `ctx.openEntry`, che chiede il PIN.
+
+Canali Live raggruppati: `src/services/liveGrouping.js` (puro) decide i gruppi durante il sync/rebuild; i gruppi sono nello store `groups`, le righe di "Mostra tutto" (`@all`) in `entry_cat`. `getEntry` e `pageEntries` leggono da `groups` per le chiavi `live:g…`. I collegamenti manuali sono nel kv `liveLinks:<provider>`.

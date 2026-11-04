@@ -92,6 +92,80 @@ export function createDialogService({ focus, root = document.body }) {
   }
 
   /**
+   * Search box + results list. `run(query)` returns [{ key, name, group, count }] (groups are highlighted). OK on the field opens the
+   * keyboard, Done moves to the results. Resolves with the chosen result, or null when dismissed.
+   */
+  function search({ title, placeholder = '', run, emptyLabel = '' }) {
+    if (current) return current.promise;
+    const previous = snapshot();
+    let results = [];
+    let timer = null;
+    let token = 0;
+    const input = h('input', { class: 'value-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder });
+    const field = h('div', { class: 'choice search-field' }, icon('search'), input);
+    const list = h('div', { class: 'choice-list' });
+    const status = h('p', { class: 'muted search-status' });
+    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog search-dialog' }, h('h2', { text: title }), field, status, list));
+    root.appendChild(overlay);
+    let nodes = [];
+    const rowsAt = (i) => (i === 0 ? field : nodes[i - 1]);
+
+    function paint() {
+      while (list.firstChild) list.removeChild(list.firstChild);
+      nodes = results.map((r) => h('div', { class: `choice${r.group ? ' merge-group' : ''}` }, r.group ? icon('all') : null, h('span', { text: r.group ? `${r.name} (${r.count})` : r.name })));
+      nodes.forEach((n) => list.appendChild(n));
+      status.textContent = !results.length && input.value.trim().length >= 2 ? emptyLabel : '';
+    }
+
+    async function query() {
+      const mine = (token += 1);
+      const text = input.value.trim();
+      const found = text.length < 2 ? [] : await run(text).catch(() => []);
+      if (mine !== token || !current || current.overlay !== overlay) return;
+      results = found;
+      paint();
+    }
+
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation(); // the text field owns its keys
+      if (event.keyCode === 13 || event.keyCode === 65376) {
+        event.preventDefault();
+        input.blur();
+        clearTimeout(timer);
+        query().then(() => focus.focus(DIALOG_ZONE, results.length ? 1 : 0));
+      } else if (event.keyCode === 65385) input.blur();
+    });
+    input.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(query, 300);
+    });
+
+    const zone = new FocusZone({
+      id: DIALOG_ZONE,
+      model: new ListModel({ orientation: 'vertical', getCount: () => 1 + results.length }),
+      onFocus: (i) => {
+        const node = rowsAt(i);
+        if (!node) return;
+        node.classList.add('focused');
+        node.scrollIntoView({ block: 'nearest' });
+      },
+      onBlur: (i) => rowsAt(i) && rowsAt(i).classList.remove('focused'),
+      onActivate: (i) => {
+        if (i === 0) input.focus();
+        else close(results[i - 1]);
+      },
+    });
+    focus.register(zone);
+    const promise = new Promise((resolve) => {
+      current = { overlay, previous, resolve, promise: null, cancelValue: null, cleanup: () => clearTimeout(timer) };
+    });
+    current.promise = promise;
+    focus.focus(DIALOG_ZONE, 0);
+    input.focus();
+    return promise;
+  }
+
+  /**
    * PIN pad: digits from the remote's number keys or from the on-screen keypad (3 columns: 1-9, delete, 0, cancel).
    * `validate(pin)` may return an error text (shown, the digits are cleared) or '' to accept. Resolves with the PIN, or null when cancelled.
    */
@@ -168,6 +242,7 @@ export function createDialogService({ focus, root = document.body }) {
   return {
     confirm,
     choose,
+    search,
     pin,
     isOpen: () => current !== null,
     /** Back key: closes the dialog as "cancel". */

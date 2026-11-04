@@ -120,6 +120,7 @@ export function createProvidersPage(ctx, params = {}) {
         ctx.active.release(); // an open connection would block deleting the provider's database
         await ctx.providers.remove(provider.id);
         if (ctx.favorites) await ctx.favorites.removeProvider(provider.id);
+        if (ctx.liveGrouping) await ctx.liveGrouping.removeProvider(provider.id);
         if (ctx.pins) await ctx.pins.removeProvider(provider.id);
         if (wasActive) {
           const next = await ctx.providers.getActive();

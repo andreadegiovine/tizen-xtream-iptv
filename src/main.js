@@ -17,6 +17,7 @@ import { formatDate } from './core/format.js';
 import { createBackHandler } from './ui/backHandler.js';
 import { ProviderStore } from './services/providerStore.js';
 import { SettingsService } from './services/settings.js';
+import { createLiveGroupingService } from './services/liveGrouping.js';
 import { createComingSoonPage } from './ui/pages/simplePages.js';
 import { createHomePage } from './ui/pages/homePage.js';
 import { CatalogSyncService } from './services/catalogSyncService.js';
@@ -68,12 +69,14 @@ async function boot() {
   i18n.setLocale(prefs.language === 'auto' ? detectLocale(navigator.language) : prefs.language);
 
   const focus = new FocusManager();
-  const catalog = new CatalogSyncService({ providers, settings, createWorker: createCatalogWorker, getCleanTitles: () => Boolean(ctx.apiKeys && ctx.apiKeys.get().tmdbKey) });
+  const liveGrouping = createLiveGroupingService({ db, settings });
+  const catalog = new CatalogSyncService({ providers, settings, createWorker: createCatalogWorker, getCleanTitles: () => Boolean(ctx.apiKeys && ctx.apiKeys.get().tmdbKey), getGrouping: (providerId) => liveGrouping.config(providerId) });
   const active = createActiveProvider({ providers });
   const ctx = {
     db,
     settings,
     providers,
+    liveGrouping,
     catalog,
     focus,
     router: null,

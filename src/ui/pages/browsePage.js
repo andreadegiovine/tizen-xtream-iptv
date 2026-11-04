@@ -8,7 +8,7 @@ import { TOPBAR_ZONE } from '../components/topbar.js';
 import { isFilterEntry, filterCardMeta } from '../components/typedRows.js';
 import { favoriteFilterEntries, openFilter } from '../../services/favoriteFilters.js';
 import { ensureVisible } from '../scroll.js';
-import { listCategories, pageEntries, getEntry, countEntries } from '../../services/catalogQuery.js';
+import { listCategories, pageEntries, getEntry, countEntries, LIVE_ALL } from '../../services/catalogQuery.js';
 import { icon } from '../icons.js';
 import { formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
@@ -189,7 +189,7 @@ export function createBrowsePage(ctx, params = {}) {
       if (!destroyed) showCounts();
     };
     const safe = (job) => job().catch(() => undefined);
-    await safe(async () => set('all:', await countEntries(db, { type })));
+    await safe(async () => set('all:', await countEntries(db, { type, categoryId: allCategory() })));
     if (type === 'live') {
       await safe(async () => set('favorites:', (await ctx.favorites.list(providerId)).filter((f) => f.type === type).length));
       await Promise.all(categories.map((c) => safe(async () => set(`category:${c.id}`, await countEntries(db, { type, categoryId: c.id })))));
@@ -229,7 +229,7 @@ export function createBrowsePage(ctx, params = {}) {
   function renderGrid() {
     while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
     cards = entries.map((entry) => {
-      const card = createCard(entry, type, isFilterEntry(entry) ? filterCardMeta(entry) : undefined);
+      const card = createCard(entry, type, { ...(isFilterEntry(entry) ? filterCardMeta(entry) : {}), square: type === 'live' });
       gridEl.appendChild(card.el);
       return card;
     });
@@ -294,6 +294,10 @@ export function createBrowsePage(ctx, params = {}) {
 
   const byKeys = async (keys) => (await Promise.all(keys.map((key) => getEntry(db, key)))).filter(Boolean);
 
+  /** Live TV "show all" lists the grouped channels (and the ones in no group): a pseudo category of its own. */
+  const allCategory = () => (type === 'live' ? LIVE_ALL : null);
+  const viewCategory = (item) => (item.kind === 'category' ? item.id : item.kind === 'all' ? allCategory() : null);
+
   /** Entries of the views that are not a plain catalog walk. */
   async function loadList(item) {
     if (item.kind === 'continue') {
@@ -327,9 +331,9 @@ export function createBrowsePage(ctx, params = {}) {
     if (nextPage === 0 && LIST_KINDS.includes(item.kind)) list = await loadList(item).catch(() => []);
     else if (!LIST_KINDS.includes(item.kind)) list = null;
     if (list) result = { entries: list.slice(nextPage * pageSize, (nextPage + 1) * pageSize), hasMore: list.length > (nextPage + 1) * pageSize };
-    else result = await pageEntries(db, { type, categoryId: item.kind === 'category' ? item.id : null, offset: nextPage * pageSize, limit: pageSize });
+    else result = await pageEntries(db, { type, categoryId: viewCategory(item), offset: nextPage * pageSize, limit: pageSize });
     if (destroyed || token !== loadToken) return;
-    if (nextPage === 0) pages = Math.max(1, Math.ceil((list ? list.length : await countEntries(db, { type, categoryId: item.kind === 'category' ? item.id : null }).catch(() => 0)) / pageSize));
+    if (nextPage === 0) pages = Math.max(1, Math.ceil((list ? list.length : await countEntries(db, { type, categoryId: viewCategory(item) }).catch(() => 0)) / pageSize));
     if (destroyed || token !== loadToken) return;
     page = nextPage;
     hasMore = result.hasMore;
@@ -389,7 +393,7 @@ export function createBrowsePage(ctx, params = {}) {
         return;
       }
       const item = items[selected];
-      ctx.openEntry(entries[i], { section: params.section, live: { categoryId: item && item.kind === 'category' ? item.id : null, offset: page * pageSize + i } });
+      ctx.openEntry(entries[i], { section: params.section, live: { categoryId: item && item.kind === 'all' ? allCategory() : item && item.kind === 'category' ? item.id : null, offset: page * pageSize + i } });
     },
   });
 

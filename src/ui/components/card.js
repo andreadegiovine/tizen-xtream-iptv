@@ -32,6 +32,7 @@ export const formatRating = (rating) => (Number(rating) > 0 ? Number(rating).toF
  * Grid / carousel card, the same size for every media type.
  *   poster (rating badge top-right, watched/partial badge top-left)
  *   one line of title, one smaller line with year / S / E (or the program on air for channels)
+ * `meta.square` makes the picture a square (the Live TV page only).
  * update(patch) accepts: title, year, seasons, episodes, tag, subtitle, rating, poster, status, progress.
  */
 export function createCard(entry, type, meta = {}) {
@@ -45,7 +46,7 @@ export function createCard(entry, type, meta = {}) {
   if (locked) poster.appendChild(h('div', { class: 'card-placeholder locked' }, icon('lock')));
   else if (meta.placeholder) poster.appendChild(h('div', { class: 'card-placeholder' }, icon(meta.placeholder)));
   poster.append(ratingBadge, statusBadge);
-  const el = h('div', { class: `card ${type}` }, poster, title, sub, bar);
+  const el = h('div', { class: `card ${type}${meta.square ? ' square' : ''}` }, poster, title, sub, bar); // `square`: the logo box of Live TV channels
   const state = { year: entry.year, seasons: null, episodes: null, tag: '', subtitle: '', count: null, countLoading: false };
   let img = null;
 
@@ -117,6 +118,7 @@ export function createCard(entry, type, meta = {}) {
 
   const fields = { ...meta };
   delete fields.placeholder;
+  delete fields.square;
   update({ title: entry.name, poster: entry.icon, rating: entry.rating, year: entry.year, ...fields });
   return { el, update };
 }

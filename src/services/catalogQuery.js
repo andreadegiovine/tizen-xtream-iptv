@@ -1,4 +1,11 @@
 import { requestToPromise } from '../core/idb.js';
+import { isGroupKey, LIVE_ALL } from './liveGrouping.js';
+import { loadSearchRows, searchRows } from './searchIndex.js';
+
+export { LIVE_ALL };
+
+/** Grouped live channels are in their own store; every other entry is in `entries`. */
+const storeOf = (key) => (isGroupKey(key) ? 'groups' : 'entries');
 
 const MAX_ADDED = Number.MAX_SAFE_INTEGER;
 
@@ -49,9 +56,8 @@ export function pageEntries(db, { type, categoryId = null, offset = 0, limit = 2
           resolve({ entries: wanted, hasMore });
           return;
         }
-        const readTx = db.transaction('entries', 'readonly');
-        const store = readTx.objectStore('entries');
-        const entries = await Promise.all(wanted.map((row) => requestToPromise(store.get(row.entryKey))));
+        const readTx = db.transaction(['entries', 'groups'], 'readonly');
+        const entries = await Promise.all(wanted.map((row) => requestToPromise(readTx.objectStore(storeOf(row.entryKey)).get(row.entryKey))));
         resolve({ entries: entries.filter(Boolean), hasMore });
       } catch (err) {
         reject(err);
@@ -62,7 +68,33 @@ export function pageEntries(db, { type, categoryId = null, offset = 0, limit = 2
 
 /** One grid entry by key (`movie:t603`, `series:i12`...). */
 export async function getEntry(db, key) {
-  return requestToPromise(db.transaction('entries', 'readonly').objectStore('entries').get(key));
+  const store = storeOf(key);
+  return requestToPromise(db.transaction(store, 'readonly').objectStore(store).get(key));
+}
+
+/**
+ * Channels to merge with: the groups first (flagged `group`), then the channels that are in none.
+ * `skipId` is the channel being merged. Returns [{ key, name, icon, group, memberId, count }].
+ */
+export function createMergeSearch(db, skipId) {
+  let cache = null;
+  const load = () => {
+    if (!cache) {
+      cache = (async () => {
+        const rows = await loadSearchRows(db, ['live']);
+        const groups = await requestToPromise(db.transaction('groups', 'readonly').objectStore('groups').getAll());
+        const groupRows = groups.map((g) => ({ key: g.key, type: 'live', name: g.name, icon: g.icon, defaultId: g.defaultId, members: g.members, keys: g.searchKeys, added: g.added, group: true }));
+        return { rows: rows.filter((r) => !r.groupKey && r.defaultId !== skipId), groupRows };
+      })();
+    }
+    return cache;
+  };
+  return async (query, limit = 30) => {
+    const { rows, groupRows } = await load();
+    const groups = searchRows(groupRows, query, { limit });
+    const singles = searchRows(rows, query, { limit });
+    return groups.concat(singles).slice(0, limit).map((row) => ({ key: row.key, name: row.name, icon: row.icon, group: Boolean(row.group), memberId: row.defaultId, count: row.group ? row.members.length : 1 }));
+  };
 }
 
 const GENRE_STORES = ['entry_genre', 'entry_genre_tmdb'];
