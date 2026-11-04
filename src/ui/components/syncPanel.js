@@ -256,7 +256,7 @@ export function createDevicePanel() {
 }
 
 /**
- * "Operations in progress" table: what runs in the background now, since when, and a stop button for each.
+ * "Operations in progress" table (hidden when nothing runs): what runs in the background now, since when, and a stop button for each.
  * `rows` are the focusable entries (the stop buttons); `onChange` is called when the list changes.
  */
 export function createOperationsPanel(ctx) {
@@ -268,7 +268,7 @@ export function createOperationsPanel(ctx) {
   function render() {
     while (body.firstChild) body.removeChild(body.firstChild);
     const list = ctx.operations.list();
-    if (!list.length) body.appendChild(h('div', { class: 'sync-row' }, h('span', { class: 'sync-status', text: t('operations.none') })));
+    el.style.display = list.length ? '' : 'none'; // nothing runs: the table is not shown
     api.rows = list.map((op) => {
       const stop = h('button', { class: 'btn danger icon-only op-stop', type: 'button', 'aria-label': t('operations.stop'), title: t('operations.stop') }, icon('stop'));
       body.appendChild(

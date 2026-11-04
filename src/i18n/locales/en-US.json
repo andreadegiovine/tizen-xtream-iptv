@@ -173,7 +173,6 @@
   "home.suggested.movie": "Suggested movies",
   "home.suggested.series": "Suggested TV series",
   "operations.title": "Operations in progress",
-  "operations.none": "No operation in progress",
   "operations.stop": "Stop",
   "operations.since": "Since {time}",
   "operations.catalog": "Catalog update",
