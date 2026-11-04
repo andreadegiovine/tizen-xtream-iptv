@@ -409,6 +409,8 @@ export function createBrowsePage(ctx, params = {}) {
     },
   });
 
+  let restored = null; // state saved when the page was left (set right after mount, read by init)
+
   async function init() {
     const current = await ctx.active.get();
     if (!current || destroyed) return;
@@ -418,7 +420,14 @@ export function createBrowsePage(ctx, params = {}) {
     const excluded = await ctx.settings.getExcluded(providerId, type);
     pinned = await ctx.pins.list(providerId, type).catch(() => []);
     categories = (await listCategories(db, type)).filter((c) => !excluded.has(String(c.id))).map((c) => ({ id: c.id, name: c.name }));
-    const filter = params.filter || null;
+    // Coming back from a title: the same sidebar entry, page and focus as when the page was left.
+    const back = restored;
+    if (back) {
+      expanded = back.expanded;
+      networksExpanded = back.networksExpanded;
+      genresExpanded = back.genresExpanded;
+    }
+    const filter = back ? back.item : params.filter || null;
     const wantsGenre = filter && filter.kind === 'genre';
     const loadGenres = async () => {
       if (type === 'live') return;
@@ -438,9 +447,11 @@ export function createBrowsePage(ctx, params = {}) {
     renderCategories();
     syncFavorite();
     await loadPage(0);
+    if (!destroyed && back && back.page > 0) await loadPage(back.page);
     if (destroyed) return;
     // Land in the grid when there is something to browse, otherwise leave the focus on the top bar.
-    if (entries.length) ctx.focus.focus(GRID_ZONE, 0);
+    if (back && back.zone === CATS_ZONE) ctx.focus.focus(CATS_ZONE, selected);
+    else if (entries.length) ctx.focus.focus(GRID_ZONE, back && back.zone === GRID_ZONE ? Math.min(back.index, entries.length - 1) : 0);
     if (!wantsGenre && type !== 'live') {
       await loadGenres();
       genresLoading = false;
@@ -475,6 +486,23 @@ export function createBrowsePage(ctx, params = {}) {
       ctx.focus.unregister(HEAD_ZONE);
       ctx.focus.unregister(CATS_ZONE);
       ctx.focus.unregister(GRID_ZONE);
+    },
+    /** What is needed to come back to the same place: the sidebar entry, the page and where the focus was. */
+    saveState() {
+      const item = items[selected];
+      const zone = ctx.focus.activeId;
+      return {
+        item: item ? { kind: item.kind, id: item.id } : null,
+        expanded,
+        networksExpanded,
+        genresExpanded,
+        page,
+        zone,
+        index: ctx.focus.active && ctx.focus.activeId === zone ? ctx.focus.active.index : 0,
+      };
+    },
+    restoreState(state) {
+      restored = state;
     },
   };
 }

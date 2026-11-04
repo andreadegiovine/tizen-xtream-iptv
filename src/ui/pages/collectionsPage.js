@@ -203,6 +203,8 @@ export function createCollectionsPage(ctx, params = {}) {
     onActivate: (i) => shown[i] && ctx.router.push('collection', { id: shown[i].id, section: 'collections' }),
   });
 
+  let restored = null; // state saved when the page was left (set right after mount)
+
   async function init() {
     const current = await ctx.active.get();
     if (!current || destroyed) return;
@@ -216,13 +218,17 @@ export function createCollectionsPage(ctx, params = {}) {
     const known = new Set(genres.map((g) => g.key));
     pinned = (await ctx.pins.list(providerId, 'collection').catch(() => [])).filter((p) => known.has(String(p.id)));
     if (destroyed) return;
+    // Coming back from a collection: the same sidebar entry and focus as when the page was left.
+    const back = restored;
+    if (back) genresExpanded = back.genresExpanded;
     items = collectionSidebarItems({ genres, pinned, genresExpanded, labels: labels() });
-    const wanted = params.filter ? items.findIndex((item) => item.kind === 'genre' && item.id === String(params.filter.id)) : 0;
+    const wanted = back && back.item ? items.findIndex((item) => item.kind === back.item.kind && String(item.id) === String(back.item.id)) : params.filter ? items.findIndex((item) => item.kind === 'genre' && item.id === String(params.filter.id)) : 0;
     selected = Math.max(0, wanted);
     renderCategories();
     syncPin();
     showView();
-    if (shown.length) ctx.focus.focus(GRID_ZONE, 0);
+    if (back && back.zone === CATS_ZONE) ctx.focus.focus(CATS_ZONE, selected);
+    else if (shown.length) ctx.focus.focus(GRID_ZONE, back && back.zone === GRID_ZONE ? Math.min(back.index, shown.length - 1) : 0);
   }
 
   return {
@@ -246,6 +252,14 @@ export function createCollectionsPage(ctx, params = {}) {
       ctx.focus.unregister(HEAD_ZONE);
       ctx.focus.unregister(CATS_ZONE);
       ctx.focus.unregister(GRID_ZONE);
+    },
+    saveState() {
+      const item = items[selected];
+      const zone = ctx.focus.activeId;
+      return { item: item ? { kind: item.kind, id: item.id } : null, genresExpanded, zone, index: ctx.focus.active && ctx.focus.activeId === zone ? ctx.focus.active.index : 0 };
+    },
+    restoreState(state) {
+      restored = state;
     },
   };
 }

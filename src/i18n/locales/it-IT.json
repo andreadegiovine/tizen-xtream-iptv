@@ -246,5 +246,7 @@
   "networks.searchPlaceholder": "Cerca una rete...",
   "networks.channels_one": "{count} canale",
   "networks.channels_other": "{count} canali",
-  "networks.empty": "Nessun canale in questa rete."
+  "networks.empty": "Nessun canale in questa rete.",
+  "networks.units_one": "{count} canale/gruppo",
+  "networks.units_other": "{count} canali/gruppi"
 }

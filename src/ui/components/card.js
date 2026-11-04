@@ -1,7 +1,7 @@
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
 import { lazySrc } from '../lazyImage.js';
-import { i18n } from '../../i18n/index.js';
+import { i18n, t } from '../../i18n/index.js';
 import { formatNumber } from '../../core/format.js';
 
 let isAdultEntry = () => false;
@@ -125,6 +125,8 @@ export function createCard(entry, type, meta = {}) {
   const fields = { ...meta };
   delete fields.placeholder;
   delete fields.square;
-  update({ title: entry.name, poster: entry.icon, rating: entry.rating, year: entry.year, ...fields });
+  // A network says how many channels and groups it holds.
+  const units = entry.isNetwork ? (entry.memberKeys || []).length : 0;
+  update({ title: entry.name, poster: entry.icon, rating: entry.rating, year: entry.year, ...(units ? { subtitle: t('networks.units', { count: units }) } : {}), ...fields });
   return { el, update };
 }
