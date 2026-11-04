@@ -20,6 +20,52 @@ export const BATCH_SIZE = 2000;
 // Progressive order: whatever finishes first becomes usable first.
 export const SYNC_ORDER = [MediaType.MOVIE, MediaType.SERIES, MediaType.LIVE];
 
+/** Pauses (ms) before the two new attempts at a download that failed or came back empty: each one longer. Tests set it to zero. */
+export const retryPolicy = { delays: [3000, 8000] };
+const RETRYABLE = new Set([ErrorCode.HTTP, ErrorCode.NETWORK, ErrorCode.TIMEOUT, ErrorCode.BAD_RESPONSE]);
+
+/** Waits `ms`, ending early (with the abort error) when the sync is cancelled. */
+function pause(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) return reject(new AppError(ErrorCode.ABORTED, 'Aborted'));
+    const timer = setTimeout(() => {
+      if (signal) signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    function onAbort() {
+      clearTimeout(timer);
+      reject(new AppError(ErrorCode.ABORTED, 'Aborted'));
+    }
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+    return undefined;
+  });
+}
+
+/**
+ * Runs `load()` and tries again, after a longer pause each time (`delays`), when the provider fails (network, timeout, HTTP error,
+ * unreadable answer) or answers with nothing. After the last attempt the failure is thrown, or the empty answer is returned.
+ */
+async function loadWithRetries(load, { delays = retryPolicy.delays, signal, gate = () => Promise.resolve(), onRetry = () => {} } = {}) {
+  for (let attempt = 0; ; attempt += 1) {
+    let failure = null;
+    let result = null;
+    try {
+      result = await load();
+    } catch (err) {
+      if (!RETRYABLE.has(toAppError(err).code)) throw err;
+      failure = err;
+    }
+    if (!failure && result.length > 0) return result;
+    if (attempt >= delays.length) {
+      if (failure) throw failure;
+      return result;
+    }
+    onRetry(attempt + 1, delays.length);
+    await pause(delays[attempt], signal);
+    await gate();
+  }
+}
+
 const metaKey = (type) => `sync:${type}`;
 /** Meta row with how the Live networks were found (read by the Diagnostics page). */
 export const NETWORK_REPORT_KEY = 'networkReport';
@@ -146,19 +192,21 @@ export async function syncType({
   emit = () => {},
   gate = () => Promise.resolve(),
   now = Date.now,
+  retryDelays = retryPolicy.delays,
 }) {
   const progress = (phase, extra = {}) => emit({ event: 'progress', mediaType: type, phase, ...extra });
   const started = now();
 
   throwIfAborted(signal);
   progress('categories');
-  const categories = categoryRows(type, await client.getCategories(type, { signal }));
+  const retry = { delays: retryDelays, signal, gate, onRetry: (attempt, attempts) => progress('retry', { attempt, attempts }) };
+  const categories = categoryRows(type, await loadWithRetries(() => client.getCategories(type, { signal }), retry));
 
   await gate();
   throwIfAborted(signal);
   progress('download');
   const downloadStart = now();
-  const raw = await client.getStreams(type, { signal });
+  const raw = await loadWithRetries(() => client.getStreams(type, { signal }), retry);
   const fetchMs = now() - downloadStart;
 
   const byKey = new Map();
@@ -222,7 +270,7 @@ export async function syncType({
 }
 
 /** Syncs several media types in order. A failing type does not stop the others, except auth/abort errors. */
-export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, cleanTitles = true, grouping = DEFAULT_GROUPING, force = false, signal, emit = () => {}, gate, now = Date.now }) {
+export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, cleanTitles = true, grouping = DEFAULT_GROUPING, force = false, signal, emit = () => {}, gate, now = Date.now, retryDelays }) {
   const results = [];
   for (const type of types) {
     try {
@@ -234,7 +282,7 @@ export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, c
         results.push({ type, skipped: true });
         continue;
       }
-      const meta = await syncType({ db, client, type, excludedCategories: excluded[type] || new Set(), cleanTitles, grouping, signal, emit, gate, now });
+      const meta = await syncType({ db, client, type, excludedCategories: excluded[type] || new Set(), cleanTitles, grouping, signal, emit, gate, now, retryDelays });
       results.push({ type, meta });
     } catch (err) {
       const error = toAppError(err);

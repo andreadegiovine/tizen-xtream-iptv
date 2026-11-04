@@ -59,6 +59,7 @@
   "home.phase.categories": "Scarico le categorie…",
   "home.phase.download": "Scarico la lista…",
   "home.phase.write": "Salvo {done} / {total}",
+  "home.phase.retry": "Il provider non risponde: nuovo tentativo {attempt}/{attempts}…",
   "home.phase.entries": "Costruisco il catalogo…",
   "home.engine": "Motore",
   "home.engine.worker": "worker in background",

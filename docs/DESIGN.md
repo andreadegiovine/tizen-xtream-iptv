@@ -109,6 +109,10 @@ Canali Live raggruppati: `src/services/liveGrouping.js` (puro) decide i gruppi d
 - Preferiti: record `favorites` con chiave `collection:<id>` e tipo `collection` (non compaiono nelle pagine per tipo). Generi fissati: `pins` con tipo `collection`.
 - Pagina "Collezioni" (sidebar + griglia) e scheda `collection` (conteggio, generi, Preferiti/Modifica/Elimina, carosello). L'aggiunta parte dalla scheda di un titolo con `dialogs.search` (lo stesso box dell'unione dei canali, con `createLabel` per la riga "crea"); la modifica usa `dialogs.editCollection`.
 
+## Download del catalogo: nuovi tentativi
+
+- Categorie e liste (`syncType`) passano da `loadWithRetries`: se il provider dà un errore (rete, timeout, HTTP, risposta illeggibile) o una lista vuota, si riprova 2 volte con pause crescenti (`retryPolicy.delays`, 3 s e 8 s), mostrando "nuovo tentativo n/2" nella fase `retry`. Dopo l'ultimo tentativo l'errore viene lanciato, la lista vuota accettata se non c'è un catalogo salvato (se c'è, resta il rifiuto "lista vuota": non si cancella nulla). Gli errori non ripetibili (autenticazione, annullamento) non si ritentano; annullare la sync interrompe anche la pausa. Si somma al tentativo unico di `fetchJson` per timeout/5xx.
+
 ## Reti Live TV
 
 - Una rete raccoglie i canali e i gruppi che iniziano con la stessa parola (≥ 2 elementi; `networkToken` scarta parole generiche, numeri e parole corte). È calcolata nella stessa sync/rebuild dei gruppi (`buildNetworks` dopo `groupLiveItems`) e salvata nello store `groups` con chiave `live:n<id>` (`isCompositeKey` vale per gruppi e reti); in "Mostra tutto" è elencata per prima (poi i gruppi senza rete, poi i canali senza gruppo né rete; i membri di una rete non si ripetono).

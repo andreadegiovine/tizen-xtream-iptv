@@ -59,6 +59,7 @@
   "home.phase.categories": "Downloading categories…",
   "home.phase.download": "Downloading the list…",
   "home.phase.write": "Saving {done} / {total}",
+  "home.phase.retry": "The provider did not answer: attempt {attempt}/{attempts}…",
   "home.phase.entries": "Building the catalog…",
   "home.engine": "Engine",
   "home.engine.worker": "background worker",

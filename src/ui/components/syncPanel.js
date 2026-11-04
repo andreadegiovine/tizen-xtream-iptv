@@ -7,7 +7,7 @@ import { collectDeviceInfo, formatBytes } from '../../services/deviceInfo.js';
 
 const TYPES = [MediaType.MOVIE, MediaType.SERIES, MediaType.LIVE];
 const LABEL_KEY = { movie: 'nav.movies', series: 'nav.series', live: 'nav.live' };
-const ACTIVE_PHASES = new Set(['queued', 'categories', 'download', 'write', 'entries']);
+const ACTIVE_PHASES = new Set(['queued', 'categories', 'download', 'write', 'entries', 'retry']);
 
 /** Text for one media type: live progress while syncing, otherwise what the last sync stored. */
 export function describeType(state, meta, locale) {
@@ -17,6 +17,7 @@ export function describeType(state, meta, locale) {
     return t('home.phase.write', { done: formatNumber(state.done, locale), total: formatNumber(state.total, locale) });
   }
   if (phase === 'queued') return t('common.queued');
+  if (phase === 'retry') return t('home.phase.retry', { attempt: state.attempt, attempts: state.attempts });
   if (ACTIVE_PHASES.has(phase)) return t(`home.phase.${phase}`);
   if (!meta) return t('common.never');
   if ((meta.groupCount > 0 && meta.groupedCount !== undefined) || meta.networkCount > 0) {

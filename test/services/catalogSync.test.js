@@ -77,6 +77,64 @@ describe('syncType', () => {
     db.close();
   });
 
+  test('a failed or empty download is tried again twice, after pauses that grow, before it is accepted', async () => {
+    const { AppError } = await import('../../src/core/errors.js');
+    const { retryPolicy } = await import('../../src/services/catalogSync.js');
+    expect(retryPolicy.delays).toHaveLength(2); // the real ones are two, each longer than the one before (the tests run them at zero)
+    // a provider error, then an empty list, then the data
+    const db = await newDb();
+    const lists = { movie: [movie(1, 'A')] };
+    const client = makeClient(lists);
+    client.getStreams
+      .mockRejectedValueOnce(new AppError(ErrorCode.HTTP, 'bad gateway', { details: { status: 502 } }))
+      .mockResolvedValueOnce([]);
+    const events = [];
+    const meta = await syncType({ db, client, type: 'movie', retryDelays: [0, 0], emit: (e) => events.push(e) });
+    expect(client.getStreams).toHaveBeenCalledTimes(3);
+    expect(meta).toMatchObject({ itemCount: 1 });
+    expect(events.filter((e) => e.phase === 'retry').map((e) => [e.attempt, e.attempts])).toEqual([[1, 2], [2, 2]]);
+    db.close();
+
+    // categories are retried too
+    const db2 = await newDb();
+    const client2 = makeClient({ movie: [movie(1, 'A')] });
+    client2.getCategories.mockResolvedValueOnce([]);
+    await syncType({ db: db2, client: client2, type: 'movie', retryDelays: [0, 0] });
+    expect(client2.getCategories).toHaveBeenCalledTimes(2);
+    db2.close();
+  });
+
+  test('after the last attempt an error is thrown, an empty list is accepted when nothing is stored, and other errors are not tried again', async () => {
+    const { AppError } = await import('../../src/core/errors.js');
+    const db = await newDb();
+    const failing = makeClient({});
+    failing.getStreams.mockRejectedValue(new AppError(ErrorCode.NETWORK, 'down'));
+    await expect(syncType({ db, client: failing, type: 'movie', retryDelays: [0, 0] })).rejects.toMatchObject({ code: ErrorCode.NETWORK });
+    expect(failing.getStreams).toHaveBeenCalledTimes(3);
+
+    const empty = makeClient({});
+    const meta = await syncType({ db, client: empty, type: 'movie', retryDelays: [0, 0] });
+    expect(empty.getStreams).toHaveBeenCalledTimes(3);
+    expect(meta.itemCount).toBe(0);
+
+    const denied = makeClient({});
+    denied.getStreams.mockRejectedValue(new AppError(ErrorCode.AUTH_FAILED, 'no'));
+    await expect(syncType({ db, client: denied, type: 'movie', retryDelays: [0, 0] })).rejects.toMatchObject({ code: ErrorCode.AUTH_FAILED });
+    expect(denied.getStreams).toHaveBeenCalledTimes(1);
+    db.close();
+  });
+
+  test('cancelling the sync ends the pause between attempts', async () => {
+    const db = await newDb();
+    const client = makeClient({});
+    const controller = new AbortController();
+    const pending = syncType({ db, client, type: 'movie', retryDelays: [60000, 60000], signal: controller.signal });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ code: ErrorCode.ABORTED });
+    db.close();
+  });
+
   test('an empty answer never wipes an existing catalog', async () => {
     const db = await newDb();
     const lists = { movie: [movie(1, 'A')] };

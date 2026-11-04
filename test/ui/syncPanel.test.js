@@ -5,6 +5,7 @@ describe('home sync text', () => {
   test('live progress wins over stored data', () => {
     expect(describeType({ phase: 'write', done: 2000, total: 12000 }, { itemCount: 1 }, 'en-US')).toBe('Saving 2,000 / 12,000');
     expect(describeType({ phase: 'download' }, null, 'en-US')).toBe('Downloading the list…');
+    expect(describeType({ phase: 'retry', attempt: 1, attempts: 2 }, null, 'en-US')).toBe('The provider did not answer: attempt 1/2…');
   });
 
   test('idle shows the last sync or "never run"', () => {
