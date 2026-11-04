@@ -1,4 +1,4 @@
-import { buildNetworks, annotateNetworkKeys, networkToken, networkCounts } from '../../src/services/liveNetworks.js';
+import { buildNetworks, annotateNetworkKeys, networkToken, networkCounts, formatNetworkReport } from '../../src/services/liveNetworks.js';
 import { buildChannelGroups, annotateGroupKeys, createLiveGroupingService } from '../../src/services/liveGrouping.js';
 import { buildEntries } from '../../src/services/grouping.js';
 import { openProviderDb } from '../../src/db/providerDb.js';
@@ -145,4 +145,30 @@ test('a term made of symbols ("==", "[DVS]") is removed wherever it is, words st
   expect(channelBase('==SKY CINEMA==', regex).display).toBe('SKY CINEMA');
   expect(channelBase('[DVS]A LIGA', regex).display).toBe('A LIGA');
   expect(channelBase('Chd Hd', regex).display).toBe('Chd'); // "hd" inside a word stays
+});
+
+test('a word shared by unrelated shows is not a network, its longer common name can be', () => {
+  const items = [ch(1, 'Alessandro Borghese 4 ristoranti'), ch(2, 'Alessandro Borghese Celebrity Chef Channel 1'), ch(3, 'Alessandro Borghese Celebrity Chef Channel 2'), ch(4, 'Alessandro Siani Channel')];
+  const { networks } = build(items);
+  expect(networks.map((n) => n.name)).toEqual(['Alessandro Borghese']);
+  expect(networks[0].memberKeys).toEqual(['live:i1', 'live:i2', 'live:i3']);
+});
+
+test('the network takes the whole common name and the most common written form', () => {
+  const items = [ch(1, 'AMAZON PRIME 1'), ch(2, 'Amazon Prime 2'), ch(3, 'Amazon Prime Movies')];
+  const { networks } = build(items);
+  expect(networks.map((n) => [n.name, n.networkId])).toEqual([['Amazon Prime', 'amazon-prime']]);
+  expect(build([ch(1, 'Sky Uno'), ch(2, 'Sky Cinema'), ch(3, 'Sky Sport 24')]).networks.map((n) => n.name)).toEqual(['Sky']);
+  expect(build([ch(1, 'Sky Uno'), ch(2, 'Sky Cinema')]).networks).toEqual([]); // two different shows: no proof
+});
+
+test('the report says what was grouped and what was left out', () => {
+  const report = {};
+  const items = [...channels, ch(8, 'Zeta Uno'), ch(9, 'Zeta Due')];
+  buildNetworks(buildEntries('live', items.map((i) => ({ ...i, tmdbId: null, ext: '', genre: '' }))), [], { report });
+  expect(report.networks[0]).toMatchObject({ name: 'Rai', proof: 'numbered', units: 4 });
+  expect(report.rejected.map((r) => r.name)).toContain('zeta');
+  const text = formatNetworkReport(report, (key) => key);
+  expect(text).toContain('+ Rai');
+  expect(text).toContain('- zeta');
 });

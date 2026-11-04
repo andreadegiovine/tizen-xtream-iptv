@@ -6,6 +6,9 @@ import { runDiagnostics } from '../../services/diagnostics.js';
 import { createAvPlaySpike } from '../../services/avplaySpike.js';
 import { log } from '../../core/logger.js';
 import { ensureVisible } from '../scroll.js';
+import { dbGet } from '../../core/idb.js';
+import { NETWORK_REPORT_KEY } from '../../services/catalogSync.js';
+import { formatNetworkReport } from '../../services/liveNetworks.js';
 
 const ZONE_ID = 'diagnostics';
 const IME_DONE = 65376;
@@ -25,8 +28,12 @@ export function createDiagnosticsPage(ctx) {
   const subtitleOverlay = h('div', { class: 'diag-subtitle' });
   const modeButtons = ['events', 'native', 'before', 'late', 'off'].map((mode) => ({ mode, el: h('button', { class: 'btn', type: 'button', text: t(`diag.sub.${mode}`) }) }));
   const trackButton = h('button', { class: 'btn', type: 'button', text: t('diag.sub.track', { n: '…' }) });
-  const focusables = [runButton, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el), logBox];
+  // How the Live networks were found (saved by the last Live sync): what was grouped, why, and what was left out.
+  const reportButton = h('button', { class: 'btn', type: 'button', text: t('diag.networks') });
+  const reportBox = h('pre', { class: 'diag-log' });
+  const focusables = [runButton, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el), reportButton, logBox];
   const FIRST_MODE = 5;
+  const REPORT = FIRST_MODE + modeButtons.length;
 
   function renderLog() {
     logBox.textContent = log
@@ -47,6 +54,13 @@ export function createDiagnosticsPage(ctx) {
     );
   }
 
+  async function showReport() {
+    reportBox.textContent = '…';
+    const active = await ctx.active.get();
+    const row = active ? await dbGet(active.db, 'meta', NETWORK_REPORT_KEY) : null;
+    reportBox.textContent = row && row.report ? formatNetworkReport(row.report, (key, vars) => t(key, vars)) : t('diag.networks.none');
+  }
+
   const zone = new FocusZone({
     id: ZONE_ID,
     model: new ListModel({ orientation: 'vertical', getCount: () => focusables.length }),
@@ -58,6 +72,7 @@ export function createDiagnosticsPage(ctx) {
     onActivate: async (i) => {
       if (i === 0) run();
       else if (i === 1) urlInput.focus();
+      else if (i === REPORT) showReport();
       else if (i === 4) {
         const tracks = spike.textTracks();
         labTrack = tracks.length ? (labTrack + 1) % tracks.length : 0;
@@ -93,7 +108,7 @@ export function createDiagnosticsPage(ctx) {
         'div',
         { class: 'page-container' },
         h('h1', { text: t('settings.diagnostics') }),
-        h('div', { class: 'form' }, runButton, results, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el)),
+        h('div', { class: 'form' }, runButton, results, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el), reportButton, reportBox),
         h('h2', { class: 'prefs-title', text: t('diag.logs') }),
         logBox,
       ),

@@ -21,6 +21,8 @@ export const BATCH_SIZE = 2000;
 export const SYNC_ORDER = [MediaType.MOVIE, MediaType.SERIES, MediaType.LIVE];
 
 const metaKey = (type) => `sync:${type}`;
+/** Meta row with how the Live networks were found (read by the Diagnostics page). */
+export const NETWORK_REPORT_KEY = 'networkReport';
 
 export function shouldSync(meta, now = Date.now(), ttlMs = LIST_TTL_MS) {
   return !meta || !meta.lastSync || !meta.genres || now - meta.lastSync > ttlMs; // `genres`: lists synced before genres existed are refreshed once
@@ -39,9 +41,10 @@ function buildLiveComposites(entries, items, excludedCategories, grouping) {
   if (g.enabled || (g.networks && g.networks.enabled)) cleanChannelNames(entries, compileTerms(g.terms));
   const groups = groupLiveItems(items, { excludedCategories, grouping });
   annotateGroupKeys(entries, groups);
-  const networks = buildNetworks(entries, groups, g.networks || { enabled: false, links: [] }); // a config without `networks` leaves them off
+  const report = {};
+  const networks = buildNetworks(entries, groups, { ...(g.networks || { enabled: false, links: [] }), report }); // a config without `networks` leaves them off
   annotateNetworkKeys(entries, groups, networks);
-  return { groups, networks };
+  return { groups, networks, report };
 }
 
 /** Makes the next sync of a type download it again (a hidden category was shown again: its items were never kept). */
@@ -110,8 +113,9 @@ export async function rebuildEntries({ db, type, excludedCategories = new Set(),
     items = items.filter((item) => !excludedCategories.has(item.categoryId));
   }
   const entries = buildEntries(type, items, { excludedCategories, cleanTitles });
-  const { groups, networks } = type === MediaType.LIVE ? buildLiveComposites(entries, items, excludedCategories, grouping) : { groups: [], networks: [] };
+  const { groups, networks, report } = type === MediaType.LIVE ? buildLiveComposites(entries, items, excludedCategories, grouping) : { groups: [], networks: [], report: null };
   await writeEntries(db, type, entries, { groups, networks });
+  if (report) await dbPut(db, 'meta', { key: NETWORK_REPORT_KEY, type, report });
   const previous = (await getSyncMeta(db, type)) || { key: metaKey(type), type };
   await dbPut(db, 'meta', { ...previous, itemCount: items.length, entryCount: entries.length, ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, ...groupCounts(entries, groups, networks) } : {}) });
   emit({ event: 'progress', mediaType: type, phase: 'rebuilt', done: entries.length, total: entries.length });
@@ -187,9 +191,10 @@ export async function syncType({
   progress('entries');
   const entriesStart = now();
   const entries = buildEntries(type, items, { excludedCategories, cleanTitles });
-  const { groups, networks } = type === MediaType.LIVE ? buildLiveComposites(entries, items, excludedCategories, grouping) : { groups: [], networks: [] };
+  const { groups, networks, report } = type === MediaType.LIVE ? buildLiveComposites(entries, items, excludedCategories, grouping) : { groups: [], networks: [], report: null };
   const buildMs = now() - entriesStart;
   await writeEntries(db, type, entries, { groups, networks });
+  if (report) await dbPut(db, 'meta', { key: NETWORK_REPORT_KEY, type, report });
   const entriesMs = now() - entriesStart;
   await replaceRows(db, 'categories', type, categories);
   const writeMs = now() - writeStart;
