@@ -138,3 +138,11 @@ test('underscores in channel names become spaces', async () => {
   expect(entries.map((e) => e.name).sort()).toEqual(['Rai 1', 'Rai 2']);
   expect(networkToken('Rai_1')).toBe('rai');
 });
+
+test('a term made of symbols ("==", "[DVS]") is removed wherever it is, words still match whole', async () => {
+  const { channelBase, compileTerms } = await import('../../src/services/liveGrouping.js');
+  const regex = compileTerms(['==', '[DVS]', 'hd']);
+  expect(channelBase('==SKY CINEMA==', regex).display).toBe('SKY CINEMA');
+  expect(channelBase('[DVS]A LIGA', regex).display).toBe('A LIGA');
+  expect(channelBase('Chd Hd', regex).display).toBe('Chd'); // "hd" inside a word stays
+});

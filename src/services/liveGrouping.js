@@ -73,7 +73,7 @@ export function resolveTerms(text) {
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * One regular expression for the plain terms (longest first, whole words only, case ignored); null without terms.
+ * One regular expression for the plain terms (longest first, case ignored; words match whole, symbols such as "==" match anywhere); null without terms.
  * The `/regex/` terms are compiled apart and kept in its `extra` list: channelBase() applies them too.
  */
 export function compileTerms(terms) {
@@ -94,8 +94,15 @@ export function compileTerms(terms) {
     }
   });
   if (!plain.length && !extra.length) return null;
-  const parts = plain.sort((a, b) => b.length - a.length).map((term) => escapeRegExp(term).replace(/ /g, '\\s+'));
-  const regex = parts.length ? new RegExp(`(^|[^\\p{L}\\p{N}])(?:${parts.join('|')})(?=$|[^\\p{L}\\p{N}])`, 'giu') : /(?!)/u;
+  // Whole words only: a word edge (letter or digit) must not touch another letter or digit, but a term made of symbols ("==", "[DVS]") has no such edge.
+  const edge = (ch) => /[\p{L}\p{N}]/u.test(ch);
+  const parts = plain
+    .sort((x, y) => y.length - x.length)
+    .map((term) => {
+      const body = escapeRegExp(term).replace(/ /g, '\\s+');
+      return `${edge(term[0]) ? '(?<![\\p{L}\\p{N}])' : ''}${body}${edge(term[term.length - 1]) ? '(?![\\p{L}\\p{N}])' : ''}`;
+    });
+  const regex = parts.length ? new RegExp(`(?:${parts.join('|')})`, 'giu') : /(?!)/u;
   regex.extra = extra;
   return regex;
 }
@@ -119,7 +126,7 @@ export function channelBase(name, regex) {
   let text = original;
   if (regex) {
     regex.lastIndex = 0;
-    text = text.replace(regex, '$1 ');
+    text = text.replace(regex, ' ');
     (regex.extra || []).forEach((rx) => {
       rx.lastIndex = 0;
       text = text.replace(rx, ' ');
