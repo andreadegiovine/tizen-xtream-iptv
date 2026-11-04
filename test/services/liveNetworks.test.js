@@ -128,3 +128,13 @@ test('terms can be /regular expressions/ (commas allowed inside), a bad one is i
   expect(channelBase('[XYZ] Canale Uno HD', regex).display).toBe('Canale Uno');
   expect(compileTerms(['/(/'])).toBeNull();
 });
+
+test('underscores in channel names become spaces', async () => {
+  const { channelBase, compileTerms } = await import('../../src/services/liveGrouping.js');
+  const { normalizeChannelName } = await import('../../src/services/titleNormalizer.js');
+  expect(normalizeChannelName('RAI_1__HD ').cleanTitle).toBe('RAI 1 HD');
+  expect(channelBase('IT_Rai_Yoyo_HD', compileTerms(['hd'])).display).toBe('IT Rai Yoyo');
+  const entries = buildEntries('live', [ch(1, 'Rai_1'), ch(2, 'Rai_2')].map((i) => ({ ...i, tmdbId: null, ext: '', genre: '' })));
+  expect(entries.map((e) => e.name).sort()).toEqual(['Rai 1', 'Rai 2']);
+  expect(networkToken('Rai_1')).toBe('rai');
+});

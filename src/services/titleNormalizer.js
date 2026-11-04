@@ -77,8 +77,8 @@ export function normalizeTitle(raw) {
   return { cleanTitle, searchKey: makeSearchKey(cleanTitle), year, tags: Array.from(new Set(tags)) };
 }
 
-/** Live channels keep their full name ("Sky Cinema HD" stays as is). */
+/** Live channels keep their full name ("Sky Cinema HD" stays as is), with spaces instead of underscores ("RAI_1_HD" → "RAI 1 HD"). */
 export function normalizeChannelName(raw) {
-  const name = String(raw ?? '').trim();
+  const name = String(raw ?? '').replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
   return { cleanTitle: name, searchKey: makeSearchKey(name), year: null, tags: [] };
 }

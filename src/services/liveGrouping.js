@@ -115,7 +115,7 @@ export function qualityRank(name) {
 
 /** Channel name without the terms, language prefixes and tag brackets: { display, base }. `base` is the comparison key. */
 export function channelBase(name, regex) {
-  const original = String(name == null ? '' : name).trim();
+  const original = String(name == null ? '' : name).replace(/_+/g, ' ').replace(/\s+/g, ' ').trim(); // underscores are spaces
   let text = original;
   if (regex) {
     regex.lastIndex = 0;
