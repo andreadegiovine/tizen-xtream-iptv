@@ -49,7 +49,6 @@
   "exit.cancel": "Resta",
   "home.catalog": "Catalogo",
   "home.update": "Aggiorna il catalogo ora",
-  "home.updatedLive": "{items} elementi · {groups} gruppi ({grouped} canali) · aggiornato {time}",
   "home.updated": "{items} elementi · {entries} titoli · aggiornato {time}",
   "home.phase.categories": "Scarico le categorie…",
   "home.phase.download": "Scarico la lista…",
@@ -234,5 +233,18 @@
   "collections.delete": "Elimina la collezione",
   "collections.deleteConfirm": "Eliminare “{name}”? Gli elementi restano nel catalogo.",
   "collections.name": "Nome",
-  "collections.save": "Salva"
+  "collections.save": "Salva",
+  "home.items": "{items} elementi",
+  "home.groups": "{groups} gruppi ({channels} canali)",
+  "home.networks": "{networks} reti ({channels} canali)",
+  "home.updatedAt": "aggiornato {time}",
+  "settings.liveNetworks": "Raggruppa i canali Live TV per rete",
+  "networks.title": "Reti",
+  "networks.add": "Aggiungi a una rete",
+  "networks.open": "Apri la rete",
+  "networks.edit": "Modifica la rete",
+  "networks.searchPlaceholder": "Cerca una rete...",
+  "networks.channels_one": "{count} canale",
+  "networks.channels_other": "{count} canali",
+  "networks.empty": "Nessun canale in questa rete."
 }

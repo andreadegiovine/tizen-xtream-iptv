@@ -46,6 +46,7 @@ import { createFavoritesService } from './services/favorites.js';
 import { createCollectionsService } from './services/collections.js';
 import { createCollectionsPage } from './ui/pages/collectionsPage.js';
 import { createCollectionPage } from './ui/pages/collectionPage.js';
+import { createNetworkPage } from './ui/pages/networkPage.js';
 import { createPinsService } from './services/pins.js';
 import { createSearchPage } from './ui/pages/searchPage.js';
 import { createDetailPage } from './ui/pages/detailPage.js';
@@ -164,6 +165,10 @@ async function boot() {
   };
   let gateOpen = false; // one PIN dialog at a time (a second OK press must not stack another)
   ctx.openEntry = async (entry, extra = {}) => {
+    if (entry.isNetwork) {
+      ctx.router.push('network', { key: entry.key, section: extra.section || 'live' }); // a network has its own page
+      return;
+    }
     if (ctx.parental.isAdult(entry)) {
       if (gateOpen) return;
       gateOpen = true;
@@ -216,6 +221,7 @@ async function boot() {
       favorites: () => createFavoritesPage(ctx),
       collections: (params) => createCollectionsPage(ctx, params),
       collection: (params) => createCollectionPage(ctx, params),
+      network: (params) => createNetworkPage(ctx, params),
       detail: (params) => createDetailPage(ctx, params),
       player: (params) => createPlayerPage(ctx, params),
       browse: (params) => createBrowsePage(ctx, params),

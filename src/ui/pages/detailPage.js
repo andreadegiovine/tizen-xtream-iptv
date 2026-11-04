@@ -7,7 +7,7 @@ import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { createCarousel } from '../components/carousel.js';
 import { createSelectField } from '../components/selectField.js';
-import { getEntry, listCategories, createMergeSearch } from '../../services/catalogQuery.js';
+import { getEntry, listCategories, listNetworks, createMergeSearch } from '../../services/catalogQuery.js';
 import { rebuildLive } from '../../services/rebuildLive.js';
 import { watchKey, shouldResume, isWatched } from '../../services/watchStore.js';
 import { formatClock } from '../../services/playerController.js';
@@ -103,6 +103,7 @@ export function createDetailPage(ctx, params) {
   let categoryNames = new Map();
   let db = null;
   let mergeAvailable = false; // grouping is on: a single channel can be merged by hand
+  let networkChoices = []; // Live TV networks a channel can be added to: [{ key, name, networkId }]
   let manualIds = new Set(); // streams added to a group by hand
   let related = []; // catalog entries "you might also like"
   let favorite = false;
@@ -211,6 +212,30 @@ export function createDetailPage(ctx, params) {
     } catch (err) {
       log.warn('Merge failed', err && err.message);
       ctx.notices.error(t('error.UNKNOWN'), { key: 'merge' });
+    }
+  }
+
+  /** Adds this channel (or every version of this group) to a network chosen in the search box; the link is kept across syncs. */
+  async function addToNetwork() {
+    const fold = (text) => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const picked = await ctx.dialogs.search({
+      title: t('networks.add'),
+      placeholder: t('networks.searchPlaceholder'),
+      emptyLabel: t('common.empty'),
+      minLength: 0,
+      autoFocus: false,
+      run: async (text) => networkChoices.filter((n) => !text || fold(n.name).includes(fold(text))).map((n) => ({ key: n.key, name: n.name, networkId: n.networkId })),
+    });
+    if (!picked || destroyed) return;
+    try {
+      await ctx.liveGrouping.linkNetwork(providerId, entry.isGroup ? entry.memberIds : [entry.defaultId], picked.networkId);
+      await rebuildLive(ctx);
+      entry = (await getEntry(db, entry.key)) || entry;
+      if (!destroyed) build();
+      ctx.notices.success(t('notice.added'), { key: 'network' });
+    } catch (err) {
+      log.warn('Add to network failed', err && err.message);
+      ctx.notices.error(t('error.UNKNOWN'), { key: 'network' });
     }
   }
 
@@ -530,6 +555,10 @@ export function createDetailPage(ctx, params) {
         if (await addToCollection(ctx, { providerId, entry }) && !destroyed) await loadCollections();
       } });
     }
+    if (buttons.length && entry.type === 'live') {
+      if (entry.networkKey) buttons.push({ id: 'network', icon: 'network', label: t('networks.open'), run: () => ctx.router.push('network', { key: entry.networkKey, section: params.section }) });
+      else if (networkChoices.length) buttons.push({ id: 'networkAdd', icon: 'networkAdd', label: t('networks.add'), run: addToNetwork });
+    }
     if (buttons.length && entry.type === 'live' && !entry.isGroup && !entry.groupKey && mergeAvailable) {
       buttons.push({ id: 'merge', icon: 'merge', label: t('merge.title'), run: mergeChannel });
     }
@@ -611,6 +640,7 @@ export function createDetailPage(ctx, params) {
     if (ctx.collections) collectionItems = (await ctx.collections.list(providerId)).filter((c) => c.entryKeys.includes(entry.key)).map((c) => ({ id: c.id, name: c.name }));
     mergeAvailable = entry.type === 'live' && ctx.liveGrouping ? (await ctx.settings.get()).liveGrouping : false;
     if (entry.type === 'live' && ctx.liveGrouping) manualIds = await ctx.liveGrouping.manual(providerId);
+    if (entry.type === 'live') networkChoices = (await listNetworks(db).catch(() => [])).map((n) => ({ key: n.key, name: n.name, networkId: n.networkId }));
     await reloadRecords();
     build();
 

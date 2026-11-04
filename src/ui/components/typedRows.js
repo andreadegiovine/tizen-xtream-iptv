@@ -15,7 +15,8 @@ export const filterCardMeta = (entry) => ({ placeholder: entry.filterKind === 'g
 
 /** Splits entries by type (collections first), keeping the order and at most `limit` per type. */
 export function groupByType(entries, limit = 20) {
-  return ORDER.map((type) => ({ type, entries: entries.filter((entry) => entry.type === type).slice(0, limit) })).filter((group) => group.entries.length);
+  const first = (entry) => (entry.isNetwork ? 0 : 1); // networks come ahead of the channels and groups
+  return ORDER.map((type) => ({ type, entries: entries.filter((entry) => entry.type === type).sort((a, b) => first(a) - first(b)).slice(0, limit) })).filter((group) => group.entries.length);
 }
 
 /**

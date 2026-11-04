@@ -90,14 +90,15 @@ export function createCard(entry, type, meta = {}) {
 
   function setStatus(status) {
     while (statusBadge.firstChild) statusBadge.removeChild(statusBadge.firstChild);
-    // A grouped Live TV channel carries its own badge, in the place of the watched one.
-    const shown = entry && entry.isGroup ? 'group' : status;
-    if (shown === 'group') statusBadge.appendChild(icon('group'));
+    // A network or a grouped Live TV channel carries its own badge, in the place of the watched one.
+    const shown = entry && entry.isNetwork ? 'network' : entry && entry.isGroup ? 'group' : status;
+    if (shown === 'network') statusBadge.appendChild(icon('network'));
+    else if (shown === 'group') statusBadge.appendChild(icon('group'));
     else if (shown === 'watched') statusBadge.appendChild(icon('check'));
     else if (shown === 'partial') statusBadge.appendChild(icon('hourglass'));
-    statusBadge.classList.toggle('visible', shown === 'group' || shown === 'watched' || shown === 'partial');
+    statusBadge.classList.toggle('visible', shown === 'network' || shown === 'group' || shown === 'watched' || shown === 'partial');
     statusBadge.classList.toggle('partial', shown === 'partial');
-    statusBadge.classList.toggle('group', shown === 'group');
+    statusBadge.classList.toggle('group', shown === 'group' || shown === 'network');
   }
 
   function update(next = {}) {
@@ -120,7 +121,7 @@ export function createCard(entry, type, meta = {}) {
     }
   }
 
-  if (entry && entry.isGroup) setStatus(null);
+  if (entry && (entry.isGroup || entry.isNetwork)) setStatus(null);
   const fields = { ...meta };
   delete fields.placeholder;
   delete fields.square;

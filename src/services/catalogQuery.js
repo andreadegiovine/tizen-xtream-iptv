@@ -1,11 +1,11 @@
 import { requestToPromise } from '../core/idb.js';
-import { isGroupKey, LIVE_ALL } from './liveGrouping.js';
+import { isCompositeKey, NETWORK_PREFIX, LIVE_ALL } from './liveGrouping.js';
 import { loadSearchRows, searchRows } from './searchIndex.js';
 
 export { LIVE_ALL };
 
 /** Grouped live channels are in their own store; every other entry is in `entries`. */
-const storeOf = (key) => (isGroupKey(key) ? 'groups' : 'entries');
+const storeOf = (key) => (isCompositeKey(key) ? 'groups' : 'entries');
 
 const MAX_ADDED = Number.MAX_SAFE_INTEGER;
 
@@ -66,6 +66,12 @@ export function pageEntries(db, { type, categoryId = null, offset = 0, limit = 2
   });
 }
 
+/** The networks of Live TV, alphabetical: [{ key, name, icon, memberKeys, manualKeys, channelCount }]. */
+export async function listNetworks(db) {
+  const all = await requestToPromise(db.transaction('groups', 'readonly').objectStore('groups').getAll(IDBKeyRange.bound(NETWORK_PREFIX, `${NETWORK_PREFIX}\uffff`)));
+  return all.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
+
 /** One grid entry by key (`movie:t603`, `series:i12`...). */
 export async function getEntry(db, key) {
   const store = storeOf(key);
@@ -80,14 +86,14 @@ export function createMergeSearch(db, skipId) {
   let cache = null;
   const load = () => {
     if (!cache) {
-      cache = loadSearchRows(db, ['live']).then((rows) => ({ rows: rows.filter((r) => r.defaultId !== skipId) }));
+      cache = loadSearchRows(db, ['live']).then((rows) => ({ rows: rows.filter((r) => !r.isNetwork && r.defaultId !== skipId) }));
     }
     return cache;
   };
   return async (query, limit = 30) => {
     const { rows } = await load();
     const groups = searchRows(rows.filter((r) => r.group), query, { limit });
-    const singles = searchRows(rows.filter((r) => !r.group), query, { limit });
+    const singles = searchRows(rows.filter((r) => !r.group && !r.isNetwork), query, { limit });
     return groups.concat(singles).slice(0, limit).map((row) => ({ key: row.key, name: row.name, icon: row.icon, group: Boolean(row.group), memberId: row.defaultId, count: row.group ? row.members.length : 1 }));
   };
 }

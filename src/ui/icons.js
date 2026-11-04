@@ -29,6 +29,8 @@ import { faLightbulb } from '@fortawesome/free-solid-svg-icons/faLightbulb';
 import { faPen } from '@fortawesome/free-solid-svg-icons/faPen';
 import { faFolder } from '@fortawesome/free-solid-svg-icons/faFolder';
 import { faFolderPlus } from '@fortawesome/free-solid-svg-icons/faFolderPlus';
+import { faTowerBroadcast } from '@fortawesome/free-solid-svg-icons/faTowerBroadcast';
+import { faCirclePlus } from '@fortawesome/free-solid-svg-icons/faCirclePlus';
 import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash';
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
 import { faMasksTheater } from '@fortawesome/free-solid-svg-icons/faMasksTheater';
@@ -78,6 +80,8 @@ const ICONS = {
   remove: faTrash,
   add: faPlus,
   folder: faFolder,
+  network: faTowerBroadcast,
+  networkAdd: faCirclePlus,
   collectionAdd: faFolderPlus,
   refresh: faRotateRight,
   stop: faStop,

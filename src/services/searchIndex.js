@@ -13,7 +13,7 @@ export async function loadSearchRows(db, types) {
     }
     if (type === 'live') {
       const groups = await requestToPromise(db.transaction('groups', 'readonly').objectStore('groups').getAll());
-      groups.forEach((group) => rows.push({ key: group.key, type, name: group.name, year: null, icon: group.icon, rating: null, tmdbId: null, defaultId: group.defaultId, members: group.members, categoryIds: group.categoryIds, keys: group.searchKeys, added: group.added, isGroup: true, group: true }));
+      groups.forEach((group) => rows.push({ key: group.key, type, name: group.name, year: null, icon: group.icon, rating: null, tmdbId: null, defaultId: group.defaultId, members: group.members, categoryIds: group.categoryIds, keys: group.searchKeys, added: group.added, isGroup: !group.isNetwork, group: !group.isNetwork, isNetwork: Boolean(group.isNetwork) }));
     }
   }
   return rows;

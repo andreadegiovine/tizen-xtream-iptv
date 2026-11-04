@@ -176,25 +176,27 @@ export function createDialogService({ focus, root = document.body }) {
    * Edit box of a collection: its name, the titles it holds (OK marks one to be taken out) and Save / Cancel.
    * Resolves with `{ name, remove: [keys] }`, or null when cancelled.
    */
-  function editCollection({ title, name, items, nameLabel, saveLabel, cancelLabel }) {
+  function editCollection({ title, name = '', items, nameLabel = null, saveLabel, cancelLabel }) {
     if (current) return current.promise;
     const previous = snapshot();
     const gone = new Set();
-    const input = h('input', { class: 'value-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', value: name, 'aria-label': nameLabel });
+    const named = Boolean(nameLabel); // a network cannot be renamed: its box has only the titles
+    const input = h('input', { class: 'value-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', value: name, 'aria-label': nameLabel || '' });
     const field = h('div', { class: 'choice search-field' }, icon('edit'), input);
+    const lead = named ? 1 : 0; // rows before the titles
     const rows = items.map((item) => h('div', { class: 'choice edit-item' }, h('span', { text: item.name }), icon('remove')));
     const list = h('div', { class: 'choice-list' }, rows);
     const buttons = [h('button', { class: 'btn', type: 'button', text: cancelLabel }), h('button', { class: 'btn primary', type: 'button', text: saveLabel })];
-    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog search-dialog' }, h('h2', { text: title }), field, list, h('div', { class: 'dialog-actions stacked' }, buttons)));
+    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog search-dialog' }, h('h2', { text: title }), named ? field : null, list, h('div', { class: 'dialog-actions stacked' }, buttons)));
     root.appendChild(overlay);
-    const total = () => 1 + items.length + 2;
-    const nodeAt = (i) => (i === 0 ? field : i <= items.length ? rows[i - 1] : buttons[i - 1 - items.length]);
+    const total = () => lead + items.length + 2;
+    const nodeAt = (i) => (i < lead ? field : i < lead + items.length ? rows[i - lead] : buttons[i - lead - items.length]);
     input.addEventListener('keydown', (event) => {
       event.stopPropagation();
       if (event.keyCode === 13 || event.keyCode === 65376) {
         event.preventDefault();
         input.blur();
-        focus.focus(DIALOG_ZONE, items.length + 2); // Save
+        focus.focus(DIALOG_ZONE, lead + items.length + 1); // Save
       } else if (event.keyCode === 65385) input.blur();
     });
     const zone = new FocusZone({
@@ -206,13 +208,13 @@ export function createDialogService({ focus, root = document.body }) {
       },
       onBlur: (i) => nodeAt(i) && nodeAt(i).classList.remove('focused'),
       onActivate: (i) => {
-        if (i === 0) input.focus();
-        else if (i <= items.length) {
-          const key = items[i - 1].key;
+        if (i < lead) input.focus();
+        else if (i < lead + items.length) {
+          const key = items[i - lead].key;
           if (gone.has(key)) gone.delete(key);
           else gone.add(key);
-          rows[i - 1].classList.toggle('removed', gone.has(key));
-        } else if (i === items.length + 1) close(null);
+          rows[i - lead].classList.toggle('removed', gone.has(key));
+        } else if (i === lead + items.length) close(null);
         else close({ name: input.value.trim() || name, remove: Array.from(gone) });
       },
     });
@@ -221,7 +223,7 @@ export function createDialogService({ focus, root = document.body }) {
       current = { overlay, previous, resolve, promise: null, cancelValue: null };
     });
     current.promise = promise;
-    focus.focus(DIALOG_ZONE, items.length ? 1 : 2);
+    focus.focus(DIALOG_ZONE, items.length ? lead : lead + 1);
     return promise;
   }
 

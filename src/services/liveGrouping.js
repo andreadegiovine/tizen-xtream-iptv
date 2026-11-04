@@ -4,10 +4,15 @@ import { normalizeTitle, makeSearchKey } from './titleNormalizer.js';
 /** Key of the pseudo category that lists what the Live TV "show all" view holds (groups + channels that are not grouped). */
 export const LIVE_ALL = '@all';
 /** Layout of the live catalog: lists synced with an older one are downloaded again once. */
-export const LIVE_LAYOUT = 2;
+export const LIVE_LAYOUT = 3;
 /** Keys of grouped channels start with this; single channels are `live:i<id>`. */
 export const GROUP_PREFIX = 'live:g';
 export const isGroupKey = (key) => typeof key === 'string' && key.startsWith(GROUP_PREFIX);
+/** Keys of networks (all the channels of one broadcaster) start with this; they live in the same store as the groups. */
+export const NETWORK_PREFIX = 'live:n';
+export const isNetworkKey = (key) => typeof key === 'string' && key.startsWith(NETWORK_PREFIX);
+/** Groups and networks are stored apart from the single channels. */
+export const isCompositeKey = (key) => isGroupKey(key) || isNetworkKey(key);
 
 /** Words taken out of a channel name before comparing it with the others (quality and feed markers). */
 export const DEFAULT_TERMS = Object.freeze([
@@ -254,8 +259,8 @@ export function buildLiveAllRows(entries, groups) {
   return rows;
 }
 
-/** What the catalog sync needs: { enabled, terms, links }. The default when nothing is configured. */
-export const DEFAULT_GROUPING = Object.freeze({ enabled: true, terms: DEFAULT_TERMS, links: [], splits: [] });
+/** What the catalog sync needs: { enabled, terms, links, splits, networks: { enabled, links } }. The default when nothing is configured. */
+export const DEFAULT_GROUPING = Object.freeze({ enabled: true, terms: DEFAULT_TERMS, links: [], splits: [], networks: Object.freeze({ enabled: true, links: [] }) });
 
 /** Grouped entries for a sync / rebuild: none when the feature is off. */
 export function groupLiveItems(items, { excludedCategories, grouping = DEFAULT_GROUPING } = {}) {
@@ -265,6 +270,7 @@ export function groupLiveItems(items, { excludedCategories, grouping = DEFAULT_G
 
 const linksKey = (providerId) => `liveLinks:${providerId}`;
 const splitsKey = (providerId) => `liveSplits:${providerId}`;
+const networkLinksKey = (providerId) => `liveNetworkLinks:${providerId}`;
 
 /** The streams a user added to a group by hand: the one that was moved, and the target too when it was a lone channel (link = [id, target, 1]). */
 export function manualIds(links) {
@@ -285,7 +291,13 @@ export function createLiveGroupingService({ db, settings }) {
   return {
     async config(providerId) {
       const s = await settings.get();
-      return { enabled: s.liveGrouping, terms: resolveTerms(s.liveGroupPatterns), links: await read(linksKey(providerId)), splits: await read(splitsKey(providerId)) };
+      return {
+        enabled: s.liveGrouping,
+        terms: resolveTerms(s.liveGroupPatterns),
+        links: await read(linksKey(providerId)),
+        splits: await read(splitsKey(providerId)),
+        networks: { enabled: s.liveNetworks, links: await read(networkLinksKey(providerId)) },
+      };
     },
     /** Streams added to a group by hand. */
     async manual(providerId) {
@@ -305,7 +317,24 @@ export function createLiveGroupingService({ db, settings }) {
       if (!splits.includes(id)) splits.push(id);
       await kvSet(db, splitsKey(providerId), splits);
     },
+    /** Streams added to a network by hand: [[streamId, networkId]]. */
+    async networkLinks(providerId) {
+      return read(networkLinksKey(providerId));
+    },
+    /** Puts streams (a channel, or all the versions of a group) in a network for good. */
+    async linkNetwork(providerId, ids, networkId) {
+      const moved = new Set(ids);
+      const links = (await read(networkLinksKey(providerId))).filter(([id]) => !moved.has(id));
+      ids.forEach((id) => links.push([id, networkId]));
+      await kvSet(db, networkLinksKey(providerId), links);
+    },
+    /** Takes streams that were added by hand out of their network. */
+    async unlinkNetwork(providerId, ids) {
+      const gone = new Set(ids);
+      await kvSet(db, networkLinksKey(providerId), (await read(networkLinksKey(providerId))).filter(([id]) => !gone.has(id)));
+    },
     async removeProvider(providerId) {
+      await kvDelete(db, networkLinksKey(providerId));
       await kvDelete(db, linksKey(providerId));
       await kvDelete(db, splitsKey(providerId));
     },

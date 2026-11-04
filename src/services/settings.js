@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   timeFormat: 'auto',
   dateFormat: 'auto',
   liveGrouping: true, // Live TV: versions of the same channel shown as one
+  liveNetworks: true, // Live TV: the channels of one broadcaster (Rai 1, Rai 2...) gathered in a network
   liveGroupPatterns: '', // words removed from channel names to compare them; empty = the defaults
   excluded: {},
 });
@@ -35,6 +36,7 @@ function sanitize(raw) {
     timeFormat: pick(raw.timeFormat, TIME_FORMATS, DEFAULT_SETTINGS.timeFormat),
     dateFormat: pick(raw.dateFormat, DATE_FORMATS, DEFAULT_SETTINGS.dateFormat),
     liveGrouping: typeof raw.liveGrouping === 'boolean' ? raw.liveGrouping : DEFAULT_SETTINGS.liveGrouping,
+    liveNetworks: typeof raw.liveNetworks === 'boolean' ? raw.liveNetworks : DEFAULT_SETTINGS.liveNetworks,
     liveGroupPatterns: typeof raw.liveGroupPatterns === 'string' ? raw.liveGroupPatterns.slice(0, 600) : '',
     excluded: raw.excluded && typeof raw.excluded === 'object' ? raw.excluded : {},
   };

@@ -19,9 +19,13 @@ export function describeType(state, meta, locale) {
   if (phase === 'queued') return t('common.queued');
   if (ACTIVE_PHASES.has(phase)) return t(`home.phase.${phase}`);
   if (!meta) return t('common.never');
-  if (meta.groupCount > 0 && meta.groupedCount !== undefined) {
-    // Live TV with grouped channels: "5321 items · 683 groups (2219 channels) · updated …"
-    return t('home.updatedLive', { items: formatNumber(meta.itemCount, locale), groups: formatNumber(meta.groupCount, locale), grouped: formatNumber(meta.groupedCount, locale), time: formatDateTime(meta.lastSync, locale) });
+  if ((meta.groupCount > 0 && meta.groupedCount !== undefined) || meta.networkCount > 0) {
+    // Live TV: "5321 items · 683 groups (2219 channels) · 12 networks (840 channels) · updated …"
+    const parts = [t('home.items', { items: formatNumber(meta.itemCount, locale) })];
+    if (meta.groupCount > 0) parts.push(t('home.groups', { groups: formatNumber(meta.groupCount, locale), channels: formatNumber(meta.groupedCount, locale) }));
+    if (meta.networkCount > 0) parts.push(t('home.networks', { networks: formatNumber(meta.networkCount, locale), channels: formatNumber(meta.networkedCount, locale) }));
+    parts.push(t('home.updatedAt', { time: formatDateTime(meta.lastSync, locale) }));
+    return parts.join(' · ');
   }
   return t('home.updated', {
     items: formatNumber(meta.itemCount, locale),

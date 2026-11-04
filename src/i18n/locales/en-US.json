@@ -49,7 +49,6 @@
   "exit.cancel": "Stay",
   "home.catalog": "Catalog",
   "home.update": "Update catalog now",
-  "home.updatedLive": "{items} items · {groups} groups ({grouped} channels) · updated {time}",
   "home.updated": "{items} items · {entries} titles · updated {time}",
   "home.phase.categories": "Downloading categories…",
   "home.phase.download": "Downloading the list…",
@@ -234,5 +233,18 @@
   "collections.delete": "Delete the collection",
   "collections.deleteConfirm": "Delete “{name}”? The items stay in the catalog.",
   "collections.name": "Name",
-  "collections.save": "Save"
+  "collections.save": "Save",
+  "home.items": "{items} items",
+  "home.groups": "{groups} groups ({channels} channels)",
+  "home.networks": "{networks} networks ({channels} channels)",
+  "home.updatedAt": "updated {time}",
+  "settings.liveNetworks": "Group Live TV channels by network",
+  "networks.title": "Networks",
+  "networks.add": "Add to a network",
+  "networks.open": "Open the network",
+  "networks.edit": "Edit the network",
+  "networks.searchPlaceholder": "Search a network...",
+  "networks.channels_one": "{count} channel",
+  "networks.channels_other": "{count} channels",
+  "networks.empty": "No channels in this network."
 }

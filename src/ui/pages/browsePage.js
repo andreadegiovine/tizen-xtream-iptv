@@ -8,20 +8,20 @@ import { TOPBAR_ZONE } from '../components/topbar.js';
 import { isFilterEntry, filterCardMeta } from '../components/typedRows.js';
 import { favoriteFilterEntries, openFilter } from '../../services/favoriteFilters.js';
 import { ensureVisible } from '../scroll.js';
-import { listCategories, pageEntries, getEntry, countEntries, LIVE_ALL } from '../../services/catalogQuery.js';
+import { listCategories, listNetworks, pageEntries, getEntry, countEntries, LIVE_ALL } from '../../services/catalogQuery.js';
 import { icon } from '../icons.js';
 import { formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
 
 const CATS_ZONE = 'browseCategories';
 /** Icon before the label of the fixed sidebar entries (genres and categories get an empty slot to stay aligned). */
-export const SIDEBAR_ICON = { all: 'all', continue: 'continue', favorites: 'heart', suggestions: 'suggestions', genresToggle: 'genres', toggle: 'categories' };
+export const SIDEBAR_ICON = { all: 'all', continue: 'continue', favorites: 'heart', suggestions: 'suggestions', genresToggle: 'genres', toggle: 'categories', networksToggle: 'network' };
 /** Placeholder rows shown while the genres load: enough that the "Categories" entry stays below the screen. */
 export const GENRE_SKELETONS = 12;
 const GRID_ZONE = 'browseGrid';
 const HEAD_ZONE = 'browseHead';
 /** Views that are loaded as one in-memory list and paged locally. */
-const LIST_KINDS = ['continue', 'favorites', 'suggestions', 'genre'];
+const LIST_KINDS = ['continue', 'favorites', 'suggestions', 'genre', 'network'];
 /** Every media type uses the same 6-column grid of equally sized cards (channels included). */
 export const columnsFor = () => 6;
 
@@ -58,13 +58,17 @@ export function createPagedGridModel({ columns, getCount, hasNext, hasPrevious, 
 
 /**
  * Sidebar entries. Movies and series: show all, continue watching, favourites, suggestions, a "Genres"
- * entry (open by default) with the genres, then a "Categories" entry that expands into the provider categories. Channels: show all, favourites, pinned categories and the categories.
+ * entry (open by default) with the genres, then a "Categories" entry that expands into the provider categories. Channels: show all, favourites, pinned categories, the "Networks" entry (open) and the categories (closed).
  */
-export function sidebarItems({ type, genres = [], categories = [], pinned = [], expanded = false, genresExpanded = true, genresLoading = false, labels }) {
+export function sidebarItems({ type, genres = [], categories = [], pinned = [], networks = [], networksExpanded = true, expanded = false, genresExpanded = true, genresLoading = false, labels }) {
   const items = [{ kind: 'all', name: labels.all }];
   if (type === 'live') {
     items.push({ kind: 'favorites', name: labels.favorites });
     pinned.forEach((p) => items.push({ kind: p.kind, id: String(p.id), name: p.name, pinned: true }));
+    if (networks.length) {
+      items.push({ kind: 'networksToggle', name: labels.networks, expanded: networksExpanded });
+      if (networksExpanded) networks.forEach((n) => items.push({ kind: 'network', id: n.key, name: n.name, depth: 1 }));
+    }
     if (categories.length) {
       items.push({ kind: 'toggle', name: labels.categories, expanded });
       if (expanded) categories.forEach((c) => items.push({ kind: 'category', id: c.id, name: c.name, depth: 1 }));
@@ -129,6 +133,8 @@ export function createBrowsePage(ctx, params = {}) {
   let pinned = []; // pinned categories / genres of this media type
   let categories = []; // visible provider categories [{ id, name }]
   let expanded = false; // categories group
+  let networks = []; // Live TV networks [{ key, name, memberKeys }]
+  let networksExpanded = true; // networks group: open by default
   let genresExpanded = true; // genres group: open by default
   let genresLoading = type !== 'live';
   let countsLoading = true;
@@ -144,7 +150,7 @@ export function createBrowsePage(ctx, params = {}) {
   let loadToken = 0;
   const counts = new Map(); // sidebar numbers: 'kind:id' → how many titles
 
-  const labels = () => ({ all: t('browse.all'), continue: t('home.continue'), favorites: t('nav.favorites'), suggestions: t('nav.suggestions'), genres: t('detail.genres'), categories: t('detail.categories') });
+  const labels = () => ({ all: t('browse.all'), continue: t('home.continue'), favorites: t('nav.favorites'), suggestions: t('nav.suggestions'), genres: t('detail.genres'), categories: t('detail.categories'), networks: t('networks.title') });
 
   function renderCategories() {
     while (catList.firstChild) catList.removeChild(catList.firstChild);
@@ -156,7 +162,7 @@ export function createBrowsePage(ctx, params = {}) {
       node.appendChild(h('span', { class: 'browse-cat-name', text: item.name }));
       const text = countText(item);
       node.appendChild(h('span', { class: `browse-cat-count${text === '' && countsLoading ? ' skeleton-line' : ''}`, text }));
-      if (item.kind === 'toggle' || item.kind === 'genresToggle') node.appendChild(icon('chevron', item.expanded ? 'open' : ''));
+      if (item.kind === 'toggle' || item.kind === 'genresToggle' || item.kind === 'networksToggle') node.appendChild(icon('chevron', item.expanded ? 'open' : ''));
       catList.appendChild(node);
       // While the genres are being found, grey placeholders hold their place under the "Genres" entry.
       if (item.kind === 'genresToggle' && genresLoading && genresExpanded) {
@@ -170,7 +176,7 @@ export function createBrowsePage(ctx, params = {}) {
 
   const countKey = (item) => `${item.kind}:${item.id === undefined ? '' : item.id}`;
   const countText = (item) => {
-    const n = item.kind === 'toggle' ? categories.length : item.kind === 'genresToggle' ? (genresLoading ? undefined : genres.length) : counts.get(countKey(item));
+    const n = item.kind === 'toggle' ? categories.length : item.kind === 'networksToggle' ? networks.length : item.kind === 'genresToggle' ? (genresLoading ? undefined : genres.length) : counts.get(countKey(item));
     return n === undefined ? '' : formatNumber(n, i18n.getLocale());
   };
   function showCounts() {
@@ -193,6 +199,7 @@ export function createBrowsePage(ctx, params = {}) {
     await safe(async () => set('all:', await countEntries(db, { type, categoryId: allCategory() })));
     if (type === 'live') {
       await safe(async () => set('favorites:', (await ctx.favorites.list(providerId)).filter((f) => f.type === type).length));
+      networks.forEach((n) => set(`network:${n.key}`, n.memberKeys.length));
       await Promise.all(categories.map((c) => safe(async () => set(`category:${c.id}`, await countEntries(db, { type, categoryId: c.id })))));
       return;
     }
@@ -216,7 +223,7 @@ export function createBrowsePage(ctx, params = {}) {
   /** Rebuilds the sidebar keeping the same entry selected (genres arrive late, categories expand). */
   function rebuildSidebar(focusKey) {
     const keep = items[selected];
-    items = sidebarItems({ type, genres, categories, pinned, expanded, genresExpanded, genresLoading, labels: labels() });
+    items = sidebarItems({ type, genres, categories, pinned, networks, networksExpanded, expanded, genresExpanded, genresLoading, labels: labels() });
     const same = keep ? items.findIndex((item) => item.kind === keep.kind && String(item.id) === String(keep.id)) : -1;
     selected = same >= 0 ? same : 0;
     renderCategories();
@@ -314,6 +321,10 @@ export function createBrowsePage(ctx, params = {}) {
     if (item.kind === 'genre') {
       return byKeys(await ctx.genres.entryKeys(type, item.id));
     }
+    if (item.kind === 'network') {
+      const network = networks.find((n) => n.key === item.id);
+      return network ? byKeys(network.memberKeys) : [];
+    }
     return null;
   }
 
@@ -351,8 +362,9 @@ export function createBrowsePage(ctx, params = {}) {
     onBlur: (i) => catNodes[i] && catNodes[i].classList.remove('focused'),
     onActivate: (i) => {
       const item = items[i];
-      if (item.kind === 'toggle' || item.kind === 'genresToggle') {
+      if (item.kind === 'toggle' || item.kind === 'genresToggle' || item.kind === 'networksToggle') {
         if (item.kind === 'toggle') expanded = !expanded;
+        else if (item.kind === 'networksToggle') networksExpanded = !networksExpanded;
         else genresExpanded = !genresExpanded;
         selected = Math.min(selected, items.length - 1);
         rebuildSidebar(item.kind);
@@ -416,8 +428,9 @@ export function createBrowsePage(ctx, params = {}) {
       await loadGenres();
       genresLoading = false;
     }
-    expanded = type === 'live' || Boolean(filter && filter.kind === 'category');
-    items = sidebarItems({ type, genres, categories, pinned, expanded, genresExpanded, genresLoading, labels: labels() });
+    expanded = Boolean(filter && filter.kind === 'category');
+    networks = type === 'live' ? await listNetworks(db).catch(() => []) : [];
+    items = sidebarItems({ type, genres, categories, pinned, networks, networksExpanded, expanded, genresExpanded, genresLoading, labels: labels() });
     selected = indexOfFilter(items, filter);
     renderCategories();
     syncFavorite();

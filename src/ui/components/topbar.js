@@ -31,7 +31,7 @@ export const SECTIONS = [
 
 // Shown only while a page offers it (a category or genre grid): adds / removes the open grid from the favourites.
 
-const SECTION_OF_ROUTE = { categories: 'settings', browse: 'home', search: 'search', suggestions: 'suggestions', favorites: 'favorites', collections: 'collections', collection: 'collections', detail: 'home', player: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
+const SECTION_OF_ROUTE = { categories: 'settings', browse: 'home', search: 'search', suggestions: 'suggestions', favorites: 'favorites', collections: 'collections', collection: 'collections', network: 'live', detail: 'home', player: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
 
 /** Section a router entry belongs to: explicit `params.section`, otherwise derived from the route name. */
 export function sectionForEntry(entry) {
@@ -43,7 +43,7 @@ export function sectionForEntry(entry) {
 export const isSearchable = (text) => String(text || '').trim().length >= MIN_QUERY_LENGTH;
 
 /**
- * Top navigation bar. In "search mode" it is replaced by a full-width text field with a close icon;
+ * Top navigation bar. In "search mode" the sections are replaced by a text field with a close icon, between the logo and the clock;
  * `handlers.onQuery(text)` fires (debounced) while typing, `handlers.onSubmit()` on Enter / Down,
  * `handlers.onClose()` when the user closes the search.
  */
@@ -106,11 +106,16 @@ export function createTopbar(ctx, handlers = {}) {
       nodes.push(node);
       el.appendChild(node);
     });
+    appendClock();
+    if (ctx.focus.activeId === TOPBAR_ZONE && nodes[zone.index]) nodes[zone.index].classList.add('focused');
+  }
+
+  /** Time over date at the right edge (also while the search field is open). */
+  function appendClock() {
     clockTime = h('span', { class: 'clock-time' });
     clockDate = h('span', { class: 'clock-date' });
     el.appendChild(h('span', { class: 'topbar-clock', 'aria-hidden': 'true' }, clockTime, clockDate));
     paintClock();
-    if (ctx.focus.activeId === TOPBAR_ZONE && nodes[zone.index]) nodes[zone.index].classList.add('focused');
   }
 
   // Time over date, at the right edge after the settings icon; it follows the system format unless Settings says otherwise.
@@ -148,7 +153,8 @@ export function createTopbar(ctx, handlers = {}) {
     input.value = initial || '';
     field = h('label', { class: 'topbar-search' }, icon('search'), input);
     closeBtn = h('span', { class: 'topbar-item icon-only', 'aria-label': t('search.close') }, icon('close'));
-    el.append(field, closeBtn);
+    el.append(createLogo(), field, closeBtn); // the field takes the room between the logo and the clock
+    appendClock();
     input.addEventListener('input', () => {
       clearTimeout(timer);
       if (handlers.onTyping && input.value.trim()) handlers.onTyping(input.value);

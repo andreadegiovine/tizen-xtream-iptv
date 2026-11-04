@@ -264,6 +264,18 @@ export function createSettingsPage(ctx) {
     },
   };
 
+  const networksValue = toggle();
+  const liveNetworks = {
+    el: h('div', { class: 'row' }, h('span', { text: t('settings.liveNetworks') }), networksValue),
+    refresh: () => ctx.settings.get().then((s) => { setToggle(networksValue, s.liveNetworks); }),
+    async activate() {
+      const s = await ctx.settings.get();
+      const next = await ctx.settings.update({ liveNetworks: !s.liveNetworks });
+      setToggle(networksValue, next.liveNetworks);
+      await regroup();
+    },
+  };
+
   /** Rebuilds Live TV with the grouping settings as they are now. */
   async function regroup() {
     try {
@@ -317,6 +329,7 @@ export function createSettingsPage(ctx) {
     optionRow({ ctx, labelKey: 'settings.dateFormat', key: 'dateFormat', options: DATE_FORMATS, format: dateName }),
     pinRow,
     liveGrouping,
+    liveNetworks,
     patternsRow,
     patternsResetRow,
     optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }),

@@ -1,4 +1,4 @@
-import { manualIds, buildChannelGroups, buildLiveAllRows, annotateGroupKeys, parseTerms, resolveTerms, DEFAULT_TERMS, qualityRank, channelBase, compileTerms, LIVE_ALL } from '../../src/services/liveGrouping.js';
+import { manualIds, buildChannelGroups, buildLiveAllRows, annotateGroupKeys, parseTerms, resolveTerms, DEFAULT_TERMS, qualityRank, channelBase, compileTerms, LIVE_ALL, LIVE_LAYOUT } from '../../src/services/liveGrouping.js';
 import { buildEntries } from '../../src/services/grouping.js';
 import { openProviderDb, deleteProviderDb } from '../../src/db/providerDb.js';
 import { syncType, rebuildEntries } from '../../src/services/catalogSync.js';
@@ -82,7 +82,7 @@ describe('live catalog with groups', () => {
   test('show all lists the group once, categories keep every channel, groups open by key', async () => {
     const db = await openProviderDb('live-groups-1');
     const meta = await syncType({ db, client, type: 'live' });
-    expect(meta).toMatchObject({ layout: 2, groupCount: 1, entryCount: 5 });
+    expect(meta).toMatchObject({ layout: LIVE_LAYOUT, groupCount: 1, entryCount: 5 });
     const all = await pageEntries(db, { type: 'live', categoryId: LIVE_ALL, offset: 0, limit: 20 });
     expect(all.entries.map((e) => e.key).sort()).toEqual(['live:g:rai_yoyo', 'live:i7']);
     expect(await countEntries(db, { type: 'live', categoryId: LIVE_ALL })).toBe(2);

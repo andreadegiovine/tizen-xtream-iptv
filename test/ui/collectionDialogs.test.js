@@ -62,3 +62,14 @@ test('the collections box does not put the cursor in the field when it opens: th
   focus.handle(Action.ENTER);
   expect((await promise).collectionId).toBe('c1');
 });
+
+test('edit box without a name (networks): only the titles, Save and Cancel', async () => {
+  const { root, focus, dialogs } = setup();
+  const promise = dialogs.editCollection({ title: 'Edit', items: [{ key: 'a', name: 'A' }], saveLabel: 'Save', cancelLabel: 'Cancel' });
+  expect(root.querySelector('input')).toBeNull();
+  focus.handle(Action.ENTER); // title A: marked
+  focus.handle(Action.DOWN);
+  focus.handle(Action.DOWN); // Cancel, Save
+  focus.handle(Action.ENTER);
+  expect(await promise).toEqual({ name: '', remove: ['a'] });
+});

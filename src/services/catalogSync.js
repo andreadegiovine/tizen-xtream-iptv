@@ -13,6 +13,7 @@ import { XtreamClient } from './xtreamClient.js';
 import { projectItem } from './itemProjector.js';
 import { buildEntries, buildEntryCategoryRows, buildEntryGenreRows } from './grouping.js';
 import { LIVE_LAYOUT, DEFAULT_GROUPING, groupLiveItems, annotateGroupKeys, buildLiveAllRows } from './liveGrouping.js';
+import { buildNetworks, annotateNetworkKeys, networkCounts } from './liveNetworks.js';
 
 export const LIST_TTL_MS = 12 * 60 * 60 * 1000;
 export const BATCH_SIZE = 2000;
@@ -26,9 +27,18 @@ export function shouldSync(meta, now = Date.now(), ttlMs = LIST_TTL_MS) {
 }
 
 /** How many channels are in groups, how many groups there are and how many channels stand alone. */
-function groupCounts(entries, groups) {
+function groupCounts(entries, groups, networks = []) {
   const grouped = groups.reduce((sum, group) => sum + group.memberIds.length, 0);
-  return { groupCount: groups.length, groupedCount: grouped, singleCount: entries.length - grouped };
+  return { groupCount: groups.length, groupedCount: grouped, singleCount: entries.length - grouped, ...networkCounts(networks) };
+}
+
+/** Groups, networks and the marks on the channels for a live list: { groups, networks }. */
+function buildLiveComposites(entries, items, excludedCategories, grouping) {
+  const groups = groupLiveItems(items, { excludedCategories, grouping });
+  annotateGroupKeys(entries, groups);
+  const networks = buildNetworks(entries, groups, (grouping && grouping.networks) || undefined);
+  annotateNetworkKeys(entries, groups, networks);
+  return { groups, networks };
 }
 
 /** Makes the next sync of a type download it again (a hidden category was shown again: its items were never kept). */
@@ -72,13 +82,13 @@ async function replaceRows(db, store, type, rows, { onBatch } = {}) {
 }
 
 /** Entries + their per-category rows. Shared by the sync and by "exclusions changed". */
-export async function writeEntries(db, type, entries, { onBatch, groups = [] } = {}) {
+export async function writeEntries(db, type, entries, { onBatch, groups = [], networks = [] } = {}) {
   await replaceRows(db, 'entries', type, entries, { onBatch });
   let categoryRows = buildEntryCategoryRows(entries);
   if (type === MediaType.LIVE) {
     // Live TV "show all": the groups plus the channels that are in none (they live in a pseudo category).
     categoryRows = categoryRows.concat(buildLiveAllRows(entries, groups));
-    await replaceRows(db, 'groups', type, groups);
+    await replaceRows(db, 'groups', type, groups.concat(networks)); // networks sit in the same store, keys `live:n…`
   }
   await replaceRows(db, 'entry_cat', type, categoryRows);
   await replaceRows(db, 'entry_genre', type, buildEntryGenreRows(entries));
@@ -97,11 +107,10 @@ export async function rebuildEntries({ db, type, excludedCategories = new Set(),
     items = items.filter((item) => !excludedCategories.has(item.categoryId));
   }
   const entries = buildEntries(type, items, { excludedCategories, cleanTitles });
-  const groups = type === MediaType.LIVE ? groupLiveItems(items, { excludedCategories, grouping }) : [];
-  if (type === MediaType.LIVE) annotateGroupKeys(entries, groups);
-  await writeEntries(db, type, entries, { groups });
+  const { groups, networks } = type === MediaType.LIVE ? buildLiveComposites(entries, items, excludedCategories, grouping) : { groups: [], networks: [] };
+  await writeEntries(db, type, entries, { groups, networks });
   const previous = (await getSyncMeta(db, type)) || { key: metaKey(type), type };
-  await dbPut(db, 'meta', { ...previous, itemCount: items.length, entryCount: entries.length, ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, ...groupCounts(entries, groups) } : {}) });
+  await dbPut(db, 'meta', { ...previous, itemCount: items.length, entryCount: entries.length, ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, ...groupCounts(entries, groups, networks) } : {}) });
   emit({ event: 'progress', mediaType: type, phase: 'rebuilt', done: entries.length, total: entries.length });
   return entries.length;
 }
@@ -175,10 +184,9 @@ export async function syncType({
   progress('entries');
   const entriesStart = now();
   const entries = buildEntries(type, items, { excludedCategories, cleanTitles });
-  const groups = type === MediaType.LIVE ? groupLiveItems(items, { excludedCategories, grouping }) : [];
-  if (type === MediaType.LIVE) annotateGroupKeys(entries, groups);
+  const { groups, networks } = type === MediaType.LIVE ? buildLiveComposites(entries, items, excludedCategories, grouping) : { groups: [], networks: [] };
   const buildMs = now() - entriesStart;
-  await writeEntries(db, type, entries, { groups });
+  await writeEntries(db, type, entries, { groups, networks });
   const entriesMs = now() - entriesStart;
   await replaceRows(db, 'categories', type, categories);
   const writeMs = now() - writeStart;
@@ -190,7 +198,7 @@ export async function syncType({
     genres: true,
     itemCount: items.length,
     entryCount: entries.length,
-    ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, ...groupCounts(entries, groups) } : {}),
+    ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, ...groupCounts(entries, groups, networks) } : {}),
     categoryCount: categories.length,
     excludedCount: excludedCategories.size,
     fetchMs,
