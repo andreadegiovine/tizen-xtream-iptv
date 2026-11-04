@@ -83,5 +83,5 @@ test('Collections page restores its sidebar entry too', async () => {
 
 test('a network card says how many channels and groups it holds', () => {
   const card = createCard({ name: 'Rai', icon: '', isNetwork: true, memberKeys: ['a', 'b', 'c'] }, 'live');
-  expect(card.el.querySelector('.card-meta').textContent).toBe('3 channels/groups');
+  expect(card.el.querySelector('.card-meta').textContent).toBe('3 items');
 });

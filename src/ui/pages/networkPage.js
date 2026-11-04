@@ -108,7 +108,7 @@ export function createNetworkPage(ctx, params) {
     const next = [];
     titleEl.textContent = network.name;
     clear(metaEl);
-    metaEl.appendChild(h('span', { text: t('networks.channels', { count: network.channelCount }) }));
+    metaEl.appendChild(h('span', { text: t('collections.items', { count: (network.memberKeys || []).length }) }));
     const buttons = [
       { icon: 'heart', active: favorite, label: favorite ? t('detail.unfavorite') : t('detail.favorite'), run: toggleFavorite },
       { icon: 'collectionAdd', label: t('collections.add'), run: () => addToCollection(ctx, { providerId, entry: network }) },

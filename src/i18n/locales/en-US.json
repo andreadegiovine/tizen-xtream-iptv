@@ -252,9 +252,5 @@
   "networks.open": "Open the network",
   "networks.edit": "Edit the network",
   "networks.searchPlaceholder": "Search a network...",
-  "networks.channels_one": "{count} channel",
-  "networks.channels_other": "{count} channels",
-  "networks.empty": "No channels in this network.",
-  "networks.units_one": "{count} channel/group",
-  "networks.units_other": "{count} channels/groups"
+  "networks.empty": "No channels in this network."
 }

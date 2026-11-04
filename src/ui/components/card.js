@@ -125,8 +125,8 @@ export function createCard(entry, type, meta = {}) {
   const fields = { ...meta };
   delete fields.placeholder;
   delete fields.square;
-  // A network says how many channels and groups it holds.
+  // A network says how many items (channels and groups) it holds, like a collection.
   const units = entry.isNetwork ? (entry.memberKeys || []).length : 0;
-  update({ title: entry.name, poster: entry.icon, rating: entry.rating, year: entry.year, ...(units ? { subtitle: t('networks.units', { count: units }) } : {}), ...fields });
+  update({ title: entry.name, poster: entry.icon, rating: entry.rating, year: entry.year, ...(units ? { subtitle: t('collections.items', { count: units }) } : {}), ...fields });
   return { el, update };
 }

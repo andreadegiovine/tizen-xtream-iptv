@@ -158,8 +158,8 @@ test('the network takes the whole common name and the most common written form',
   const items = [ch(1, 'AMAZON PRIME 1'), ch(2, 'Amazon Prime 2'), ch(3, 'Amazon Prime Movies')];
   const { networks } = build(items);
   expect(networks.map((n) => [n.name, n.networkId])).toEqual([['Amazon Prime', 'amazon-prime']]);
-  const sky = [ch(1, 'Sky Cinema Uno'), ch(2, 'Sky Cinema Due'), ch(3, 'Sky Sport Uno'), ch(4, 'Sky Sport Due'), ch(5, 'Sky Arte')];
-  expect(build(sky).networks.map((n) => n.name)).toEqual(['Sky']); // different second words, in families
+  const sky = [ch(1, 'Sky Cinema Uno'), ch(2, 'Sky Cinema Due'), ch(3, 'Sky Sport Uno'), ch(4, 'Sky Sport Due'), ch(5, 'Sky Calcio Uno'), ch(6, 'Sky Calcio Due'), ch(7, 'Sky Arte')];
+  expect(build(sky).networks.map((n) => n.name)).toEqual(['Sky']); // different second words, in three families (with two, the families are the networks)
   expect(build([ch(1, 'Tele Arena'), ch(2, 'Tele Liberta'), ch(3, 'Tele Lombardia')]).networks).toEqual([]); // unrelated channels sharing a word
   expect(build([ch(1, 'Sky Uno'), ch(2, 'Sky Cinema')]).networks).toEqual([]); // two different shows: no proof
 });
@@ -186,4 +186,13 @@ test('the same name with or without spaces is one network', () => {
   const { networks } = build([ch(1, 'Real Time 1'), ch(2, 'Real Time 2'), ch(3, 'RealTime 3')]);
   expect(networks).toHaveLength(1);
   expect(networks[0].channelCount).toBe(3);
+});
+
+test('the name goes on while the next word is shared by most units, and the report lists the biggest discarded names first', () => {
+  const nation = [ch(1, 'UEFA Nation League 1 TV'), ch(2, 'UEFA Nation League 2 TV'), ch(3, 'UEFA Nation League 3 TV'), ch(4, 'UEFA Champions Stellina')];
+  expect(build(nation).networks.map((n) => n.name)).toEqual(['UEFA Nation League']);
+  const items = [ch(1, 'Aaa Uno'), ch(2, 'Aaa Due'), ch(3, 'Bbb Uno'), ch(4, 'Bbb Due'), ch(5, 'Bbb Tre')];
+  const report = {};
+  buildNetworks(buildEntries('live', items.map((i) => ({ ...i, tmdbId: null, ext: '', genre: '' }))), [], { report });
+  expect(report.rejected.map((r) => r.name)).toEqual(['bbb', 'aaa']);
 });

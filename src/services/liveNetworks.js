@@ -18,8 +18,11 @@ const MAX_WORDS = 3;
 const EXTEND_SHARE = 0.8;
 /** Different second words needed to call a single word a network without numbered channels ("Sky Uno", "Sky Cinema", "Sky Sport")... */
 const MIN_DISTINCT = 3;
-/** ...and the proof also needs sub-families (at least two second words shared by 2+ units: "Sky Cinema …", "Sky Sport …") or this many units. */
+/** ...and the proof also needs sub-families (at least this many second words shared by 2+ units: "Sky Cinema …", "Sky Sport …") or this many units. */
+const MIN_FAMILIES = 3;
 const BIG_NETWORK = 20;
+/** Discarded names kept in the Diagnostics report. */
+const MAX_REPORT_REJECTED = 150;
 /** Words a network name cannot end with: it goes on ("Aldo Giovanni e" → "Aldo Giovanni e Giacomo"). */
 const STOP = new Set(['e', 'ed', 'di', 'del', 'della', 'dei', 'delle', 'da', 'al', 'alla', 'ai', 'in', 'il', 'lo', 'la', 'le', 'un', 'una', 'de', 'and', 'of', 'the', 'del', 'con', 'per']);
 /** Most words of a name that was extended through such words. */
@@ -117,10 +120,10 @@ export function analyzeNetworks(units, { min = MIN_NETWORK_UNITS } = {}) {
     const named = Array.from(children).filter(([key]) => nameable(key, depth));
     const top = named.slice().sort((a, b) => b[1].length - a[1].length)[0];
     const label = prefix.join(' ');
-    const dominant = Boolean(top) && top[1].length >= min && top[1].length >= EXTEND_SHARE * list.length && list.length - top[1].length <= 1;
+    const dominant = Boolean(top) && top[1].length >= min && top[1].length >= EXTEND_SHARE * list.length;
 
-    // One second word holds (almost) all the units: the network name is that long ("Amazon" → "Amazon Prime").
-    if (depth === 1 && dominant) return visit(top[1], 2, prefix.concat(top[0]));
+    // One next word holds (almost) all the units: the network name is that long ("Amazon" → "Amazon Prime", "UEFA Nation" → "UEFA Nation League").
+    if (depth < MAX_WORDS && dominant) return visit(top[1], depth + 1, prefix.concat(top[0]));
     // A name never ends with "e", "di", "al"…: it goes on while the units agree ("Aldo Giovanni e Giacomo").
     const open = STOP.has(prefix[depth - 1]);
     if (depth < MAX_STOP_WORDS && ((open && top && top[1].length >= min) || (depth >= 2 && dominant && STOP.has(top[0])))) return visit(top[1], depth + 1, prefix.concat(top[0]));
@@ -137,7 +140,7 @@ export function analyzeNetworks(units, { min = MIN_NETWORK_UNITS } = {}) {
       });
       const families = named.filter(([, sub]) => sub.length >= 2).length;
       if (numbers.size >= 2) proof = 'numbered'; // "Rai 1", "Rai 2" (one number alone is a name: "Rete 4", "Italia 1")
-      else if (named.length >= MIN_DISTINCT && list.length >= MIN_DISTINCT && (families >= 2 || list.length >= BIG_NETWORK)) proof = 'distinct';
+      else if (named.length >= MIN_DISTINCT && list.length >= MIN_DISTINCT && (families >= MIN_FAMILIES || list.length >= BIG_NETWORK)) proof = 'distinct';
     }
     if (proof && list.length >= min) {
       const name = prefix.map((key, i) => (i > 0 && STOP.has(key) ? key : voteWord(list.map((unit) => unit.words[i] && unit.words[i].word).filter(Boolean), key))).join(' ');
@@ -220,7 +223,7 @@ export function buildNetworks(entries, groups, { enabled = true, links = [], min
   if (report) {
     const proofOf = new Map(analysis.networks.map((n) => [n.id, n.proof]));
     report.networks = rows.map((row) => ({ name: row.name, proof: proofOf.get(row.networkId), units: row.memberKeys.length, channels: row.channelCount, manual: row.manualKeys.length, sample: members.get(row.networkId).slice(0, 3).map(({ unit }) => unit.name) }));
-    report.rejected = analysis.rejected.slice(0, 60);
+    report.rejected = analysis.rejected.slice().sort((a, b) => b.units - a.units).slice(0, MAX_REPORT_REJECTED); // the biggest first: they matter most
     report.unassigned = units.filter((unit) => !own.has(unit.key)).length;
   }
   return rows;
