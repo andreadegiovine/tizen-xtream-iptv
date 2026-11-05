@@ -10,6 +10,8 @@ $fail: #ff5a5f;
 
 // Layout is designed for a 1920x1080 coordinate space; keep content inside the safe area.
 // One spacing unit for everything: screen sides, bar → content, sidebar → content.
+$logo-size: 60px;
+$topbar-external-margin: 40px;
 $gutter: 48px;
 $safe-x: $gutter;
 $topbar-height: 96px;
