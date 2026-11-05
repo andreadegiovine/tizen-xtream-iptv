@@ -14,6 +14,7 @@ const CONTROLS_MS = 4000;
 const SAVE_EVERY_MS = 10000;
 const NEXT_OFFER_S = 120; // the "next episode" notice appears this long before the end (over the end credits)
 const NEXT_MIN_DURATION_S = 240;
+const NEXT_COUNTDOWN_S = 10;
 const SEEK_SHORT = 10;
 const SEEK_LONG = 30;
 const SCRUB_STEP = 30;
@@ -39,6 +40,7 @@ export function createPlayerPage(ctx, params) {
   let hideTimer = null;
   let saveTimer = null;
   let nextNotice = null; // the notice that offers the next episode (OK plays it now)
+  let nextTimer = null; // the 10 second countdown
   let nextOffered = false; // once per episode
   let recoverNotice = null;
   let loadToken = 0;
@@ -409,26 +411,36 @@ export function createPlayerPage(ctx, params) {
   }
 
   function closeNextNotice() {
+    clearInterval(nextTimer);
+    nextTimer = null;
     if (nextNotice !== null) ctx.notices.close(nextNotice);
     nextNotice = null;
   }
 
   /** About two minutes before the end of an episode the next one is offered: OK plays it now (during the end credits). */
   function offerNext(state) {
-    if (nextNotice !== null && !isLive) {
-      ctx.notices.update(nextNotice, nextText(state));
-      return;
-    }
     if (isLive || isTrailer || nextOffered || state.status !== 'playing' || !(state.duration > NEXT_MIN_DURATION_S)) return;
     if (state.duration - state.position > NEXT_OFFER_S) return;
     const next = neighborEpisode(playlist, index, 1);
     if (!next) return;
     nextOffered = true;
-    nextNotice = ctx.notices.info(nextText(state), { scope: 'playback', key: 'player-next', sticky: true });
+    nextNotice = ctx.notices.info(t('player.next', { seconds: NEXT_COUNTDOWN_S }), { scope: 'playback', key: 'player-next', sticky: true });
+    const shown = nextNotice;
+    // Always a 10 second countdown from when the notice appears; at zero the next episode starts (autoplay on).
+    ctx.settings.get().then((s) => {
+      if (nextNotice !== shown || destroyed) return;
+      if (!s.autoplayNext) {
+        ctx.notices.update(shown, t('player.nextNow'));
+        return;
+      }
+      let left = NEXT_COUNTDOWN_S;
+      nextTimer = setInterval(() => {
+        left -= 1;
+        if (left <= 0) play(next.index);
+        else ctx.notices.update(shown, t('player.next', { seconds: left }));
+      }, 1000);
+    });
   }
-
-  /** "Next episode in N seconds": the time that is left of this one. */
-  const nextText = (state) => t('player.next', { seconds: Math.max(0, Math.ceil(state.duration - state.position)) });
 
   function onEnded() {
     if (isTrailer) {

@@ -1778,12 +1778,17 @@ h2 {
   }
 }
 
+// Inside the poster, along its bottom edge: same margins as the badges (8px).
 .card-progress {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  z-index: 1;
   display: none;
   height: 5px;
-  margin-top: 4px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.35);
 
   span {
     display: block;

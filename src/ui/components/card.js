@@ -48,8 +48,8 @@ export function createCard(entry, type, meta = {}) {
   const locked = Boolean(entry && isAdultEntry(entry));
   if (locked) poster.appendChild(h('div', { class: 'card-placeholder locked' }, icon('lock')));
   else if (meta.placeholder) poster.appendChild(h('div', { class: 'card-placeholder' }, icon(meta.placeholder)));
-  poster.append(badges, statusBadge);
-  const el = h('div', { class: `card ${type}${meta.square ? ' square' : ''}` }, poster, title, sub, bar); // `square`: the logo box of Live TV channels
+  poster.append(badges, statusBadge, bar);
+  const el = h('div', { class: `card ${type}${meta.square ? ' square' : ''}` }, poster, title, sub); // `square`: the logo box of Live TV channels
   const state = { year: entry.year, seasons: null, episodes: null, tag: '', subtitle: '', count: null, countLoading: false };
   let img = null;
   let rotation = null; // a collection card: its poster changes among the pictures of its titles
