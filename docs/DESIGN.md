@@ -168,3 +168,7 @@ Solo in sviluppo: `scripts/dev-media-proxy.js` serve `/__media?u=…` (Range, re
 - Lettura (`importFromTrakt`): svuota la coda, legge visti film/serie e `/sync/playback`; segna visti, toglie i visti già allineati ma non più su Trakt (`source: 'trakt'` o `traktSynced`), applica il progresso più recente solo con durata locale nota.
 
 Aggiunte (patch 79): `trakt.progress` in `kv` = un avanzamento per titolo (il più recente) non ancora inviato, riprovato da `flush()`; `playbackItems` porta anche titolo, episodio e durata (runtime di Trakt, o 100 / 45 min); `sendHistory` invia in blocco (200 record per chiamata) i visti con `traktSynced` falso, anche all'avvio (`pushUnsent`); da 99 % l'avanzamento non è più uno scrobble ma un titolo visto.
+
+## Immagini e contenitori che scorrono (patch 80)
+
+`lazyImage.js` osserva ogni immagine dal suo contenitore (`.carousel-track` o `.page`) con `root` esplicito: senza, i contenitori `overflow` ritagliano senza margine e `rootMargin` non ha effetto. Gli observer sono uno per contenitore; l'immagine non è ancora nel documento quando la card nasce, quindi la registrazione avviene al frame dopo.

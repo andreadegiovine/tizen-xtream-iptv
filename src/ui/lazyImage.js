@@ -4,8 +4,10 @@
 const MARGIN = '600px'; // closer than this to the screen: the picture is loaded
 const FAR_MARGIN = '1800px'; // farther than this (three times as much, so nothing flickers at the edge): the picture is dropped
 const SWEEP_AT = 400;
-let near = null;
-let far = null;
+// An observer without a root measures against the screen, but the scroll containers between the picture and the screen (the page, the track
+// of a carousel) clip it WITHOUT the margin: a picture a pixel below the visible part would count as far away. So every picture is observed
+// from its own scroll container, where the margins really are 600 / 1800 px.
+const groups = new Map(); // root element (null = the screen) -> { near, far }
 const watched = new Set();
 
 function load(img) {
@@ -25,48 +27,65 @@ function sweep() {
   // Pages are destroyed without telling us: forget images that left the document.
   watched.forEach((img) => {
     if (!img.isConnected) {
-      if (near) near.unobserve(img);
-      if (far) far.unobserve(img);
+      const group = groups.get(img.lazyRoot || null);
+      if (group) {
+        group.near.unobserve(img);
+        group.far.unobserve(img);
+      }
       watched.delete(img);
+    }
+  });
+  groups.forEach((group, root) => {
+    if (root && !root.isConnected) {
+      group.near.disconnect();
+      group.far.disconnect();
+      groups.delete(root);
     }
   });
 }
 
-function getObservers() {
-  if (near || typeof IntersectionObserver === 'undefined') return near;
-  near = new IntersectionObserver(
-    (records) => {
-      records.forEach((record) => {
-        if (record.isIntersecting) load(record.target);
-      });
-    },
-    { rootMargin: MARGIN },
-  );
-  far = new IntersectionObserver(
-    (records) => {
-      records.forEach((record) => {
-        if (!record.isIntersecting) unload(record.target);
-      });
-    },
-    { rootMargin: FAR_MARGIN },
-  );
-  return near;
+function groupFor(root) {
+  let group = groups.get(root);
+  if (group) return group;
+  const make = (rootMargin, onRecord) => new IntersectionObserver((records) => records.forEach(onRecord), { root, rootMargin });
+  group = {
+    near: make(MARGIN, (record) => {
+      if (record.isIntersecting) load(record.target);
+    }),
+    far: make(FAR_MARGIN, (record) => {
+      if (!record.isIntersecting) unload(record.target);
+    }),
+  };
+  groups.set(root, group);
+  return group;
+}
+
+const scrollRootOf = (img) => (img.closest ? img.closest('.carousel-track') || img.closest('.page') : null);
+
+/** Starts watching a picture from its scroll container (it is not in the page yet when a card is built: one frame later). */
+function register(img, tries = 0) {
+  if (!img.isConnected && tries < 3 && typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => register(img, tries + 1));
+    return;
+  }
+  if (watched.has(img)) return;
+  if (watched.size > SWEEP_AT) sweep();
+  const root = img.isConnected ? scrollRootOf(img) : null;
+  img.lazyRoot = root;
+  const group = groupFor(root);
+  watched.add(img);
+  group.near.observe(img);
+  group.far.observe(img);
 }
 
 /** Sets the image address now when the image is already loading/visible, otherwise when it scrolls near the screen. */
 export function lazySrc(img, url) {
   img.dataset.src = url;
   img.decoding = 'async'; // decoded off the main thread: scrolling does not stutter while posters appear
-  const io = getObservers();
-  if (!io) {
+  if (typeof IntersectionObserver === 'undefined') {
     load(img);
     return;
   }
   if (img.getAttribute('src')) load(img); // already showing something: the new address replaces it at once
-  if (!watched.has(img)) {
-    if (watched.size > SWEEP_AT) sweep();
-    watched.add(img);
-    near.observe(img);
-    far.observe(img);
-  }
+  register(img);
 }
