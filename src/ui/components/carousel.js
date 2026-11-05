@@ -6,9 +6,9 @@ import { createCard } from './card.js';
 
 /**
  * Horizontal row of cards with its own focus zone.
- * items: [{ entry, type, meta? }]; onOpen(item) is called on OK. `revealTop`: focusing it scrolls the page to the top.
+ * items: [{ entry, type, meta? }]; onOpen(item) is called on OK. `startIndex`: the card the focus lands on first; `revealTop`: focusing it scrolls the page to the top.
  */
-export function createCarousel({ id, title, items, onOpen, className = '', revealTop = false }) {
+export function createCarousel({ id, title, items, onOpen, className = '', revealTop = false, startIndex = 0 }) {
   const track = h('div', { class: 'carousel-track' });
   const cards = items.map((item) => {
     const card = createCard(item.entry, item.type, item.meta);
@@ -29,5 +29,6 @@ export function createCarousel({ id, title, items, onOpen, className = '', revea
     onBlur: (i) => cards[i] && cards[i].el.classList.remove('focused'),
     onActivate: (i) => onOpen && onOpen(items[i]),
   });
+  zone.index = Math.max(0, Math.min(startIndex, items.length - 1)); // where the focus lands when the row is reached
   return { el, zone, cards, items };
 }

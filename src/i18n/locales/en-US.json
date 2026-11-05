@@ -85,7 +85,6 @@
   "player.loading": "Loading…",
   "player.paused": "Paused",
   "player.buffering": "Buffering {percent}%",
-  "player.nextNow": "Next episode: press OK to watch it now",
   "player.next": "Next episode in {seconds} seconds",
   "settings.textSize": "Text size",
   "settings.screensaver": "Screensaver",

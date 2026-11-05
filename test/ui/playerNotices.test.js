@@ -82,6 +82,7 @@ describe('player notices', () => {
     expect(document.body.querySelector('.notices .notice')).toBeNull();
     clock.time = 3000 - 110;
     jest.advanceTimersByTime(2000);
+    await flush();
     expect(document.body.querySelector('.notices .notice.info')).not.toBeNull();
     const notice = document.body.querySelector('.notices .notice');
     expect(notice.textContent).toMatch(/tra 10 secondi|in 10 seconds/);
@@ -107,6 +108,20 @@ describe('player notices', () => {
     handlers().onEnded();
     await flush();
     expect(engine.start).toHaveBeenCalledTimes(2);
+    page.destroy();
+  });
+
+  test('autoplay off: no notice near the end', async () => {
+    const { page, notices, handlers, clock } = setup({ autoplayNext: false });
+    document.body.appendChild(page.el);
+    page.mount();
+    await flush();
+    notices.setPlayback(true);
+    handlers().onPrepared();
+    clock.time = 3000 - 60;
+    jest.advanceTimersByTime(2000);
+    await flush();
+    expect(document.body.querySelector('.notices .notice')).toBeNull();
     page.destroy();
   });
 });

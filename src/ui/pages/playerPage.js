@@ -424,15 +424,13 @@ export function createPlayerPage(ctx, params) {
     const next = neighborEpisode(playlist, index, 1);
     if (!next) return;
     nextOffered = true;
-    nextNotice = ctx.notices.info(t('player.next', { seconds: NEXT_COUNTDOWN_S }), { scope: 'playback', key: 'player-next', sticky: true });
-    const shown = nextNotice;
-    // Always a 10 second countdown from when the notice appears; at zero the next episode starts (autoplay on).
+    const episodeToken = loadToken;
+    // With "play the next episode" off nothing is shown: the episode just ends.
     ctx.settings.get().then((s) => {
-      if (nextNotice !== shown || destroyed) return;
-      if (!s.autoplayNext) {
-        ctx.notices.update(shown, t('player.nextNow'));
-        return;
-      }
+      if (!s.autoplayNext || destroyed || nextNotice !== null || episodeToken !== loadToken) return;
+      nextNotice = ctx.notices.info(t('player.next', { seconds: NEXT_COUNTDOWN_S }), { scope: 'playback', key: 'player-next', sticky: true });
+      const shown = nextNotice;
+      // Always a 10 second countdown from when the notice appears; at zero the next episode starts.
       let left = NEXT_COUNTDOWN_S;
       nextTimer = setInterval(() => {
         left -= 1;

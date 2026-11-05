@@ -38,3 +38,11 @@ test('a permanent playback notice stays until it is closed', () => {
   expect(notices.isOpen()).toBe(false);
   jest.useRealTimers();
 });
+
+test('carousel: the focus lands on startIndex', () => {
+  const { createCarousel } = require('../../src/ui/components/carousel.js');
+  const items = [1, 2, 3].map((n) => ({ entry: { name: String(n) }, type: 'episode' }));
+  expect(createCarousel({ id: 'c', title: '', items, startIndex: 2 }).zone.index).toBe(2);
+  expect(createCarousel({ id: 'c', title: '', items, startIndex: 9 }).zone.index).toBe(2);
+  expect(createCarousel({ id: 'c', title: '', items }).zone.index).toBe(0);
+});

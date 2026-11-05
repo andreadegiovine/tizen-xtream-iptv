@@ -453,6 +453,8 @@ export function createDetailPage(ctx, params) {
           },
         };
       }),
+      // The focus lands on the episode that plays next, when it is in the season shown.
+      startIndex: Math.max(0, season.episodes.indexOf(pickNextEpisode(episodes, records).episode)),
       onOpen: (item) => play({ list: episodes, startIndex: episodes.indexOf(item.episode) }),
     });
     episodesEl.appendChild(carousel.el);
@@ -471,6 +473,14 @@ export function createDetailPage(ctx, params) {
     else {
       const rec = await ctx.watch.get(watchKey(providerId, entry.key));
       records = rec ? [rec] : [];
+    }
+    followWatchState();
+  }
+
+  /** The season shown (unless the user picked another one) is the one of the episode that plays next, as the watch state now stands. */
+  function followWatchState() {
+    if (entry.type === 'series' && info && info.seasons && info.seasons.length && !seasonChosen) {
+      seasonIndex = seasonIndexOf(info.seasons, pickNextEpisode(flattenEpisodes(info.seasons), records).episode);
     }
   }
 
@@ -666,9 +676,7 @@ export function createDetailPage(ctx, params) {
     }
     if (destroyed) return;
     el.classList.remove('loading');
-    if (entry.type === 'series' && info.seasons && info.seasons.length && !seasonChosen) {
-      seasonIndex = seasonIndexOf(info.seasons, pickNextEpisode(flattenEpisodes(info.seasons), records).episode);
-    }
+    followWatchState();
     fillText();
     build();
     if (ctx.meta) {
