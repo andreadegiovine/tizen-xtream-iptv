@@ -140,4 +140,19 @@ describe('tmdb download', () => {
     expect(tmdb.details).toHaveBeenCalledTimes(1);
     expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['dramma']);
   });
+  test('once every title went through TMDB only its genres remain (also for titles without a match); before that the provider\'s are there', async () => {
+    const { openAppDb } = await import('../../src/db/appDb.js');
+    const { runTmdbDownload, runGenreBackfill } = await import('../../src/services/genreBackfill.js');
+    const appDb = await openAppDb(`app-${Math.random()}`);
+    const db = await openProviderDb(`genres-only-${Math.random()}`);
+    const item = (id, tmdbId) => ({ key: `movie:${id}`, type: 'movie', id, name: `Film ${id}`, categoryId: '1', added: 100 + id, tmdbId, ext: 'mkv', genre: 'Azione', ...{} });
+    await writeEntries(db, 'movie', buildEntries('movie', [item(1, 7), item(2, 0)]));
+    expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['azione']); // provider's, before TMDB
+    const tmdb = { enabled: true, details: jest.fn(async () => ({ id: 7, title: 'T', genres: [{ id: 1, name: 'Dramma' }] })) };
+    await runTmdbDownload({ db, appDb, tmdb, language: 'it-IT', now: () => 1000 });
+    expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['dramma']); // title 2 has no TMDB id: no genre, the provider's are gone
+    await writeEntries(db, 'movie', buildEntries('movie', [item(1, 7), item(2, 0)]));
+    expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['dramma']);
+    expect(await runGenreBackfill({ db, xtream: { getVodInfo: jest.fn(), getSeriesInfo: jest.fn() }, tmdb: null, language: 'it' })).toBe(0);
+  });
 });

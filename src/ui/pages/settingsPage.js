@@ -4,7 +4,8 @@ import { clearDerived } from '../../services/derivedStore.js';
 import { removeCatalogType } from '../../services/catalogSync.js';
 import { DERIVED_STORES } from '../../services/dbSize.js';
 import { Priority } from '../../services/backgroundQueue.js';
-import { transactionDone } from '../../core/idb.js';
+import { transactionDone, dbDelete } from '../../core/idb.js';
+import { GENRES_SOURCE_KEY } from '../../services/genreBackfill.js';
 import { h } from '../dom.js';
 import { changePin } from '../components/pinFlows.js';
 import { TEXT_SIZES, applyTextSize } from '../../core/textSize.js';
@@ -235,7 +236,7 @@ export function createSettingsPage(ctx) {
     panel.refreshStatus().catch(() => undefined);
     devicePanel.refresh().catch(() => undefined);
   }
-  const catalogRows = panel.rowButtons.flatMap((b) => [rowOf(b.remove, () => removeType(b.type), 'left'), rowOf(b.refresh, async () => panel.syncType(b.type))]);
+  const catalogRows = panel.rowButtons.flatMap((b) => [rowOf(b.refresh, async () => panel.syncType(b.type)), rowOf(b.remove, () => removeType(b.type), 'left')]);
 
   // TMDB table: metadata download and genre search.
   async function removeMetadata() {
@@ -257,10 +258,10 @@ export function createSettingsPage(ctx) {
     tmdbPanel.refresh().catch(() => undefined);
   }
   const tmdbRows = [
-    rowOf(tmdbPanel.tmdbButtons.remove, removeMetadata, 'left'),
     rowOf(tmdbPanel.tmdbButtons.refresh, () => runMetadata(['tmdb'])),
-    rowOf(tmdbPanel.genreButtons.remove, removeGenres, 'left'),
+    rowOf(tmdbPanel.tmdbButtons.remove, removeMetadata, 'left'),
     rowOf(tmdbPanel.genreButtons.refresh, () => runMetadata(['genres'])),
+    rowOf(tmdbPanel.genreButtons.remove, removeGenres, 'left'),
   ];
   const dbUpdateRow = {
     el: devicePanel.updateButton,
@@ -269,6 +270,8 @@ export function createSettingsPage(ctx) {
       if (ctx.catalog.getState().running) return;
       await rebuildTitles(ctx);
       await rebuildLive(ctx);
+      await ctx.genres.restore().catch(() => undefined); // the genres come back from the saved TMDB metadata, not from the network
+      ctx.catalogChanged();
       ctx.notices.success(t('notice.dbRebuilt'));
       devicePanel.refresh().catch(() => undefined);
     },
@@ -288,9 +291,12 @@ export function createSettingsPage(ctx) {
       DERIVED_STORES.forEach((name) => tx.objectStore(name).clear());
       await transactionDone(tx);
       await clearDerived(current.db);
+      await dbDelete(current.db, 'meta', GENRES_SOURCE_KEY); // the provider's genres come back with the rebuild, then TMDB's replace them
       log.info('Derived data emptied by the user (entries, groups, genres, search index, sidebar)');
       await rebuildTitles(ctx);
       await rebuildLive(ctx);
+      await ctx.genres.restore().catch(() => undefined);
+      ctx.catalogChanged();
       ctx.notices.success(t('notice.removed'));
       if (ctx.queue) ctx.queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) });
       devicePanel.refresh().catch(() => undefined);
@@ -444,7 +450,7 @@ export function createSettingsPage(ctx) {
     section.fields ? h('div', { class: 'fields' }, section.fields.filter((r) => !r.secondary).map((r) => r.root)) : null,
   ]);
   // Focus order follows the page: catalog, TMDB, Trakt, preferences.
-  const rows = [...catalogRows, ...tmdbRows, tmdbTokenRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktSecretRow, dbRemoveRow, dbUpdateRow, ...prefs];
+  const rows = [...catalogRows, ...tmdbRows, tmdbTokenRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktSecretRow, dbUpdateRow, dbRemoveRow, ...prefs];
   // The Trakt sync / remove buttons exist only while an account is connected.
   const visibleRows = () => rows.filter((row) => row.el.style.display !== 'none');
   rows.forEach((row) => row.refresh());

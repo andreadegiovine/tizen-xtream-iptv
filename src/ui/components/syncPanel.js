@@ -302,7 +302,7 @@ export function createOperationsPanel(ctx) {
     const list = ctx.operations.list();
     el.style.display = list.length ? '' : 'none'; // nothing runs: the table is not shown
     api.rows = list.map((op) => {
-      const stop = h('button', { class: 'btn danger icon-only op-stop', type: 'button', 'aria-label': t('operations.stop'), title: t('operations.stop') }, icon('stop'));
+      const stop = h('button', { class: 'btn primary icon-only panel-button op-stop', type: 'button', 'aria-label': t('operations.stop'), title: t('operations.stop') }, icon('stop'));
       body.appendChild(
         h(
           'div',

@@ -169,7 +169,8 @@ export async function writeEntries(db, type, entries, { onBatch, groups = [], ne
   // The provider's genres are not written for titles that already have TMDB's (they replace them).
   const tmdbKeys = await dbGetAllKeys(db, 'entry_genre_tmdb', ranges.entry_genre_tmdb(type));
   const withTmdb = new Set(tmdbKeys.filter((key) => key.endsWith('|tmdb')).map((key) => key.slice(0, key.indexOf('|'))));
-  await replaceRowsChunked(db, 'entry_genre', type, entries, (batch) => buildEntryGenreRows(withTmdb.size ? batch.filter((entry) => !withTmdb.has(entry.key)) : batch));
+  const tmdbOnly = Boolean(await dbGet(db, 'meta', 'genres:source')); // every title went through TMDB: the provider's genres are not kept
+  await replaceRowsChunked(db, 'entry_genre', type, entries, (batch) => (tmdbOnly ? [] : buildEntryGenreRows(withTmdb.size ? batch.filter((entry) => !withTmdb.has(entry.key)) : batch)));
   // TMDB genres follow the metadata, not the sync: only forget the ones of titles that left the catalog.
   const present = new Set(entries.map((entry) => entry.key));
   const known = await dbGetAllKeys(db, 'entry_genre_tmdb', ranges.entry_genre_tmdb(type));
@@ -281,6 +282,7 @@ export async function syncType({
   const itemCount = items.length;
   items.length = 0; // the entries hold what the grids need: the items are not kept in memory while the rows are written
   projected.length = 0;
+  await dbDelete(db, 'meta', 'genres:source'); // new titles have only the provider's genres until TMDB has been through them
   await writeEntries(db, type, entries, { groups, networks });
   if (report) await dbPut(db, 'meta', { key: NETWORK_REPORT_KEY, type, report });
   const entriesMs = now() - entriesStart;

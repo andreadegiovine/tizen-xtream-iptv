@@ -1,4 +1,4 @@
-import { dbGetAllKeys, dbDeleteMany, dbGetAll, dbPutMany } from '../core/idb.js';
+import { dbGetAllKeys, dbDeleteMany, dbGetAll, dbPutMany, dbDelete } from '../core/idb.js';
 import { buildEntryGenreRows } from './grouping.js';
 import { bumpGenresRev } from './derivedStore.js';
 import { listGenres, genreEntryKeys, genreCounts } from './catalogQuery.js';
@@ -132,6 +132,12 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
   /** One phase on its own (the "update metadata" operations). */
   const download = (force = false) => phase('tmdb', force);
   const findGenres = () => phase('genres', false);
+  /** The TMDB genres written again from the metadata already saved (no request), also when a download is not due. */
+  function restore() {
+    if (running) return Promise.resolve(0);
+    cancelled = false;
+    return run('restore', false);
+  }
 
   function phase(name, force) {
     if (running) return Promise.resolve(0);
@@ -186,7 +192,7 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     } catch (err) {
       log.warn('Background metadata job failed', err && err.message);
     } finally {
-      if (done > 0) await bumpGenresRev(current.db).catch(() => undefined); // genre lists and counts derived from it are worked out again
+      await bumpGenresRev(current.db).catch(() => undefined); // genre lists and counts derived from it are worked out again
       running = wasRunning;
       stopRun = null;
       controller = null;
@@ -199,6 +205,7 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     backfill,
     download,
     findGenres,
+    restore,
     hold,
     stop,
     /** Genres for the sidebar: [{ key, name }], only those that still have at least one title. */
@@ -227,6 +234,7 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
       if (!current) return;
       const keys = await dbGetAllKeys(current.db, STORE);
       await dbDeleteMany(current.db, STORE, keys.filter((key) => key.endsWith('|tmdb')));
+      await dbDelete(current.db, 'meta', 'genres:source');
       // TMDB's genres had replaced the provider's list for those titles: the list comes back from the entries.
       const entries = await dbGetAll(current.db, 'entries');
       await dbPutMany(current.db, 'entry_genre', buildEntryGenreRows(entries.filter((entry) => entry.genres && entry.genres.length)));

@@ -1,4 +1,4 @@
-import { dbGet, dbGetAllKeys, dbPut, transactionDone } from '../core/idb.js';
+import { dbGet, dbGetAllKeys, dbPut, dbClear, dbDeleteMany, transactionDone } from '../core/idb.js';
 import { openProviderDb } from '../db/providerDb.js';
 import { XtreamClient } from './xtreamClient.js';
 import { createTmdbClient } from './tmdbClient.js';
@@ -53,6 +53,7 @@ async function missing(db, type, limit, tried) {
  * `gate()` lets the caller pause it (playback, catalog sync).
  */
 export async function runGenreBackfill({ db, xtream, tmdb, language, signal, gate = () => Promise.resolve(), emit = () => {}, limit = MAX_PER_RUN, concurrency = 3 }) {
+  if (await dbGet(db, 'meta', GENRES_SOURCE_KEY)) return 0; // TMDB's genres are the only ones: the provider is not asked
   let total = 0;
   const aborted = () => Boolean(signal && signal.aborted);
 
@@ -144,19 +145,7 @@ export async function runTmdbDownload({ db, appDb, tmdb, language, signal, gate 
   emit({ event: 'info', message: titles.length ? `TMDB: ${titles.length} titles with a TMDB id, ${due.length} to download` : 'TMDB: no title of the catalog carries a TMDB id (the provider does not send it): nothing to download' });
   emit({ event: 'progress', done, total: due.length });
 
-  // Titles whose metadata is already downloaded but whose genres are not in the database (emptied, or lost): written again from the saved metadata.
-  const withGenres = new Set((await dbGetAllKeys(db, STORE)).filter((key) => key.endsWith('|tmdb')).map((key) => key.slice(0, key.indexOf('|'))));
-  let restored = 0;
-  for (const title of titles) {
-    if (aborted() || !fresh.has(metaKey(title.type, title.tmdbId, language)) || title.entries.some((entry) => withGenres.has(entry.key))) continue;
-    const record = await dbGet(appDb, 'tmdb', metaKey(title.type, title.tmdbId, language));
-    const list = record && record.value && record.value.genreList;
-    if (!list || !list.length) continue;
-    for (const entry of title.entries) await writeGenres(db, entry, list.map((g) => g.name), 'tmdb');
-    restored += 1;
-    if (restored % 50 === 0) await gate();
-  }
-  if (restored) emit({ event: 'info', message: `TMDB: genres written again from the saved metadata for ${restored} titles` });
+  const restored = await restoreTmdbGenres({ db, appDb, titles, fresh, language, signal, gate, emit });
   done += restored;
 
   async function download(title) {
@@ -186,7 +175,47 @@ export async function runTmdbDownload({ db, appDb, tmdb, language, signal, gate 
     if (done % 30 < concurrency || done === restored + due.length) emit({ event: 'progress', done, total: restored + due.length });
   }
   if (failures) emit({ event: 'info', level: 'warn', message: `TMDB: ${failures} requests failed (first: ${firstFailure})` });
+  else if (!aborted()) await markTmdbComplete(db, emit);
   return done;
+}
+
+/** Marker in the provider database: every title has been through TMDB, whose genres are now the only ones. */
+export const GENRES_SOURCE_KEY = 'genres:source';
+
+/**
+ * TMDB's genres replace all the provider's: once every title has been through TMDB the provider's genres (the sync list and the ones
+ * read from details) are removed, and a marker keeps them from being written or searched again until the next catalog sync.
+ */
+export async function markTmdbComplete(db, emit = () => {}) {
+  await dbClear(db, 'entry_genre');
+  const stale = (await dbGetAllKeys(db, STORE)).filter((key) => key.endsWith('|info'));
+  await dbDeleteMany(db, STORE, stale);
+  await dbPut(db, 'meta', { key: GENRES_SOURCE_KEY, source: 'tmdb' });
+  emit({ event: 'info', message: 'TMDB: its genres now replace the provider\'s' });
+}
+
+/**
+ * Writes again, from the metadata already saved in the app database (no request), the TMDB genres that are not in the provider database
+ * (emptied, or lost). Resolves with how many titles were written. With no title left to download the TMDB genres become the only ones.
+ */
+export async function restoreTmdbGenres({ db, appDb, titles = null, fresh = null, language, signal, gate = () => Promise.resolve(), emit = () => {}, now = Date.now }) {
+  const all = titles || (await collectTmdbTitles(db));
+  const live = fresh || new Set(await dbGetAllKeys(appDb, 'tmdb', { index: 'byExpires', range: IDBKeyRange.lowerBound(now(), true) }));
+  const withGenres = new Set((await dbGetAllKeys(db, STORE)).filter((key) => key.endsWith('|tmdb')).map((key) => key.slice(0, key.indexOf('|'))));
+  const aborted = () => Boolean(signal && signal.aborted);
+  let restored = 0;
+  for (const title of all) {
+    if (aborted() || !live.has(metaKey(title.type, title.tmdbId, language)) || title.entries.some((entry) => withGenres.has(entry.key))) continue;
+    const record = await dbGet(appDb, 'tmdb', metaKey(title.type, title.tmdbId, language));
+    const list = record && record.value && record.value.genreList;
+    if (!list || !list.length) continue;
+    for (const entry of title.entries) await writeGenres(db, entry, list.map((g) => g.name), 'tmdb');
+    restored += 1;
+    if (restored % 50 === 0) await gate();
+  }
+  if (restored) emit({ event: 'info', message: `TMDB: genres written again from the saved metadata for ${restored} titles` });
+  if (!titles && !aborted() && all.length && all.every((title) => live.has(metaKey(title.type, title.tmdbId, language)))) await markTmdbComplete(db, emit);
+  return restored;
 }
 
 /**
@@ -200,7 +229,10 @@ export async function runGenreBackfillForProvider({ provider, tmdbKey, language,
   try {
     db = await openProviderDb(provider.id);
     const tmdb = createTmdbClient({ getApiKey: () => tmdbKey });
-    if (phase === 'tmdb') {
+    if (phase === 'restore') {
+      appDb = await openAppDb();
+      done = await restoreTmdbGenres({ db, appDb, language, signal, gate, emit });
+    } else if (phase === 'tmdb') {
       if (tmdb.enabled) {
         appDb = await openAppDb();
         done = await runTmdbDownload({ db, appDb, tmdb, language, signal, gate, emit, force });
