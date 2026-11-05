@@ -86,6 +86,8 @@
   "player.paused": "In pausa",
   "player.buffering": "Buffering {percent}%",
   "player.next": "Prossimo: {title} tra {seconds} s — OK per guardare ora, Indietro per fermare",
+  "settings.textSize": "Dimensioni testo",
+  "settings.screensaver": "Screensaver dopo 15 minuti",
   "settings.autoplayNext": "Avvia l'episodio successivo",
   "home.continue": "Continua a guardare",
   "suggestions.loading": "Cerco suggerimenti…",

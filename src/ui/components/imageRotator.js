@@ -78,3 +78,75 @@ export function createImageRotator({ host, intervalMs = ROTATE_MS, random = Math
     },
   };
 }
+
+// ---- cards: one shared clock for all the rotating posters ----
+
+const rotating = new Set();
+let ticker = null;
+
+function tick() {
+  rotating.forEach((item) => {
+    if (!item.host.isConnected) rotating.delete(item); // the page is gone: forgotten, no timer per card to clean up
+    else item.next();
+  });
+  if (!rotating.size) {
+    clearInterval(ticker);
+    ticker = null;
+  }
+}
+
+/** Number of posters rotating now (for tests). */
+export const rotatingCount = () => rotating.size;
+/** Runs one round of the shared clock (for tests). */
+export const tickRotation = tick;
+
+/**
+ * A card's poster that changes to another random one of `urls` every `ROTATE_MS`, with a cross-fade, on a clock shared by every card
+ * (cards removed from the page drop out by themselves). The layers go before `before` (the badges stay on top).
+ * Returns { setUrls }.
+ */
+export function rotatePoster({ host, before = null, urls = [], random = Math.random, preload = (url, done) => {
+  const probe = new Image();
+  probe.onload = () => done(true);
+  probe.onerror = () => done(false);
+  probe.src = url;
+} }) {
+  const layers = [h('div', { class: 'rot-layer' }), h('div', { class: 'rot-layer' })];
+  layers.forEach((l) => host.insertBefore(l, before));
+  let pool = [];
+  let front = -1;
+  let current = '';
+  let busy = false;
+  const item = {
+    host,
+    next() {
+      const url = pickRandom(pool, current, random);
+      if (!url || busy || url === current) return;
+      busy = true;
+      preload(url, (ok) => {
+        busy = false;
+        if (!ok) {
+          pool = pool.filter((u) => u !== url);
+          return;
+        }
+        const next = front === 0 ? 1 : 0;
+        layers[next].style.backgroundImage = `url("${url}")`;
+        layers[next].classList.add(FADE_CLASS);
+        if (front >= 0) layers[front].classList.remove(FADE_CLASS);
+        front = next;
+        current = url;
+      });
+    },
+  };
+  const api = {
+    setUrls(next) {
+      pool = Array.from(new Set(next.filter(Boolean)));
+      if (pool.length > 1 && !rotating.has(item)) {
+        rotating.add(item);
+        if (!ticker) ticker = setInterval(tick, ROTATE_MS);
+      } else if (pool.length <= 1) rotating.delete(item);
+    },
+  };
+  api.setUrls(urls);
+  return api;
+}

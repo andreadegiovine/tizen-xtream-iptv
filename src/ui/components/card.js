@@ -3,6 +3,7 @@ import { icon } from '../icons.js';
 import { lazySrc } from '../lazyImage.js';
 import { i18n, t } from '../../i18n/index.js';
 import { formatNumber } from '../../core/format.js';
+import { rotatePoster } from './imageRotator.js';
 
 let isAdultEntry = () => false;
 /** The app tells the cards which entries are adult content: their poster is never shown (a lock stands in for it). */
@@ -33,7 +34,7 @@ export const formatRating = (rating) => (Number(rating) > 0 ? Number(rating).toF
  *   poster (rating badge top-right, watched/partial badge top-left)
  *   one line of title, one smaller line with year / S / E (or the program on air for channels)
  * `meta.square` makes the picture a square (the Live TV page only).
- * update(patch) accepts: title, year, seasons, episodes, tag, subtitle, rating, poster, status, progress.
+ * update(patch) accepts: title, year, seasons, episodes, tag, subtitle, rating, poster, posters (several: rotate, see imageRotator.js), status, progress.
  */
 export function createCard(entry, type, meta = {}) {
   const poster = h('div', { class: 'card-poster' });
@@ -49,6 +50,7 @@ export function createCard(entry, type, meta = {}) {
   const el = h('div', { class: `card ${type}${meta.square ? ' square' : ''}` }, poster, title, sub, bar); // `square`: the logo box of Live TV channels
   const state = { year: entry.year, seasons: null, episodes: null, tag: '', subtitle: '', count: null, countLoading: false };
   let img = null;
+  let rotation = null; // a collection card: its poster changes among the pictures of its titles
 
   function setPoster(url) {
     if (!url || locked) return;
@@ -113,6 +115,10 @@ export function createCard(entry, type, meta = {}) {
     if (next.countLoading !== undefined) state.countLoading = next.countLoading;
     if (['year', 'seasons', 'episodes', 'tag', 'subtitle', 'count', 'countLoading'].some((key) => next[key] !== undefined)) renderSub();
     if (next.poster) setPoster(next.poster);
+    if (next.posters && !locked) {
+      if (!rotation) rotation = rotatePoster({ host: poster, before: ratingBadge, urls: next.posters });
+      else rotation.setUrls(next.posters);
+    }
     if (next.rating !== undefined) setRating(next.rating);
     if (next.status !== undefined) setStatus(next.status);
     if (next.progress !== undefined) {
@@ -127,6 +133,6 @@ export function createCard(entry, type, meta = {}) {
   delete fields.square;
   // A network says how many items (channels and groups) it holds, like a collection.
   const units = entry.isNetwork ? (entry.memberKeys || []).length : 0;
-  update({ title: entry.name, poster: entry.icon, rating: entry.rating, year: entry.year, ...(units ? { subtitle: t('collections.items', { count: units }) } : {}), ...fields });
+  update({ title: entry.name, poster: entry.icon, ...(entry.icons && entry.icons.length > 1 ? { posters: entry.icons } : {}), rating: entry.rating, year: entry.year, ...(units ? { subtitle: t('collections.items', { count: units }) } : {}), ...fields });
   return { el, update };
 }

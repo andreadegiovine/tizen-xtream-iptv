@@ -94,15 +94,15 @@ export async function collectionGenres(db, entryKeys, genresOf) {
   return unionGenres(await Promise.all(entryKeys.map((key) => genresOf(db, key).catch(() => []))));
 }
 
-/** A collection as a card entry (`type: 'collection'`): the picture is the first member that has one. `getEntry(db, key)` reads the catalog. */
+/** Pictures of the titles of a collection (up to `limit`): posters first, channel logos only when there is nothing else. */
+export async function collectionImages(db, collection, getEntry, limit = 12) {
+  const entries = (await Promise.all(collection.entryKeys.slice(0, limit * 2).map((key) => getEntry(db, key).catch(() => null)))).filter((e) => e && e.icon);
+  const posters = entries.filter((e) => e.type !== 'live');
+  return (posters.length ? posters : entries).slice(0, limit).map((e) => e.icon);
+}
+
+/** A collection as a card entry (`type: 'collection'`): `icon` is one of its pictures, `icons` all of them (the card rotates them). `getEntry(db, key)` reads the catalog. */
 export async function collectionEntry(db, collection, getEntry, countLabel) {
-  let icon = '';
-  for (const key of collection.entryKeys.slice(0, 6)) {
-    const entry = await getEntry(db, key).catch(() => null);
-    if (entry && entry.icon) {
-      icon = entry.icon;
-      break;
-    }
-  }
-  return { key: collectionKey(collection.id), type: 'collection', name: collection.name, icon, collectionId: collection.id, subtitle: countLabel(collection.entryKeys.length) };
+  const icons = await collectionImages(db, collection, getEntry);
+  return { key: collectionKey(collection.id), type: 'collection', name: collection.name, icon: icons[0] || '', icons, collectionId: collection.id, subtitle: countLabel(collection.entryKeys.length) };
 }

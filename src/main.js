@@ -57,6 +57,8 @@ import { createProviderSetupPage } from './ui/pages/providerSetupPage.js';
 import { createCategoriesPage } from './ui/pages/categoriesPage.js';
 import { createTraktClient } from './services/traktClient.js';
 import { createTraktService, createWatchState } from './services/traktService.js';
+import { createScreensaver } from './ui/screensaver.js';
+import { applyTextSize } from './core/textSize.js';
 import { createSettingsPage } from './ui/pages/settingsPage.js';
 import { createDiagnosticsPage } from './ui/pages/diagnosticsPage.js';
 
@@ -70,6 +72,7 @@ async function boot() {
   const providers = new ProviderStore(db);
 
   const prefs = await settings.get();
+  applyTextSize(prefs.textSize);
   i18n.setLocale(prefs.language === 'auto' ? detectLocale(navigator.language) : prefs.language);
 
   const focus = new FocusManager();
@@ -210,6 +213,7 @@ async function boot() {
   document.getElementById('topbar').appendChild(topbar.el);
   ctx.syncSearchLinks = () => topbar.syncSearchLinks();
   ctx.refreshClock = () => topbar.refreshClock();
+  ctx.screensaver = createScreensaver({ enabled: prefs.screensaver });
 
   const router = new Router({
     container: document.getElementById('content'),
@@ -240,6 +244,7 @@ async function boot() {
       topbar.setSkeleton(entry.name === 'providerSetup' && Boolean(entry.params.firstRun));
       topbar.setVisible(entry.name !== 'player');
       if (ctx.notices) ctx.notices.setPlayback(entry.name === 'player');
+      if (ctx.screensaver) ctx.screensaver.setSuspended(entry.name === 'player'); // never over a video
       topbar.setCurrentSection(section);
       // Pages with their own zone take focus in mount(). When the user switched section from the bar,
       // or the page has no zone, the focus stays on (or returns to) the bar, on the current section.

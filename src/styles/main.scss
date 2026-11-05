@@ -4,6 +4,10 @@
   box-sizing: border-box;
 }
 
+html {
+  font-size: 16px; // base of every rem; the "Text size" setting changes it (core/textSize.js)
+}
+
 html,
 body {
   margin: 0;
@@ -13,8 +17,11 @@ body {
   background: $bg;
   color: $text;
   font-family: $font;
-  font-size: 26px;
   line-height: 1.35;
+}
+
+body {
+  font-size: 1.625rem; // 26 px at 100 %
 }
 
 // AVPlay renders on a plane behind the page: while video plays the page must be see-through.
@@ -26,13 +33,13 @@ body.video-active #topbar {
 
 h1 {
   margin: 0 0 32px;
-  font-size: 53px;
+  font-size: 3.3125rem;
   font-weight: 700;
 }
 
 h2 {
   margin: 32px 0 12px;
-  font-size: 31px;
+  font-size: 1.9375rem;
 }
 
 .muted {
@@ -72,7 +79,7 @@ h2 {
   display: flex;
   align-items: center;
   margin-right: 40px;
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 800;
   letter-spacing: 2px;
   color: #fff;
@@ -103,14 +110,14 @@ h2 {
   line-height: 1.1;
 
   .clock-time {
-    font-size: 30px;
+    font-size: 1.875rem;
     font-weight: 700;
   }
 
   .clock-date {
     margin-top: 2px;
     color: $text-muted;
-    font-size: 18px;
+    font-size: 1.125rem;
   }
 }
 
@@ -261,7 +268,7 @@ h2 {
   .field-label {
     display: block;
     color: $text-muted;
-    font-size: 22px;
+    font-size: 1.375rem;
   }
 
   input {
@@ -401,7 +408,7 @@ h2 {
   border-left: 6px solid $text-muted;
   background: $bg-raised;
   margin-bottom: 4px;
-  font-size: 22px;
+  font-size: 1.375rem;
 
   .diag-id {
     width: 160px;
@@ -438,7 +445,7 @@ h2 {
   left: 160px;
   z-index: 50;
   text-align: center;
-  font-size: 40px;
+  font-size: 2.5rem;
   line-height: 1.25;
   text-shadow: 0 2px 6px #000, 0 0 12px #000;
   white-space: pre-line;
@@ -452,7 +459,7 @@ h2 {
   border: 2px solid transparent;
   border-radius: 6px;
   color: $text-muted;
-  font-size: 18px;
+  font-size: 1.125rem;
   white-space: pre-wrap;
   word-break: break-all;
 
@@ -489,7 +496,7 @@ h2 {
     min-height: 32px;
     margin: 0 0 12px;
     color: $fail;
-    font-size: 22px;
+    font-size: 1.375rem;
   }
 
   .pin-pad {
@@ -509,7 +516,7 @@ h2 {
     margin: 4px;
     border: 2px solid rgba(255, 255, 255, 0.35);
     border-radius: 6px;
-    font-size: 32px;
+    font-size: 2rem;
     font-weight: 700;
     transition: transform 0.12s ease-out;
 
@@ -597,7 +604,7 @@ h2 {
   .code-value {
     margin: 0;
     text-align: center;
-    font-size: 64px;
+    font-size: 4rem;
     font-weight: 800;
     letter-spacing: 12px;
   }
@@ -630,7 +637,7 @@ h2 {
   border-radius: 6px;
   background: $bg-raised;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
-  font-size: 24px;
+  font-size: 1.5rem;
   pointer-events: auto;
   transition: transform 0.12s ease-out;
 
@@ -718,7 +725,7 @@ h2 {
 
 .sync-info {
   min-height: 32px;
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 .btn.disabled {
@@ -749,14 +756,14 @@ h2 {
 
   .provider-name {
     display: block;
-    font-size: 35px;
+    font-size: 2.1875rem;
     font-weight: 700;
   }
 
   .provider-valid {
     margin-left: 20px;
     color: $ok;
-    font-size: 24px;
+    font-size: 1.5rem;
     font-weight: 400;
 
     &.expired {
@@ -767,7 +774,7 @@ h2 {
   .provider-meta {
     display: block;
     color: $text-muted;
-    font-size: 24px;
+    font-size: 1.5rem;
   }
 
   .provider-actions {
@@ -942,7 +949,7 @@ h2 {
   margin-bottom: 4px;
   padding: 10px 16px;
   border-radius: 4px;
-  font-size: 26px;
+  font-size: 1.625rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -953,10 +960,10 @@ h2 {
 
   &.sub {
     margin-left: 20px;
-    font-size: 22px;
+    font-size: 1.375rem;
 
     .browse-cat-count {
-      font-size: 20px;
+      font-size: 1.25rem;
     }
   }
 
@@ -970,7 +977,7 @@ h2 {
     flex: none;
     margin-left: 12px;
     color: $text-muted;
-    font-size: 22px;
+    font-size: 1.375rem;
     font-weight: 400;
   }
 
@@ -1030,18 +1037,18 @@ h2 {
 }
 
 .browse-title {
-  font-size: 38px;
+  font-size: 2.375rem;
   font-weight: 600;
 }
 
 .browse-count {
-  font-size: 30px;
+  font-size: 1.875rem;
 }
 
 .browse-sep {
   margin: 0 14px;
   color: $text-muted;
-  font-size: 30px;
+  font-size: 1.875rem;
 }
 
 // Heart of the sticky head: the .icon-btn look of the title page, a bit smaller to fit the head.
@@ -1136,7 +1143,7 @@ h2 {
     padding: 0 10px;
     border-radius: 0;
     background: rgba(0, 0, 0, 0.72);
-    font-size: 22px;
+    font-size: 1.375rem;
     font-weight: 700;
 
     &.visible {
@@ -1177,7 +1184,7 @@ h2 {
     margin-top: 8px;
     padding: 0 2px;
     overflow: hidden;
-    font-size: 24px;
+    font-size: 1.5rem;
     line-height: 30px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1188,7 +1195,7 @@ h2 {
     padding: 0 2px;
     overflow: hidden;
     color: $text-muted;
-    font-size: 19px;
+    font-size: 1.1875rem;
     line-height: 26px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1203,7 +1210,7 @@ h2 {
 }
 
 .browse-empty {
-  font-size: 26px;
+  font-size: 1.625rem;
 }
 
 // ---- player ----
@@ -1247,14 +1254,14 @@ h2 {
   }
 
   .player-title {
-    font-size: 44px;
+    font-size: 2.75rem;
     font-weight: 700;
   }
 
   .player-now {
     min-height: 30px;
     color: $text-muted;
-    font-size: 26px;
+    font-size: 1.625rem;
   }
 
   .player-row {
@@ -1286,7 +1293,7 @@ h2 {
   .player-time {
     flex: none;
     margin-left: 20px;
-    font-size: 26px;
+    font-size: 1.625rem;
   }
 
   .player-bar {
@@ -1322,7 +1329,7 @@ h2 {
     padding: 4px 14px;
     border-radius: 6px;
     background: rgba(0, 0, 0, 0.8);
-    font-size: 26px;
+    font-size: 1.625rem;
     white-space: nowrap;
     opacity: 0;
     transform: translateX(-50%);
@@ -1378,7 +1385,7 @@ h2 {
     left: 0;
     right: 0;
     text-align: center;
-    font-size: 40px;
+    font-size: 2.5rem;
     opacity: 0;
     text-shadow: 0 2px 8px #000;
 
@@ -1395,7 +1402,7 @@ h2 {
     padding: 16px 24px;
     border-radius: 6px;
     background: rgba(0, 0, 0, 0.8);
-    font-size: 29px;
+    font-size: 1.8125rem;
     opacity: 0;
 
     &.visible {
@@ -1410,7 +1417,7 @@ h2 {
     left: 160px;
     display: none;
     text-align: center;
-    font-size: 40px;
+    font-size: 2.5rem;
     line-height: 1.25;
     text-shadow: 0 2px 6px #000, 0 0 12px #000;
     white-space: pre-line;
@@ -1522,7 +1529,7 @@ h2 {
     min-height: 32px;
     margin: 0 0 20px;
     color: $text-muted;
-    font-size: 26px;
+    font-size: 1.625rem;
 
     .meta-sep {
       margin: 0 12px;
@@ -1545,7 +1552,7 @@ h2 {
     max-width: 1100px;
     margin: 0 0 20px;
     overflow: hidden;
-    font-size: 26px;
+    font-size: 1.625rem;
     line-height: 1.4;
   }
 
@@ -1566,7 +1573,7 @@ h2 {
   .detail-note {
     margin-left: 12px;
     color: $text-muted;
-    font-size: 24px;
+    font-size: 1.5rem;
   }
 
   .detail-categories {
@@ -1582,7 +1589,7 @@ h2 {
   .detail-label {
     flex-basis: 100%;
     margin-bottom: 6px;
-    font-size: 18px;
+    font-size: 1.125rem;
     opacity: 0.6;
   }
 
@@ -1607,7 +1614,7 @@ h2 {
   .epg-row {
     display: flex;
     padding: 6px 0;
-    font-size: 24px;
+    font-size: 1.5rem;
 
     .epg-time {
       width: 120px;
@@ -1622,7 +1629,7 @@ h2 {
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 20px;
   color: $text-muted;
-  font-size: 22px;
+  font-size: 1.375rem;
   color: $text;
 
   &.focused {
@@ -1679,7 +1686,7 @@ h2 {
     display: block;
     margin-bottom: 6px;
     color: $text-muted;
-    font-size: 22px;
+    font-size: 1.375rem;
   }
 
   .select-box {
@@ -1733,7 +1740,7 @@ h2 {
   padding: 14px 24px;
   border-left: 5px solid transparent;
   border-radius: 4px;
-  font-size: 29px;
+  font-size: 1.8125rem;
 
   &.current {
     border-left-color: $accent;
@@ -1784,7 +1791,7 @@ h2 {
 
 .carousel-title {
   margin: 0 0 12px;
-  font-size: 33px;
+  font-size: 2.0625rem;
 }
 
 // Full width: the track runs under the page padding, so a focused first card still has room.
@@ -2035,6 +2042,29 @@ h2 {
   align-items: center;
   justify-content: center;
   height: 100%;
-  font-size: 96px;
+  font-size: 6rem;
   opacity: 0.4;
+}
+
+// Screensaver: black screen, the logo moves and changes size now and then.
+.screensaver {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1000;
+  background: #000;
+  cursor: none;
+
+  .screensaver-mark {
+    position: absolute;
+    transition: left 1.5s ease-in-out, top 1.5s ease-in-out, width 1.5s ease-in-out, height 1.5s ease-in-out;
+
+    svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  }
 }

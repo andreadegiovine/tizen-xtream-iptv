@@ -138,3 +138,9 @@ Vedi anche `docs/MULTIPLATFORM.md`.
 - `STARTED_RATIO = 0.1`: `isStarted` è vero oltre il 10% (esclusivo); `shouldResume` = iniziato e non finito (prima: almeno 30 s). `WatchStore.recent` raggruppa i record per titolo: un film resta se iniziato e non visto; una serie resta se un suo episodio è finito o iniziato.
 - "Visto" poi tolto esegue `clearEntry` (nessun record resta), quindi il titolo non è iniziato.
 - Player: `endsAtText` = ora attuale + tempo restante; formato `timeFormat` delle impostazioni (come l'orologio). Non mostrato in diretta o con durata ignota.
+
+## Dimensione del testo, screensaver, locandine delle card
+
+- `html { font-size: 16px }`; tutti i `font-size` del foglio di stile sono in **rem** (px / 16) e `body` è 1.625rem (26 px). Si usa rem e non em perché gli em si compongono tra elementi annidati e avrebbero cambiato le dimensioni relative. `applyTextSize` (core/textSize.js) imposta il font di `<html>` a 12 / 16 / 20 px. Le misure dei box restano in px: a 125% i testi lunghi si troncano come già avviene.
+- Screensaver (ui/screensaver.js): ascolta in cattura tasti e puntatore; dopo 15 minuti mostra un overlay nero con il logo (`MARK`) che cambia posto e dimensione ogni 10 s; il primo evento lo chiude e viene inghiottito. Sospeso nella pagina player e quando la preferenza è disattivata.
+- `rotatePoster` (imageRotator.js): le card con `posters` (collezioni) cambiano immagine ogni 8 s su un solo `setInterval` condiviso; le card non più nel DOM (`isConnected`) escono dal giro da sole, quindi non servono distruttori.

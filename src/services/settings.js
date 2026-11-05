@@ -1,5 +1,6 @@
 import { kvGet, kvSet } from '../db/kv.js';
 import { TIME_FORMATS, DATE_FORMATS } from '../core/clock.js';
+import { TEXT_SIZES, DEFAULT_TEXT_SIZE } from '../core/textSize.js';
 import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from './liveNetworks.js';
 
 export const BUFFER_OPTIONS = [2, 5, 10, 20, 30];
@@ -15,6 +16,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   carouselItems: 15,
   gridItems: 24,
   autoplayNext: true,
+  textSize: DEFAULT_TEXT_SIZE, // % of the base text size (75, 100, 125)
+  screensaver: true, // after 15 minutes without a key: black screen with the moving logo
   suggestionSource: 'tmdb',
   timeFormat: 'auto',
   dateFormat: 'auto',
@@ -37,6 +40,8 @@ function sanitize(raw) {
     bufferSeconds: pick(raw.bufferSeconds, BUFFER_OPTIONS, DEFAULT_SETTINGS.bufferSeconds),
     carouselItems: pick(raw.carouselItems, CAROUSEL_OPTIONS, DEFAULT_SETTINGS.carouselItems),
     gridItems: pick(raw.gridItems, GRID_OPTIONS, DEFAULT_SETTINGS.gridItems),
+    textSize: pick(raw.textSize, TEXT_SIZES, DEFAULT_SETTINGS.textSize),
+    screensaver: typeof raw.screensaver === 'boolean' ? raw.screensaver : DEFAULT_SETTINGS.screensaver,
     autoplayNext: typeof raw.autoplayNext === 'boolean' ? raw.autoplayNext : DEFAULT_SETTINGS.autoplayNext,
     suggestionSource: pick(raw.suggestionSource, SUGGESTION_SOURCE_OPTIONS, DEFAULT_SETTINGS.suggestionSource),
     timeFormat: pick(raw.timeFormat, TIME_FORMATS, DEFAULT_SETTINGS.timeFormat),

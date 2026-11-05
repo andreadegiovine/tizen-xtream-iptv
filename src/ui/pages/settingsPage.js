@@ -2,6 +2,7 @@ import { createCodePrompt } from '../components/codePrompt.js';
 import { resetApp } from '../../services/resetApp.js';
 import { h } from '../dom.js';
 import { changePin } from '../components/pinFlows.js';
+import { TEXT_SIZES, applyTextSize } from '../../core/textSize.js';
 import { TIME_FORMATS, DATE_FORMATS, formatClockTime, formatClockDate } from '../../core/clock.js';
 import { t, i18n, detectLocale } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
@@ -101,6 +102,7 @@ export function optionRow({ labelKey, key, options, format = String, ctx }) {
       if (chosen === null) return;
       await ctx.settings.update({ [key]: chosen });
       show(chosen);
+      if (key === 'textSize') applyTextSize(chosen);
       if (key === 'language') i18n.setLocale(chosen === 'auto' ? detectLocale(navigator.language) : chosen);
       if ((key === 'timeFormat' || key === 'dateFormat') && ctx.refreshClock) ctx.refreshClock();
       ctx.notices.success(t('notice.saved'), { key: 'setting' });
@@ -137,6 +139,19 @@ export function createSettingsPage(ctx) {
     },
   };
 
+
+  const screensaverValue = toggle();
+  const screensaver = {
+    el: h('div', { class: 'row' }, h('span', { text: t('settings.screensaver') }), screensaverValue),
+    refresh: () => ctx.settings.get().then((s) => { setToggle(screensaverValue, s.screensaver); }),
+    async activate() {
+      const s = await ctx.settings.get();
+      const next = await ctx.settings.update({ screensaver: !s.screensaver });
+      setToggle(screensaverValue, next.screensaver);
+      if (ctx.screensaver) ctx.screensaver.setEnabled(next.screensaver);
+      ctx.notices.success(t('notice.saved'), { key: 'setting' });
+    },
+  };
 
   /** Trakt device-code login: shows the code, waits for the approval on another device, then imports the history. */
   async function connectTrakt() {
@@ -355,10 +370,12 @@ export function createSettingsPage(ctx) {
 
   const prefs = [
     optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
+    optionRow({ ctx, labelKey: 'settings.textSize', key: 'textSize', options: TEXT_SIZES, format: (v) => `${v}%` }),
     optionRow({ ctx, labelKey: 'settings.gridItems', key: 'gridItems', options: GRID_OPTIONS }),
     optionRow({ ctx, labelKey: 'settings.carouselItems', key: 'carouselItems', options: CAROUSEL_OPTIONS }),
     optionRow({ ctx, labelKey: 'settings.buffer', key: 'bufferSeconds', options: BUFFER_OPTIONS, format: seconds }),
     autoplay,
+    screensaver,
     optionRow({ ctx, labelKey: 'settings.timeFormat', key: 'timeFormat', options: TIME_FORMATS, format: timeName }),
     optionRow({ ctx, labelKey: 'settings.dateFormat', key: 'dateFormat', options: DATE_FORMATS, format: dateName }),
     pinRow,

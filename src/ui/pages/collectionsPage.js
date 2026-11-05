@@ -8,7 +8,7 @@ import { createCard } from '../components/card.js';
 import { ensureVisible } from '../scroll.js';
 import { SIDEBAR_ICON, columnsFor } from './browsePage.js';
 import { getEntry, entryGenres } from '../../services/catalogQuery.js';
-import { collectionGenres, collectionKey, unionGenres } from '../../services/collections.js';
+import { collectionGenres, collectionImages, collectionKey, unionGenres } from '../../services/collections.js';
 import { formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
 
@@ -37,15 +37,6 @@ export function collectionsOfView(collections, item, { genresById, favoriteIds }
 
 /** Card entry of a collection: the poster is the first member that has one (filled in later). */
 export const collectionCardEntry = (collection) => ({ key: collectionKey(collection.id), type: 'collection', name: collection.name, icon: '' });
-
-/** The picture of a collection: the first member with a poster or logo. */
-export async function collectionPoster(db, collection) {
-  for (const key of collection.entryKeys.slice(0, 6)) {
-    const entry = await getEntry(db, key).catch(() => null);
-    if (entry && entry.icon) return entry.icon;
-  }
-  return '';
-}
 
 /** "Collections" page: sidebar (all, favourites, pinned genres, genres) and a grid of collection cards. */
 export function createCollectionsPage(ctx, params = {}) {
@@ -143,7 +134,9 @@ export function createCollectionsPage(ctx, params = {}) {
     const cards = shown.map((collection) => {
       const card = createCard(collectionCardEntry(collection), 'movie', { placeholder: 'folder', subtitle: t('collections.items', { count: collection.entryKeys.length }) });
       gridEl.appendChild(card.el);
-      collectionPoster(db, collection).then((url) => url && !destroyed && card.update({ poster: url })).catch(() => undefined);
+      collectionImages(db, collection, getEntry)
+        .then((urls) => urls.length && !destroyed && card.update({ poster: urls[0], posters: urls }))
+        .catch(() => undefined);
       return card;
     });
     cardNodes = cards.map((card) => card.el);
