@@ -5,6 +5,7 @@ import {
   dbGetAllKeys,
   dbGetAllRange,
   dbDeleteMany,
+  dbDelete,
 } from '../core/idb.js';
 import { openProviderDb } from '../db/providerDb.js';
 import { bumpCatalogRev } from './derivedStore.js';
@@ -173,6 +174,15 @@ export async function writeEntries(db, type, entries, { onBatch, groups = [], ne
   const present = new Set(entries.map((entry) => entry.key));
   const known = await dbGetAllKeys(db, 'entry_genre_tmdb', ranges.entry_genre_tmdb(type));
   await dbDeleteMany(db, 'entry_genre_tmdb', known.filter((key) => !present.has(key.slice(0, key.indexOf('|')))));
+}
+
+/** Deletes everything stored for one media type: the downloaded lists and categories, what is worked out from them, and the sync record. */
+export async function removeCatalogType(db, type) {
+  for (const store of ['items', 'entries', 'entry_cat', 'entry_genre', 'entry_genre_tmdb', 'groups', 'categories']) {
+    await dbDeleteMany(db, store, await dbGetAllKeys(db, store, ranges[store](type)));
+  }
+  await dbDelete(db, 'meta', metaKey(type));
+  await bumpCatalogRev(db);
 }
 
 /** Rebuilds the grid entries from the stored items (used when the excluded categories change). */

@@ -382,3 +382,14 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
 - Generi: quando TMDB fornisce i generi di un titolo, quelli del provider (lista della sync e dettagli) per quel titolo vengono rimossi dal db (`entry_genre`, `|info`); la sync successiva non li riscrive; "Rimuovi dati TMDB" li ripristina dalle voci. Vale per i titoli scaricati da ora: quelli già scaricati si correggono al prossimo scarico.
 - Impostazioni > Dispositivo: bottoni "Aggiorna database" (nuova sync forzata del catalogo) e "Svuota database" (svuota catalogo, generi e indice del provider attivo e riscarica), con conferma.
 - Diagnostica: il riquadro del log è alto il 62% dello schermo e lo scroll con le frecce resta sul riquadro (prima la navigazione seguiva i collegamenti). Non verificato su TV.
+
+### Patch 85 — "Aggiorna database" ricostruisce senza rete
+- Impostazioni > Dispositivo: "Aggiorna database" ricostruisce voci, gruppi e reti dalle liste già salvate (film, serie, Live) e invalida i dati derivati, senza richieste al provider. "Svuota database" resta come prima (svuota e riscarica). Non verificato su TV.
+
+### Patch 86 — "Svuota" non tocca il catalogo
+- Impostazioni > Dispositivo: il bottone svuota solo ciò che deriva dal catalogo (voci, categorie per voce, gruppi/reti, generi del provider e di TMDB, indice di ricerca e sidebar salvati) e lo ricostruisce dalle liste scaricate, che restano; poi mette in coda i generi. Nessuna richiesta al provider. Non verificato su TV.
+
+### Patch 87 — generi TMDB, tabelle con elimina/aggiorna per riga, sidebar immediata
+- Generi TMDB: se i metadati TMDB sono già scaricati ma i generi non sono nel db (svuotati o persi), vengono riscritti dai metadati salvati senza richieste. Il job scrive nel log (Diagnostica) quanti titoli hanno un id TMDB, quanti da scaricare e le richieste fallite con il primo errore (prima gli errori erano silenziosi: chiave non valida, rete). Se nessun titolo ha un id TMDB il log lo dice (l'app usa l'id che manda il provider).
+- Impostazioni: ogni riga ha elimina + aggiorna. Catalogo: una coppia per Film, Serie, Live (elimina la lista scaricata del tipo / la riscarica). TMDB: due coppie (metadati con il numero di titoli, generi). Dispositivo: righe "database catalogo" e "database derivati" con dimensione stimata; i bottoni sono sulla seconda (aggiorna = ricostruisce senza rete, svuota = azzera i derivati e ricostruisce).
+- Sidebar: la copia salvata nel db si mostra subito anche se è di prima di una sync o di un job di generi; categorie, generi e reti si ricalcolano dietro e la sidebar si aggiorna. Le liste si salvano appena pronte, i numeri dopo. Non verificato su TV.

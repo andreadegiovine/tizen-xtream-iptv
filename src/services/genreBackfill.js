@@ -1,4 +1,4 @@
-import { dbGetAllKeys, dbPut, transactionDone } from '../core/idb.js';
+import { dbGet, dbGetAllKeys, dbPut, transactionDone } from '../core/idb.js';
 import { openProviderDb } from '../db/providerDb.js';
 import { XtreamClient } from './xtreamClient.js';
 import { createTmdbClient } from './tmdbClient.js';
@@ -136,17 +136,39 @@ export async function runTmdbDownload({ db, appDb, tmdb, language, signal, gate 
   const fresh = force
     ? new Set()
     : new Set(await dbGetAllKeys(appDb, 'tmdb', { index: 'byExpires', range: IDBKeyRange.lowerBound(now(), true) }));
-  const due = titles.filter((title) => !fresh.has(metaKey(title.type, title.tmdbId, language)));
   const aborted = () => Boolean(signal && signal.aborted);
+  const due = titles.filter((title) => !fresh.has(metaKey(title.type, title.tmdbId, language)));
   let done = 0;
+  let failures = 0;
+  let firstFailure = '';
+  emit({ event: 'info', message: titles.length ? `TMDB: ${titles.length} titles with a TMDB id, ${due.length} to download` : 'TMDB: no title of the catalog carries a TMDB id (the provider does not send it): nothing to download' });
   emit({ event: 'progress', done, total: due.length });
+
+  // Titles whose metadata is already downloaded but whose genres are not in the database (emptied, or lost): written again from the saved metadata.
+  const withGenres = new Set((await dbGetAllKeys(db, STORE)).filter((key) => key.endsWith('|tmdb')).map((key) => key.slice(0, key.indexOf('|'))));
+  let restored = 0;
+  for (const title of titles) {
+    if (aborted() || !fresh.has(metaKey(title.type, title.tmdbId, language)) || title.entries.some((entry) => withGenres.has(entry.key))) continue;
+    const record = await dbGet(appDb, 'tmdb', metaKey(title.type, title.tmdbId, language));
+    const list = record && record.value && record.value.genreList;
+    if (!list || !list.length) continue;
+    for (const entry of title.entries) await writeGenres(db, entry, list.map((g) => g.name), 'tmdb');
+    restored += 1;
+    if (restored % 50 === 0) await gate();
+  }
+  if (restored) emit({ event: 'info', message: `TMDB: genres written again from the saved metadata for ${restored} titles` });
+  done += restored;
 
   async function download(title) {
     let value = null;
     try {
       value = gridMeta(normalizeMeta(title.type, await tmdb.details(title.type, title.tmdbId, language, { full: false }), language));
     } catch (err) {
-      if (!(err && err.details && err.details.status === 404)) return; // network / quota: the next run tries again
+      if (!(err && err.details && err.details.status === 404)) {
+        failures += 1; // network / quota / invalid key: the next run tries again
+        if (!firstFailure) firstFailure = `${(err && err.code) || ''} ${(err && err.details && err.details.status) || ''} ${(err && err.message) || ''}`.trim();
+        return;
+      }
     }
     const stamp = now();
     await dbPut(appDb, 'tmdb', { key: metaKey(title.type, title.tmdbId, language), value, fetchedAt: stamp, expiresAt: stamp + (value ? META_TTL_MS : NOT_FOUND_TTL_MS) });
@@ -160,9 +182,10 @@ export async function runTmdbDownload({ db, appDb, tmdb, language, signal, gate 
     await gate();
     if (aborted()) break;
     await Promise.all(due.slice(i, i + concurrency).map(download));
-    done = Math.min(due.length, i + concurrency);
-    if (done % 30 < concurrency || done === due.length) emit({ event: 'progress', done, total: due.length });
+    done = restored + Math.min(due.length, i + concurrency);
+    if (done % 30 < concurrency || done === restored + due.length) emit({ event: 'progress', done, total: restored + due.length });
   }
+  if (failures) emit({ event: 'info', level: 'warn', message: `TMDB: ${failures} requests failed (first: ${firstFailure})` });
   return done;
 }
 

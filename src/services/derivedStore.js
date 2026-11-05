@@ -34,6 +34,12 @@ export async function readDerived(db, name, version) {
   return row && row.version === version ? row.value : null;
 }
 
+/** The saved record whatever its version: { value, fresh } (fresh: built on `version`), or null. Lets a page show the last copy at once and refresh it. */
+export async function readDerivedAny(db, name, version) {
+  const row = await dbGet(db, 'meta', `${PREFIX}${name}`);
+  return row && row.value !== undefined ? { value: row.value, fresh: row.version === version } : null;
+}
+
 /** Saves a value built on `version` (read BEFORE working it out: if the catalog changed meanwhile, the record is born invalid). */
 export function writeDerived(db, name, value, version) {
   return dbPut(db, 'meta', { key: `${PREFIX}${name}`, version, value });

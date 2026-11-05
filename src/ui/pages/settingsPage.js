@@ -1,5 +1,10 @@
 import { createCodePrompt } from '../components/codePrompt.js';
-import { resetApp, clearAllStores } from '../../services/resetApp.js';
+import { resetApp } from '../../services/resetApp.js';
+import { clearDerived } from '../../services/derivedStore.js';
+import { removeCatalogType } from '../../services/catalogSync.js';
+import { DERIVED_STORES } from '../../services/dbSize.js';
+import { Priority } from '../../services/backgroundQueue.js';
+import { transactionDone } from '../../core/idb.js';
 import { h } from '../dom.js';
 import { changePin } from '../components/pinFlows.js';
 import { TEXT_SIZES, applyTextSize } from '../../core/textSize.js';
@@ -178,15 +183,14 @@ export function createSettingsPage(ctx) {
     ctx.focus.focus(ZONE_ID, visibleRows().indexOf(traktConnectRow) + opsPanel.rows.length); // the remove / sync buttons are gone
   }
 
-  /** "Update": the TMDB download of the titles that are missing or expired, then the genre search. */
-  async function updateMetadata() {
+  /** Runs the metadata steps asked (`tmdb`: download, `genres`: provider genre search), each listed as queued and running in turn. */
+  async function runMetadata(ids) {
     if (metaBusy) return;
     metaBusy = true;
-    tmdbPanel.button.classList.add('disabled');
-    // Every step that will run is listed at once ("queued"); each one becomes "running" on its turn.
+    [tmdbPanel.tmdbButtons.refresh, tmdbPanel.genreButtons.refresh].forEach((b) => b.classList.add('disabled'));
     const steps = [];
-    if (ctx.tmdb && ctx.tmdb.enabled) steps.push({ id: 'tmdb', run: () => ctx.genres.download() });
-    steps.push({ id: 'genres', run: () => ctx.genres.findGenres() });
+    if (ids.includes('tmdb') && ctx.tmdb && ctx.tmdb.enabled) steps.push({ id: 'tmdb', run: () => ctx.genres.download() });
+    if (ids.includes('genres')) steps.push({ id: 'genres', run: () => ctx.genres.findGenres() });
     const skipped = new Set();
     const ends = steps.map((step) => ctx.operations.start(step.id, { queued: true, cancel: () => skipped.add(step.id) }));
     try {
@@ -198,7 +202,7 @@ export function createSettingsPage(ctx) {
     } finally {
       ends.forEach((end) => end());
       metaBusy = false;
-      tmdbPanel.button.classList.remove('disabled');
+      [tmdbPanel.tmdbButtons.refresh, tmdbPanel.genreButtons.refresh].forEach((b) => b.classList.remove('disabled'));
       tmdbPanel.refresh().catch(() => undefined);
       devicePanel.refresh().catch(() => undefined);
     }
@@ -210,44 +214,85 @@ export function createSettingsPage(ctx) {
   const panel = createSyncPanel(ctx);
   const tmdbPanel = createTmdbPanel(ctx);
   const traktPanel = createTraktPanel(ctx);
-  const devicePanel = createDevicePanel();
+  const devicePanel = createDevicePanel(ctx);
   const opsPanel = createOperationsPanel(ctx);
   let metaBusy = false;
-  const syncRow = { el: panel.button, refresh: async () => undefined, activate: async () => panel.syncNow() };
-  const metaRow = { el: tmdbPanel.button, refresh: async () => undefined, activate: updateMetadata };
-  const metaRemoveRow = {
-    secondary: 'left',
-    el: tmdbPanel.removeButton,
+  const typeName = (type) => t({ movie: 'nav.movies', series: 'nav.series', live: 'nav.live' }[type]);
+  const rowOf = (el, activate, secondary = null) => ({ el, ...(secondary ? { secondary } : {}), refresh: async () => undefined, activate });
+  const confirmRemove = (title, message) => ctx.dialogs.confirm({ title, message, confirmLabel: t('settings.confirmRemove'), cancelLabel: t('setup.cancel') });
+
+  // Catalog table: one remove / update pair per media type.
+  async function removeType(type) {
+    const ok = await confirmRemove(t('settings.typeRemove', { type: typeName(type) }), t('settings.typeRemoveConfirm', { type: typeName(type) }));
+    if (!ok) return;
+    const current = await ctx.active.get();
+    if (!current) return;
+    ctx.genres.stop();
+    ctx.catalog.cancel();
+    await removeCatalogType(current.db, type);
+    ctx.catalogChanged();
+    ctx.notices.success(t('notice.removed'));
+    panel.refreshStatus().catch(() => undefined);
+    devicePanel.refresh().catch(() => undefined);
+  }
+  const catalogRows = panel.rowButtons.flatMap((b) => [rowOf(b.remove, () => removeType(b.type), 'left'), rowOf(b.refresh, async () => panel.syncType(b.type))]);
+
+  // TMDB table: metadata download and genre search.
+  async function removeMetadata() {
+    if (!(await confirmRemove(t('settings.metaRemove'), t('settings.metaRemoveConfirm')))) return;
+    ctx.genres.stop();
+    await ctx.tmdb.clearAll();
+    await ctx.genres.clearTmdb();
+    await ctx.syncLog.clear('tmdb');
+    ctx.notices.success(t('notice.removed'));
+    tmdbPanel.refresh().catch(() => undefined);
+  }
+  async function removeGenres() {
+    if (!(await confirmRemove(t('settings.genresRemove'), t('settings.genresRemoveConfirm')))) return;
+    ctx.genres.stop();
+    await ctx.genres.clearTmdb();
+    await ctx.syncLog.clear('genres');
+    ctx.catalogChanged();
+    ctx.notices.success(t('notice.removed'));
+    tmdbPanel.refresh().catch(() => undefined);
+  }
+  const tmdbRows = [
+    rowOf(tmdbPanel.tmdbButtons.remove, removeMetadata, 'left'),
+    rowOf(tmdbPanel.tmdbButtons.refresh, () => runMetadata(['tmdb'])),
+    rowOf(tmdbPanel.genreButtons.remove, removeGenres, 'left'),
+    rowOf(tmdbPanel.genreButtons.refresh, () => runMetadata(['genres'])),
+  ];
+  const dbUpdateRow = {
+    el: devicePanel.updateButton,
     refresh: async () => undefined,
     async activate() {
-      const ok = await ctx.dialogs.confirm({ title: t('settings.metaRemove'), message: t('settings.metaRemoveConfirm'), confirmLabel: t('settings.confirmRemove'), cancelLabel: t('setup.cancel') });
-      if (!ok) return;
-      ctx.genres.stop();
-      await ctx.tmdb.clearAll();
-      await ctx.genres.clearTmdb();
-      await ctx.syncLog.clear('tmdb');
-      ctx.notices.success(t('notice.removed'));
-      tmdbPanel.refresh().catch(() => undefined);
+      if (ctx.catalog.getState().running) return;
+      await rebuildTitles(ctx);
+      await rebuildLive(ctx);
+      ctx.notices.success(t('notice.dbRebuilt'));
+      devicePanel.refresh().catch(() => undefined);
     },
   };
-  // Databases of the active provider: update = download the catalog again; remove = empty them (catalog, genres, search index) and download again.
-  const dbUpdateRow = { el: devicePanel.updateButton, refresh: async () => undefined, activate: async () => panel.syncNow() };
   const dbRemoveRow = {
     secondary: 'left',
     el: devicePanel.removeButton,
     refresh: async () => undefined,
     async activate() {
-      const ok = await ctx.dialogs.confirm({ title: t('settings.dbRemove'), message: t('settings.dbRemoveConfirm'), confirmLabel: t('settings.confirmRemove'), cancelLabel: t('setup.cancel') });
-      if (!ok) return;
+      if (!(await confirmRemove(t('settings.dbRemove'), t('settings.dbRemoveConfirm')))) return;
       const current = await ctx.active.get();
       if (!current) return;
       ctx.genres.stop();
       ctx.catalog.cancel();
-      await clearAllStores(current.db);
-      log.info('Provider database emptied by the user');
-      ctx.catalogChanged();
+      // The downloaded catalog (lists, categories, details) stays: what is worked out from it is emptied and built again, with no download.
+      const tx = current.db.transaction(DERIVED_STORES, 'readwrite');
+      DERIVED_STORES.forEach((name) => tx.objectStore(name).clear());
+      await transactionDone(tx);
+      await clearDerived(current.db);
+      log.info('Derived data emptied by the user (entries, groups, genres, search index, sidebar)');
+      await rebuildTitles(ctx);
+      await rebuildLive(ctx);
       ctx.notices.success(t('notice.removed'));
-      ctx.catalog.start({ force: true });
+      if (ctx.queue) ctx.queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) });
       devicePanel.refresh().catch(() => undefined);
     },
   };
@@ -399,7 +444,7 @@ export function createSettingsPage(ctx) {
     section.fields ? h('div', { class: 'fields' }, section.fields.filter((r) => !r.secondary).map((r) => r.root)) : null,
   ]);
   // Focus order follows the page: catalog, TMDB, Trakt, preferences.
-  const rows = [syncRow, metaRow, metaRemoveRow, tmdbTokenRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktSecretRow, dbRemoveRow, dbUpdateRow, ...prefs];
+  const rows = [...catalogRows, ...tmdbRows, tmdbTokenRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktSecretRow, dbRemoveRow, dbUpdateRow, ...prefs];
   // The Trakt sync / remove buttons exist only while an account is connected.
   const visibleRows = () => rows.filter((row) => row.el.style.display !== 'none');
   rows.forEach((row) => row.refresh());
@@ -470,7 +515,7 @@ export function createSettingsPage(ctx) {
         const id = provider && provider.id;
         panel.setProviderName(provider ? provider.name : '');
         panel.el.style.display = id ? '' : 'none';
-        syncRow.el.style.display = id ? '' : 'none';
+        catalogRows.forEach((row) => { row.el.style.display = id ? '' : 'none'; });
         if (id) panel.setProvider(id);
       });
       tmdbPanel.refresh().catch(() => undefined);

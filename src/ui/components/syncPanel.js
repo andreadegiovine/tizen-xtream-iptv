@@ -4,6 +4,7 @@ import { t, i18n } from '../../i18n/index.js';
 import { MediaType } from '../../services/mediaType.js';
 import { formatNumber, formatDateTime, formatSeconds } from '../../core/format.js';
 import { collectDeviceInfo, formatBytes } from '../../services/deviceInfo.js';
+import { estimateStoresBytes, CATALOG_STORES, DERIVED_STORES } from '../../services/dbSize.js';
 
 const TYPES = [MediaType.MOVIE, MediaType.SERIES, MediaType.LIVE];
 const LABEL_KEY = { movie: 'nav.movies', series: 'nav.series', live: 'nav.live' };
@@ -35,9 +36,11 @@ export function describeType(state, meta, locale) {
   });
 }
 
-/** Round icon button at the right of a table title (the label stays as aria-label). */
-function refreshButton(label) {
-  return h('button', { class: 'btn primary icon-only panel-button', type: 'button', 'aria-label': label, title: label }, icon('refresh'));
+/** The remove + refresh buttons at the end of a table row (labels are the aria-labels). */
+function rowButtons(removeLabel, refreshLabel) {
+  const remove = h('button', { class: 'btn danger icon-only panel-button', type: 'button', 'aria-label': removeLabel, title: removeLabel }, icon('remove'));
+  const refresh = h('button', { class: 'btn primary icon-only panel-button', type: 'button', 'aria-label': refreshLabel, title: refreshLabel }, icon('refresh'));
+  return { remove, refresh, el: h('span', { class: 'row-buttons' }, remove, refresh) };
 }
 
 /**
@@ -47,16 +50,16 @@ function refreshButton(label) {
 export function createSyncPanel(ctx) {
   const rows = TYPES.map((type) => {
     const status = h('span', { class: 'sync-status' });
-    return { type, status, el: h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t(LABEL_KEY[type]) }), status) };
+    const buttons = rowButtons(t('settings.typeRemove', { type: t(LABEL_KEY[type]) }), t('settings.typeUpdate', { type: t(LABEL_KEY[type]) }));
+    return { type, status, buttons, el: h('div', { class: 'sync-row with-buttons' }, h('span', { class: 'sync-name', text: t(LABEL_KEY[type]) }), status, buttons.el) };
   });
   const engineStatus = h('span', { class: 'sync-status' });
   const timingStatus = h('span', { class: 'sync-status' });
   const engineRow = h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t('home.engine') }), engineStatus);
   const timingRow = h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t('home.syncTiming') }), timingStatus);
   const info = h('p', { class: 'muted sync-info' });
-  const button = refreshButton(t('home.update'));
   const providerName = h('span', { class: 'panel-provider' });
-  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('home.catalog') }, providerName), button), h('div', { class: 'sync' }, rows.map((r) => r.el), engineRow, timingRow), info);
+  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('home.catalog') }, providerName)), h('div', { class: 'sync' }, rows.map((r) => r.el), engineRow, timingRow), info);
   let persisted = {};
   let providerId = null;
   let wasRunning = false;
@@ -84,20 +87,22 @@ export function createSyncPanel(ctx) {
     timingRow.style.display = meta.length ? '' : 'none';
     const lines = state.error ? [t(`error.${state.error.code}`)] : [];
     info.textContent = lines.join(' · ');
-    button.classList.toggle('disabled', state.running);
+    rows.forEach((row) => row.buttons.refresh.classList.toggle('disabled', state.running));
   }
 
   return {
     el,
-    button,
+    /** Per media type: { type, remove, refresh } (the buttons at the end of its row). */
+    rowButtons: rows.map((row) => ({ type: row.type, remove: row.buttons.remove, refresh: row.buttons.refresh })),
     /** Nickname of the active provider, next to the title. */
     setProviderName(name) {
       providerName.textContent = name ? ` · ${name}` : '';
     },
-    /** Starts a forced sync unless one is already running. */
-    syncNow() {
-      if (!ctx.catalog.getState().running) ctx.catalog.start({ force: true });
+    /** Starts a forced sync of one media type unless one is already running. */
+    syncType(type) {
+      if (!ctx.catalog.getState().running) ctx.catalog.start({ force: true, types: [type] });
     },
+    refreshStatus: () => refreshPersisted(),
     /** Points the panel at a provider (also called when the active provider changes). */
     setProvider(id) {
       providerId = id;
@@ -136,21 +141,20 @@ export function describeMeta(entry, locale, ready, running = null) {
 function createTable(title, buttons, rows) {
   const status = rows.map((row) => ({ ...row, status: h('span', { class: 'sync-status' }) }));
   status.forEach((row) => {
-    row.el = h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: row.label }), row.status);
+    row.el = h('div', { class: row.buttons ? 'sync-row with-buttons' : 'sync-row' }, h('span', { class: 'sync-name', text: row.label }), row.status, row.buttons ? row.buttons.el : null);
   });
   const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: title }), h('div', { class: 'panel-buttons' }, buttons)), h('div', { class: 'sync' }, status.map((r) => r.el)));
   return { el, rows: status };
 }
 
-/** "TMDB" table: download state, genre search, titles in the database; remove and update buttons. */
+/** "TMDB" table: metadata download (with the titles in the database) and genre search, each with its remove and update buttons. */
 export function createTmdbPanel(ctx) {
-  const button = refreshButton(t('settings.metaUpdate'));
-  const removeButton = h('button', { class: 'btn danger icon-only panel-button', type: 'button', 'aria-label': t('settings.metaRemove'), title: t('settings.metaRemove') }, icon('remove'));
   const ready = () => Boolean(ctx.tmdb && ctx.tmdb.enabled);
-  const table = createTable(t('tmdb.title'), [removeButton, button], [
-    { name: 'tmdb', label: t('tmdb.download') },
-    { name: 'genres', label: t('detail.genres') },
-    { name: 'count', label: t('tmdb.count') },
+  const tmdbButtons = rowButtons(t('settings.metaRemove'), t('settings.metaUpdate'));
+  const genreButtons = rowButtons(t('settings.genresRemove'), t('settings.genresUpdate'));
+  const table = createTable(t('tmdb.title'), [], [
+    { name: 'tmdb', label: t('tmdb.download'), buttons: tmdbButtons },
+    { name: 'genres', label: t('detail.genres'), buttons: genreButtons },
   ]);
 
   async function refresh() {
@@ -158,19 +162,17 @@ export function createTmdbPanel(ctx) {
     const locale = i18n.getLocale();
     const active = new Map(ctx.operations.list().map((op) => [op.id, op]));
     for (const row of table.rows) {
-      if (row.name === 'count') {
-        row.status.textContent = ready() ? formatNumber(await ctx.tmdb.countMeta(), locale) : t('settings.notConfigured');
-        continue;
-      }
       row.status.classList.toggle('in-progress', active.has(row.name));
-      row.status.textContent = describeMeta(log[row.name], locale, row.name === 'genres' || ready(), active.get(row.name));
+      const text = describeMeta(log[row.name], locale, row.name === 'genres' || ready(), active.get(row.name));
+      row.status.textContent = row.name === 'tmdb' && ready() ? `${formatNumber(await ctx.tmdb.countMeta(), locale)} ${t('tmdb.count').toLowerCase()} · ${text}` : text;
     }
   }
   let unsubscribe = null;
   return {
     el: table.el,
-    button,
-    removeButton,
+    /** { remove, refresh } of the metadata download row and of the genre search row. */
+    tmdbButtons,
+    genreButtons,
     refresh,
     /** Follows the operations: a row says "running since…" while it works and shows the new result when it ends. */
     mount() {
@@ -257,18 +259,32 @@ export function deviceRows(info) {
   ];
 }
 
-/** "Device" table in the same style as Catalog and Metadata. */
-export function createDevicePanel() {
+/** "Device" table: the device figures, then the downloaded catalog and the data worked out from it (sizes); the last has the buttons. */
+export function createDevicePanel(ctx) {
   const body = h('div', { class: 'sync' });
-  const updateButton = refreshButton(t('settings.dbUpdate'));
-  const removeButton = h('button', { class: 'btn danger icon-only panel-button', type: 'button', 'aria-label': t('settings.dbRemove'), title: t('settings.dbRemove') }, icon('remove'));
-  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('settings.device') }), h('div', { class: 'panel-buttons' }, [removeButton, updateButton])), body);
+  const buttons = rowButtons(t('settings.dbRemove'), t('settings.dbUpdate'));
+  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('settings.device') })), body);
+  const line = (label, value, withButtons = null) =>
+    h('div', { class: withButtons ? 'sync-row with-buttons' : 'sync-row' }, h('span', { class: 'sync-name', text: label }), h('span', { class: 'sync-status', text: value }), withButtons ? withButtons.el : null);
   async function refresh() {
     const rows = deviceRows(await collectDeviceInfo());
+    let sizes = null;
+    try {
+      const current = await ctx.active.get();
+      if (current) sizes = { catalog: await estimateStoresBytes(current.db, CATALOG_STORES), derived: await estimateStoresBytes(current.db, DERIVED_STORES) };
+    } catch {
+      sizes = null;
+    }
     while (body.firstChild) body.removeChild(body.firstChild);
-    rows.forEach((row) => body.appendChild(h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: row.label }), h('span', { class: 'sync-status', text: row.value }))));
+    rows.forEach((row) => body.appendChild(line(row.label, row.value)));
+    if (sizes) {
+      body.appendChild(line(t('device.dbCatalog'), `≈ ${formatBytes(sizes.catalog)}`));
+      body.appendChild(line(t('device.dbDerived'), `≈ ${formatBytes(sizes.derived)}`, buttons));
+    } else {
+      body.appendChild(line(t('device.dbDerived'), t('device.unknown'), buttons));
+    }
   }
-  return { el, refresh, updateButton, removeButton };
+  return { el, refresh, updateButton: buttons.refresh, removeButton: buttons.remove };
 }
 
 /**

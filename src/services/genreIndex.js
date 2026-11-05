@@ -92,6 +92,8 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
           sent = true;
           instance.postMessage({ op: 'start', ...payload });
           if (gate.isPaused()) instance.postMessage({ op: 'pause' });
+        } else if (message.event === 'info') {
+          log[message.level === 'warn' ? 'warn' : 'info'](message.message);
         } else if (message.event === 'done') {
           instance.terminate();
           worker = null;
@@ -175,11 +177,11 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     controller = new AbortController();
     try {
       try {
-        done = createWorker ? await runInWorker(payload) : await runGenreBackfillForProvider({ ...payload, gate: gate.wait, signal: controller.signal });
+        done = createWorker ? await runInWorker(payload) : await runGenreBackfillForProvider({ ...payload, gate: gate.wait, signal: controller.signal, emit: (m) => m.event === 'info' && log[m.level === 'warn' ? 'warn' : 'info'](m.message) });
       } catch (err) {
         if (sent) throw err; // the worker was running: do not start it twice
         log.warn('Genre worker unavailable, using the main thread:', err.message);
-        done = await runGenreBackfillForProvider({ ...payload, gate: gate.wait, signal: controller.signal });
+        done = await runGenreBackfillForProvider({ ...payload, gate: gate.wait, signal: controller.signal, emit: (m) => m.event === 'info' && log[m.level === 'warn' ? 'warn' : 'info'](m.message) });
       }
     } catch (err) {
       log.warn('Background metadata job failed', err && err.message);

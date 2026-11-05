@@ -122,4 +122,22 @@ describe('tmdb download', () => {
     await runTmdbDownload({ ...args, force: true });
     expect(tmdb.details).toHaveBeenCalledTimes(6);
   });
+
+  test('fresh metadata whose genres were lost is written again from the saved record, without a request', async () => {
+    const { openAppDb } = await import('../../src/db/appDb.js');
+    const { runTmdbDownload } = await import('../../src/services/genreBackfill.js');
+    const appDb = await openAppDb(`app-${Math.random()}`);
+    const db = await openProviderDb(`genres-restore-${Math.random()}`);
+    const item = { key: 'movie:1', type: 'movie', id: 1, name: 'Film 1', categoryId: '1', added: 101, tmdbId: 7, ext: 'mkv', genre: '' };
+    await writeEntries(db, 'movie', buildEntries('movie', [item]));
+    const tmdb = { enabled: true, details: jest.fn(async () => ({ id: 7, title: 'T', genres: [{ id: 1, name: 'Dramma' }] })) };
+    const args = { db, appDb, tmdb, language: 'it-IT', now: () => 1000 };
+    await runTmdbDownload(args);
+    const { dbGetAllKeys, dbDeleteMany } = await import('../../src/core/idb.js');
+    await dbDeleteMany(db, 'entry_genre_tmdb', await dbGetAllKeys(db, 'entry_genre_tmdb'));
+    expect((await listGenres(db, 'movie')).length).toBe(0);
+    await runTmdbDownload(args);
+    expect(tmdb.details).toHaveBeenCalledTimes(1);
+    expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['dramma']);
+  });
 });

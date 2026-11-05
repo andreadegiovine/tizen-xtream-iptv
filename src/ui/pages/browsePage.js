@@ -1,7 +1,7 @@
 import { continueWatching } from '../../services/continueWatching.js';
 import { h } from '../dom.js';
 import { createCard, createSkeletonCard } from '../components/card.js';
-import { derivedVersion, readDerived, writeDerived } from '../../services/derivedStore.js';
+import { derivedVersion, readDerivedAny, writeDerived } from '../../services/derivedStore.js';
 import { t, i18n } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel, ListModel } from '../focus/models.js';
@@ -225,11 +225,11 @@ export function createBrowsePage(ctx, params = {}) {
   }
 
   /** Remembers the sidebar (and its numbers) until the app closes or the catalog changes. */
-  function storeSidebar() {
-    if (!ctx.pageCache || !providerId) return;
-    const catalogCounts = Array.from(counts.entries()).filter(([key]) => !/^(continue|favorites|suggestions):/.test(key));
+  function storeSidebar(withCounts = true) {
+    if (!providerId) return;
+    const catalogCounts = withCounts ? Array.from(counts.entries()).filter(([key]) => !/^(continue|favorites|suggestions):/.test(key)) : null;
     const stored = { categories, networks, genres, counts: catalogCounts };
-    ctx.pageCache.set(sidebarKey(), stored);
+    if (ctx.pageCache && withCounts) ctx.pageCache.set(sidebarKey(), stored);
     // Also in the database: valid until the catalog or the genres change, so the next start shows it without working it out.
     if (sidebarVersion) writeDerived(db, sidebarKey(), stored, sidebarVersion).catch(() => undefined);
   }
@@ -459,16 +459,25 @@ export function createBrowsePage(ctx, params = {}) {
     if (type === 'live' && ctx.epg) ctx.epg.maybeSync().catch(() => undefined); // the guide is downloaded when Live TV is opened, at most once a day
     sidebarVersion = await derivedVersion(db, { genres: true, locale: i18n.getLocale() }).catch(() => null);
     let cachedSidebar = ctx.pageCache ? ctx.pageCache.get(sidebarKey()) : null;
+    let stale = false; // the saved copy is from before a sync / genre job: shown at once, worked out again behind it
     if (!cachedSidebar && sidebarVersion) {
-      cachedSidebar = await readDerived(db, sidebarKey(), sidebarVersion).catch(() => null);
-      if (cachedSidebar && ctx.pageCache) ctx.pageCache.set(sidebarKey(), cachedSidebar);
+      const saved = await readDerivedAny(db, sidebarKey(), sidebarVersion).catch(() => null);
+      if (saved) {
+        cachedSidebar = saved.value;
+        stale = !saved.fresh;
+        if (!stale && ctx.pageCache && cachedSidebar.counts) ctx.pageCache.set(sidebarKey(), cachedSidebar);
+      }
     }
+    const haveCounts = Boolean(cachedSidebar && cachedSidebar.counts);
+    const fresh = Boolean(cachedSidebar) && !stale;
     if (cachedSidebar) {
       categories = cachedSidebar.categories;
       genres = cachedSidebar.genres;
       genresLoading = false;
-      cachedSidebar.counts.forEach(([key, n]) => counts.set(key, n));
-      countsLoading = false;
+      if (haveCounts) {
+        cachedSidebar.counts.forEach(([key, n]) => counts.set(key, n));
+        countsLoading = false;
+      }
     } else categories = (await listCategories(db, type)).filter((c) => !excluded.has(String(c.id))).map((c) => ({ id: c.id, name: c.name }));
     // Coming back from a title: the same sidebar entry, page and focus as when the page was left.
     const back = restored;
@@ -480,9 +489,10 @@ export function createBrowsePage(ctx, params = {}) {
     const filter = back ? back.item : params.filter || null;
     const wantsGenre = filter && filter.kind === 'genre';
     const loadGenres = async () => {
-      if (type === 'live' || cachedSidebar) return;
+      if (type === 'live' || fresh) return;
       const found = await ctx.genres.list(type).catch(() => []);
       genres = found.map((g) => ({ key: g.key, name: g.name })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      storeSidebar(false); // the lists are kept at once (the numbers follow): the next visit does not wait for them
     };
     if (wantsGenre) {
       await loadGenres();
@@ -490,6 +500,8 @@ export function createBrowsePage(ctx, params = {}) {
     }
     expanded = Boolean(filter && filter.kind === 'category');
     networks = cachedSidebar ? cachedSidebar.networks : type === 'live' ? await listNetworks(db).catch(() => []) : [];
+    if (stale) listCategories(db, type).then((found) => { if (!destroyed) { categories = found.filter((c) => !excluded.has(String(c.id))).map((c) => ({ id: c.id, name: c.name })); rebuildSidebar(); } }).catch(() => undefined);
+    if (stale && type === 'live') listNetworks(db).then((found) => { if (!destroyed) { networks = found; rebuildSidebar(); } }).catch(() => undefined);
     // A hidden category or a network that no longer exists is not pinned in the sidebar.
     pinned = pinned.filter((p) => (p.kind !== 'category' || !excluded.has(String(p.id))) && (p.kind !== 'network' || networks.some((n) => n.key === p.id)));
     items = sidebarItems({ type, genres, categories, pinned, networks, networksExpanded, expanded, genresExpanded, genresLoading, labels: labels() });
@@ -510,7 +522,7 @@ export function createBrowsePage(ctx, params = {}) {
       if (!destroyed) rebuildSidebar();
     }
     loadUserCounts().catch((err) => log.warn('Sidebar counts failed', err && err.message));
-    if (cachedSidebar) return;
+    if (fresh && haveCounts) return;
     loadCatalogCounts()
       .then((complete) => {
         if (complete && !destroyed) storeSidebar();
