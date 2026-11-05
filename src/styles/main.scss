@@ -1766,16 +1766,17 @@ h2 {
 
 .choice {
   padding: 14px 24px;
-  border-left: 5px solid transparent;
   border-radius: 4px;
   font-size: 1.8125rem;
 
   &.current {
-    border-left-color: $accent;
+    background: $bg-focus;
   }
 
   &.focused {
-    background: $bg-focus;
+    background: $text;
+    color: $bg;
+    transform: scale(1.02);
   }
 }
 
@@ -2023,8 +2024,6 @@ h2 {
     display: flex;
     align-items: center;
     gap: 12px;
-    border-left: 6px solid $accent;
-    font-weight: 700;
 
     .icon {
       flex: none;
