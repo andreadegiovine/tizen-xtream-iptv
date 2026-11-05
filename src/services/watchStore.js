@@ -1,11 +1,13 @@
 import { dbGet, dbPut, dbGetAll, dbDelete } from '../core/idb.js';
 
 export const WATCHED_RATIO = 0.9;
-export const RESUME_MIN_SECONDS = 30;
+export const STARTED_RATIO = 0.1;
 
 export const isWatched = (position, duration) => duration > 0 && position / duration >= WATCHED_RATIO;
+/** A title counts as started (and so as one to continue) once more than 10 % of it was seen. */
+export const isStarted = (position, duration) => duration > 0 && position / duration > STARTED_RATIO;
 /** Resume only when meaningfully into the title and not finished. */
-export const shouldResume = (position, duration) => position >= RESUME_MIN_SECONDS && !isWatched(position, duration);
+export const shouldResume = (position, duration) => isStarted(position, duration) && !isWatched(position, duration);
 
 /**
  * Watch key: tmdb-based entries are shared across providers (history survives deleting a provider),
@@ -49,14 +51,24 @@ export class WatchStore {
     const all = await dbGetAll(this.db, 'watch');
     const seen = new Set();
     const result = [];
+    // Per title: its records, newest first (the first one is the row shown).
+    const groups = new Map();
     all.sort((a, b) => b.updatedAt - a.updatedAt);
     for (const rec of all) {
       if (providerId && rec.providerId !== providerId) continue;
-      const group = rec.entryKey; // one row per title: the most recent episode wins
-      if (seen.has(group)) continue;
-      seen.add(group);
-      // A series stays while it may have a next episode (see continueWatching.js for the finished ones).
-      if (onlyUnfinished && rec.watched && rec.type !== 'series') continue;
+      if (!groups.has(rec.entryKey)) groups.set(rec.entryKey, []);
+      groups.get(rec.entryKey).push(rec);
+    }
+    for (const records of groups.values()) {
+      const rec = records[0]; // one row per title: the most recent episode wins
+      if (seen.has(rec.entryKey)) continue;
+      seen.add(rec.entryKey);
+      if (onlyUnfinished) {
+        // A movie stays once started (> 10 %) and not finished. A series stays while an episode was started or finished
+        // (it may have a next one; see continueWatching.js for the finished ones).
+        const keep = rec.type === 'series' ? records.some((r) => r.watched || isStarted(r.position, r.duration)) : !rec.watched && isStarted(rec.position, rec.duration);
+        if (!keep) continue;
+      }
       result.push(rec);
       if (result.length >= limit) break;
     }

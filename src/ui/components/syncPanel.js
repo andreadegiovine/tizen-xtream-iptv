@@ -230,6 +230,18 @@ export function createTraktPanel(ctx) {
   };
 }
 
+/** "Online · Wi-Fi · 4g · 10 Mbps · 50 ms", or "Offline"; quality parts only when the browser reports them. */
+export function networkText(network) {
+  if (!network) return t('device.unknown');
+  if (!network.online) return t('device.offline');
+  const parts = [t('device.online')];
+  if (network.kind) parts.push(t(`device.net.${network.kind}`));
+  if (network.effectiveType) parts.push(String(network.effectiveType));
+  if (network.downlink) parts.push(`${network.downlink} Mbps`);
+  if (network.rtt) parts.push(`${network.rtt} ms`);
+  return parts.join(' · ');
+}
+
 /** Text rows of the "Device" table from `collectDeviceInfo()`. */
 export function deviceRows(info) {
   const unknown = t('device.unknown');
@@ -237,6 +249,7 @@ export function deviceRows(info) {
   const size = (d) => (d ? `${d.width} × ${d.height}` : null);
   const resolution = info.panel ? `${size(info.panel)}${info.page && size(info.page) !== size(info.panel) ? ` (${size(info.page)})` : ''}` : unknown;
   return [
+    { label: t('device.network'), value: networkText(info.network) },
     { label: t('device.resolution'), value: resolution },
     { label: t('device.heap'), value: info.heap ? of(info.heap.used, info.heap.limit) : unknown },
     { label: t('device.storage'), value: info.storage ? of(info.storage.used, info.storage.quota) : unknown },

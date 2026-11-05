@@ -6,6 +6,7 @@ import { icon } from '../icons.js';
 import { createPlayerController, cleanSubtitle, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer } from '../../services/playerController.js';
 import { ASPECT_MODES } from '../../services/playerEngines.js';
 import { youtubeStreamUrl } from '../../services/youtubeEngine.js';
+import { formatClockTime } from '../../core/clock.js';
 import { watchKey, shouldResume } from '../../services/watchStore.js';
 import { pageEntries } from '../../services/catalogQuery.js';
 
@@ -47,13 +48,13 @@ export function createPlayerPage(ctx, params) {
   let focusMode = false; // the D-pad moves over the controls (progress pointer + buttons) instead of seeking
   let barFocus = false; // focus on the progress pointer (otherwise on a button)
   let focusIndex = 0;
-  let flashTimer = null;
   let lastStatus = '';
   let subtitleTimer = null;
   let scrub = null; // seconds while the user drags / steps the progress bar, otherwise null
   let lastState = { position: 0, duration: 0 };
   let lastPosition = null; // previous polled position, to spot jumps (a seek)
   let tipTimer = null;
+  let timeFormat = 'auto'; // the clock format of the top bar, for the end time
   let scrubTimer = null;
 
   const titleEl = h('div', { class: 'player-title' });
@@ -67,7 +68,6 @@ export function createPlayerPage(ctx, params) {
   const bar = h('div', { class: 'player-bar' }, buffer, fill, knob, tip);
   const seek = h('div', { class: 'player-seek' }, bar);
   const nextEl = h('div', { class: 'player-next' });
-  const flashEl = h('div', { class: 'player-flash' });
   const subtitleEl = h('div', { class: 'player-subtitle' });
 
   // Control buttons: transport at the bottom left (not for live), aspect ratio + subtitles at the bottom right.
@@ -90,7 +90,7 @@ export function createPlayerPage(ctx, params) {
   const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('back'), buttonEl('toggle'), buttonEl('forward'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio')));
   const top = h('div', { class: 'player-top' }, titleEl, nowEl);
   const controls = h('div', { class: 'player-controls' }, ...(isLive ? [] : [seek]), row);
-  const el = h('section', { class: 'player' }, top, controls, statusEl, nextEl, flashEl, subtitleEl);
+  const el = h('section', { class: 'player' }, top, controls, statusEl, nextEl, subtitleEl);
 
   const current = () => playlist[index];
   const episodeKey = () => (params.type === 'series' && current().season !== undefined ? `s${current().season}e${current().number}` : null);
@@ -110,6 +110,13 @@ export function createPlayerPage(ctx, params) {
     }, CONTROLS_MS);
   }
 
+  /** " · termina alle 23:34": when it would end if it keeps playing from `position` (the clock format of the top bar). */
+  function endsAtText(position, duration) {
+    if (!(duration > 0)) return '';
+    const end = new Date(Date.now() + Math.max(0, duration - position) * 1000);
+    return ` · ${t('player.endsAt', { time: formatClockTime(end, timeFormat) })}`;
+  }
+
   function drawProgress(position, duration, bufferedEnd = null) {
     const pct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0;
     const bufferPct = duration > 0 && bufferedEnd !== null ? Math.min(100, Math.max(pct, (bufferedEnd / duration) * 100)) : 0;
@@ -118,7 +125,7 @@ export function createPlayerPage(ctx, params) {
     knob.style.left = `${pct}%`;
     tip.style.left = `${pct}%`;
     tip.textContent = formatClock(position);
-    timeEl.textContent = isLive ? t('player.live') : `${formatClock(position)} / ${formatClock(duration)}`;
+    timeEl.textContent = isLive ? t('player.live') : `${formatClock(position)} / ${formatClock(duration)}${endsAtText(position, duration)}`;
   }
 
   /** The minute the picture now starts from, shown above the knob for a moment after a jump. */
@@ -176,13 +183,6 @@ export function createPlayerPage(ctx, params) {
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
   });
-
-  function flash(text) {
-    flashEl.textContent = text;
-    flashEl.classList.add('visible');
-    clearTimeout(flashTimer);
-    flashTimer = setTimeout(() => flashEl.classList.remove('visible'), 2000);
-  }
 
   const shown = () => buttonDefs.filter((d) => !d.hidden);
   function setAudioVisible(visible) {
@@ -243,7 +243,7 @@ export function createPlayerPage(ctx, params) {
   function cycleAspect() {
     aspect = nextAspect(ASPECT_MODES, aspect);
     if (engine.setAspect) engine.setAspect(aspect);
-    flash(`${t('player.aspect')}: ${t(`player.aspect.${aspect}`)}`);
+    ctx.notices.info(`${t('player.aspect')}: ${t(`player.aspect.${aspect}`)}`, { scope: 'playback', key: 'aspect' });
   }
 
   async function openSubtitles() {
@@ -373,7 +373,8 @@ export function createPlayerPage(ctx, params) {
         if (record && !params.restart && shouldResume(record.position, record.duration)) startAt = record.position;
       }
       if (destroyed || token !== loadToken) return;
-      const { bufferSeconds } = await ctx.settings.get();
+      const { bufferSeconds, timeFormat: clockFormat } = await ctx.settings.get();
+      timeFormat = clockFormat || 'auto';
       controller.load(client.streamUrl(params.type, current().id, current().ext), { startAt, bufferSeconds, onSubtitle: showSubtitle });
       if (isLive && ctx.epg) ctx.epg.nowNext(params.epgChannelId).then((n) => { if (!destroyed && n && n.now) nowEl.textContent = n.now.title; }).catch(() => {});
     } catch (err) {
@@ -518,7 +519,6 @@ export function createPlayerPage(ctx, params) {
       destroyed = true;
       clearTimeout(hideTimer);
       clearTimeout(scrubTimer);
-      clearTimeout(flashTimer);
       clearTimeout(subtitleTimer);
       clearInterval(saveTimer);
       cancelCountdown();

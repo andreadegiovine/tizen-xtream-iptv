@@ -10,6 +10,8 @@ describe('watch rules', () => {
     expect(isWatched(89, 100)).toBe(false);
     expect(isWatched(10, 0)).toBe(false);
     expect(shouldResume(10, 1000)).toBe(false);
+    expect(shouldResume(100, 1000)).toBe(false); // exactly 10 %: not yet started
+    expect(shouldResume(101, 1000)).toBe(true);
     expect(shouldResume(300, 1000)).toBe(true);
     expect(shouldResume(950, 1000)).toBe(false);
   });
@@ -23,7 +25,7 @@ describe('watch rules', () => {
 describe('WatchStore', () => {
   test('saves with watched flag and lists recent, one row per title', async () => {
     const store = await newStore();
-    await store.save({ key: 'movie:t1', entryKey: 'movie:t1', type: 'movie', providerId: 'p', position: 100, duration: 1000 }, 1);
+    await store.save({ key: 'movie:t1', entryKey: 'movie:t1', type: 'movie', providerId: 'p', position: 150, duration: 1000 }, 1);
     await store.save({ key: 'movie:t2', entryKey: 'movie:t2', type: 'movie', providerId: 'p', position: 995, duration: 1000 }, 2);
     await store.save({ key: 'series:t3|s1e1', entryKey: 'series:t3', type: 'series', providerId: 'p', position: 50, duration: 100 }, 3);
     await store.save({ key: 'series:t3|s1e2', entryKey: 'series:t3', type: 'series', providerId: 'p', position: 10, duration: 100 }, 4);
@@ -37,6 +39,27 @@ describe('WatchStore', () => {
     await store.save({ key: 'p:movie:i2', entryKey: 'movie:i2', type: 'movie', position: 1, duration: 10 }, 2);
     await store.save({ key: 'series:t3|s1e1', entryKey: 'series:t3', type: 'series', position: 1, duration: 10 }, 3);
     expect(await store.seeds()).toEqual([{ type: 'series', tmdbId: 3 }, { type: 'movie', tmdbId: 1 }]);
+  });
+});
+
+describe('started titles (over 10 %)', () => {
+  test('under 10 % is not in the continue list; a series with a finished episode stays', async () => {
+    const store = await newStore();
+    await store.save({ key: 'movie:t1', entryKey: 'movie:t1', type: 'movie', providerId: 'p', position: 100, duration: 1000 }, 1);
+    await store.save({ key: 'movie:t2', entryKey: 'movie:t2', type: 'movie', providerId: 'p', position: 101, duration: 1000 }, 2);
+    await store.save({ key: 'series:t3|s1e1', entryKey: 'series:t3', type: 'series', providerId: 'p', position: 100, duration: 100 }, 3);
+    await store.save({ key: 'series:t3|s1e2', entryKey: 'series:t3', type: 'series', providerId: 'p', position: 1, duration: 100 }, 4);
+    await store.save({ key: 'series:t4|s1e1', entryKey: 'series:t4', type: 'series', providerId: 'p', position: 5, duration: 100 }, 5);
+    expect((await store.recent()).map((r) => r.key)).toEqual(['series:t3|s1e2', 'movie:t2']);
+  });
+  test('marked as seen and then unmarked: no longer started, not in the continue list', async () => {
+    const store = await newStore();
+    await store.save({ key: 'movie:t1', entryKey: 'movie:t1', type: 'movie', providerId: 'p', position: 500, duration: 1000 }, 1);
+    expect(await store.recent()).toHaveLength(1);
+    await store.save({ key: 'movie:t1', entryKey: 'movie:t1', type: 'movie', providerId: 'p', position: 1, duration: 1 }, 2); // "seen"
+    await store.clearEntry('p', 'movie:t1'); // "seen" taken off
+    expect(await store.recent()).toEqual([]);
+    expect(await store.get('movie:t1')).toBeUndefined();
   });
 });
 

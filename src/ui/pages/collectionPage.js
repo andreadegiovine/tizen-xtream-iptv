@@ -6,6 +6,7 @@ import { ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { createCarousel } from '../components/carousel.js';
+import { createImageRotator } from '../components/imageRotator.js';
 import { getEntry, entryGenres } from '../../services/catalogQuery.js';
 import { collectionGenres, collectionKey } from '../../services/collections.js';
 import { log } from '../../core/logger.js';
@@ -24,14 +25,19 @@ export function createCollectionPage(ctx, params) {
   let rows = [];
   let destroyed = false;
   let focusedOnce = false;
+  let backdropToken = 0;
 
-  const poster = h('div', { class: 'detail-poster square' });
+  const poster = h('div', { class: 'detail-poster' });
+  const backdrop = h('div', { class: 'detail-backdrop' });
   const titleEl = h('h1', { class: 'detail-title' });
   const metaEl = h('p', { class: 'detail-meta' });
   const actionsEl = h('div', { class: 'detail-actions' });
   const genresEl = h('div', { class: 'detail-categories' });
   const itemsEl = h('div', { class: 'detail-section' });
-  const el = h('section', { class: 'page detail collection' }, poster, h('div', { class: 'detail-body' }, titleEl, metaEl, actionsEl, genresEl, itemsEl));
+  const el = h('section', { class: 'page detail collection' }, backdrop, poster, h('div', { class: 'detail-body' }, titleEl, metaEl, actionsEl, genresEl, itemsEl));
+
+  const posterRotator = createImageRotator({ host: poster });
+  const backdropRotator = createImageRotator({ host: backdrop });
 
   const clear = (node) => {
     while (node.firstChild) node.removeChild(node.firstChild);
@@ -156,11 +162,44 @@ export function createCollectionPage(ctx, params) {
       itemsEl.appendChild(h('p', { class: 'muted', text: t('collections.emptyCollection') }));
     }
     setRows(next);
-    const first = members.find((entry) => entry.icon);
-    clear(poster);
-    poster.classList.remove('loading');
-    if (first) poster.appendChild(h('img', { src: first.icon, alt: '', referrerpolicy: 'no-referrer' }));
-    else poster.appendChild(h('div', { class: 'card-placeholder' }, icon('folder')));
+    updateImages();
+  }
+
+  /** Poster and backdrop each pick their own picture at random among those of the titles (channels have no poster worth showing here). */
+  function updateImages() {
+    const covers = members.filter((entry) => entry.type !== 'live' && entry.icon).map((entry) => entry.icon);
+    const pictures = covers.length ? covers : members.filter((entry) => entry.icon).map((entry) => entry.icon);
+    posterRotator.setUrls(pictures);
+    posterRotator.start();
+    poster.classList.toggle('empty', !pictures.length);
+    if (!pictures.length && !poster.querySelector('.card-placeholder')) poster.appendChild(h('div', { class: 'card-placeholder' }, icon('folder')));
+    if (pictures.length) {
+      const placeholder = poster.querySelector('.card-placeholder');
+      if (placeholder) placeholder.remove();
+    }
+    backdropRotator.setUrls(pictures);
+    backdropRotator.start();
+    loadBackdrops(pictures);
+  }
+
+  /** TMDB's wide pictures of the titles that have a TMDB id (those already known or fetched quietly), added to the backdrop pool as they arrive. */
+  function loadBackdrops(fallback) {
+    if (!ctx.tmdb || !ctx.tmdb.getMeta) return;
+    backdropToken += 1;
+    const mine = backdropToken;
+    const wide = [];
+    members
+      .filter((entry) => entry.tmdbId && entry.type !== 'live')
+      .slice(0, 12)
+      .forEach((entry) => {
+        Promise.resolve(ctx.tmdb.getMeta(entry.type, entry.tmdbId))
+          .then((meta) => {
+            if (destroyed || mine !== backdropToken || !meta || !meta.backdrop) return;
+            wide.push(meta.backdrop);
+            backdropRotator.setUrls(wide.concat(fallback));
+          })
+          .catch(() => undefined);
+      });
   }
 
   async function reload() {
@@ -187,6 +226,8 @@ export function createCollectionPage(ctx, params) {
     },
     destroy() {
       destroyed = true;
+      posterRotator.stop();
+      backdropRotator.stop();
       rows.forEach((r) => ctx.focus.unregister(r.id));
       rows = [];
     },

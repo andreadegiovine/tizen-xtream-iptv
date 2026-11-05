@@ -34,6 +34,50 @@ function tizenMemory(env) {
   }
 }
 
+/** Tizen's NETWORK property ("WIFI", "ETHERNET", "CELLULAR", "NONE"...) when the firmware has it. */
+function tizenNetwork(env) {
+  return new Promise((resolve) => {
+    try {
+      const info = env.tizen && env.tizen.systeminfo;
+      if (!info) {
+        resolve(null);
+        return;
+      }
+      info.getPropertyValue('NETWORK', (n) => resolve(n && n.networkType ? String(n.networkType) : null), () => resolve(null));
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+/** "WIFI" / "wifi" / "ETHERNET" / "4g"... -> the kinds the UI has a word for, or '' */
+export function connectionKind(raw) {
+  const text = String(raw || '').toLowerCase();
+  if (text === 'wifi' || text === 'wi-fi') return 'wifi';
+  if (text.startsWith('ethernet')) return 'ethernet';
+  if (text.startsWith('cell') || text === '2g' || text === '3g' || text === '4g' || text === '5g') return 'cellular';
+  return '';
+}
+
+/**
+ * Internet connection as far as the browser / firmware tell: { online, kind ('wifi' | 'ethernet' | 'cellular' | ''), effectiveType ('4g'...),
+ * downlink (Mbit/s), rtt (ms) }. Quality fields are null when `navigator.connection` is not there.
+ */
+async function collectNetwork(env) {
+  const nav = env.navigator || {};
+  const conn = nav.connection || null;
+  const tizen = await tizenNetwork(env);
+  const online = tizen === 'NONE' ? false : nav.onLine !== false;
+  const kind = connectionKind(tizen) || connectionKind(conn && conn.type);
+  return {
+    online,
+    kind,
+    effectiveType: (conn && conn.effectiveType) || null,
+    downlink: conn && Number(conn.downlink) > 0 ? Number(conn.downlink) : null,
+    rtt: conn && Number(conn.rtt) > 0 ? Number(conn.rtt) : null,
+  };
+}
+
 /**
  * What the TV reports about itself, for the "Device" table. Every value can be missing (null) on browsers or
  * firmware that do not expose it: resolution (physical when Tizen says so, plus the page's own size),
@@ -55,5 +99,6 @@ export async function collectDeviceInfo(env = globalThis) {
   // RAM: what Tizen says is in use on the device, else what this app's JS heap uses out of the device total.
   const device = tizenMemory(env);
   const memory = device ? { ...device, scope: 'device' } : heap && ram ? { used: heap.used, total: ram, scope: 'app' } : null;
-  return { panel, page, ratio: env.devicePixelRatio || 1, heap, storage, ram, memory };
+  const network = await collectNetwork(env);
+  return { panel, page, ratio: env.devicePixelRatio || 1, heap, storage, ram, memory, network };
 }

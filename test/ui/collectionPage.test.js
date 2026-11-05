@@ -75,3 +75,43 @@ test('search shows the collections whose name matches, and Favorites lists the f
   expect(favorites.el.querySelectorAll('.card')).toHaveLength(1);
   favorites.destroy();
 });
+
+test('collection page: rectangular poster, rotating images with their own random pick', async () => {
+  jest.useFakeTimers();
+  try {
+    const { createImageRotator, pickRandom } = await import('../../src/ui/components/imageRotator.js');
+    expect(pickRandom(['a', 'b'], 'a', () => 0)).toBe('b');
+    expect(pickRandom(['a'], 'a', () => 0.9)).toBe('a');
+    expect(pickRandom([], '')).toBe('');
+    const host = document.createElement('div');
+    const picks = [0.9, 0];
+    const rotator = createImageRotator({ host, intervalMs: 1000, random: () => picks.shift(), preload: (url, done) => done(true) });
+    rotator.setUrls(['a', 'b', 'c']);
+    rotator.start();
+    jest.advanceTimersByTime(1);
+    expect(rotator.current).toBe('c');
+    expect(host.querySelectorAll('.rot-layer.visible')).toHaveLength(1);
+    jest.advanceTimersByTime(1000);
+    expect(rotator.current).toBe('a');
+    expect(host.querySelectorAll('.rot-layer.visible')).toHaveLength(1); // the other one faded out
+    rotator.stop();
+  } finally {
+    jest.useRealTimers();
+  }
+  const ctx = await setup();
+  const collection = await ctx.collections.create('p', 'Marvel', []);
+  const page = createCollectionPage(ctx, { id: collection.id });
+  page.mount();
+  await tick();
+  expect(page.el.querySelector('.detail-poster').classList.contains('square')).toBe(false);
+  page.destroy();
+});
+
+test('device info: network row', async () => {
+  const { collectDeviceInfo } = await import('../../src/services/deviceInfo.js');
+  const { deviceRows } = await import('../../src/ui/components/syncPanel.js');
+  const info = await collectDeviceInfo({ navigator: { onLine: true, connection: { type: 'wifi', effectiveType: '4g', downlink: 10, rtt: 50 } } });
+  expect(deviceRows(info)[0].value).toBe('Online · Wi-Fi · 4g · 10 Mbps · 50 ms');
+  const off = await collectDeviceInfo({ navigator: { onLine: false } });
+  expect(deviceRows(off)[0].value).toBe('Offline');
+});

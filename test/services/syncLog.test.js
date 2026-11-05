@@ -61,7 +61,7 @@ describe('device, expiry, backdrop', () => {
     expect(info.ram).toBe(2 * 1024 ** 3);
     const bare = await collectDeviceInfo({});
     expect(bare).toMatchObject({ panel: null, heap: null, storage: null, ram: null });
-    expect(deviceRows(bare)).toHaveLength(4);
+    expect(deviceRows(bare)).toHaveLength(5);
     expect(formatBytes(1536 * 1024 ** 2)).toBe('1.5 GB');
     expect(formatBytes(300 * 1024 ** 2)).toBe('300 MB');
   });

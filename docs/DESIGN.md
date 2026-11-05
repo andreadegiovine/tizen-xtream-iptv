@@ -123,3 +123,18 @@ Canali Live raggruppati: `src/services/liveGrouping.js` (puro) decide i gruppi d
 
 - Le parole da rimuovere dai nomi (`liveGroupPatterns`) si sommano a quelle predefinite (`resolveTerms`: predefinite + aggiunte), mantengono il maiuscolo/minuscolo scritto e accettano `/regex/`; si applicano ai nomi dei canali singoli (`cleanChannelNames`) e dei gruppi, prima di calcolare reti e gruppi.
 - Una rete si può aggiungere ai preferiti (record titolo con la chiave `live:n…`) e fissare nella sidebar Live (`pins` con `kind: 'network'`).
+
+## Immagini delle collezioni e connessione
+
+- La pagina di una collezione ha locandina rettangolare (come film e serie); solo l'entità Rete usa la locandina quadrata.
+- `imageRotator.js`: due livelli sovrapposti con dissolvenza; ogni rotatore sceglie a caso (mai la stessa due volte di fila) tra le immagini dei titoli, con precarico. Locandina e sfondo sono rotatori indipendenti, quindi non sono accoppiati. Lo sfondo usa anche i backdrop TMDB dei titoli con `tmdbId` (primi 12) man mano che arrivano.
+- Dispositivo: la riga "Connessione internet" usa `navigator.onLine`, `navigator.connection` (tipo, `effectiveType`, `downlink`, `rtt`) e `tizen.systeminfo` `NETWORK` quando presente; i campi di qualità compaiono solo se il browser li fornisce.
+- Player: il cambio formato usa le notice standard (`scope: 'playback'`, `key: 'aspect'`) come audio e sottotitoli; rimosso il riquadro `player-flash`.
+
+Vedi anche `docs/MULTIPLATFORM.md`.
+
+## Titoli iniziati e ora di fine
+
+- `STARTED_RATIO = 0.1`: `isStarted` è vero oltre il 10% (esclusivo); `shouldResume` = iniziato e non finito (prima: almeno 30 s). `WatchStore.recent` raggruppa i record per titolo: un film resta se iniziato e non visto; una serie resta se un suo episodio è finito o iniziato.
+- "Visto" poi tolto esegue `clearEntry` (nessun record resta), quindi il titolo non è iniziato.
+- Player: `endsAtText` = ora attuale + tempo restante; formato `timeFormat` delle impostazioni (come l'orologio). Non mostrato in diretta o con durata ignota.
