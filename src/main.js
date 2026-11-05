@@ -42,7 +42,9 @@ import { createDefaultEngine } from './services/playerEngines.js';
 import { createYouTubeEngine } from './services/youtubeEngine.js';
 import { createSyncLog } from './services/syncLog.js';
 import { createOperations } from './services/operations.js';
-import { countEntries } from './services/catalogQuery.js';
+import { countEntries, getEntry } from './services/catalogQuery.js';
+import { continueWatching } from './services/continueWatching.js';
+import { isEmptySeries, markUnavailable } from './services/unavailable.js';
 import { createGenreIndex } from './services/genreIndex.js';
 import { createGenreWorker } from './services/createGenreWorker.js';
 import { createSuggestionsService } from './services/suggestions.js';
@@ -254,10 +256,10 @@ async function boot() {
     onCleared: () => {
       if (router.current && router.current.name === 'search' && router.page && router.page.showRecent) router.page.showRecent();
     },
-    onTyping: () => {
+    onTyping: (text) => {
       // First keystroke: open the results page right away, with placeholders instead of an empty screen.
       if (router.current && router.current.name === 'search') {
-        if (router.page && router.page.showSkeleton) router.page.showSkeleton();
+        if (router.page && router.page.showSkeleton) router.page.showSkeleton(text);
       } else {
         router.push('search', { query: '', section: 'search' });
         if (router.page && router.page.showSkeleton) router.page.showSkeleton();
@@ -437,6 +439,28 @@ async function boot() {
     // Stale-while-revalidate: the cached catalog is usable at once, lists older than 12 h refresh in background.
     catalog.start();
     queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) });
+    // The series of "continue watching" the provider no longer serves (details without episodes) leave the catalog (details cached a day).
+    queue.add({
+      name: 'unavailable',
+      priority: Priority.TRAKT,
+      run: async () => {
+        const current = await active.get();
+        if (!current) return;
+        let removed = 0;
+        for (const rec of await continueWatching(ctx, { providerId: current.provider.id, limit: 20 })) {
+          if (rec.type !== 'series') continue;
+          const entry = await getEntry(current.db, rec.entryKey);
+          const info = entry ? await ctx.details.series(entry.defaultId).catch(() => null) : null;
+          if (!isEmptySeries(entry, info)) continue;
+          await markUnavailable(current.db, entry.key);
+          removed += 1;
+        }
+        if (!removed) return;
+        log.info(`Series without episodes taken out of the catalog: ${removed}`);
+        ctx.catalogChanged();
+        if (router.current && router.current.name === 'home') router.reload();
+      },
+    });
     // The search index is the last start-up task; the search icon moves it to the front.
     queueSearchWarm();
   } else {

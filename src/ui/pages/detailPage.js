@@ -1,5 +1,6 @@
 import { h } from '../dom.js';
 import { cssUrl } from '../cssUrl.js';
+import { isEmptySeries, markUnavailable } from '../../services/unavailable.js';
 import { formatClockTime } from '../../core/clock.js';
 import { t, i18n } from '../../i18n/index.js';
 import { icon } from '../icons.js';
@@ -684,6 +685,16 @@ export function createDetailPage(ctx, params) {
     }
     if (destroyed) return;
     el.classList.remove('loading');
+    if (isEmptySeries(entry, info)) {
+      // The provider lists the series but serves no episode: it leaves the catalog (grids, search, continue watching).
+      markUnavailable(db, entry.key)
+        .then(() => {
+          log.info(`Series without episodes taken out of the catalog: ${entry.key}`);
+          ctx.catalogChanged();
+          ctx.notices.info(t('detail.unavailable'), { key: 'unavailable' });
+        })
+        .catch((err) => log.warn('Unavailable mark failed', err && err.message));
+    }
     followWatchState();
     fillText();
     build();

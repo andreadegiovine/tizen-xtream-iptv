@@ -104,6 +104,27 @@ describe('search page and top bar', () => {
     page.el.remove();
   });
 
+  test('Down / Done on the TV keyboard with the same text leaves the results, never the placeholders', async () => {
+    const { ctx } = makeCtx();
+    ctx.search.search = jest.fn(async () => [{ key: 'series:i1', type: 'series', name: 'Euphoria' }]);
+    const page = createSearchPage(ctx, {});
+    document.body.appendChild(page.el);
+    page.mount();
+    await tick();
+    await page.setQuery('eup');
+    await tick();
+    const skeleton = page.el.querySelector('.search-skeleton');
+    expect(skeleton.style.display).toBe('none');
+    page.showSkeleton('eup'); // input event of the keyboard closing: same text
+    expect(skeleton.style.display).toBe('none');
+    page.showSkeleton(); // a caller that does not say the text: placeholders shown...
+    await page.setQuery('eup'); // ...and the same query takes them away again
+    expect(skeleton.style.display).toBe('none');
+    expect(ctx.search.search).toHaveBeenCalledTimes(1);
+    page.destroy();
+    page.el.remove();
+  });
+
   test('picking a recent search puts it in the field and runs it', async () => {
     const { ctx, search, setSearchText, added } = makeCtx();
     const page = createSearchPage(ctx, {});

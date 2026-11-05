@@ -95,6 +95,8 @@ export function createSearchPage(ctx, params = {}) {
     return Promise.all(list.slice(0, PER_TYPE).map((c) => collectionEntry(current.db, c, getEntry, (count) => t('collections.items', { count }))));
   }
 
+  let running = false; // a search is under way: its placeholders stay until it answers
+
   async function run() {
     if (query.length < 2) {
       await showRecent();
@@ -103,6 +105,7 @@ export function createSearchPage(ctx, params = {}) {
     hideRecent();
     const mine = (token += 1);
     skeleton.style.display = '';
+    running = true;
     try {
       const found = query.length < 2 ? [] : await ctx.search.search(query, { limit: PER_TYPE * 6 });
       if (query.length >= 2 && ctx.collections) found.push(...(await matchingCollections(query)));
@@ -113,6 +116,8 @@ export function createSearchPage(ctx, params = {}) {
     } catch (err) {
       skeleton.style.display = 'none';
       log.warn('Search failed', err && err.message);
+    } finally {
+      if (mine === token) running = false;
     }
   }
 
@@ -127,8 +132,12 @@ export function createSearchPage(ctx, params = {}) {
       hideRecent();
       rows.destroy();
     },
-    /** Called at every keystroke (before the debounce): the placeholders replace the recent searches until the results arrive. */
-    showSkeleton() {
+    /**
+     * Called at every keystroke (before the debounce): the placeholders replace the recent searches until the results arrive. The TV
+     * keyboard also sends an input event when it closes (Down / Done) without changing the text: then the results stay as they are.
+     */
+    showSkeleton(text) {
+      if (text !== undefined && String(text).trim() === query && query.length >= 2) return;
       hideRecent();
       status.textContent = '';
       skeleton.style.display = '';
@@ -141,7 +150,11 @@ export function createSearchPage(ctx, params = {}) {
     /** Called by the top bar while typing. */
     setQuery(text) {
       const next = String(text || '').trim();
-      if (next === query) return Promise.resolve(); // same text (e.g. Enter after typing): keep the cards and the focus
+      if (next === query) {
+        // Same text (e.g. Enter / Down after typing): keep the cards and the focus, and never leave placeholders on screen.
+        if (!running) skeleton.style.display = 'none';
+        return Promise.resolve();
+      }
       query = next;
       return run();
     },

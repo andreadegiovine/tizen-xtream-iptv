@@ -116,6 +116,7 @@
   "detail.version": "Version",
   "detail.seasonOption": "Season {season} ({count})",
   "detail.categories": "Categories",
+  "detail.unavailable": "The provider no longer offers any episode of this series: it has been taken out of the catalog.",
   "detail.genres": "Genres",
   "detail.director": "Director",
   "detail.companies": "Production",

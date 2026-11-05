@@ -10,6 +10,7 @@ import {
 } from '../core/idb.js';
 import { openProviderDb } from '../db/providerDb.js';
 import { bumpCatalogRev } from './derivedStore.js';
+import { unavailableKeys } from './unavailable.js';
 import { AppError, ErrorCode, Severity, toAppError } from '../core/errors.js';
 import { MediaType } from './mediaType.js';
 import { XtreamClient } from './xtreamClient.js';
@@ -185,7 +186,10 @@ async function replaceRowsChunked(db, store, type, entries, makeRows, { extra = 
 }
 
 /** Entries + their per-category rows. Shared by the sync and by "exclusions changed". */
-export async function writeEntries(db, type, entries, { onBatch, groups = [], networks = [], full = false } = {}) {
+export async function writeEntries(db, type, all, { onBatch, groups = [], networks = [], full = false } = {}) {
+  // Titles the provider lists but no longer serves (see unavailable.js) stay out of the catalog for a while.
+  const unavailable = type === MediaType.SERIES ? await unavailableKeys(db) : new Set();
+  const entries = unavailable.size ? all.filter((entry) => !unavailable.has(entry.key)) : all;
   let changes = await replaceRows(db, 'entries', type, entries, { onBatch, full });
   let liveAllRows = [];
   if (type === MediaType.LIVE) {

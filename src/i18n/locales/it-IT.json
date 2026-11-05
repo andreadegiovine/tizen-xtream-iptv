@@ -116,6 +116,7 @@
   "detail.version": "Versione",
   "detail.seasonOption": "Stagione {season} ({count})",
   "detail.categories": "Categorie",
+  "detail.unavailable": "Il provider non offre più episodi di questa serie: è stata tolta dal catalogo.",
   "detail.genres": "Generi",
   "detail.director": "Regista",
   "detail.companies": "Produzione",
