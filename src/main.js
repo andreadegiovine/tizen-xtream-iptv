@@ -24,6 +24,7 @@ import { createHomePage } from './ui/pages/homePage.js';
 import { CatalogSyncService } from './services/catalogSyncService.js';
 import { createCatalogWorker } from './services/createCatalogWorker.js';
 import { startRebuild } from './services/catalogRebuild.js';
+import { createJobQueue } from './services/jobQueue.js';
 import { createEpgService } from './services/epgService.js';
 import { createEpgWorker } from './services/createEpgWorker.js';
 import { createTmdbClient } from './services/tmdbClient.js';
@@ -141,6 +142,13 @@ async function boot() {
   ctx.tmdb = tmdb;
   ctx.operations = createOperations();
   ctx.syncLog = createSyncLog({ db, operations: ctx.operations });
+  // What Settings asks (updates, rebuilds) runs one job at a time, after any catalog / genre / TMDB work already running.
+  const EXCLUSIVE = ['catalog', 'tmdb', 'genres', 'rebuild'];
+  ctx.jobs = createJobQueue({
+    operations: ctx.operations,
+    isBusy: () => Boolean(catalog.getState().running) || ctx.operations.list().some((op) => !op.queued && EXCLUSIVE.includes(op.id)),
+    onError: (key, err) => log.warn(`Job ${key} failed`, err && err.message),
+  });
   /**
    * Works out the entries of some media types again from the stored lists (hidden categories, title cleaning, Live grouping or links
    * changed, "update" / "empty" of the derived data). It runs in a catalog worker: on a TV rebuilding 30 000 titles on the UI thread

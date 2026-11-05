@@ -67,10 +67,21 @@ export function createCard(entry, type, meta = {}) {
       });
       poster.insertBefore(img, badges);
     }
-    if (img.dataset.src !== url) {
-      poster.classList.add('loading'); // skeleton until the picture is there
-      lazySrc(img, url);
+    if (img.dataset.src === url) return;
+    if (img.getAttribute('src') && img.complete && img.naturalWidth > 0) {
+      // A picture is already showing (the provider's, now TMDB's arrives): the new one is loaded aside and swapped in when ready,
+      // without the loading sweep over a poster that was fine (all the cards of a row flashed at once).
+      img.dataset.src = url;
+      const probe = new Image();
+      probe.referrerPolicy = 'no-referrer';
+      probe.onload = () => {
+        if (img && img.dataset.src === url) img.setAttribute('src', url);
+      };
+      probe.src = url;
+      return;
     }
+    poster.classList.add('loading'); // skeleton until the picture is there
+    lazySrc(img, url);
   }
 
   /** The meta line, plus (favourite categories / genres) a number after a dot: a grey sweep stands in until it is known. */

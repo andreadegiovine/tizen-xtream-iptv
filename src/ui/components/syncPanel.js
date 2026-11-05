@@ -253,9 +253,9 @@ export function deviceRows(info) {
   return [
     { label: t('device.network'), value: networkText(info.network) },
     { label: t('device.resolution'), value: resolution },
-    { label: t('device.heap'), value: info.heap ? of(info.heap.used, info.heap.limit) : unknown },
-    { label: t('device.storage'), value: info.storage ? of(info.storage.used, info.storage.quota) : unknown },
     { label: t('device.ram'), value: info.memory ? of(info.memory.used, info.memory.total) : info.ram ? formatBytes(info.ram) : unknown },
+    { label: t('device.heap'), value: info.heap ? of(info.heap.used, info.heap.limit) : unknown },
+    { label: t('device.storage'), value: info.storage ? of(info.storage.used, info.storage.quota) : unknown }, // then the catalog and database rows
   ];
 }
 
@@ -307,7 +307,7 @@ export function createOperationsPanel(ctx) {
         h(
           'div',
           { class: 'sync-row op-row' },
-          h('span', { class: 'sync-name', text: t(`operations.${op.id}`) }),
+          h('span', { class: 'sync-name', text: op.label || t(`operations.${op.id}`) }),
           h('span', { class: 'sync-status', text: op.queued ? t('common.queued') : t('operations.since', { time: formatDateTime(op.startedAt, i18n.getLocale()) }) }),
           stop,
         ),

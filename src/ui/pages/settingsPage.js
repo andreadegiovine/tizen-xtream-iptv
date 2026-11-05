@@ -220,7 +220,14 @@ export function createSettingsPage(ctx) {
     panel.refreshStatus().catch(() => undefined);
     devicePanel.refresh().catch(() => undefined);
   }
-  const catalogRows = panel.rowButtons.flatMap((b) => [rowOf(b.refresh, async () => panel.syncType(b.type)), rowOf(b.remove, () => removeType(b.type), 'left')]);
+  // Every update goes through the job queue: asked while something runs, it waits its turn (listed as queued).
+  const queueJob = (key, label, run) => {
+    if (!ctx.jobs.add(key, label, run)) ctx.notices.info(t('operations.alreadyQueued'), { key: 'queued' });
+  };
+  const catalogRows = panel.rowButtons.flatMap((b) => [
+    rowOf(b.refresh, async () => queueJob(`catalog:${b.type}`, `${t('operations.catalog')} · ${typeName(b.type)}`, () => ctx.catalog.start({ force: true, types: [b.type], rewrite: true }))),
+    rowOf(b.remove, () => removeType(b.type), 'left'),
+  ]);
 
   // TMDB table: metadata download and genre search.
   async function removeMetadata() {
@@ -242,22 +249,22 @@ export function createSettingsPage(ctx) {
     tmdbPanel.refresh().catch(() => undefined);
   }
   const tmdbRows = [
-    rowOf(tmdbPanel.tmdbButtons.refresh, () => runMetadata(['tmdb'])),
+    rowOf(tmdbPanel.tmdbButtons.refresh, async () => queueJob('tmdb', t('operations.tmdb'), () => runMetadata(['tmdb']))),
     rowOf(tmdbPanel.tmdbButtons.remove, removeMetadata, 'left'),
-    rowOf(tmdbPanel.genreButtons.refresh, () => runMetadata(['genres'])),
+    rowOf(tmdbPanel.genreButtons.refresh, async () => queueJob('genres', t('operations.genres'), () => runMetadata(['genres']))),
     rowOf(tmdbPanel.genreButtons.remove, removeGenres, 'left'),
   ];
   const dbUpdateRow = {
     el: devicePanel.updateButton,
     refresh: async () => undefined,
-    async activate() {
-      if (ctx.catalog.getState().running) return;
-      await ctx.rebuildCatalog(['movie', 'series', 'live']); // in the catalog worker
-      await ctx.genres.restore().catch(() => undefined); // the genres come back from the saved TMDB metadata, not from the network
-      ctx.catalogChanged();
-      ctx.notices.success(t('notice.dbRebuilt'));
-      devicePanel.refresh().catch(() => undefined);
-    },
+    activate: async () =>
+      queueJob('rebuild', t('operations.rebuild'), async () => {
+        await ctx.rebuildCatalog(['movie', 'series', 'live']); // in the catalog worker
+        await ctx.genres.restore().catch(() => undefined); // the genres come back from the saved TMDB metadata, not from the network
+        ctx.catalogChanged();
+        ctx.notices.success(t('notice.dbRebuilt'));
+        devicePanel.refresh().catch(() => undefined);
+      }),
   };
   const dbRemoveRow = {
     secondary: 'left',
@@ -265,25 +272,27 @@ export function createSettingsPage(ctx) {
     refresh: async () => undefined,
     async activate() {
       if (!(await confirmRemove(t('settings.dbRemove'), t('settings.dbRemoveConfirm')))) return;
-      const current = await ctx.active.get();
-      if (!current) return;
-      ctx.genres.stop();
-      ctx.catalog.cancel();
-      // The downloaded catalog (lists, categories, details) stays: what is worked out from it is emptied and built again, with no download.
-      const tx = current.db.transaction(DERIVED_STORES, 'readwrite');
-      DERIVED_STORES.forEach((name) => tx.objectStore(name).clear());
-      await transactionDone(tx);
-      await clearDerived(current.db);
-      await dbDelete(current.db, 'meta', GENRES_SOURCE_KEY); // the provider's genres come back with the rebuild, then TMDB's replace them
-      log.info('Derived data emptied by the user (entries, groups, genres, search index, sidebar)');
-      await ctx.rebuildCatalog(['movie', 'series', 'live']); // in the catalog worker
-      await ctx.genres.restore().catch(() => undefined);
-      ctx.catalogChanged();
-      ctx.notices.success(t('notice.removed'));
-      if (ctx.queue) ctx.queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) });
-      devicePanel.refresh().catch(() => undefined);
+      queueJob('empty', t('settings.dbRemove'), emptyDerived);
     },
   };
+  /** Empties what is worked out from the catalog and builds it again (queued like every update). */
+  async function emptyDerived() {
+    const current = await ctx.active.get();
+    if (!current) return;
+    // The downloaded catalog (lists, categories, details) stays: what is worked out from it is emptied and built again, with no download.
+    const tx = current.db.transaction(DERIVED_STORES, 'readwrite');
+    DERIVED_STORES.forEach((name) => tx.objectStore(name).clear());
+    await transactionDone(tx);
+    await clearDerived(current.db);
+    await dbDelete(current.db, 'meta', GENRES_SOURCE_KEY); // the provider's genres come back with the rebuild, then TMDB's replace them
+    log.info('Derived data emptied by the user (entries, groups, genres, search index, sidebar)');
+    await ctx.rebuildCatalog(['movie', 'series', 'live']); // in the catalog worker
+    await ctx.genres.restore().catch(() => undefined);
+    ctx.catalogChanged();
+    ctx.notices.success(t('notice.removed'));
+    if (ctx.queue) ctx.queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) });
+    devicePanel.refresh().catch(() => undefined);
+  }
   const traktConnectRow = { el: traktPanel.connectButton, refresh: async () => undefined, activate: connectTrakt };
   const traktSyncRow = { el: traktPanel.syncButton, refresh: async () => undefined, activate: syncTrakt };
   const traktRemoveRow = { secondary: 'left', el: traktPanel.removeButton, refresh: async () => undefined, activate: removeTrakt };

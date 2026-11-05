@@ -48,18 +48,42 @@ export function createHomePage(ctx) {
     if (ctx.enrich) Object.entries(byType).forEach(([type, group]) => ctx.enrich(group.entries, group.cards, type));
   }
 
+  /** What a row shows: the same signature means the same cards (kept as they are, pictures included). */
+  const signature = (d) => d.items.map((item) => `${item.entry.key}|${item.meta ? `${item.meta.progress}|${item.meta.subtitle}` : ''}`).join(',');
+
+  /**
+   * Draws the rows. Rows whose cards did not change are kept as they are: when the suggestions arrive (a second render) the rows
+   * above are not built again, so their posters do not reload all together (a flash on the TV).
+   */
   function render(definitions) {
     const hadFocus = ctx.focus.activeId && ctx.focus.activeId.indexOf('home') === 0 ? { id: ctx.focus.activeId, index: ctx.focus.active.index } : null;
-    clearRows();
-    carousels = definitions
+    const previous = new Map(carousels.map((c) => [c.id, c]));
+    const next = definitions
       .filter((d) => d.items.length)
-      .map((d, index) => createCarousel({ ...d, revealTop: index === 0, onOpen: (item) => ctx.openEntry(item.entry, { section: 'home' }) }));
+      .map((d, index) => {
+        const sig = signature(d);
+        const kept = previous.get(d.id);
+        if (kept && kept.sig === sig && kept.first === (index === 0)) {
+          previous.delete(d.id);
+          return kept;
+        }
+        const carousel = createCarousel({ ...d, revealTop: index === 0, onOpen: (item) => ctx.openEntry(item.entry, { section: 'home' }) });
+        return Object.assign(carousel, { id: d.id, sig, first: index === 0, fresh: true });
+      });
+    previous.forEach((c) => {
+      ctx.focus.unregister(c.zone.id);
+      c.el.remove();
+    });
+    carousels = next;
     carousels.forEach((c, i) => {
-      rowsEl.appendChild(c.el);
-      ctx.focus.register(c.zone);
+      if (rowsEl.children[i] !== c.el) rowsEl.insertBefore(c.el, rowsEl.children[i] || null);
+      if (c.fresh) {
+        ctx.focus.register(c.zone);
+        enrich(c);
+        c.fresh = false;
+      }
       ctx.focus.link(c.zone.id, 'up', i === 0 ? TOPBAR_ZONE : carousels[i - 1].zone.id);
       if (i < carousels.length - 1) ctx.focus.link(c.zone.id, 'down', carousels[i + 1].zone.id);
-      enrich(c);
     });
     if (carousels.length) {
       ctx.focus.link(TOPBAR_ZONE, 'down', carousels[0].zone.id);

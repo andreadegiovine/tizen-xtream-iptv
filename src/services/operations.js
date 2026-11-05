@@ -25,11 +25,11 @@ export function createOperations({ now = Date.now } = {}) {
      * Registers an operation; returns `end()`. `queued` lists it as waiting its turn; starting it again
      * (not queued) promotes the waiting entry in place. Any other repeated id keeps the first one.
      */
-    start(id, { cancel = null, startedAt = now(), queued = false } = {}) {
+    start(id, { cancel = null, startedAt = now(), queued = false, label = null } = {}) {
       const existing = running.get(id);
       if (existing && !(existing.queued && !queued)) return () => undefined;
       const entry = existing || { id };
-      Object.assign(entry, { startedAt, cancel, queued });
+      Object.assign(entry, { startedAt, cancel, queued, label: label || entry.label || null });
       running.set(id, entry);
       notify();
       if (!queued) emit('start', id);
