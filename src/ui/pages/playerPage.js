@@ -415,14 +415,20 @@ export function createPlayerPage(ctx, params) {
 
   /** About two minutes before the end of an episode the next one is offered: OK plays it now (during the end credits). */
   function offerNext(state) {
+    if (nextNotice !== null && !isLive) {
+      ctx.notices.update(nextNotice, nextText(state));
+      return;
+    }
     if (isLive || isTrailer || nextOffered || state.status !== 'playing' || !(state.duration > NEXT_MIN_DURATION_S)) return;
     if (state.duration - state.position > NEXT_OFFER_S) return;
     const next = neighborEpisode(playlist, index, 1);
     if (!next) return;
     nextOffered = true;
-    const label = next.episode.title || `${t('detail.episode')} ${next.episode.number}`;
-    nextNotice = ctx.notices.info(t('player.next', { title: label }), { scope: 'playback', key: 'player-next', permanent: true });
+    nextNotice = ctx.notices.info(nextText(state), { scope: 'playback', key: 'player-next', sticky: true });
   }
+
+  /** "Next episode in N seconds": the time that is left of this one. */
+  const nextText = (state) => t('player.next', { seconds: Math.max(0, Math.ceil(state.duration - state.position)) });
 
   function onEnded() {
     if (isTrailer) {

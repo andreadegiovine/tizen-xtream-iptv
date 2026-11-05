@@ -85,7 +85,7 @@
   "player.loading": "Caricamento…",
   "player.paused": "In pausa",
   "player.buffering": "Buffering {percent}%",
-  "player.next": "Prossimo: {title} — premi OK per guardarlo ora",
+  "player.next": "Prossimo episodio tra {seconds} secondi",
   "settings.textSize": "Dimensioni testo",
   "settings.screensaver": "Screensaver",
   "settings.screensaver.off": "Disattiva",

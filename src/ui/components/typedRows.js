@@ -23,7 +23,7 @@ export function groupByType(entries, limit = 20) {
  * One carousel per media type (movies, series, channels), stacked vertically with linked focus zones.
  * Used by Favorites, Suggestions and the search results. A `collection` entry carries `collectionId` and a `subtitle` (its item count).
  */
-export function createTypedRows(ctx, { prefix, onOpen, limit = 20 }) { // onOpen(entry): titles and favourite filters (see isFilterEntry)
+export function createTypedRows(ctx, { prefix, onOpen, limit = 20, hideFavorite = false }) { // onOpen(entry): titles and favourite filters (see isFilterEntry)
   const el = h('div', { class: 'typed-rows' });
   let carousels = [];
 
@@ -56,7 +56,7 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 20 }) { // onOpen
         ctx.focus.register(carousel.zone);
         ctx.focus.link(carousel.zone.id, 'up', i === 0 ? TOPBAR_ZONE : carousels[i - 1].zone.id);
         if (i < carousels.length - 1) ctx.focus.link(carousel.zone.id, 'down', carousels[i + 1].zone.id);
-        if (ctx.enrich && carousel.type !== 'collection') ctx.enrich(carousel.items.map((item) => item.entry), carousel.cards, carousel.type, i > 0);
+        if (ctx.enrich && carousel.type !== 'collection') ctx.enrich(carousel.items.map((item) => item.entry), carousel.cards, carousel.type, i > 0, { hideFavorite });
       });
       if (carousels.length) ctx.focus.link(TOPBAR_ZONE, 'down', carousels[0].zone.id);
       if (ctx.syncSearchLinks) ctx.syncSearchLinks();

@@ -27,10 +27,10 @@ export function createNoticeService({ root = document.body } = {}) {
   }
 
   /**
-   * options: { type, message, title?, permanent?, ms?, key?, scope? }. `key` replaces a notice that is already shown
+   * options: { type, message, title?, permanent?, sticky?, ms?, key?, scope? } (`sticky`: a permanent one that a click cannot close). `key` replaces a notice that is already shown
    * with the same key. Returns the notice id, or null when it was not shown.
    */
-  function show({ type = NoticeType.INFO, message, title = '', permanent = false, ms = 0, key = '', scope = '' }) {
+  function show({ type = NoticeType.INFO, message, title = '', permanent = false, sticky = false, ms = 0, key = '', scope = '' }) {
     if (!message) return null;
     if (playing && scope !== PLAYBACK_ALLOWED) return null;
     if (key) {
@@ -40,12 +40,12 @@ export function createNoticeService({ root = document.body } = {}) {
     seq += 1;
     const id = seq;
     const body = h('div', { class: 'notice-body' }, title ? h('div', { class: 'notice-title', text: title }) : null, h('div', { class: 'notice-text', text: message }));
-    const el = h('div', { class: `notice ${type}${permanent ? ' permanent' : ''}`, role: type === 'error' ? 'alert' : 'status' }, h('span', { class: 'notice-icon' }, icon(type)), body);
-    el.addEventListener('click', () => close(id));
-    const entry = { id, key, el, timer: null };
+    const el = h('div', { class: `notice ${type}${permanent || sticky ? ' permanent' : ''}`, role: type === 'error' ? 'alert' : 'status' }, h('span', { class: 'notice-icon' }, icon(type)), body);
+    if (!sticky) el.addEventListener('click', () => close(id));
+    const entry = { id, key, el, timer: null, text: body.lastChild };
     list.push(entry);
     container.appendChild(el);
-    if (!permanent) entry.timer = setTimeout(() => close(id), ms || DEFAULT_MS[type] || DEFAULT_MS.info);
+    if (!permanent && !sticky) entry.timer = setTimeout(() => close(id), ms || DEFAULT_MS[type] || DEFAULT_MS.info);
     return id;
   }
 
@@ -56,6 +56,13 @@ export function createNoticeService({ root = document.body } = {}) {
     warning: (message, options = {}) => show({ ...options, type: NoticeType.WARNING, message }),
     error: (message, options = {}) => show({ ...options, type: NoticeType.ERROR, message }),
     close,
+    /** Changes the text of a notice that is shown (a countdown); false when it is gone. */
+    update(id, message) {
+      const entry = list.find((n) => n.id === id);
+      if (!entry) return false;
+      entry.text.textContent = message;
+      return true;
+    },
     isOpen: () => list.length > 0,
     /** While a video plays only the playback notices appear. */
     setPlayback(value) {

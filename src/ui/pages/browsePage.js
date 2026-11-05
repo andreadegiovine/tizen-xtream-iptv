@@ -260,7 +260,8 @@ export function createBrowsePage(ctx, params = {}) {
       return card;
     });
     cardNodes = cards.map((card) => card.el);
-    if (ctx.enrich) ctx.enrich(entries, cards, type);
+    // In the Favourites grid every card is a favourite: no heart.
+    if (ctx.enrich) ctx.enrich(entries, cards, type, false, { hideFavorite: items[selected] && items[selected].kind === 'favorites' });
     const name = items[selected] ? items[selected].name : '';
     titleEl.textContent = name;
     count.textContent = entries.length ? t('browse.page', { page: formatNumber(page + 1, i18n.getLocale()), pages: formatNumber(Math.max(pages, page + 1), i18n.getLocale()) }) : '';

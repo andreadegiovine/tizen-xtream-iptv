@@ -10,6 +10,7 @@ import { log } from '../../core/logger.js';
 export function createFavoritesPage(ctx) {
   const status = h('p', { class: 'muted search-status', text: t('player.loading') });
   const rows = createTypedRows(ctx, {
+    hideFavorite: true, // everything here is a favourite: the heart would say nothing
     prefix: 'favorites',
     onOpen: (entry) => {
       if (entry.collectionId) ctx.router.push('collection', { id: entry.collectionId, section: 'favorites' });

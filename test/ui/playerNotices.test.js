@@ -83,7 +83,13 @@ describe('player notices', () => {
     clock.time = 3000 - 110;
     jest.advanceTimersByTime(2000);
     expect(document.body.querySelector('.notices .notice.info')).not.toBeNull();
-    expect(document.body.querySelector('.notices .notice').textContent).toContain('Due');
+    const notice = document.body.querySelector('.notices .notice');
+    expect(notice.textContent).toMatch(/Prossimo episodio tra 11\d secondi|Next episode in 11\d seconds/);
+    notice.click(); // it cannot be hidden
+    expect(document.body.querySelector('.notices .notice.info')).not.toBeNull();
+    clock.time = 3000 - 7;
+    jest.advanceTimersByTime(2000);
+    expect(document.body.querySelector('.notices .notice').textContent).toMatch(/\b[67]\b/);
     page.onAction(Action.ENTER);
     await flush();
     expect(engine.start).toHaveBeenCalledTimes(2);
