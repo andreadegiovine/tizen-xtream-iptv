@@ -41,7 +41,7 @@ describe('genre index', () => {
     const { db, index } = await setup([item(1, 'Animazione, Commedia', { tmdbId: 10 }), item(2, 'Azione'), item(3, '')]);
     await writeGenres(db, { key: 'movie:t10', type: 'movie', added: 101 }, [{ name: 'animazione' }, { name: 'Avventura' }], 'tmdb');
     const keys = (await index.list('movie')).map((g) => g.key).sort();
-    expect(keys).toEqual(['animazione', 'avventura', 'azione', 'commedia']);
+    expect(keys).toEqual(['animazione', 'avventura', 'azione']); // TMDB's genres replace the provider's ones for title 10 (commedia is gone)
     expect(await index.entryKeys('movie', 'animazione')).toEqual(['movie:t10']);
   });
 
@@ -60,6 +60,14 @@ describe('genre index', () => {
     await writeGenres(db, { key: 'movie:i2', type: 'movie', added: 102 }, 'Thriller', 'info');
     await index.clearTmdb();
     expect((await listGenres(db, 'movie')).map((g) => g.key).sort()).toEqual(['azione', 'thriller']);
+  });
+
+  test('TMDB genres replace the provider list of a title, and a new sync does not bring it back', async () => {
+    const { db } = await setup([item(1, 'Azione', { tmdbId: 10 })]);
+    await writeGenres(db, { key: 'movie:t10', type: 'movie', added: 101 }, ['Guerra'], 'tmdb');
+    expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['guerra']);
+    await writeEntries(db, 'movie', buildEntries('movie', [item(1, 'Azione', { tmdbId: 10 })]));
+    expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['guerra']);
   });
 
   test('the background pass asks only for titles without genres, TMDB first then the provider, once each', async () => {

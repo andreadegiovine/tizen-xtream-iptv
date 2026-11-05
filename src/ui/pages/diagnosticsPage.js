@@ -75,7 +75,7 @@ export function createDiagnosticsPage(ctx) {
         const canScroll = dir === Dir.DOWN ? !atEnd() : logBox.scrollTop > 0;
         if (canScroll) {
           logBox.scrollTop += dir === Dir.DOWN ? step : -step;
-          return { type: 'stay' };
+          return { type: 'move', index }; // same row: the focus stays on the log and no link is followed
         }
       }
       return listModel.navigate(dir, index);

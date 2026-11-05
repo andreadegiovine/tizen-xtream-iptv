@@ -1,4 +1,5 @@
-import { dbGetAllKeys, dbDeleteMany } from '../core/idb.js';
+import { dbGetAllKeys, dbDeleteMany, dbGetAll, dbPutMany } from '../core/idb.js';
+import { buildEntryGenreRows } from './grouping.js';
 import { bumpGenresRev } from './derivedStore.js';
 import { listGenres, genreEntryKeys, genreCounts } from './catalogQuery.js';
 import { runGenreBackfillForProvider } from './genreBackfill.js';
@@ -224,6 +225,9 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
       if (!current) return;
       const keys = await dbGetAllKeys(current.db, STORE);
       await dbDeleteMany(current.db, STORE, keys.filter((key) => key.endsWith('|tmdb')));
+      // TMDB's genres had replaced the provider's list for those titles: the list comes back from the entries.
+      const entries = await dbGetAll(current.db, 'entries');
+      await dbPutMany(current.db, 'entry_genre', buildEntryGenreRows(entries.filter((entry) => entry.genres && entry.genres.length)));
     },
   };
 }

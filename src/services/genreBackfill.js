@@ -16,9 +16,14 @@ export async function writeGenres(db, entry, genreNames, source) {
   const prefix = `${entry.key}|`;
   const suffix = `|${source}`;
   const existing = (await dbGetAllKeys(db, STORE, { range: IDBKeyRange.bound(prefix, `${prefix}￿`) })).filter((key) => key.endsWith(suffix));
-  const tx = db.transaction(STORE, 'readwrite');
+  const replace = source === 'tmdb' && genres.length; // TMDB's genres replace the provider's for this title
+  const range = IDBKeyRange.bound(prefix, `${prefix}\uffff`);
+  const stale = replace ? (await dbGetAllKeys(db, STORE, { range })).filter((key) => key.endsWith('|info')) : [];
+  const fromList = replace ? await dbGetAllKeys(db, 'entry_genre', { range }) : [];
+  const tx = db.transaction([STORE, 'entry_genre'], 'readwrite');
   const store = tx.objectStore(STORE);
-  existing.forEach((key) => store.delete(key));
+  existing.concat(stale).forEach((key) => store.delete(key));
+  fromList.forEach((key) => tx.objectStore('entry_genre').delete(key));
   genres.forEach((g) => store.put({ key: `${prefix}${g.key}${suffix}`, entryKey: entry.key, type: entry.type, genreKey: g.key, name: g.name, added: entry.added || 0 }));
   await transactionDone(tx);
 }

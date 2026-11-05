@@ -165,7 +165,10 @@ export async function writeEntries(db, type, entries, { onBatch, groups = [], ne
     await replaceRows(db, 'groups', type, groups.concat(networks)); // networks sit in the same store, keys `live:n…`
   }
   await replaceRowsChunked(db, 'entry_cat', type, entries, buildEntryCategoryRows, { extra: liveAllRows });
-  await replaceRowsChunked(db, 'entry_genre', type, entries, buildEntryGenreRows);
+  // The provider's genres are not written for titles that already have TMDB's (they replace them).
+  const tmdbKeys = await dbGetAllKeys(db, 'entry_genre_tmdb', ranges.entry_genre_tmdb(type));
+  const withTmdb = new Set(tmdbKeys.filter((key) => key.endsWith('|tmdb')).map((key) => key.slice(0, key.indexOf('|'))));
+  await replaceRowsChunked(db, 'entry_genre', type, entries, (batch) => buildEntryGenreRows(withTmdb.size ? batch.filter((entry) => !withTmdb.has(entry.key)) : batch));
   // TMDB genres follow the metadata, not the sync: only forget the ones of titles that left the catalog.
   const present = new Set(entries.map((entry) => entry.key));
   const known = await dbGetAllKeys(db, 'entry_genre_tmdb', ranges.entry_genre_tmdb(type));

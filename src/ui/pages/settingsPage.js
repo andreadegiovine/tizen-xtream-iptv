@@ -1,5 +1,5 @@
 import { createCodePrompt } from '../components/codePrompt.js';
-import { resetApp } from '../../services/resetApp.js';
+import { resetApp, clearAllStores } from '../../services/resetApp.js';
 import { h } from '../dom.js';
 import { changePin } from '../components/pinFlows.js';
 import { TEXT_SIZES, applyTextSize } from '../../core/textSize.js';
@@ -230,6 +230,27 @@ export function createSettingsPage(ctx) {
       tmdbPanel.refresh().catch(() => undefined);
     },
   };
+  // Databases of the active provider: update = download the catalog again; remove = empty them (catalog, genres, search index) and download again.
+  const dbUpdateRow = { el: devicePanel.updateButton, refresh: async () => undefined, activate: async () => panel.syncNow() };
+  const dbRemoveRow = {
+    secondary: 'left',
+    el: devicePanel.removeButton,
+    refresh: async () => undefined,
+    async activate() {
+      const ok = await ctx.dialogs.confirm({ title: t('settings.dbRemove'), message: t('settings.dbRemoveConfirm'), confirmLabel: t('settings.confirmRemove'), cancelLabel: t('setup.cancel') });
+      if (!ok) return;
+      const current = await ctx.active.get();
+      if (!current) return;
+      ctx.genres.stop();
+      ctx.catalog.cancel();
+      await clearAllStores(current.db);
+      log.info('Provider database emptied by the user');
+      ctx.catalogChanged();
+      ctx.notices.success(t('notice.removed'));
+      ctx.catalog.start({ force: true });
+      devicePanel.refresh().catch(() => undefined);
+    },
+  };
   const traktConnectRow = { el: traktPanel.connectButton, refresh: async () => undefined, activate: connectTrakt };
   const traktSyncRow = { el: traktPanel.syncButton, refresh: async () => undefined, activate: syncTrakt };
   const traktRemoveRow = { secondary: 'left', el: traktPanel.removeButton, refresh: async () => undefined, activate: removeTrakt };
@@ -378,7 +399,7 @@ export function createSettingsPage(ctx) {
     section.fields ? h('div', { class: 'fields' }, section.fields.filter((r) => !r.secondary).map((r) => r.root)) : null,
   ]);
   // Focus order follows the page: catalog, TMDB, Trakt, preferences.
-  const rows = [syncRow, metaRow, metaRemoveRow, tmdbTokenRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktSecretRow, ...prefs];
+  const rows = [syncRow, metaRow, metaRemoveRow, tmdbTokenRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktSecretRow, dbRemoveRow, dbUpdateRow, ...prefs];
   // The Trakt sync / remove buttons exist only while an account is connected.
   const visibleRows = () => rows.filter((row) => row.el.style.display !== 'none');
   rows.forEach((row) => row.refresh());

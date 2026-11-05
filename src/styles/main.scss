@@ -2134,7 +2134,8 @@ h2 {
 
 // The log of Diagnostics: a box of fixed height that scrolls inside (the report above it keeps its full height).
 pre.diag-log.scroll {
-  max-height: 420px;
+  height: 62vh; // a large part of the screen: more of the log at a glance
+  max-height: 62vh;
   overflow-y: auto;
 
   &::-webkit-scrollbar {

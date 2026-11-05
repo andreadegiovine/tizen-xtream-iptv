@@ -377,3 +377,8 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
 
 ### Patch 83 — log delle operazioni in Diagnostica
 - Nel blocco "Log recente": ogni attività della coda (tempo o errore), inizio/fine/errore della sync del catalogo con conteggi e tempi per tipo (scarico, scrittura, totale), sync TMDB/generi/Trakt (elementi e durata), EPG, indice di ricerca (letto dal db o costruito, righe e tempo). Non verificato su TV.
+
+### Patch 84 — generi TMDB, database da Impostazioni, log su TV
+- Generi: quando TMDB fornisce i generi di un titolo, quelli del provider (lista della sync e dettagli) per quel titolo vengono rimossi dal db (`entry_genre`, `|info`); la sync successiva non li riscrive; "Rimuovi dati TMDB" li ripristina dalle voci. Vale per i titoli scaricati da ora: quelli già scaricati si correggono al prossimo scarico.
+- Impostazioni > Dispositivo: bottoni "Aggiorna database" (nuova sync forzata del catalogo) e "Svuota database" (svuota catalogo, generi e indice del provider attivo e riscarica), con conferma.
+- Diagnostica: il riquadro del log è alto il 62% dello schermo e lo scroll con le frecce resta sul riquadro (prima la navigazione seguiva i collegamenti). Non verificato su TV.

@@ -260,13 +260,15 @@ export function deviceRows(info) {
 /** "Device" table in the same style as Catalog and Metadata. */
 export function createDevicePanel() {
   const body = h('div', { class: 'sync' });
-  const el = h('div', { class: 'sync-panel' }, h('h2', { text: t('settings.device') }), body);
+  const updateButton = refreshButton(t('settings.dbUpdate'));
+  const removeButton = h('button', { class: 'btn danger icon-only panel-button', type: 'button', 'aria-label': t('settings.dbRemove'), title: t('settings.dbRemove') }, icon('remove'));
+  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('settings.device') }), h('div', { class: 'panel-buttons' }, [removeButton, updateButton])), body);
   async function refresh() {
     const rows = deviceRows(await collectDeviceInfo());
     while (body.firstChild) body.removeChild(body.firstChild);
     rows.forEach((row) => body.appendChild(h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: row.label }), h('span', { class: 'sync-status', text: row.value }))));
   }
-  return { el, refresh };
+  return { el, refresh, updateButton, removeButton };
 }
 
 /**

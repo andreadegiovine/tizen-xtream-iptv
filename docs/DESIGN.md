@@ -175,3 +175,6 @@ Aggiunte (patch 79): `trakt.progress` in `kv` = un avanzamento per titolo (il pi
 
 ## Avvio a coda e dati derivati
 Tutto ciò che deriva dal catalogo (righe di ricerca, sidebar con generi e conteggi) è salvato nel db provider (`meta`, chiavi `derived:*`) con la versione `schema|catalogRev|genresRev|lingua`; la versione si legge prima del calcolo e ogni sync la invalida. Le attività di avvio passano da `backgroundQueue` (una alla volta, per priorità, bloccate durante la sync del catalogo).
+
+## Generi: TMDB sostituisce il provider
+Per un titolo con generi TMDB (`entry_genre_tmdb`, `|tmdb`) le righe del provider (`entry_genre` e `|info`) sono eliminate in `writeGenres`, e `writeEntries` non riscrive `entry_genre` per quei titoli. `clearTmdb` riscrive la lista del provider dalle voci.
