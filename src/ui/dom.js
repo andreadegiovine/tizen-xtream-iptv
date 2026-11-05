@@ -9,7 +9,7 @@ export function h(tag, attrs = {}, ...children) {
       el.addEventListener(key.slice(2).toLowerCase(), value);
     } else el.setAttribute(key, value === true ? '' : value);
   });
-  children.flat().forEach((child) => {
+  children.flat(Infinity).forEach((child) => {
     if (child === null || child === undefined || child === false) return;
     el.appendChild(child.nodeType ? child : document.createTextNode(String(child)));
   });

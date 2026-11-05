@@ -372,7 +372,7 @@ export function createSettingsPage(ctx) {
     { titleKey: 'settings.section.advanced', list: [diagnostics, resetAll] },
   ];
   const prefs = sections.flatMap((section) => (section.list || []).concat(section.fields || []));
-  const prefsBlocks = sections.map((section) => [
+  const prefsBlocks = sections.flatMap((section) => [
     h('h2', { class: 'prefs-title', text: t(section.titleKey) }),
     section.list ? h('div', { class: 'list' }, section.list.map((r) => r.el)) : null,
     section.fields ? h('div', { class: 'fields' }, section.fields.filter((r) => !r.secondary).map((r) => r.root)) : null,

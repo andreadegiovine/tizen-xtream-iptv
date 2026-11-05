@@ -38,3 +38,11 @@ test('flipRange flips the ids between two rows against the base, in either order
   expect([...flipRange(base, ['a', 'b', 'c', 'd'], 2, 0)].sort()).toEqual(['a', 'c']);
   expect([...base]).toEqual(['b']);
 });
+
+test('h(): nested arrays of nodes are appended as elements, never printed as "[object HTMLDivElement]"', () => {
+  const { h } = require('../../src/ui/dom.js');
+  const el = h('div', {}, [[h('h2', { text: 'a' }), null, h('div', { text: 'b' })], [h('h2', { text: 'c' })]]);
+  expect(el.children).toHaveLength(3);
+  expect(el.textContent).toBe('abc');
+  expect(el.textContent).not.toContain('object');
+});

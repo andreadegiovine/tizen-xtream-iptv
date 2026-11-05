@@ -777,10 +777,6 @@ h2 {
   border-radius: 6px;
   background: $bg-raised;
 
-  &.is-active {
-    border-left-color: $accent;
-  }
-
   .provider-info {
     flex: 1;
   }
