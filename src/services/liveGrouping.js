@@ -302,6 +302,7 @@ export function buildChannelGroups(items, { excludedCategories = new Set(), term
       genres: [],
       icon: (members.find((m) => m.item.icon) || best).item.icon,
       epgChannelId: (members.find((m) => m.item.epgChannelId) || best).item.epgChannelId || null,
+      ...(members.some((m) => m.item.adult) ? { adult: true } : {}),
     };
   });
 }

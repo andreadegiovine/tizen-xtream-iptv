@@ -92,7 +92,6 @@ h2 {
     display: flex;
     width: 60px;
     height: 60px;
-    margin-right: 14px;
   }
 
   svg {
@@ -286,6 +285,38 @@ h2 {
     border-color: $text;
     background: $bg-focus;
     transform: scale(1.02);
+  }
+}
+
+// Form actions (Confirm / Cancel) on one line.
+.form-actions {
+  display: flex;
+
+  .btn {
+    flex: 1;
+    margin-right: 16px;
+
+    &:last-child {
+      margin-right: 0;
+    }
+  }
+}
+
+// A field with a button at its right (Settings: restore the default).
+.field-line {
+  display: flex;
+  align-items: stretch;
+
+  .field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .btn.row-reset {
+    flex: none;
+    width: 72px;
+    margin: 0 0 16px 12px;
+    padding: 0;
   }
 }
 
@@ -1102,7 +1133,7 @@ h2 {
   border: 3px solid transparent;
   border-radius: 0;
   background: transparent;
-  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+  transition: transform 0.12s ease-out; // only the transform moves on the GPU: the shadow appears at once (animating a blurred shadow repaints every frame)
 
   .card-poster {
     position: relative;
@@ -1206,6 +1237,7 @@ h2 {
     border-color: $text;
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), 0 14px 32px rgba(0, 0, 0, 0.95);
     transform: scale(1.06);
+    will-change: transform;
   }
 }
 
@@ -2066,5 +2098,30 @@ h2 {
       width: 100%;
       height: 100%;
     }
+  }
+}
+
+// Shown from the first paint until the first page replaces it (the router empties #content).
+.boot-splash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+
+  svg {
+    width: 160px;
+    height: 160px;
+    animation: boot-pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes boot-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
   }
 }

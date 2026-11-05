@@ -628,27 +628,38 @@ export function createDetailPage(ctx, params) {
     entry = await getEntry(current.db, params.entryKey);
     if (!entry || destroyed) return;
     selectedMember = entry.members.find((m) => m.id === entry.defaultId) || entry.members[0];
-    try {
-      const categories = await listCategories(current.db, entry.type);
+    // The provider's details start downloading at once; the local reads run side by side (they used to wait for each other).
+    const detailsJob = entry.type === 'series' ? ctx.details.series(entry.defaultId) : entry.type === 'movie' ? ctx.details.vod(entry.defaultId) : Promise.resolve({});
+    detailsJob.catch(() => undefined); // handled below, where it is awaited
+    const isLive = entry.type === 'live';
+    const [categories, isFavorite, collectionList, settingsNow, manual, networks] = await Promise.all([
+      listCategories(current.db, entry.type).catch((err) => {
+        log.warn('Categories failed', err && err.message);
+        return null;
+      }),
+      ctx.favorites.has(providerId, entry.key),
+      ctx.collections ? ctx.collections.list(providerId) : Promise.resolve([]),
+      isLive && ctx.liveGrouping ? ctx.settings.get() : Promise.resolve(null),
+      isLive && ctx.liveGrouping ? ctx.liveGrouping.manual(providerId) : Promise.resolve(manualIds),
+      isLive ? listNetworks(db).catch(() => []) : Promise.resolve([]),
+    ]);
+    if (destroyed) return;
+    if (categories) {
       categoryNames = new Map(categories.map((c) => [c.id, c.name]));
       updateCategoryItems();
-    } catch (err) {
-      log.warn('Categories failed', err && err.message);
     }
     fillText();
-    favorite = await ctx.favorites.has(providerId, entry.key);
-    if (ctx.collections) collectionItems = (await ctx.collections.list(providerId)).filter((c) => c.entryKeys.includes(entry.key)).map((c) => ({ id: c.id, name: c.name }));
-    mergeAvailable = entry.type === 'live' && ctx.liveGrouping ? (await ctx.settings.get()).liveGrouping : false;
-    if (entry.type === 'live' && ctx.liveGrouping) manualIds = await ctx.liveGrouping.manual(providerId);
-    if (entry.type === 'live') networkChoices = (await listNetworks(db).catch(() => [])).map((n) => ({ key: n.key, name: n.name, networkId: n.networkId }));
+    favorite = isFavorite;
+    if (ctx.collections) collectionItems = collectionList.filter((c) => c.entryKeys.includes(entry.key)).map((c) => ({ id: c.id, name: c.name }));
+    mergeAvailable = settingsNow ? settingsNow.liveGrouping : false;
+    manualIds = manual;
+    if (isLive) networkChoices = networks.map((n) => ({ key: n.key, name: n.name, networkId: n.networkId }));
     await reloadRecords();
     build();
 
     // Slow parts arrive later and refresh the page in place.
     try {
-      if (entry.type === 'series') info = { ...(await ctx.details.series(entry.defaultId)) };
-      else if (entry.type === 'movie') info = { ...(await ctx.details.vod(entry.defaultId)) };
-      else info = {};
+      info = { ...(await detailsJob) };
     } catch (err) {
       log.warn('Details failed', err && err.message);
       info = info || {};

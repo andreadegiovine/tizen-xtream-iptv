@@ -1,40 +1,33 @@
 import { h } from '../dom.js';
 import { t } from '../../i18n/index.js';
-import { FocusZone } from '../focus/FocusManager.js';
-import { ListModel } from '../focus/models.js';
 import { XtreamClient, normalizeBaseUrl } from '../../services/xtreamClient.js';
 import { AppError, ErrorCode, toAppError } from '../../core/errors.js';
 import { log } from '../../core/logger.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
-import { ensureVisible } from '../scroll.js';
+import { createForm, framedPage } from '../components/formPage.js';
 import { createHomeSkeleton } from './homePage.js';
 
 const ZONE_ID = 'providerSetup';
-// Samsung on-screen keyboard: "Done" and "Cancel" arrive as these key codes.
-const IME_DONE = 65376;
-const IME_CANCEL = 65385;
 
 export function createProviderSetupPage(ctx, params = {}) {
-  const fields = [
-    { id: 'name', type: 'text', labelKey: 'setup.name' },
-    { id: 'url', type: 'text', labelKey: 'setup.url' },
-    { id: 'username', type: 'text', labelKey: 'setup.username' },
-    { id: 'password', type: 'password', labelKey: 'setup.password' },
-  ];
-  const status = h('div', { class: 'status', role: 'status' });
-  const rows = fields.map((field) => {
-    const input = h('input', {
-      type: field.type,
-      autocomplete: 'off',
-      autocapitalize: 'off',
-      spellcheck: 'false',
-    });
-    return { field, input, row: h('label', { class: 'field' }, h('span', { class: 'field-label', text: t(field.labelKey) }), input) };
-  });
-  const submit = h('button', { class: 'btn primary', type: 'button', text: t('setup.verify') });
-  const cancel = params.firstRun ? null : h('button', { class: 'btn', type: 'button', text: t('setup.cancel') });
-  const focusables = [...rows.map((r) => r.row), submit, ...(cancel ? [cancel] : [])];
   const editId = params.providerId || null;
+  const submit = { label: t('setup.verify'), primary: true, run: () => save() };
+  const actions = [submit];
+  if (!params.firstRun) actions.push({ label: t('setup.cancel'), run: () => ctx.router.back() });
+  const form = createForm({
+    id: ZONE_ID,
+    focus: ctx.focus,
+    fields: [
+      { label: t('setup.name') },
+      { label: t('setup.url') },
+      { label: t('setup.username') },
+      { label: t('setup.password'), type: 'password' },
+    ],
+    actions,
+  });
+  const [nameField, urlField, userField, passwordField] = form.fields;
+  const { status, zone } = form;
+  const submitButton = form.actionButtons[0];
   let editing = null;
   let busy = false;
   let destroyed = false;
@@ -42,10 +35,10 @@ export function createProviderSetupPage(ctx, params = {}) {
   async function save() {
     if (busy) return;
     busy = true;
-    submit.textContent = t('setup.verifying');
+    submitButton.textContent = t('setup.verifying');
     status.textContent = '';
     try {
-      const values = Object.fromEntries(rows.map((r) => [r.field.id, r.input.value.trim()]));
+      const values = { name: nameField.getValue().trim(), url: urlField.getValue().trim(), username: userField.getValue().trim(), password: passwordField.getValue().trim() };
       if (!values.name || !values.username || !values.password) throw new AppError(ErrorCode.INVALID_INPUT);
       const baseUrl = normalizeBaseUrl(values.url);
       const auth = await new XtreamClient({ baseUrl, username: values.username, password: values.password }).authenticate();
@@ -74,45 +67,15 @@ export function createProviderSetupPage(ctx, params = {}) {
       status.textContent = t(appError.i18nKey);
     } finally {
       busy = false;
-      submit.textContent = t('setup.verify');
+      submitButton.textContent = t('setup.verify');
     }
   }
 
-  const zone = new FocusZone({
-    id: ZONE_ID,
-    model: new ListModel({ orientation: 'vertical', getCount: () => focusables.length }),
-    onFocus: (i) => {
-      focusables[i].classList.add('focused');
-      ensureVisible(focusables[i], { first: i === 0 });
-    },
-    onBlur: (i) => focusables[i].classList.remove('focused'),
-    onActivate: (i) => {
-      if (i < rows.length) rows[i].input.focus();
-      else if (focusables[i] === submit) save();
-      else ctx.router.back();
-    },
-  });
-
-  rows.forEach((r, i) => {
-    r.input.addEventListener('keydown', (event) => {
-      // The field owns its keys: stop them before the global InputService turns Enter into "activate".
-      event.stopPropagation();
-      if (event.keyCode === 13 || event.keyCode === IME_DONE) {
-        event.preventDefault();
-        r.input.blur();
-        ctx.focus.focus(ZONE_ID, Math.min(i + 1, focusables.length - 1));
-      } else if (event.keyCode === IME_CANCEL) {
-        r.input.blur();
-      }
-    });
-  });
-
-  const form = h('div', { class: 'form' }, rows.map((r) => r.row), submit, cancel, status);
   const title = h('h1', { text: t(editId ? 'setup.editTitle' : 'setup.title') });
   // First start: the bar (logo + placeholders) is above; the form sits at the left, in a square box, over the Home skeleton.
   const el = params.firstRun
-    ? h('section', { class: 'page setup first-run' }, h('div', { class: 'setup-backdrop home-skeleton', 'aria-hidden': 'true' }, createHomeSkeleton()), h('div', { class: 'setup-box' }, title, form))
-    : h('section', { class: 'page setup' }, title, form);
+    ? h('section', { class: 'page setup first-run' }, h('div', { class: 'setup-backdrop home-skeleton', 'aria-hidden': 'true' }, createHomeSkeleton()), h('div', { class: 'setup-box' }, title, form.el))
+    : framedPage(title, form.el);
 
   return {
     el,
@@ -125,10 +88,10 @@ export function createProviderSetupPage(ctx, params = {}) {
         ctx.providers.get(editId).then((provider) => {
           if (!provider || destroyed) return;
           editing = provider;
-          rows[0].input.value = provider.name;
-          rows[1].input.value = provider.baseUrl;
-          rows[2].input.value = provider.username;
-          rows[3].input.value = provider.password;
+          nameField.setValue(provider.name);
+          urlField.setValue(provider.baseUrl);
+          userField.setValue(provider.username);
+          passwordField.setValue(provider.password);
         });
       }
     },

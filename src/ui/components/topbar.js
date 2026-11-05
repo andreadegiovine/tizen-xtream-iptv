@@ -11,7 +11,7 @@ export const SEARCH_BAR_ZONE = 'topbarSearch';
 export const MIN_QUERY_LENGTH = 2;
 const IME_DONE = 65376;
 const IME_CANCEL = 65385;
-const DEBOUNCE_MS = 3000; // search starts after 3 s without typing (Enter starts it at once)
+const DEBOUNCE_MS = 1000; // search starts after 1 s without typing (Enter starts it at once)
 
 // `id` is the section: it is what the bar highlights as "current". `icon` items show only the icon
 // (the label stays as aria-label); `end` items are pushed to the right edge of the screen.
@@ -44,7 +44,7 @@ export const isSearchable = (text) => String(text || '').trim().length >= MIN_QU
 
 /**
  * Top navigation bar. In "search mode" the sections are replaced by a text field with a close icon, between the logo and the clock;
- * `handlers.onQuery(text)` fires (debounced) while typing, `handlers.onSubmit()` on Enter / Down,
+ * `handlers.onOpen()` fires when the user opens the search, `handlers.onCleared()` when the field is emptied, `handlers.onQuery(text)` fires (debounced) while typing, `handlers.onSubmit()` on Enter / Down,
  * `handlers.onClose()` when the user closes the search.
  */
 export function createTopbar(ctx, handlers = {}) {
@@ -157,7 +157,11 @@ export function createTopbar(ctx, handlers = {}) {
     appendClock();
     input.addEventListener('input', () => {
       clearTimeout(timer);
-      if (handlers.onTyping && input.value.trim()) handlers.onTyping(input.value);
+      if (!input.value.trim()) {
+        if (handlers.onCleared) handlers.onCleared(); // empty field: the recent searches again
+        return;
+      }
+      if (handlers.onTyping) handlers.onTyping(input.value);
       timer = setTimeout(() => handlers.onQuery && handlers.onQuery(input.value), DEBOUNCE_MS);
     });
     input.addEventListener('keydown', (event) => {
@@ -217,7 +221,12 @@ export function createTopbar(ctx, handlers = {}) {
       if (!silent) {
         ctx.focus.focus(SEARCH_BAR_ZONE, 0);
         input.focus();
+        if (handlers.onOpen) handlers.onOpen(); // the search page (with the recent searches) opens at once
       }
+    },
+    /** Puts a text in the search field (a recent search picked from the list). */
+    setQuery(text) {
+      if (input) input.value = text;
     },
     /** Back to the normal bar. `notify: false` when the caller already navigated away. */
     closeSearch({ notify = true } = {}) {

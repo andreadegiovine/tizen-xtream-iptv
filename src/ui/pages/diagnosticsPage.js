@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { framedPage } from '../components/formPage.js';
 import { t } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
@@ -100,18 +101,12 @@ export function createDiagnosticsPage(ctx) {
   });
 
   return {
-    el: h(
-      'section',
-      { class: 'page framed' },
+    el: framedPage(
       subtitleOverlay,
-      h(
-        'div',
-        { class: 'page-container' },
-        h('h1', { text: t('settings.diagnostics') }),
-        h('div', { class: 'form' }, runButton, results, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el), reportButton, reportBox),
-        h('h2', { class: 'prefs-title', text: t('diag.logs') }),
-        logBox,
-      ),
+      h('h1', { text: t('settings.diagnostics') }),
+      h('div', { class: 'form' }, runButton, results, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el), reportButton, reportBox),
+      h('h2', { class: 'prefs-title', text: t('diag.logs') }),
+      logBox,
     ),
     mount() {
       ctx.focus.register(zone);

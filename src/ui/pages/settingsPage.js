@@ -17,42 +17,34 @@ import { rebuildLive } from '../../services/rebuildLive.js';
 import { parseTerms, termsText } from '../../services/liveGrouping.js';
 import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from '../../services/liveNetworks.js';
 import { icon } from '../icons.js';
+import { createField } from '../components/field.js';
+import { framedPage } from '../components/formPage.js';
 
 const ZONE_ID = 'settings';
-const IME_DONE = 65376;
-const IME_CANCEL = 65385;
 
-/** A row with an editable text value (API keys). OK opens the on-screen keyboard; Done saves. */
+/** An editable text value (API keys) as a Field. OK opens the on-screen keyboard; Done saves. */
 export function textRow({ label, field, secret = false, ctx }) {
-  const input = h('input', { class: 'value-input', type: secret ? 'password' : 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: '—' });
-  const el = h('div', { class: 'row' }, h('span', { text: label }), input);
+  let input = null;
   const show = () => {
-    input.value = ctx.apiKeys.getStored(field);
+    input.setValue(ctx.apiKeys.getStored(field));
   };
-  input.addEventListener('keydown', (event) => {
-    event.stopPropagation(); // the text field owns its keys
-    if (event.keyCode === 13 || event.keyCode === IME_DONE) {
-      event.preventDefault();
-      input.blur();
-      const before = ctx.apiKeys.getStored(field);
-      const titlesChange = field === 'tmdbKey' && Boolean(before.trim()) !== Boolean(input.value.trim());
-      ctx.apiKeys.set({ [field]: input.value }).then(() => (titlesChange ? rebuildTitles(ctx) : undefined)).then(() => {
-        ctx.notices.success(t('notice.saved'));
-        // A new TMDB key starts the first metadata run at once (genres and TMDB data of what was watched).
-        if (field === 'tmdbKey' && input.value.trim() && input.value.trim() !== before && ctx.genres) {
-          ctx.genres
-            .forgetMisses()
-            .then(() => ctx.genres.backfill())
-            .catch(() => undefined);
-        }
-        ctx.router.reload(); // rows that depend on the keys appear or disappear
-      });
-    } else if (event.keyCode === IME_CANCEL) {
-      input.blur();
-      show();
-    }
-  });
-  return { el, refresh: async () => show(), activate: async () => input.focus() };
+  const save = (value) => {
+    const before = ctx.apiKeys.getStored(field);
+    const titlesChange = field === 'tmdbKey' && Boolean(before.trim()) !== Boolean(value.trim());
+    ctx.apiKeys.set({ [field]: value }).then(() => (titlesChange ? rebuildTitles(ctx) : undefined)).then(() => {
+      ctx.notices.success(t('notice.saved'));
+      // A new TMDB key starts the first metadata run at once (genres and TMDB data of what was watched).
+      if (field === 'tmdbKey' && value.trim() && value.trim() !== before && ctx.genres) {
+        ctx.genres
+          .forgetMisses()
+          .then(() => ctx.genres.backfill())
+          .catch(() => undefined);
+      }
+      ctx.router.reload(); // rows that depend on the keys appear or disappear
+    });
+  };
+  input = createField({ label, type: secret ? 'password' : 'text', placeholder: '—', onSubmit: save, onCancel: show });
+  return { el: input.el, root: input.root, refresh: async () => show(), activate: async () => input.focus() };
 }
 
 /** Movie / series titles are cleaned only when TMDB is configured: adding or removing the key rebuilds the entries. */
@@ -65,7 +57,7 @@ async function rebuildTitles(ctx) {
       const excluded = await ctx.settings.getExcluded(active.provider.id, type);
       await rebuildEntries({ db: active.db, type, excludedCategories: excluded, cleanTitles });
     }
-    ctx.search.invalidate();
+    ctx.catalogChanged();
   } catch (err) {
     log.warn('Titles rebuild failed', err && err.message);
   }
@@ -244,7 +236,6 @@ export function createSettingsPage(ctx) {
   const tmdbTokenRow = textRow({ ctx, label: t('settings.tmdbKey'), field: 'tmdbKey' });
   const traktIdRow = textRow({ ctx, label: t('settings.traktId'), field: 'traktId' });
   const traktSecretRow = textRow({ ctx, label: t('settings.traktSecret'), field: 'traktSecret', secret: true });
-  const prefsTitle = h('h2', { class: 'prefs-title', text: t('settings.preferences') });
 
   const pinValue = h('span', { class: 'value' });
   const pinRow = {
@@ -292,26 +283,16 @@ export function createSettingsPage(ctx) {
   }
 
   // Words removed from channel names: the field shows the defaults as its placeholder, the button at its right brings them back.
-  const patternsInput = h('input', { class: 'value-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: t('settings.liveGroupPlaceholder') });
   const patternsReset = h('button', { class: 'btn danger icon-only row-reset', type: 'button', 'aria-label': t('settings.liveGroupReset'), title: t('settings.liveGroupReset') }, icon('remove'));
-  const showPatterns = () => ctx.settings.get().then((s) => { patternsInput.value = s.liveGroupPatterns; });
-  patternsInput.addEventListener('keydown', (event) => {
-    event.stopPropagation(); // the text field owns its keys
-    if (event.keyCode === 13 || event.keyCode === IME_DONE) {
-      event.preventDefault();
-      patternsInput.blur();
-      const text = termsText(parseTerms(patternsInput.value));
-      ctx.settings.update({ liveGroupPatterns: text }).then(showPatterns).then(regroup);
-    } else if (event.keyCode === IME_CANCEL) {
-      patternsInput.blur();
-      showPatterns();
-    }
+  const showPatterns = () => ctx.settings.get().then((s) => { patternsField.setValue(s.liveGroupPatterns); });
+  const patternsField = createField({
+    label: t('settings.liveGroupPatterns'),
+    placeholder: t('settings.liveGroupPlaceholder'),
+    trailing: patternsReset,
+    onSubmit: (value) => ctx.settings.update({ liveGroupPatterns: termsText(parseTerms(value)) }).then(showPatterns).then(regroup),
+    onCancel: showPatterns,
   });
-  const patternsRow = {
-    el: h('div', { class: 'row' }, h('span', { text: t('settings.liveGroupPatterns') }), patternsInput, patternsReset),
-    refresh: showPatterns,
-    activate: async () => patternsInput.focus(),
-  };
+  const patternsRow = { el: patternsField.el, root: patternsField.root, refresh: showPatterns, activate: async () => patternsField.focus() };
   const patternsResetRow = {
     secondary: 'right',
     el: patternsReset,
@@ -325,22 +306,18 @@ export function createSettingsPage(ctx) {
 
   /** A number field (with its reset button, a second row like the one of the words) for a network setting; Enter saves and rebuilds Live TV. */
   function numberRows({ key, labelKey, resetKey, fallback }) {
-    const input = h('input', { class: 'value-input', type: 'text', inputmode: 'numeric', autocomplete: 'off', spellcheck: 'false', placeholder: String(fallback) });
     const reset = h('button', { class: 'btn danger icon-only row-reset', type: 'button', 'aria-label': t(resetKey), title: t(resetKey) }, icon('remove'));
-    const show = () => ctx.settings.get().then((s) => { input.value = String(s[key]); });
-    input.addEventListener('keydown', (event) => {
-      event.stopPropagation(); // the text field owns its keys
-      if (event.keyCode === 13 || event.keyCode === IME_DONE) {
-        event.preventDefault();
-        input.blur();
-        ctx.settings.update({ [key]: input.value.trim() }).then(show).then(regroup);
-      } else if (event.keyCode === IME_CANCEL) {
-        input.blur();
-        show();
-      }
+    const show = () => ctx.settings.get().then((s) => { field.setValue(s[key]); });
+    const field = createField({
+      label: t(labelKey),
+      placeholder: String(fallback),
+      inputmode: 'numeric',
+      trailing: reset,
+      onSubmit: (value) => ctx.settings.update({ [key]: value.trim() }).then(show).then(regroup),
+      onCancel: show,
     });
     return [
-      { el: h('div', { class: 'row' }, h('span', { text: t(labelKey) }), input, reset), refresh: show, activate: async () => input.focus() },
+      { el: field.el, root: field.root, refresh: show, activate: async () => field.focus() },
       {
         secondary: 'right',
         el: reset,
@@ -356,37 +333,50 @@ export function createSettingsPage(ctx) {
   const [similarityRow, similarityResetRow] = numberRows({ key: 'liveNetworkSimilarity', labelKey: 'settings.liveNetworkSimilarity', resetKey: 'settings.liveNetworkReset', fallback: DEFAULT_SIMILARITY });
   const [maxDiffRow, maxDiffResetRow] = numberRows({ key: 'liveNetworkMaxDiff', labelKey: 'settings.liveNetworkMaxDiff', resetKey: 'settings.liveNetworkReset', fallback: DEFAULT_MAX_DIFF });
 
-  const prefs = [
-    optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
-    optionRow({ ctx, labelKey: 'settings.textSize', key: 'textSize', options: TEXT_SIZES, format: (v) => `${v}%` }),
-    optionRow({ ctx, labelKey: 'settings.gridItems', key: 'gridItems', options: GRID_OPTIONS }),
-    optionRow({ ctx, labelKey: 'settings.carouselItems', key: 'carouselItems', options: CAROUSEL_OPTIONS }),
-    optionRow({ ctx, labelKey: 'settings.buffer', key: 'bufferSeconds', options: BUFFER_OPTIONS, format: seconds }),
-    autoplay,
-    optionRow({ ctx, labelKey: 'settings.screensaver', key: 'screensaver', options: SCREENSAVER_OPTIONS, format: (v) => (v ? t('settings.screensaver.minutes', { count: v }) : t('settings.screensaver.off')) }),
-    optionRow({ ctx, labelKey: 'settings.timeFormat', key: 'timeFormat', options: TIME_FORMATS, format: timeName }),
-    optionRow({ ctx, labelKey: 'settings.dateFormat', key: 'dateFormat', options: DATE_FORMATS, format: dateName }),
-    pinRow,
-    liveGrouping,
-    liveNetworks,
-    similarityRow,
-    similarityResetRow,
-    maxDiffRow,
-    maxDiffResetRow,
-    patternsRow,
-    patternsResetRow,
-    optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }),
-    diagnostics,
-    actionRow({
-      ctx,
-      label: t('settings.resetAll'),
-      confirm: t('settings.resetAllConfirm'),
-      run: async () => {
-        await resetApp({ db: ctx.db, providers: ctx.providers, stopWork: () => { ctx.genres.stop(); ctx.catalog.cancel(); }, storages: [localStorage, sessionStorage] });
-        window.location.reload();
-      },
-    }),
+  const resetAll = actionRow({
+    ctx,
+    label: t('settings.resetAll'),
+    confirm: t('settings.resetAllConfirm'),
+    run: async () => {
+      await resetApp({ db: ctx.db, providers: ctx.providers, stopWork: () => { ctx.genres.stop(); ctx.catalog.cancel(); }, storages: [localStorage, sessionStorage] });
+      window.location.reload();
+    },
+  });
+  // Preferences in sections, in the order of the page. `list`: rows of the usual list; `fields`: text fields (with their reset buttons).
+  const sections = [
+    {
+      titleKey: 'settings.section.appearance',
+      list: [
+        optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
+        optionRow({ ctx, labelKey: 'settings.textSize', key: 'textSize', options: TEXT_SIZES, format: (v) => `${v}%` }),
+        optionRow({ ctx, labelKey: 'settings.gridItems', key: 'gridItems', options: GRID_OPTIONS }),
+        optionRow({ ctx, labelKey: 'settings.carouselItems', key: 'carouselItems', options: CAROUSEL_OPTIONS }),
+        optionRow({ ctx, labelKey: 'settings.timeFormat', key: 'timeFormat', options: TIME_FORMATS, format: timeName }),
+        optionRow({ ctx, labelKey: 'settings.dateFormat', key: 'dateFormat', options: DATE_FORMATS, format: dateName }),
+        optionRow({ ctx, labelKey: 'settings.screensaver', key: 'screensaver', options: SCREENSAVER_OPTIONS, format: (v) => (v ? t('settings.screensaver.minutes', { count: v }) : t('settings.screensaver.off')) }),
+      ],
+    },
+    {
+      titleKey: 'settings.section.playback',
+      list: [optionRow({ ctx, labelKey: 'settings.buffer', key: 'bufferSeconds', options: BUFFER_OPTIONS, format: seconds }), autoplay],
+    },
+    {
+      titleKey: 'settings.section.live',
+      list: [liveGrouping, liveNetworks],
+      fields: [similarityRow, similarityResetRow, maxDiffRow, maxDiffResetRow, patternsRow, patternsResetRow],
+    },
+    {
+      titleKey: 'settings.section.content',
+      list: [optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }), pinRow],
+    },
+    { titleKey: 'settings.section.advanced', list: [diagnostics, resetAll] },
   ];
+  const prefs = sections.flatMap((section) => (section.list || []).concat(section.fields || []));
+  const prefsBlocks = sections.map((section) => [
+    h('h2', { class: 'prefs-title', text: t(section.titleKey) }),
+    section.list ? h('div', { class: 'list' }, section.list.map((r) => r.el)) : null,
+    section.fields ? h('div', { class: 'fields' }, section.fields.filter((r) => !r.secondary).map((r) => r.root)) : null,
+  ]);
   // Focus order follows the page: catalog, TMDB, Trakt, preferences.
   const rows = [syncRow, metaRow, metaRemoveRow, tmdbTokenRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktSecretRow, ...prefs];
   // The Trakt sync / remove buttons exist only while an account is connected.
@@ -449,7 +439,7 @@ export function createSettingsPage(ctx) {
   };
 
   return {
-    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('nav.settings') }), opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'list' }, tmdbTokenRow.el), traktPanel.el, h('div', { class: 'list' }, traktIdRow.el, traktSecretRow.el), devicePanel.el, prefsTitle, h('div', { class: 'list' }, prefs.filter((r) => !r.secondary).map((r) => r.el)))),
+    el: framedPage(h('h1', { text: t('nav.settings') }), opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), devicePanel.el, prefsBlocks),
     mount() {
       opsPanel.mount();
       tmdbPanel.mount();

@@ -6,6 +6,7 @@ const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
 const pkg = require('./package.json');
 const devProxy = require('./scripts/dev-proxy');
+const devMediaProxy = require('./scripts/dev-media-proxy');
 
 const YOUTUBE_SERVICE_PORT = 8125; // keep in sync with src/services/youtubeEngine.js
 
@@ -90,6 +91,8 @@ module.exports = (env = {}, argv = {}) => {
       setupMiddlewares: (middlewares) => {
         // Same-origin proxy for provider API calls (avoids CORS while developing).
         middlewares.unshift({ name: 'xtream-dev-proxy', path: '/__proxy', middleware: devProxy });
+        // Video streams (Range, redirects, HLS playlists rewritten) for the desktop player.
+        middlewares.unshift({ name: 'xtream-dev-media-proxy', path: '/__media', middleware: devMediaProxy });
         return middlewares;
       },
     },

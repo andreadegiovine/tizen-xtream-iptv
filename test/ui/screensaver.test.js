@@ -90,7 +90,7 @@ test('card posters rotate on a shared clock; cards that left the page drop out',
   const picks = [0.9, 0];
   rotatePoster({ host, urls: ['a', 'b', 'c'], random: () => picks.shift(), preload: (url, done) => done(true) });
   expect(rotatingCount()).toBe(1);
-  jest.advanceTimersByTime(8000);
+  jest.advanceTimersByTime(8000 + 2000);
   expect(host.querySelectorAll('.rot-layer.visible')).toHaveLength(1);
   expect(host.querySelector('.rot-layer.visible').style.backgroundImage).toContain('c');
   host.remove();

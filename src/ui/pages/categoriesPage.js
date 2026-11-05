@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { framedPage } from '../components/formPage.js';
 import { t } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
@@ -211,7 +212,7 @@ export function createCategoriesPage(ctx, params = {}) {
       await ctx.settings.setExcluded(providerId, type, Array.from(excluded));
       if (excluded.size !== original.size || Array.from(excluded).some((id) => !original.has(id))) {
         await rebuildEntries({ db, type, excludedCategories: excluded, cleanTitles: Boolean(ctx.apiKeys.get().tmdbKey), grouping: type === 'live' ? await ctx.liveGrouping.config(providerId) : undefined });
-        ctx.search.invalidate();
+        ctx.catalogChanged();
         // A category shown again: its items were not kept, so the type is downloaded again (now if this is the active provider).
         if (Array.from(original).some((id) => !excluded.has(id))) {
           await markStale(db, type);
@@ -230,7 +231,7 @@ export function createCategoriesPage(ctx, params = {}) {
   }
 
   return {
-    el: h('section', { class: 'page framed' }, h('div', { class: 'page-container' }, h('h1', { text: t('settings.categories') }), status, h('div', { class: 'categories-body' }, h('div', { class: 'categories-side' }, multiButton), list))),
+    el: framedPage(h('h1', { text: t('settings.categories') }), status, h('div', { class: 'categories-body' }, h('div', { class: 'categories-side' }, multiButton), list)),
     /** Back cancels the multiple selection instead of leaving the page. */
     onBack() {
       if (!armed) return false;

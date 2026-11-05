@@ -133,17 +133,37 @@ async function replaceRows(db, store, type, rows, { onBatch } = {}) {
   await dbDeleteMany(db, store, existing.filter((key) => !fresh.has(key)));
 }
 
+/**
+ * Like `replaceRows`, but the rows are made `chunk` entries at a time (`makeRows(slice)`), written, and dropped: only the keys are
+ * kept (to know what to delete afterwards). The row lists of a big catalog (one per entry and category, one per entry and genre)
+ * never exist as one array. `extra` rows (few) are written at the end.
+ */
+async function replaceRowsChunked(db, store, type, entries, makeRows, { extra = [], chunk = BATCH_SIZE } = {}) {
+  const fresh = new Set();
+  for (let i = 0; i < entries.length; i += chunk) {
+    const rows = makeRows(entries.slice(i, i + chunk));
+    rows.forEach((row) => fresh.add(row.key));
+    await dbPutMany(db, store, rows, BATCH_SIZE);
+  }
+  if (extra.length) {
+    extra.forEach((row) => fresh.add(row.key));
+    await dbPutMany(db, store, extra, BATCH_SIZE);
+  }
+  const existing = await dbGetAllKeys(db, store, ranges[store](type));
+  await dbDeleteMany(db, store, existing.filter((key) => !fresh.has(key)));
+}
+
 /** Entries + their per-category rows. Shared by the sync and by "exclusions changed". */
 export async function writeEntries(db, type, entries, { onBatch, groups = [], networks = [] } = {}) {
   await replaceRows(db, 'entries', type, entries, { onBatch });
-  let categoryRows = buildEntryCategoryRows(entries);
+  let liveAllRows = [];
   if (type === MediaType.LIVE) {
     // Live TV "show all": the groups plus the channels that are in none (they live in a pseudo category).
-    categoryRows = categoryRows.concat(buildLiveAllRows(entries, groups, networks));
+    liveAllRows = buildLiveAllRows(entries, groups, networks);
     await replaceRows(db, 'groups', type, groups.concat(networks)); // networks sit in the same store, keys `live:n…`
   }
-  await replaceRows(db, 'entry_cat', type, categoryRows);
-  await replaceRows(db, 'entry_genre', type, buildEntryGenreRows(entries));
+  await replaceRowsChunked(db, 'entry_cat', type, entries, buildEntryCategoryRows, { extra: liveAllRows });
+  await replaceRowsChunked(db, 'entry_genre', type, entries, buildEntryGenreRows);
   // TMDB genres follow the metadata, not the sync: only forget the ones of titles that left the catalog.
   const present = new Set(entries.map((entry) => entry.key));
   const known = await dbGetAllKeys(db, 'entry_genre_tmdb', ranges.entry_genre_tmdb(type));
@@ -215,6 +235,7 @@ export async function syncType({
     if (item) byKey.set(item.key, item);
   });
   const projected = Array.from(byKey.values());
+  byKey.clear(); // the map and the list held every item twice
   const rawCount = raw.length;
   raw.length = 0; // let the big raw list be collected before the heavy writes
 
@@ -241,6 +262,9 @@ export async function syncType({
   const entries = buildEntries(type, items, { excludedCategories, cleanTitles });
   const { groups, networks, report } = type === MediaType.LIVE ? buildLiveComposites(entries, items, excludedCategories, grouping) : { groups: [], networks: [], report: null };
   const buildMs = now() - entriesStart;
+  const itemCount = items.length;
+  items.length = 0; // the entries hold what the grids need: the items are not kept in memory while the rows are written
+  projected.length = 0;
   await writeEntries(db, type, entries, { groups, networks });
   if (report) await dbPut(db, 'meta', { key: NETWORK_REPORT_KEY, type, report });
   const entriesMs = now() - entriesStart;
@@ -252,7 +276,7 @@ export async function syncType({
     type,
     lastSync: now(),
     genres: true,
-    itemCount: items.length,
+    itemCount,
     entryCount: entries.length,
     ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, ...groupCounts(entries, groups, networks) } : {}),
     categoryCount: categories.length,
@@ -265,7 +289,7 @@ export async function syncType({
     durationMs: now() - started,
   };
   await dbPut(db, 'meta', meta);
-  progress('done', { done: items.length, total: items.length, meta });
+  progress('done', { done: itemCount, total: itemCount, meta });
   return meta;
 }
 

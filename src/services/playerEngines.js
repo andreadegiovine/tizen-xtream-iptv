@@ -178,15 +178,61 @@ export function createAvPlayEngine() {
   };
 }
 
+/** Development only: the stream goes through the dev server (no CORS, Range support). */
+export function devMediaUrl(url) {
+  return typeof __DEV__ !== 'undefined' && __DEV__ ? `/__media?u=${encodeURIComponent(url)}` : url;
+}
+
+/** 'hls' | 'ts' | 'native' — only in development builds; production never loads the demuxers. */
+export function devStreamKind(url) {
+  if (!(typeof __DEV__ !== 'undefined' && __DEV__)) return 'native';
+  const path = String(url).split('?')[0].toLowerCase();
+  if (path.endsWith('.m3u8')) return 'hls';
+  if (path.endsWith('.ts') || /\/live\/[^/]+\/[^/]+\/\d+$/.test(path)) return 'ts';
+  return 'native';
+}
+
+async function attachHls(video, url, handlers) {
+  if (!(typeof __DEV__ !== 'undefined' && __DEV__)) return null;
+  const { default: Hls } = await import('hls.js');
+  if (!Hls.isSupported()) {
+    video.src = url;
+    return null;
+  }
+  const hls = new Hls();
+  hls.on(Hls.Events.ERROR, (event, data) => {
+    if (data && data.fatal) handlers.onError(`hls ${data.type}: ${data.details}`);
+  });
+  hls.loadSource(url);
+  hls.attachMedia(video);
+  return hls;
+}
+
+async function attachMpegts(video, url, handlers) {
+  if (!(typeof __DEV__ !== 'undefined' && __DEV__)) return null;
+  const { default: mpegts } = await import('mpegts.js');
+  if (!mpegts.isSupported()) {
+    video.src = url;
+    return null;
+  }
+  const player = mpegts.createPlayer({ type: 'mpegts', isLive: true, url });
+  player.on(mpegts.Events.ERROR, (type, detail) => handlers.onError(`mpegts ${type}: ${detail}`));
+  player.attachMediaElement(video);
+  player.load();
+  return player;
+}
+
 /** <video> engine for desktop browsers (development and tests); not used on the TV. */
 export function createHtml5Engine() {
   let video = null;
   let htmlHandlers = null;
+  let adapter = null; // hls.js / mpegts.js instance (development only)
   return {
     available: () => typeof document !== 'undefined',
-    start(url, { handlers }) {
+    start(rawUrl, { handlers }) {
       this.stop();
       htmlHandlers = handlers;
+      const url = devMediaUrl(rawUrl);
       video = document.createElement('video');
       video.style.cssText = 'position:fixed;left:0;top:0;width:1920px;height:1080px;z-index:-1;background:#000';
       video.addEventListener('canplay', () => handlers.onPrepared(), { once: true });
@@ -196,6 +242,17 @@ export function createHtml5Engine() {
       video.addEventListener('error', () => handlers.onError(video.error ? `media error ${video.error.code}` : 'media error'));
       document.body.appendChild(video);
       document.body.classList.add('video-active');
+      const kind = devStreamKind(rawUrl);
+      if (kind === 'hls' || kind === 'ts') {
+        // Desktop browsers cannot play HLS (Chrome/Firefox) or raw MPEG-TS: a JS demuxer does it (development only).
+        const attach = kind === 'hls' ? attachHls : attachMpegts;
+        const current = video;
+        attach(current, url, handlers).then((instance) => {
+          if (video === current) adapter = instance;
+          else if (instance) instance.destroy();
+        });
+        return;
+      }
       video.src = url;
       video.load();
     },
@@ -248,6 +305,14 @@ export function createHtml5Engine() {
       });
     },
     stop() {
+      if (adapter) {
+        try {
+          adapter.destroy();
+        } catch {
+          /* already gone */
+        }
+        adapter = null;
+      }
       if (video) {
         video.pause();
         video.removeAttribute('src');

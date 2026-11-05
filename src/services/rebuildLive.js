@@ -8,5 +8,5 @@ export async function rebuildLive(ctx) {
   const excludedCategories = await ctx.settings.getExcluded(providerId, 'live');
   const grouping = await ctx.liveGrouping.config(providerId);
   await rebuildEntries({ db: active.db, type: 'live', excludedCategories, grouping });
-  ctx.search.invalidate();
+  ctx.catalogChanged();
 }

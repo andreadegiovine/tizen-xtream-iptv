@@ -51,6 +51,7 @@ export function buildEntries(type, items, { excludedCategories = new Set(), clea
       genres: type === MediaType.LIVE ? [] : mergeGenres(members.map((m) => m.item.genre)),
       icon: base.item.icon,
       epgChannelId: base.item.epgChannelId,
+      ...(members.some((m) => m.item.adult) ? { adult: true } : {}), // the provider's own flag
     });
   }
 

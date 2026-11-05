@@ -145,3 +145,16 @@ Vedi anche `docs/MULTIPLATFORM.md`.
 - Screensaver (ui/screensaver.js): ascolta in cattura tasti e puntatore; dopo 15 minuti mostra un overlay nero con il logo (`MARK`) che cambia posto e dimensione ogni 10 s; il primo evento lo chiude e viene inghiottito. Sospeso nella pagina player e quando la preferenza è disattivata.
 - `rotatePoster` (imageRotator.js): le card con `posters` (collezioni) cambiano immagine ogni 8 s su un solo `setInterval` condiviso; le card non più nel DOM (`isConnected`) escono dal giro da sole, quindi non servono distruttori.
 - Screensaver: `screensaver` è in minuti (`SCREENSAVER_OPTIONS = [0, 1, 5, 15]`, 0 = spento); `setMinutes` sostituisce `setEnabled`. Un booleano salvato da versioni precedenti vale 15 (true) o 0 (false).
+
+## Form, ricerca, cache (patch 70)
+
+- `field.js`, `formPage.js`: campo di testo, form (campi, riga azioni) e pagina incorniciata riusabili; `formModel` gestisce il focus (Giù dall'ultimo campo → Conferma).
+- Ricerca: indice in `search.worker.js` (fallback sul thread principale), scaldato all'avvio e invalidato a ogni `catalogChanged()`; cronologia in `searchHistory` (ultime 10); la pagina mostra recenti, scheletro o risultati.
+- Adulti: flag `is_adult` del provider, poi regex sul nome.
+- Immagini: caricamento a 600px, rilascio a 1800px, `decoding=async`, scheletro al ritorno.
+- `pageCache`: chiavi `sidebar:` e `page:`; sospesa durante i job sul catalogo, svuotata alla fine, al cambio lingua e a `catalogChanged()`.
+- `connectivity.js`: avviso offline.
+
+## Player su PC (patch 71)
+
+Solo in sviluppo: `scripts/dev-media-proxy.js` serve `/__media?u=…` (Range, redirect, playlist HLS riscritte); `createHtml5Engine` sceglie hls.js, mpegts.js o `<video>` nativo da `devStreamKind`. Guardia `__DEV__` → in produzione i demuxer non entrano nel bundle. Limiti: codec non supportati dal browser (HEVC/AC3, MKV) possono non riprodursi; il proxy non gestisce provider con IP/UA vincolati.

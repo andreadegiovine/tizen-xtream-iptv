@@ -22,6 +22,8 @@ const GRID_ZONE = 'browseGrid';
 const HEAD_ZONE = 'browseHead';
 /** Views that are loaded as one in-memory list and paged locally. */
 const LIST_KINDS = ['continue', 'favorites', 'suggestions', 'genre', 'network'];
+/** Views read from the catalog only (so their first page can be cached); continue, favourites and suggestions come from the user. */
+const CACHED_KINDS = ['all', 'category', 'genre', 'network'];
 /** Every media type uses the same 6-column grid of equally sized cards (channels included). */
 export const columnsFor = () => 6;
 
@@ -189,30 +191,46 @@ export function createBrowsePage(ctx, params = {}) {
     });
   }
 
-  /** Fills the numbers on the right of the sidebar entries, one source at a time (none of them blocks the page). */
-  async function loadCounts() {
-    const set = (key, n) => {
-      counts.set(key, n);
-      if (!destroyed) showCounts();
-    };
-    const safe = (job) => job().catch(() => undefined);
-    await safe(async () => set('all:', await countEntries(db, { type, categoryId: allCategory() })));
-    if (type === 'live') {
-      await safe(async () => set('favorites:', (await ctx.favorites.list(providerId)).filter((f) => f.type === type).length));
-      networks.forEach((n) => set(`network:${n.key}`, n.memberKeys.length));
-      await Promise.all(categories.map((c) => safe(async () => set(`category:${c.id}`, await countEntries(db, { type, categoryId: c.id })))));
-      return;
-    }
-    await safe(async () => set('continue:', (await continueWatching(ctx, { providerId, limit: 200 })).filter((r) => r.type === type).length));
-    await safe(async () => set('favorites:', (await ctx.favorites.list(providerId)).filter((f) => f.type === type).length));
-    await safe(async () => set('suggestions:', (await suggestionEntries()).length));
-    const genreTotals = await safe(() => ctx.genres.counts(type));
-    if (genreTotals) genreTotals.forEach((n, key) => set(`genre:${key}`, n));
-    for (const c of categories) {
-      if (destroyed) return;
-      await safe(async () => set(`category:${c.id}`, await countEntries(db, { type, categoryId: c.id })));
-    }
+  const setCount = (key, n) => {
+    counts.set(key, n);
+    if (!destroyed) showCounts();
+  };
+  const safe = (job) => job().catch(() => undefined);
+
+  /** The numbers that depend on the user (continue watching, favourites, suggestions): read every time, never cached. */
+  async function loadUserCounts() {
+    if (type !== 'live') await safe(async () => setCount('continue:', (await continueWatching(ctx, { providerId, limit: 200 })).filter((r) => r.type === type).length));
+    await safe(async () => setCount('favorites:', (await ctx.favorites.list(providerId)).filter((f) => f.type === type).length));
+    if (type !== 'live') await safe(async () => setCount('suggestions:', (await suggestionEntries()).length));
   }
+
+  /** The numbers of the catalog (all, networks, genres, categories): one source at a time, none of them blocks the page. Resolves true when all were read. */
+  async function loadCatalogCounts() {
+    await safe(async () => setCount('all:', await countEntries(db, { type, categoryId: allCategory() })));
+    if (type === 'live') networks.forEach((n) => setCount(`network:${n.key}`, n.memberKeys.length));
+    else {
+      const genreTotals = await safe(() => ctx.genres.counts(type));
+      if (genreTotals) genreTotals.forEach((n, key) => setCount(`genre:${key}`, n));
+    }
+    if (type === 'live') {
+      await Promise.all(categories.map((c) => safe(async () => setCount(`category:${c.id}`, await countEntries(db, { type, categoryId: c.id })))));
+      return !destroyed;
+    }
+    for (const c of categories) {
+      if (destroyed) return false;
+      await safe(async () => setCount(`category:${c.id}`, await countEntries(db, { type, categoryId: c.id })));
+    }
+    return !destroyed;
+  }
+
+  /** Remembers the sidebar (and its numbers) until the app closes or the catalog changes. */
+  function storeSidebar() {
+    if (!ctx.pageCache || !providerId) return;
+    const catalogCounts = Array.from(counts.entries()).filter(([key]) => !/^(continue|favorites|suggestions):/.test(key));
+    ctx.pageCache.set(sidebarKey(), { categories, networks, genres, counts: catalogCounts });
+  }
+
+  const sidebarKey = () => `sidebar:${providerId}:${type}`;
 
   let suggestionsCache = null;
   async function suggestionEntries(fresh = false) {
@@ -338,13 +356,25 @@ export function createBrowsePage(ctx, params = {}) {
       while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
       for (let i = 0; i < Math.min(pageSize, columns * 2); i += 1) gridEl.appendChild(createSkeletonCard());
     }
+    // The first page of a catalog view (all, a category, a genre, a network) is cached; the views the user fills are not.
+    const isList = LIST_KINDS.includes(item.kind);
+    const cacheKey = nextPage === 0 && ctx.pageCache && CACHED_KINDS.includes(item.kind) ? `page:${providerId}:${type}:${item.kind}:${item.id === undefined ? '' : item.id}:${pageSize}` : null;
+    const hit = cacheKey ? ctx.pageCache.get(cacheKey) : null;
     let result;
-    if (nextPage === 0 && LIST_KINDS.includes(item.kind)) list = await loadList(item).catch(() => []);
-    else if (!LIST_KINDS.includes(item.kind)) list = null;
-    if (list) result = { entries: list.slice(nextPage * pageSize, (nextPage + 1) * pageSize), hasMore: list.length > (nextPage + 1) * pageSize };
-    else result = await pageEntries(db, { type, categoryId: viewCategory(item), offset: nextPage * pageSize, limit: pageSize });
+    if (hit) {
+      list = null; // the next pages read the list on demand
+      result = { entries: hit.entries, hasMore: hit.hasMore };
+    } else {
+      if (isList && (nextPage === 0 || !list)) list = await loadList(item).catch(() => []);
+      else if (!isList) list = null;
+      if (list) result = { entries: list.slice(nextPage * pageSize, (nextPage + 1) * pageSize), hasMore: list.length > (nextPage + 1) * pageSize };
+      else result = await pageEntries(db, { type, categoryId: viewCategory(item), offset: nextPage * pageSize, limit: pageSize });
+    }
     if (destroyed || token !== loadToken) return;
-    if (nextPage === 0) pages = Math.max(1, Math.ceil((list ? list.length : await countEntries(db, { type, categoryId: viewCategory(item) }).catch(() => 0)) / pageSize));
+    if (nextPage === 0) {
+      pages = hit ? hit.pages : Math.max(1, Math.ceil((list ? list.length : await countEntries(db, { type, categoryId: viewCategory(item) }).catch(() => 0)) / pageSize));
+      if (cacheKey && !hit && !destroyed && token === loadToken) ctx.pageCache.set(cacheKey, { entries: result.entries, hasMore: result.hasMore, pages });
+    }
     if (destroyed || token !== loadToken) return;
     page = nextPage;
     hasMore = result.hasMore;
@@ -419,7 +449,15 @@ export function createBrowsePage(ctx, params = {}) {
     pageSize = (await ctx.settings.get()).gridItems;
     const excluded = await ctx.settings.getExcluded(providerId, type);
     pinned = await ctx.pins.list(providerId, type).catch(() => []);
-    categories = (await listCategories(db, type)).filter((c) => !excluded.has(String(c.id))).map((c) => ({ id: c.id, name: c.name }));
+    // Seen before (and the catalog has not changed since): categories, genres, networks and their numbers come from the cache.
+    const cachedSidebar = ctx.pageCache ? ctx.pageCache.get(sidebarKey()) : null;
+    if (cachedSidebar) {
+      categories = cachedSidebar.categories;
+      genres = cachedSidebar.genres;
+      genresLoading = false;
+      cachedSidebar.counts.forEach(([key, n]) => counts.set(key, n));
+      countsLoading = false;
+    } else categories = (await listCategories(db, type)).filter((c) => !excluded.has(String(c.id))).map((c) => ({ id: c.id, name: c.name }));
     // Coming back from a title: the same sidebar entry, page and focus as when the page was left.
     const back = restored;
     if (back) {
@@ -430,7 +468,7 @@ export function createBrowsePage(ctx, params = {}) {
     const filter = back ? back.item : params.filter || null;
     const wantsGenre = filter && filter.kind === 'genre';
     const loadGenres = async () => {
-      if (type === 'live') return;
+      if (type === 'live' || cachedSidebar) return;
       const found = await ctx.genres.list(type).catch(() => []);
       genres = found.map((g) => ({ key: g.key, name: g.name })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     };
@@ -439,7 +477,7 @@ export function createBrowsePage(ctx, params = {}) {
       genresLoading = false;
     }
     expanded = Boolean(filter && filter.kind === 'category');
-    networks = type === 'live' ? await listNetworks(db).catch(() => []) : [];
+    networks = cachedSidebar ? cachedSidebar.networks : type === 'live' ? await listNetworks(db).catch(() => []) : [];
     // A hidden category or a network that no longer exists is not pinned in the sidebar.
     pinned = pinned.filter((p) => (p.kind !== 'category' || !excluded.has(String(p.id))) && (p.kind !== 'network' || networks.some((n) => n.key === p.id)));
     items = sidebarItems({ type, genres, categories, pinned, networks, networksExpanded, expanded, genresExpanded, genresLoading, labels: labels() });
@@ -457,7 +495,12 @@ export function createBrowsePage(ctx, params = {}) {
       genresLoading = false;
       if (!destroyed) rebuildSidebar();
     }
-    loadCounts()
+    loadUserCounts().catch((err) => log.warn('Sidebar counts failed', err && err.message));
+    if (cachedSidebar) return;
+    loadCatalogCounts()
+      .then((complete) => {
+        if (complete && !destroyed) storeSidebar();
+      })
       .catch((err) => log.warn('Sidebar counts failed', err && err.message))
       .finally(() => {
         countsLoading = false;

@@ -28,6 +28,10 @@ import { createTmdbClient } from './services/tmdbClient.js';
 import { createApiKeys } from './services/apiKeys.js';
 import { createTmdbService } from './services/tmdbService.js';
 import { createActiveProvider } from './services/activeProvider.js';
+import { watchConnectivity } from './core/connectivity.js';
+import { createPageCache } from './services/pageCache.js';
+import { createSearchHistory } from './services/searchHistory.js';
+import { createSearchWorker } from './services/createSearchWorker.js';
 import { createSearchService } from './services/searchIndex.js';
 import { createDetailsService } from './services/details.js';
 import { WatchStore, watchKey } from './services/watchStore.js';
@@ -66,6 +70,8 @@ import { createDiagnosticsPage } from './ui/pages/diagnosticsPage.js';
 window.addEventListener('unhandledrejection', (event) => log.error('Unhandled rejection', event.reason && event.reason.message));
 window.addEventListener('error', (event) => log.error('Uncaught error', event.message));
 
+const SEARCH_WARM_MS = 1500;
+
 async function boot() {
   const db = await openAppDb();
   const settings = new SettingsService(db);
@@ -91,7 +97,7 @@ async function boot() {
     watch: null,
     trakt: null,
     details: createDetailsService({ active }),
-    search: createSearchService({ active }),
+    search: createSearchService({ active, createWorker: createSearchWorker }),
     createEngine: createDefaultEngine,
     createTrailerEngine: createYouTubeEngine,
     openEntry: null,
@@ -101,6 +107,14 @@ async function boot() {
   ctx.favorites = createFavoritesService({ db });
   ctx.collections = createCollectionsService({ db });
   ctx.pins = createPinsService({ db });
+  ctx.searchHistory = createSearchHistory({ db });
+  ctx.pageCache = createPageCache();
+  // Everything read from the catalog is out of date (a rebuild, a sync, hidden categories): caches emptied, the search index rebuilt.
+  ctx.catalogChanged = () => {
+    ctx.pageCache.clear();
+    ctx.search.invalidate();
+    ctx.search.warm().catch(() => undefined);
+  };
   ctx.parental = createParentalService({ db });
   setAdultCheck((entry) => ctx.parental.isAdult(entry));
   ctx.refreshAdult = async () => {
@@ -108,7 +122,8 @@ async function boot() {
     if (current) await ctx.parental.loadCategories(current.db).catch((err) => log.warn('Adult categories failed', err && err.message));
   };
   ctx.apiKeys = createApiKeys({ db });
-  await ctx.apiKeys.load();
+  const keysReady = ctx.apiKeys.load(); // read while the rest of the start-up is set up; awaited before the first page
+  keysReady.catch(() => undefined);
   ctx.trakt = createTraktService({ db, client: createTraktClient({ getCredentials: () => ({ clientId: ctx.apiKeys.get().traktId, clientSecret: ctx.apiKeys.get().traktSecret }) }) });
   ctx.watch = createWatchState({ store: new WatchStore(db), trakt: ctx.trakt });
   const tmdb = createTmdbService({ db, client: createTmdbClient({ getApiKey: () => ctx.apiKeys.get().tmdbKey }), getLanguage: () => i18n.getLocale(), onActivity: (count) => ctx.genres && ctx.genres.hold('ui', count > 0) });
@@ -185,6 +200,13 @@ async function boot() {
   };
 
   const topbar = createTopbar(ctx, {
+    onOpen: () => {
+      // The search icon shows the search page at once, with the last searches.
+      if (!(router.current && router.current.name === 'search')) router.push('search', { query: '', section: 'search' });
+    },
+    onCleared: () => {
+      if (router.current && router.current.name === 'search' && router.page && router.page.showRecent) router.page.showRecent();
+    },
     onTyping: () => {
       // First keystroke: open the results page right away, with placeholders instead of an empty screen.
       if (router.current && router.current.name === 'search') {
@@ -202,6 +224,8 @@ async function boot() {
       }
     },
     onSubmit: () => {
+      // Enter / Done: the search counts as made, it goes in the recent ones.
+      if (router.page && router.page.getQuery && ctx.searchHistory) ctx.searchHistory.add(router.page.getQuery()).catch(() => undefined);
       if (router.page && router.page.focusResults) router.page.focusResults();
     },
     onClose: () => {
@@ -212,6 +236,7 @@ async function boot() {
   });
   document.getElementById('topbar').appendChild(topbar.el);
   ctx.syncSearchLinks = () => topbar.syncSearchLinks();
+  ctx.setSearchText = (text) => topbar.setQuery(text);
   ctx.refreshClock = () => topbar.refreshClock();
   ctx.screensaver = createScreensaver({ idleMs: prefs.screensaver * 60 * 1000 });
 
@@ -259,7 +284,7 @@ async function boot() {
     if (state.running && !wasSyncing) endCatalogOp = ctx.operations.start('catalog', { startedAt: state.startedAt, cancel: () => catalog.cancel() });
     if (!state.running) endCatalogOp();
     if (wasSyncing && !state.running && !state.cancelled) {
-      ctx.search.invalidate();
+      ctx.catalogChanged(); // caches emptied and the new search index ready before the next search
       ctx.refreshAdult();
       ctx.genres.backfill().catch(() => undefined); // the genre worker finds genres the lists did not carry
       // The guide only matters once the channel list is in place; at most once a day.
@@ -268,7 +293,21 @@ async function boot() {
     wasSyncing = state.running;
   });
 
+  // The page cache is bypassed while the catalog is being changed (sync, genre or TMDB downloads) and emptied when the job ends.
+  const CATALOG_JOBS = new Set(['catalog', 'genres', 'tmdb']);
+  let cacheBusy = false;
+  const refreshCacheState = () => {
+    const busy = Boolean(catalog.getState().running) || ctx.operations.list().some((op) => CATALOG_JOBS.has(op.id));
+    if (busy === cacheBusy) return;
+    cacheBusy = busy;
+    ctx.pageCache.suspend(busy);
+    if (!busy) ctx.pageCache.clear();
+  };
+  catalog.onChange(refreshCacheState);
+  ctx.operations.onChange(refreshCacheState);
+
   i18n.onChange(() => {
+    ctx.pageCache.clear(); // titles and genres change with the language
     topbar.render();
     router.reload();
     ctx.genres.backfill().catch(() => undefined); // metadata and genres in the new language
@@ -278,6 +317,19 @@ async function boot() {
   ctx.dialogs = dialogs;
   const notices = createNoticeService();
   ctx.notices = notices;
+  // Offline: a notice that stays until the connection is back (it is also shown over a video: playback needs the network).
+  let offlineNotice = null;
+  watchConnectivity({
+    onChange: (online) => {
+      if (!online) {
+        offlineNotice = notices.show({ type: 'warning', message: t('notice.offline'), permanent: true, key: 'offline', scope: 'playback' });
+      } else if (offlineNotice !== null) {
+        notices.close(offlineNotice);
+        offlineNotice = null;
+        notices.success(t('notice.online'), { key: 'online', scope: 'playback' });
+      }
+    },
+  });
   // Operations tell when they start and finish (the Trakt sync reports its own result).
   ctx.operations.onEvent(({ kind, id }) => {
     if (id === 'trakt' && kind === 'end') return;
@@ -320,7 +372,7 @@ async function boot() {
 
   log.info('Xtream IPTV started');
   ctx.trakt.flush().catch(() => undefined); // history that could not be sent last time
-  const hasProvider = await providers.getActive();
+  const [hasProvider] = await Promise.all([providers.getActive(), keysReady]);
   if (hasProvider) await ctx.refreshAdult();
   if (hasProvider) {
     router.reset('home', { section: 'home' });
@@ -328,6 +380,8 @@ async function boot() {
     // Stale-while-revalidate: the cached catalog is usable at once, lists older than 12 h refresh in background.
     catalog.start();
     ctx.genres.backfill().catch(() => undefined);
+    // The search index is built in its worker once the first screen is up, so the first search finds it ready.
+    setTimeout(() => ctx.search.warm().catch(() => undefined), SEARCH_WARM_MS);
   } else {
     router.reset('providerSetup', { firstRun: true });
   }

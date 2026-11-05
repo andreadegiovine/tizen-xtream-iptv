@@ -1,9 +1,10 @@
-import { dbPutMany, dbGetAllKeys, dbDeleteMany, dbGet, dbPut, requestToPromise } from '../core/idb.js';
+import { dbPutMany, dbGetAllKeys, dbDeleteMany, dbGet, dbPut } from '../core/idb.js';
 import { openProviderDb } from '../db/providerDb.js';
 import { createXmltvParser } from './xmltv.js';
 import { wrapApiUrl } from '../core/env.js';
 import { toAppError, AppError, ErrorCode } from '../core/errors.js';
 
+export const EPG_BATCH = 2000;
 export const EPG_TTL_MS = 24 * 3600 * 1000;
 const META_KEY = 'epg';
 
@@ -11,10 +12,22 @@ export const xmltvUrl = (provider) =>
   `${provider.baseUrl}/xmltv.php?username=${encodeURIComponent(provider.username)}&password=${encodeURIComponent(provider.password)}`;
 
 /** Channel ids used by the live entries: only their programmes are worth storing. */
-export async function liveChannelIds(db) {
-  const tx = db.transaction('entries', 'readonly');
-  const all = await requestToPromise(tx.objectStore('entries').index('byTypeAdded').getAll(IDBKeyRange.bound(['live', 0], ['live', Number.MAX_SAFE_INTEGER])));
-  return new Set(all.map((e) => e.epgChannelId).filter(Boolean));
+export function liveChannelIds(db) {
+  // A cursor reads one channel at a time: the whole list of live entries is never held in memory just to pick one field.
+  return new Promise((resolve, reject) => {
+    const ids = new Set();
+    const tx = db.transaction('entries', 'readonly');
+    const request = tx.objectStore('entries').index('byTypeAdded').openCursor(IDBKeyRange.bound(['live', 0], ['live', Number.MAX_SAFE_INTEGER]));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      if (cursor.value.epgChannelId) ids.add(cursor.value.epgChannelId);
+      cursor.continue();
+    };
+    tx.oncomplete = () => resolve(ids);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('Transaction aborted'));
+  });
 }
 
 export const shouldSyncEpg = (meta, now = Date.now()) => !meta || now - meta.lastSync >= EPG_TTL_MS;
@@ -48,17 +61,36 @@ export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => 
     emit({ event: 'progress', phase: 'skipped' });
     return { programmes: 0, skipped: true };
   }
-  const rows = [];
-  const parser = createXmltvParser({ now, channels: wanted, onProgramme: (p) => rows.push(p) });
+  // Programmes are written as they are read, EPG_BATCH at a time: a big guide never sits in memory as one array.
+  let buffer = [];
+  let written = 0;
+  let writes = Promise.resolve();
+  const flush = () => {
+    const batch = buffer;
+    buffer = [];
+    written += batch.length;
+    writes = writes.then(() => dbPutMany(db, 'epg', batch));
+    writes.catch(() => undefined); // a failed write is thrown where `writes` is awaited, not as an unhandled rejection meanwhile
+  };
+  const parser = createXmltvParser({
+    now,
+    channels: wanted,
+    onProgramme: (p) => {
+      buffer.push(p);
+      if (buffer.length >= EPG_BATCH) flush();
+    },
+  });
   emit({ event: 'progress', phase: 'download' });
   const t0 = Date.now();
   await readGuide(url, (text) => parser.push(text), { signal, fetchImpl });
-  if (rows.length === 0 && parser.stats().total === 0) throw new AppError(ErrorCode.BAD_RESPONSE, 'Guide is empty');
-  emit({ event: 'progress', phase: 'write', done: 0, total: rows.length });
-  await dbPutMany(db, 'epg', rows);
+  if (written + buffer.length === 0 && parser.stats().total === 0) throw new AppError(ErrorCode.BAD_RESPONSE, 'Guide is empty');
+  emit({ event: 'progress', phase: 'write', done: 0, total: written + buffer.length });
+  if (buffer.length) flush();
+  await writes;
+  const total = written;
   const stale = await dbGetAllKeys(db, 'epg', { index: 'byStop', range: IDBKeyRange.upperBound(now) });
   await dbDeleteMany(db, 'epg', stale);
-  const meta = { key: META_KEY, lastSync: now, programmes: rows.length, channels: wanted.size, totalInFile: parser.stats().total, durationMs: Date.now() - t0 };
+  const meta = { key: META_KEY, lastSync: now, programmes: total, channels: wanted.size, totalInFile: parser.stats().total, durationMs: Date.now() - t0 };
   await dbPut(db, 'meta', meta);
   return meta;
 }

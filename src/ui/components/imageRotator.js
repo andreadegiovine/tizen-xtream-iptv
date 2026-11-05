@@ -84,10 +84,18 @@ export function createImageRotator({ host, intervalMs = ROTATE_MS, random = Math
 const rotating = new Set();
 let ticker = null;
 
+const STAGGER_MS = 120; // the cards change one after the other, not all in the same frame (many decodes at once stutter)
+const STAGGER_MAX_MS = 1800;
+
 function tick() {
+  let order = 0;
   rotating.forEach((item) => {
-    if (!item.host.isConnected) rotating.delete(item); // the page is gone: forgotten, no timer per card to clean up
-    else item.next();
+    if (!item.host.isConnected) {
+      rotating.delete(item); // the page is gone: forgotten, no timer per card to clean up
+      return;
+    }
+    setTimeout(() => item.next(), Math.min(STAGGER_MAX_MS, order * STAGGER_MS));
+    order += 1;
   });
   if (!rotating.size) {
     clearInterval(ticker);

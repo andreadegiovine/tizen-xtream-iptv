@@ -27,7 +27,7 @@ export function hashPin(pin, salt) {
 
 /**
  * Parental control: one PIN for the app (stored hashed in the app database) and the adult check of
- * titles, which comes from the names of the provider categories they belong to.
+ *  titles: the flag the provider puts on a title (`is_adult`) and, as a fallback, the names of its categories (the provider gives no flag on categories).
  */
 export function createParentalService({ db, random = Math.random }) {
   let record = null; // { salt, hash }
@@ -54,14 +54,13 @@ export function createParentalService({ db, random = Math.random }) {
     /** Reads the categories of the active provider and remembers which ones are adult. */
     async loadCategories(providerDb) {
       const next = { movie: new Set(), series: new Set(), live: new Set() };
-      for (const type of TYPES) {
-        const categories = await listCategories(providerDb, type);
-        categories.filter((c) => isAdultCategoryName(c.name)).forEach((c) => next[type].add(String(c.id)));
-      }
+      const lists = await Promise.all(TYPES.map((type) => listCategories(providerDb, type)));
+      TYPES.forEach((type, i) => lists[i].filter((c) => isAdultCategoryName(c.name)).forEach((c) => next[type].add(String(c.id))));
       adultIds = next;
     },
-    /** Adult title? Entries of a category whose name marks it. */
+    /** Adult title? The provider's own flag (`is_adult`) first; otherwise the entry sits in a category whose name marks it. */
     isAdult(entry) {
+      if (entry && entry.adult) return true;
       const ids = entry && entry.categoryIds;
       if (!ids || !adultIds[entry.type]) return false;
       return ids.some((id) => adultIds[entry.type].has(String(id)));
