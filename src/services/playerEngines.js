@@ -23,7 +23,11 @@ export function parseAvPlayTracks(list, kind = 'TEXT') {
 
 /** Samsung AVPlay: draws on a plane behind the page (the page background must be transparent). */
 export function createAvPlayEngine() {
-  const av = () => (typeof webapis !== 'undefined' ? webapis.avplay : null);
+  // A page outside the TV can have a partial `webapis` (extensions, emulators): AVPlay counts only when it is complete.
+  const av = () => {
+    const api = typeof webapis !== 'undefined' ? webapis.avplay : null;
+    return api && typeof api.open === 'function' && typeof api.setDisplayRect === 'function' && typeof api.prepareAsync === 'function' ? api : null;
+  };
   let element = null;
   let subtitleWatch = null;
   let nativeSubtitles = false; // the player draws them itself (fallback when no event ever arrives)

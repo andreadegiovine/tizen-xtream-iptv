@@ -200,7 +200,7 @@ export function createDetailPage(ctx, params) {
 
   /** Merges this channel with another one (or with a group) chosen in a search box; the link is kept across syncs. */
   async function mergeChannel() {
-    const picked = await ctx.dialogs.search({ title: t('merge.title'), placeholder: t('search.placeholder'), emptyLabel: t('common.empty'), run: createMergeSearch(db, entry.defaultId) });
+    const picked = await ctx.dialogs.search({ title: t('merge.title'), placeholder: t('search.placeholder'), emptyLabel: t('common.empty'), minLength: 0, autoFocus: false, run: createMergeSearch(db, entry.defaultId) });
     if (!picked || destroyed) return;
     try {
       await ctx.liveGrouping.link(providerId, entry.defaultId, picked.memberId, picked.group);
@@ -220,7 +220,7 @@ export function createDetailPage(ctx, params) {
     const fold = (text) => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
     const picked = await ctx.dialogs.search({
       title: t('networks.add'),
-      placeholder: t('networks.searchPlaceholder'),
+      placeholder: t('search.placeholder'),
       emptyLabel: t('common.empty'),
       minLength: 0,
       autoFocus: false,

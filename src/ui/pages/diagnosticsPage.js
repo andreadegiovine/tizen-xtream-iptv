@@ -2,7 +2,7 @@ import { h } from '../dom.js';
 import { framedPage } from '../components/formPage.js';
 import { t } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
-import { ListModel } from '../focus/models.js';
+import { Dir, ListModel } from '../focus/models.js';
 import { runDiagnostics } from '../../services/diagnostics.js';
 import { createAvPlaySpike } from '../../services/avplaySpike.js';
 import { log } from '../../core/logger.js';
@@ -17,7 +17,7 @@ const IME_DONE = 65376;
 export function createDiagnosticsPage(ctx) {
   const spike = createAvPlaySpike();
   const results = h('div', { class: 'diag-results' });
-  const logBox = h('pre', { class: 'diag-log' });
+  const logBox = h('pre', { class: 'diag-log scroll' });
   const runButton = h('button', { class: 'btn primary', type: 'button', text: t('diag.run') });
   const urlInput = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
   const urlRow = h('label', { class: 'field' }, h('span', { class: 'field-label', text: t('diag.avplayUrl') }), urlInput);
@@ -36,12 +36,16 @@ export function createDiagnosticsPage(ctx) {
   const FIRST_MODE = 5;
   const REPORT = FIRST_MODE + modeButtons.length;
 
+  // The log box scrolls by itself: Up / Down on it move through the whole log, and leave it only at its ends.
+  const LOG_INDEX = focusables.length - 1;
+  const atEnd = () => logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 4;
   function renderLog() {
+    const follow = atEnd(); // staying at the bottom keeps showing the newest lines
     logBox.textContent = log
       .entries()
-      .slice(-40)
       .map((e) => `${new Date(e.ts).toISOString().slice(11, 19)} ${e.level} ${e.message}`)
       .join('\n');
+    if (follow) logBox.scrollTop = logBox.scrollHeight;
   }
   const unsubscribe = log.subscribe(renderLog);
 
@@ -62,9 +66,24 @@ export function createDiagnosticsPage(ctx) {
     reportBox.textContent = row && row.report ? formatNetworkReport(row.report, (key, vars) => t(key, vars)) : t('diag.networks.none');
   }
 
+  const listModel = new ListModel({ orientation: 'vertical', getCount: () => focusables.length });
+  const model = {
+    getCount: () => listModel.getCount(),
+    navigate(dir, index) {
+      if (index === LOG_INDEX && (dir === Dir.UP || dir === Dir.DOWN)) {
+        const step = Math.max(40, Math.floor(logBox.clientHeight * 0.8));
+        const canScroll = dir === Dir.DOWN ? !atEnd() : logBox.scrollTop > 0;
+        if (canScroll) {
+          logBox.scrollTop += dir === Dir.DOWN ? step : -step;
+          return { type: 'stay' };
+        }
+      }
+      return listModel.navigate(dir, index);
+    },
+  };
   const zone = new FocusZone({
     id: ZONE_ID,
-    model: new ListModel({ orientation: 'vertical', getCount: () => focusables.length }),
+    model,
     onFocus: (i) => {
       focusables[i].classList.add('focused');
       ensureVisible(focusables[i], { first: i === 0 });
@@ -112,6 +131,7 @@ export function createDiagnosticsPage(ctx) {
       ctx.focus.register(zone);
       ctx.focus.focus(ZONE_ID, 0);
       renderLog();
+      logBox.scrollTop = logBox.scrollHeight;
     },
     destroy() {
       spike.stop();

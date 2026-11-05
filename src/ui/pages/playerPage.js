@@ -303,7 +303,6 @@ export function createPlayerPage(ctx, params) {
     if (state.status === 'loading') status = t('player.loading');
     else if (state.status === 'paused') status = t('player.paused');
     else if (state.status === 'recovering') status = t('player.recovering', { attempt: state.attempt, attempts: state.attempts });
-    else if (state.status === 'error') status = `${t('error.PLAYER')} ${state.error || ''}`.trim();
     else if (state.buffering > 0 && state.buffering < 100) status = t('player.buffering', { percent: state.buffering });
     statusEl.textContent = status;
     statusEl.classList.toggle('visible', Boolean(status));
@@ -322,7 +321,8 @@ export function createPlayerPage(ctx, params) {
       if (engine.getAudioTracks) setAudioVisible(engine.getAudioTracks().length > 1);
     }
     if ((state.status === 'paused' || state.status === 'error' || state.status === 'recovering') && state.status !== lastStatus) showControls();
-    if (state.status === 'error' && lastStatus !== 'error') ctx.notices.error(`${t('error.PLAYER')} ${state.error || ''}`.trim(), { scope: 'playback', key: 'player-error' });
+    if (state.status === 'error' && lastStatus !== 'error') showPlayerError(`${t('error.PLAYER')} ${state.error || ''}`.trim());
+    else if (state.status === 'playing') closePlayerError();
     lastStatus = state.status;
     if (state.status === 'ended') onEnded();
   }
@@ -379,9 +379,19 @@ export function createPlayerPage(ctx, params) {
       if (isLive && ctx.epg) ctx.epg.nowNext(params.epgChannelId).then((n) => { if (!destroyed && n && n.now) nowEl.textContent = n.now.title; }).catch(() => {});
     } catch (err) {
       log.warn('Player start failed', err && err.message);
-      statusEl.textContent = t('error.PLAYER');
-      statusEl.classList.add('visible');
+      showPlayerError(t('error.PLAYER'));
     }
+  }
+
+  /** The playback error stays on screen (a notice that does not time out) until the player is closed or the video plays. */
+  let errorNotice = null;
+  function showPlayerError(message) {
+    closePlayerError();
+    errorNotice = ctx.notices.error(message, { scope: 'playback', key: 'player-error', permanent: true });
+  }
+  function closePlayerError() {
+    if (errorNotice !== null) ctx.notices.close(errorNotice);
+    errorNotice = null;
   }
 
   function cancelCountdown() {
@@ -517,6 +527,7 @@ export function createPlayerPage(ctx, params) {
     },
     destroy() {
       destroyed = true;
+      closePlayerError();
       clearTimeout(hideTimer);
       clearTimeout(scrubTimer);
       clearTimeout(subtitleTimer);

@@ -34,11 +34,13 @@ export const formatRating = (rating) => (Number(rating) > 0 ? Number(rating).toF
  *   poster (rating badge top-right, watched/partial badge top-left)
  *   one line of title, one smaller line with year / S / E (or the program on air for channels)
  * `meta.square` makes the picture a square (the Live TV page only).
- * update(patch) accepts: title, year, seasons, episodes, tag, subtitle, rating, poster, posters (several: rotate, see imageRotator.js), status, progress.
+ * update(patch) accepts: title, year, seasons, episodes, tag, subtitle, rating, favorite (heart badge under the rating), poster, posters (several: rotate, see imageRotator.js), status, progress.
  */
 export function createCard(entry, type, meta = {}) {
   const poster = h('div', { class: 'card-poster' });
   const ratingBadge = h('div', { class: 'card-badge card-rating' });
+  const favoriteBadge = h('div', { class: 'card-badge card-favorite' }, icon('heart'));
+  const badges = h('div', { class: 'card-badges' }, ratingBadge, favoriteBadge); // top right: rating, then the heart under it
   const statusBadge = h('div', { class: 'card-badge card-status' });
   const title = h('div', { class: 'card-title' });
   const sub = h('div', { class: 'card-meta' });
@@ -46,7 +48,7 @@ export function createCard(entry, type, meta = {}) {
   const locked = Boolean(entry && isAdultEntry(entry));
   if (locked) poster.appendChild(h('div', { class: 'card-placeholder locked' }, icon('lock')));
   else if (meta.placeholder) poster.appendChild(h('div', { class: 'card-placeholder' }, icon(meta.placeholder)));
-  poster.append(ratingBadge, statusBadge);
+  poster.append(badges, statusBadge);
   const el = h('div', { class: `card ${type}${meta.square ? ' square' : ''}` }, poster, title, sub, bar); // `square`: the logo box of Live TV channels
   const state = { year: entry.year, seasons: null, episodes: null, tag: '', subtitle: '', count: null, countLoading: false };
   let img = null;
@@ -63,7 +65,7 @@ export function createCard(entry, type, meta = {}) {
         img = null;
         done();
       });
-      poster.insertBefore(img, ratingBadge);
+      poster.insertBefore(img, badges);
     }
     if (img.dataset.src !== url) {
       poster.classList.add('loading'); // skeleton until the picture is there
@@ -116,10 +118,11 @@ export function createCard(entry, type, meta = {}) {
     if (['year', 'seasons', 'episodes', 'tag', 'subtitle', 'count', 'countLoading'].some((key) => next[key] !== undefined)) renderSub();
     if (next.poster) setPoster(next.poster);
     if (next.posters && !locked) {
-      if (!rotation) rotation = rotatePoster({ host: poster, before: ratingBadge, urls: next.posters });
+      if (!rotation) rotation = rotatePoster({ host: poster, before: badges, urls: next.posters });
       else rotation.setUrls(next.posters);
     }
     if (next.rating !== undefined) setRating(next.rating);
+    if (next.favorite !== undefined) favoriteBadge.classList.toggle('visible', Boolean(next.favorite));
     if (next.status !== undefined) setStatus(next.status);
     if (next.progress !== undefined) {
       el.classList.toggle('has-progress', next.progress > 0);

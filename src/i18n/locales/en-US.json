@@ -73,7 +73,6 @@
   "setup.editTitle": "Edit provider",
   "browse.all": "Show all",
   "browse.page": "page {page} of {pages}",
-  "search.recent": "Recent searches",
   "search.placeholder": "Start typing...",
   "detail.play": "Play",
   "detail.resume": "Resume",
@@ -250,8 +249,6 @@
   "home.syncTiming": "Timing",
   "nav.collections": "Collections",
   "collections.add": "Add to a collection",
-  "collections.create": "Create the collection “{name}”",
-  "collections.namePlaceholder": "Search or create a collection...",
   "collections.items_one": "{count} item",
   "collections.items_other": "{count} items",
   "collections.empty": "No collections yet. Create one from the page of a title.",
@@ -273,6 +270,5 @@
   "networks.add": "Add to a network",
   "networks.open": "Open the network",
   "networks.edit": "Edit the network",
-  "networks.searchPlaceholder": "Search a network...",
   "networks.empty": "No channels in this network."
 }

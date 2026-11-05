@@ -73,7 +73,6 @@
   "setup.editTitle": "Modifica provider",
   "browse.all": "Mostra tutto",
   "browse.page": "pagina {page} di {pages}",
-  "search.recent": "Ricerche recenti",
   "search.placeholder": "Inizia a digitare...",
   "detail.play": "Riproduci",
   "detail.resume": "Riprendi",
@@ -250,8 +249,6 @@
   "home.syncTiming": "Tempistiche",
   "nav.collections": "Collezioni",
   "collections.add": "Aggiungi a una collezione",
-  "collections.create": "Crea la collezione “{name}”",
-  "collections.namePlaceholder": "Cerca o crea una collezione...",
   "collections.items_one": "{count} elemento",
   "collections.items_other": "{count} elementi",
   "collections.empty": "Nessuna collezione. Creane una dalla scheda di un titolo.",
@@ -273,6 +270,5 @@
   "networks.add": "Aggiungi a una rete",
   "networks.open": "Apri la rete",
   "networks.edit": "Modifica la rete",
-  "networks.searchPlaceholder": "Cerca una rete...",
   "networks.empty": "Nessun canale in questa rete."
 }

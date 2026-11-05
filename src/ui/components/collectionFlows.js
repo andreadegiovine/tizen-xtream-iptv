@@ -9,11 +9,11 @@ import { log } from '../../core/logger.js';
 export async function addToCollection(ctx, { providerId, entry }) {
   const picked = await ctx.dialogs.search({
     title: t('collections.add'),
-    placeholder: t('collections.namePlaceholder'),
+    placeholder: t('search.placeholder'),
     emptyLabel: t('common.empty'),
     minLength: 0,
     autoFocus: false,
-    createLabel: (name) => t('collections.create', { name }),
+    allowCreate: true,
     run: async (text) => (await ctx.collections.search(providerId, text)).map((c) => ({ key: c.id, name: c.name, collectionId: c.id })),
   });
   if (!picked) return null;

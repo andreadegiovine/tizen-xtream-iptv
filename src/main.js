@@ -170,6 +170,14 @@ async function boot() {
       if (meta.episodes) totals.set(entry.key, meta.episodes);
       paint(i);
     }, keepQueue);
+    // A heart under the rating for the titles that are favourites.
+    active.get()
+      .then((current) => (current ? ctx.favorites.listTitles(current.provider.id) : []))
+      .then((titles) => {
+        const keys = new Set(titles.map((f) => f.entryKey));
+        entries.forEach((entry, i) => cards[i] && cards[i].update({ favorite: keys.has(entry.key) }));
+      })
+      .catch(() => undefined);
     if (type === 'live') epg.decorate(entries, cards);
     else {
       Promise.all([active.get(), ctx.watch.all()])

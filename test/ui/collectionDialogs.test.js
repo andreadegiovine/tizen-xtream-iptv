@@ -17,7 +17,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 test('search with a create row: collections are listed at once and the first row creates one named after the text', async () => {
   const { root, focus, dialogs } = setup();
   const run = jest.fn(async () => [{ key: 'c1', name: 'Marvel', collectionId: 'c1' }]);
-  const promise = dialogs.search({ title: 'Add', run, minLength: 0, createLabel: (name) => `Create ${name}` });
+  const promise = dialogs.search({ title: 'Add', run, minLength: 0, allowCreate: true });
   await tick();
   expect(run).toHaveBeenCalledWith('');
   expect(root.querySelectorAll('.choice-list .choice')).toHaveLength(1); // nothing typed: no create row
@@ -27,7 +27,7 @@ test('search with a create row: collections are listed at once and the first row
   await new Promise((resolve) => setTimeout(resolve, 350));
   const rows = root.querySelectorAll('.choice-list .choice');
   expect(rows).toHaveLength(2);
-  expect(rows[0].textContent).toBe('Create Mar');
+  expect(rows[0].textContent).toBe('Mar');
   focus.handle(Action.DOWN);
   focus.handle(Action.ENTER);
   expect(await promise).toEqual({ create: true, name: 'Mar' });
@@ -55,7 +55,7 @@ test('edit box: rename and mark titles to take out; Back cancels', async () => {
 test('the collections box does not put the cursor in the field when it opens: the first collection has the focus', async () => {
   const { root, focus, dialogs } = setup();
   const run = async () => [{ key: 'c1', name: 'Marvel', collectionId: 'c1' }];
-  const promise = dialogs.search({ title: 'Add', run, minLength: 0, autoFocus: false, createLabel: (name) => name });
+  const promise = dialogs.search({ title: 'Add', run, minLength: 0, autoFocus: false, allowCreate: true });
   await tick();
   expect(document.activeElement).not.toBe(root.querySelector('input'));
   expect(focus.active.index).toBe(1);

@@ -9,7 +9,6 @@ import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
-import { icon } from '../icons.js';
 
 const PER_TYPE = 20;
 const RECENT_ZONE = 'searchRecent';
@@ -24,7 +23,7 @@ export function createSearchPage(ctx, params = {}) {
   const skeleton = h('div', { class: 'search-skeleton' }, h('div', { class: 'skeleton-line title' }), h('div', { class: 'skeleton-row' }, [0, 1, 2, 3, 4, 5].map(() => createSkeletonCard())));
   skeleton.style.display = 'none';
   const recentList = h('div', { class: 'list search-recent-list' });
-  const recentEl = h('div', { class: 'search-recent' }, h('h2', { class: 'prefs-title', text: t('search.recent') }), recentList);
+  const recentEl = h('div', { class: 'search-recent' }, recentList);
   recentEl.style.display = 'none';
   let recentNodes = [];
   let recent = [];
@@ -75,7 +74,7 @@ export function createSearchPage(ctx, params = {}) {
     if (destroyed || mine !== token) return;
     recent = list;
     while (recentList.firstChild) recentList.removeChild(recentList.firstChild);
-    recentNodes = recent.map((text) => h('div', { class: 'row' }, icon('search'), h('span', { text })));
+    recentNodes = recent.map((text) => h('div', { class: 'row' }, h('span', { text })));
     recentNodes.forEach((node) => recentList.appendChild(node));
     recentEl.style.display = recent.length ? '' : 'none';
     if (!recent.length) return;

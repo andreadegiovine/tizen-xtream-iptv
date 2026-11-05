@@ -94,11 +94,11 @@ export function createDialogService({ focus, root = document.body }) {
   /**
    * Search box + results list. `run(query)` returns [{ key, name, group, count }] (groups are highlighted). OK on the field opens the
    * keyboard, Done moves to the results. Resolves with the chosen result, or null when dismissed.
-   * `minLength` is how many characters start a search (0: the list is there as soon as the dialog opens). With `createLabel(text)`
-   * `autoFocus: false` does not open the keyboard on the field when the dialog opens (the first result takes the focus once listed). With `createLabel(text)`
-   * the first result is a "create" row (`{ create: true, name: text }`) as long as something is typed.
+   * `minLength` is how many characters start a search (0: the list is there as soon as the dialog opens).
+   * `autoFocus: false` does not open the keyboard on the field when the dialog opens (the first result takes the focus once listed). With `allowCreate`
+   * the first result is a "create" row (icon + the typed name, no label) (`{ create: true, name: text }`) as long as something is typed.
    */
-  function search({ title, placeholder = '', run, emptyLabel = '', minLength = 2, createLabel = null, autoFocus = true }) {
+  function search({ title, placeholder = '', run, emptyLabel = '', minLength = 2, allowCreate = false, autoFocus = true }) {
     if (current) return current.promise;
     const previous = snapshot();
     let results = [];
@@ -116,7 +116,7 @@ export function createDialogService({ focus, root = document.body }) {
     function paint() {
       while (list.firstChild) list.removeChild(list.firstChild);
       nodes = results.map((r) => {
-        if (r.create) return h('div', { class: 'choice merge-group' }, icon('add'), h('span', { text: createLabel(r.name) }));
+        if (r.create) return h('div', { class: 'choice merge-group' }, icon('add'), h('span', { text: r.name }));
         return h('div', { class: `choice${r.group ? ' merge-group' : ''}` }, r.group ? icon('all') : null, h('span', { text: r.group ? `${r.name} (${r.count})` : r.name }));
       });
       nodes.forEach((n) => list.appendChild(n));
@@ -128,7 +128,7 @@ export function createDialogService({ focus, root = document.body }) {
       const text = input.value.trim();
       const found = text.length < minLength ? [] : await run(text).catch(() => []);
       if (mine !== token || !current || current.overlay !== overlay) return;
-      results = createLabel && text ? [{ create: true, name: text }].concat(found) : found;
+      results = allowCreate && text ? [{ create: true, name: text }].concat(found) : found;
       paint();
     }
 

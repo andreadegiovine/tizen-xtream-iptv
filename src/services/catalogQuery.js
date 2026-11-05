@@ -92,6 +92,13 @@ export function createMergeSearch(db, skipId) {
   };
   return async (query, limit = 30) => {
     const { rows } = await load();
+    if (!String(query || '').trim()) {
+      // Nothing typed yet: the list is there at once (groups first, then the channels, by name).
+      const byName = (a, b) => String(a.name).localeCompare(String(b.name));
+      const pick = (list) => list.slice().sort(byName);
+      const all = pick(rows.filter((r) => r.group)).concat(pick(rows.filter((r) => !r.group && !r.isNetwork)));
+      return all.slice(0, limit).map((row) => ({ key: row.key, name: row.name, icon: row.icon, group: Boolean(row.group), memberId: row.defaultId, count: row.group ? row.members.length : 1 }));
+    }
     const groups = searchRows(rows.filter((r) => r.group), query, { limit });
     const singles = searchRows(rows.filter((r) => !r.group && !r.isNetwork), query, { limit });
     return groups.concat(singles).slice(0, limit).map((row) => ({ key: row.key, name: row.name, icon: row.icon, group: Boolean(row.group), memberId: row.defaultId, count: row.group ? row.members.length : 1 }));
