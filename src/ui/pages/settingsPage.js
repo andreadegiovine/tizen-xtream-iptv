@@ -7,7 +7,7 @@ import { TIME_FORMATS, DATE_FORMATS, formatClockTime, formatClockDate } from '..
 import { t, i18n, detectLocale } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { Dir } from '../focus/models.js';
-import { LANGUAGE_OPTIONS, GRID_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SUGGESTION_SOURCE_OPTIONS } from '../../services/settings.js';
+import { LANGUAGE_OPTIONS, GRID_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SCREENSAVER_OPTIONS, SUGGESTION_SOURCE_OPTIONS } from '../../services/settings.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { createSyncPanel, createTmdbPanel, createTraktPanel, createDevicePanel, createOperationsPanel } from '../components/syncPanel.js';
@@ -103,6 +103,7 @@ export function optionRow({ labelKey, key, options, format = String, ctx }) {
       await ctx.settings.update({ [key]: chosen });
       show(chosen);
       if (key === 'textSize') applyTextSize(chosen);
+      if (key === 'screensaver' && ctx.screensaver) ctx.screensaver.setMinutes(chosen);
       if (key === 'language') i18n.setLocale(chosen === 'auto' ? detectLocale(navigator.language) : chosen);
       if ((key === 'timeFormat' || key === 'dateFormat') && ctx.refreshClock) ctx.refreshClock();
       ctx.notices.success(t('notice.saved'), { key: 'setting' });
@@ -139,19 +140,6 @@ export function createSettingsPage(ctx) {
     },
   };
 
-
-  const screensaverValue = toggle();
-  const screensaver = {
-    el: h('div', { class: 'row' }, h('span', { text: t('settings.screensaver') }), screensaverValue),
-    refresh: () => ctx.settings.get().then((s) => { setToggle(screensaverValue, s.screensaver); }),
-    async activate() {
-      const s = await ctx.settings.get();
-      const next = await ctx.settings.update({ screensaver: !s.screensaver });
-      setToggle(screensaverValue, next.screensaver);
-      if (ctx.screensaver) ctx.screensaver.setEnabled(next.screensaver);
-      ctx.notices.success(t('notice.saved'), { key: 'setting' });
-    },
-  };
 
   /** Trakt device-code login: shows the code, waits for the approval on another device, then imports the history. */
   async function connectTrakt() {
@@ -375,7 +363,7 @@ export function createSettingsPage(ctx) {
     optionRow({ ctx, labelKey: 'settings.carouselItems', key: 'carouselItems', options: CAROUSEL_OPTIONS }),
     optionRow({ ctx, labelKey: 'settings.buffer', key: 'bufferSeconds', options: BUFFER_OPTIONS, format: seconds }),
     autoplay,
-    screensaver,
+    optionRow({ ctx, labelKey: 'settings.screensaver', key: 'screensaver', options: SCREENSAVER_OPTIONS, format: (v) => (v ? t('settings.screensaver.minutes', { count: v }) : t('settings.screensaver.off')) }),
     optionRow({ ctx, labelKey: 'settings.timeFormat', key: 'timeFormat', options: TIME_FORMATS, format: timeName }),
     optionRow({ ctx, labelKey: 'settings.dateFormat', key: 'dateFormat', options: DATE_FORMATS, format: dateName }),
     pinRow,

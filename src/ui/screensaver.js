@@ -16,13 +16,13 @@ export function randomSpot(width, height, random = Math.random) {
 /**
  * Screensaver: after `idleMs` without a key or pointer event a black screen with the logo takes over; the logo
  * changes place and size every `moveMs`. The first key or pointer event ends it and is not passed on to the UI.
- * It never starts while suspended (a video is playing) or when disabled.
+ * It never starts while suspended (a video is playing) or when switched off (`setMinutes(0)`).
  */
-export function createScreensaver({ doc = document, win = window, idleMs = IDLE_MS, moveMs = MOVE_MS, random = Math.random, enabled = true } = {}) {
+export function createScreensaver({ doc = document, win = window, idleMs = IDLE_MS, moveMs = MOVE_MS, random = Math.random } = {}) {
   const mark = h('span', { class: 'screensaver-mark' });
   mark.innerHTML = MARK;
   const el = h('div', { class: 'screensaver', 'aria-hidden': 'true' }, mark);
-  let on = enabled;
+  let delay = idleMs; // 0 = off
   let suspended = false;
   let active = false;
   let idleTimer = null;
@@ -38,7 +38,7 @@ export function createScreensaver({ doc = document, win = window, idleMs = IDLE_
   }
 
   function show() {
-    if (active || !on || suspended) return;
+    if (active || !delay || suspended) return;
     active = true;
     doc.body.appendChild(el);
     place();
@@ -56,7 +56,7 @@ export function createScreensaver({ doc = document, win = window, idleMs = IDLE_
     clearTimeout(idleTimer);
     idleTimer = null;
     lastReset = Date.now();
-    if (on && !suspended) idleTimer = setTimeout(show, idleMs);
+    if (delay > 0 && !suspended) idleTimer = setTimeout(show, delay);
   }
 
   function onEvent(event) {
@@ -77,9 +77,10 @@ export function createScreensaver({ doc = document, win = window, idleMs = IDLE_
   return {
     el,
     isActive: () => active,
-    setEnabled(value) {
-      on = Boolean(value);
-      if (!on) hide();
+    /** Minutes without a key before it starts (0 = never); the idle count restarts. */
+    setMinutes(minutes) {
+      delay = Math.max(0, Number(minutes) || 0) * 60 * 1000;
+      if (!delay) hide();
       arm();
     },
     /** True while a video plays: no screensaver then. */

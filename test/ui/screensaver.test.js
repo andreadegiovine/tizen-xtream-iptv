@@ -41,12 +41,16 @@ test('screensaver: activity postpones it; disabled or suspended it never starts'
   jest.advanceTimersByTime(5000);
   expect(saver.isActive()).toBe(false);
   saver.setSuspended(false);
-  saver.setEnabled(false);
+  saver.setMinutes(0);
   jest.advanceTimersByTime(5000);
   expect(saver.isActive()).toBe(false);
-  saver.setEnabled(true);
-  jest.advanceTimersByTime(1001);
+  saver.setMinutes(1);
+  jest.advanceTimersByTime(59999);
+  expect(saver.isActive()).toBe(false);
+  jest.advanceTimersByTime(2);
   expect(saver.isActive()).toBe(true);
+  saver.setMinutes(0);
+  expect(saver.isActive()).toBe(false); // switched off while showing
   saver.destroy();
   expect(document.querySelector('.screensaver')).toBeNull();
 });
@@ -72,8 +76,11 @@ test('text size: 75 / 100 / 125 % set the font of <html>; anything else is 100 %
 test('settings: text size 100 and screensaver on by default; invalid values fall back', async () => {
   jest.useRealTimers();
   const s = new SettingsService(await openAppDb('settings-text-size'));
-  expect(await s.get()).toMatchObject({ textSize: 100, screensaver: true });
-  expect(await s.update({ textSize: 125, screensaver: false })).toMatchObject({ textSize: 125, screensaver: false });
+  expect(await s.get()).toMatchObject({ textSize: 100, screensaver: 15 });
+  expect(await s.update({ textSize: 125, screensaver: 5 })).toMatchObject({ textSize: 125, screensaver: 5 });
+  expect((await s.update({ screensaver: 7 })).screensaver).toBe(15); // not in the list
+  expect((await s.update({ screensaver: false })).screensaver).toBe(0); // old on / off value
+  expect((await s.update({ screensaver: true })).screensaver).toBe(15);
   expect((await s.update({ textSize: 99 })).textSize).toBe(100);
 });
 

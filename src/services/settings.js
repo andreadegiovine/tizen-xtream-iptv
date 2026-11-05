@@ -7,6 +7,8 @@ export const BUFFER_OPTIONS = [2, 5, 10, 20, 30];
 export const CAROUSEL_OPTIONS = [10, 15, 20, 30];
 // Multiples of 12 fill whole rows for both poster grids (6 columns) and channel grids (4 columns).
 export const GRID_OPTIONS = [12, 24, 36];
+// Screensaver: minutes without a key before it starts; 0 = off.
+export const SCREENSAVER_OPTIONS = [0, 1, 5, 15];
 export const LANGUAGE_OPTIONS = ['auto', 'en-US', 'it-IT'];
 export const SUGGESTION_SOURCE_OPTIONS = ['tmdb', 'trakt'];
 
@@ -17,7 +19,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   gridItems: 24,
   autoplayNext: true,
   textSize: DEFAULT_TEXT_SIZE, // % of the base text size (75, 100, 125)
-  screensaver: true, // after 15 minutes without a key: black screen with the moving logo
+  screensaver: 15, // minutes without a key before the black screen with the moving logo (0 = off)
   suggestionSource: 'tmdb',
   timeFormat: 'auto',
   dateFormat: 'auto',
@@ -41,7 +43,8 @@ function sanitize(raw) {
     carouselItems: pick(raw.carouselItems, CAROUSEL_OPTIONS, DEFAULT_SETTINGS.carouselItems),
     gridItems: pick(raw.gridItems, GRID_OPTIONS, DEFAULT_SETTINGS.gridItems),
     textSize: pick(raw.textSize, TEXT_SIZES, DEFAULT_SETTINGS.textSize),
-    screensaver: typeof raw.screensaver === 'boolean' ? raw.screensaver : DEFAULT_SETTINGS.screensaver,
+    // Older versions stored on / off: on is the default delay.
+    screensaver: typeof raw.screensaver === 'boolean' ? (raw.screensaver ? DEFAULT_SETTINGS.screensaver : 0) : pick(raw.screensaver, SCREENSAVER_OPTIONS, DEFAULT_SETTINGS.screensaver),
     autoplayNext: typeof raw.autoplayNext === 'boolean' ? raw.autoplayNext : DEFAULT_SETTINGS.autoplayNext,
     suggestionSource: pick(raw.suggestionSource, SUGGESTION_SOURCE_OPTIONS, DEFAULT_SETTINGS.suggestionSource),
     timeFormat: pick(raw.timeFormat, TIME_FORMATS, DEFAULT_SETTINGS.timeFormat),

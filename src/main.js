@@ -213,7 +213,7 @@ async function boot() {
   document.getElementById('topbar').appendChild(topbar.el);
   ctx.syncSearchLinks = () => topbar.syncSearchLinks();
   ctx.refreshClock = () => topbar.refreshClock();
-  ctx.screensaver = createScreensaver({ enabled: prefs.screensaver });
+  ctx.screensaver = createScreensaver({ idleMs: prefs.screensaver * 60 * 1000 });
 
   const router = new Router({
     container: document.getElementById('content'),
