@@ -487,9 +487,11 @@ export function createBrowsePage(ctx, params = {}) {
     await loadPage(0);
     if (!destroyed && back && back.page > 0) await loadPage(back.page);
     if (destroyed) return;
-    // Land in the grid when there is something to browse, otherwise leave the focus on the top bar.
+    // Land in the grid when there is something to browse, otherwise on the sidebar (a section that became empty, like Continue
+    // watching after its last title was marked as seen).
     if (back && back.zone === CATS_ZONE) ctx.focus.focus(CATS_ZONE, selected);
     else if (entries.length) ctx.focus.focus(GRID_ZONE, back && back.zone === GRID_ZONE ? Math.min(back.index, entries.length - 1) : 0);
+    else ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
     if (!wantsGenre && type !== 'live') {
       await loadGenres();
       genresLoading = false;

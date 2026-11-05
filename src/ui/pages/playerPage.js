@@ -12,7 +12,8 @@ import { pageEntries } from '../../services/catalogQuery.js';
 
 const CONTROLS_MS = 4000;
 const SAVE_EVERY_MS = 10000;
-const NEXT_COUNTDOWN_S = 10;
+const NEXT_OFFER_S = 120; // the "next episode" notice appears this long before the end (over the end credits)
+const NEXT_MIN_DURATION_S = 240;
 const SEEK_SHORT = 10;
 const SEEK_LONG = 30;
 const SCRUB_STEP = 30;
@@ -37,8 +38,9 @@ export function createPlayerPage(ctx, params) {
   let destroyed = false;
   let hideTimer = null;
   let saveTimer = null;
-  let countdownTimer = null;
-  let countdown = 0;
+  let nextNotice = null; // the notice that offers the next episode (OK plays it now)
+  let nextOffered = false; // once per episode
+  let recoverNotice = null;
   let loadToken = 0;
   let providerId = null; // known once playback started, so saving on exit needs no await
   let aspect = 'fit';
@@ -67,7 +69,6 @@ export function createPlayerPage(ctx, params) {
   const tip = h('div', { class: 'player-tip' });
   const bar = h('div', { class: 'player-bar' }, buffer, fill, knob, tip);
   const seek = h('div', { class: 'player-seek' }, bar);
-  const nextEl = h('div', { class: 'player-next' });
   const subtitleEl = h('div', { class: 'player-subtitle' });
 
   // Control buttons: transport at the bottom left (not for live), aspect ratio + subtitles at the bottom right.
@@ -90,7 +91,7 @@ export function createPlayerPage(ctx, params) {
   const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('back'), buttonEl('toggle'), buttonEl('forward'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio')));
   const top = h('div', { class: 'player-top' }, titleEl, nowEl);
   const controls = h('div', { class: 'player-controls' }, ...(isLive ? [] : [seek]), row);
-  const el = h('section', { class: 'player' }, top, controls, statusEl, nextEl, subtitleEl);
+  const el = h('section', { class: 'player' }, top, controls, statusEl, subtitleEl);
 
   const current = () => playlist[index];
   const episodeKey = () => (params.type === 'series' && current().season !== undefined ? `s${current().season}e${current().number}` : null);
@@ -302,7 +303,6 @@ export function createPlayerPage(ctx, params) {
     let status = '';
     if (state.status === 'loading') status = t('player.loading');
     else if (state.status === 'paused') status = t('player.paused');
-    else if (state.status === 'recovering') status = t('player.recovering', { attempt: state.attempt, attempts: state.attempts });
     else if (state.buffering > 0 && state.buffering < 100) status = t('player.buffering', { percent: state.buffering });
     statusEl.textContent = status;
     statusEl.classList.toggle('visible', Boolean(status));
@@ -323,6 +323,9 @@ export function createPlayerPage(ctx, params) {
     if ((state.status === 'paused' || state.status === 'error' || state.status === 'recovering') && state.status !== lastStatus) showControls();
     if (state.status === 'error' && lastStatus !== 'error') showPlayerError(`${t('error.PLAYER')} ${state.error || ''}`.trim());
     else if (state.status === 'playing') closePlayerError();
+    if (state.status === 'recovering') showRecovery(t('player.recovering', { attempt: state.attempt, attempts: state.attempts }));
+    else closeRecovery();
+    offerNext(state);
     lastStatus = state.status;
     if (state.status === 'ended') onEnded();
   }
@@ -352,7 +355,8 @@ export function createPlayerPage(ctx, params) {
   async function play(nextIndex = index) {
     index = nextIndex;
     const token = (loadToken += 1);
-    cancelCountdown();
+    closeNextNotice();
+    nextOffered = false;
     subtitle = -1;
     audioTrack = null;
     setAudioVisible(false);
@@ -394,10 +398,30 @@ export function createPlayerPage(ctx, params) {
     errorNotice = null;
   }
 
-  function cancelCountdown() {
-    clearInterval(countdownTimer);
-    countdownTimer = null;
-    nextEl.classList.remove('visible');
+  /** Another try after a playback problem: a notice (replaced at every attempt), not a text over the video. */
+  function showRecovery(message) {
+    if (recoverNotice !== null) ctx.notices.close(recoverNotice);
+    recoverNotice = ctx.notices.warning(message, { scope: 'playback', key: 'player-recovery', permanent: true });
+  }
+  function closeRecovery() {
+    if (recoverNotice !== null) ctx.notices.close(recoverNotice);
+    recoverNotice = null;
+  }
+
+  function closeNextNotice() {
+    if (nextNotice !== null) ctx.notices.close(nextNotice);
+    nextNotice = null;
+  }
+
+  /** About two minutes before the end of an episode the next one is offered: OK plays it now (during the end credits). */
+  function offerNext(state) {
+    if (isLive || isTrailer || nextOffered || state.status !== 'playing' || !(state.duration > NEXT_MIN_DURATION_S)) return;
+    if (state.duration - state.position > NEXT_OFFER_S) return;
+    const next = neighborEpisode(playlist, index, 1);
+    if (!next) return;
+    nextOffered = true;
+    const label = next.episode.title || `${t('detail.episode')} ${next.episode.number}`;
+    nextNotice = ctx.notices.info(t('player.next', { title: label }), { scope: 'playback', key: 'player-next', permanent: true });
   }
 
   function onEnded() {
@@ -409,19 +433,7 @@ export function createPlayerPage(ctx, params) {
     const next = neighborEpisode(playlist, index, 1);
     if (isLive || !next) return;
     ctx.settings.get().then((s) => {
-      if (!s.autoplayNext || destroyed || countdownTimer) return;
-      countdown = NEXT_COUNTDOWN_S;
-      const label = next.episode.title || `${t('detail.episode')} ${next.episode.number}`;
-      const draw = () => {
-        nextEl.textContent = t('player.next', { title: label, seconds: countdown });
-      };
-      draw();
-      nextEl.classList.add('visible');
-      countdownTimer = setInterval(() => {
-        countdown -= 1;
-        if (countdown <= 0) play(next.index);
-        else draw();
-      }, 1000);
+      if (s.autoplayNext && !destroyed) play(next.index);
     });
   }
 
@@ -446,7 +458,7 @@ export function createPlayerPage(ctx, params) {
 
   const handlers = {
     [Action.ENTER]: () => {
-      if (countdownTimer) play(neighborEpisode(playlist, index, 1).index);
+      if (nextNotice !== null) play(neighborEpisode(playlist, index, 1).index);
       else if (['error', 'recovering'].includes(controller.getState().status)) play(index);
       else if (isLive) enterFocus();
       else controller.togglePause();
@@ -528,11 +540,12 @@ export function createPlayerPage(ctx, params) {
     destroy() {
       destroyed = true;
       closePlayerError();
+      closeRecovery();
+      closeNextNotice();
       clearTimeout(hideTimer);
       clearTimeout(scrubTimer);
       clearTimeout(subtitleTimer);
       clearInterval(saveTimer);
-      cancelCountdown();
       saveProgress(true);
       controller.stop();
       ctx.catalog.resume();
