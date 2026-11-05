@@ -46,6 +46,12 @@ export function createTraktClient({ clientId = '', clientSecret = '', getCredent
     /** Signed-in user (username) for the settings page. */
     profile: (token) => call('/users/settings', { token }),
     addHistory: (token, payload) => call('/sync/history', { method: 'POST', body: payload, token }),
+    /** Takes titles out of the history (a movie, or a whole show with all its episodes). */
+    removeHistory: (token, payload) => call('/sync/history/remove', { method: 'POST', body: payload, token }),
+    /** Playback progress: action = start | pause | stop. `pause` keeps the point reached, so it can be resumed anywhere. */
+    scrobble: (token, action, payload) => call(`/scrobble/${action}`, { method: 'POST', body: payload, token }),
+    /** Titles stopped half way, with their progress (percent). */
+    playback: (token) => call('/sync/playback', { token }),
     watchedMovies: (token) => call('/sync/watched/movies', { token }),
     watchedShows: (token) => call('/sync/watched/shows', { token }),
     /** Personalised picks for the signed-in user. */

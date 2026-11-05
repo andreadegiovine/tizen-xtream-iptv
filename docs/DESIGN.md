@@ -158,3 +158,11 @@ Vedi anche `docs/MULTIPLATFORM.md`.
 ## Player su PC (patch 71)
 
 Solo in sviluppo: `scripts/dev-media-proxy.js` serve `/__media?u=…` (Range, redirect, playlist HLS riscritte); `createHtml5Engine` sceglie hls.js, mpegts.js o `<video>` nativo da `devStreamKind`. Guardia `__DEV__` → in produzione i demuxer non entrano nel bundle. Limiti: codec non supportati dal browser (HEVC/AC3, MKV) possono non riprodursi; il proxy non gestisce provider con IP/UA vincolati.
+
+## Allineamento con Trakt (patch 78)
+
+- Chiavi: i titoli con tmdb id usano `movie:t{id}` / `series:t{id}|sXeY`, uguali localmente e su Trakt; gli altri non vengono mai inviati.
+- Invio: coda in `kv` di `{op: add|remove, payload, id}`; `flush()` ritorna gli id accettati; 5xx resta in coda, 4xx scartato. I record inviati con successo hanno `traktSynced: true`.
+- Manuale: `markWatched`/`clearEntry` → una sola chiamata sul titolo (`reportManual`), mai per episodio.
+- Progresso: `reportProgress` (scrobble pause, 1–99 %) a pausa e chiusura; best effort, senza coda.
+- Lettura (`importFromTrakt`): svuota la coda, legge visti film/serie e `/sync/playback`; segna visti, toglie i visti già allineati ma non più su Trakt (`source: 'trakt'` o `traktSynced`), applica il progresso più recente solo con durata locale nota.

@@ -1,6 +1,6 @@
 import { openAppDb } from '../../src/db/appDb.js';
 import { WatchStore } from '../../src/services/watchStore.js';
-import { createTraktService, createWatchState, historyPayload, flattenWatchedShows } from '../../src/services/traktService.js';
+import { createTraktService, createWatchState, historyPayload, flattenWatchedShows, manualPayload, progressPayload } from '../../src/services/traktService.js';
 import { kvSet } from '../../src/db/kv.js';
 
 let n = 0;
@@ -68,6 +68,37 @@ describe('reporting', () => {
   });
 });
 
+describe('manual and progress payloads', () => {
+  test('a whole title, in or out of the history; progress as a percentage', () => {
+    expect(manualPayload('movie:t5', true, 'T')).toEqual({ movies: [{ ids: { tmdb: 5 }, watched_at: 'T' }] });
+    expect(manualPayload('series:t5', true, 'T')).toEqual({ shows: [{ ids: { tmdb: 5 }, watched_at: 'T' }] });
+    expect(manualPayload('series:t5', false)).toEqual({ shows: [{ ids: { tmdb: 5 } }] });
+    expect(manualPayload('movie:t5', false)).toEqual({ movies: [{ ids: { tmdb: 5 } }] });
+    expect(manualPayload('movie:i5', true)).toBeNull();
+    expect(progressPayload({ entryKey: 'movie:t5', position: 25, duration: 100 })).toEqual({ movie: { ids: { tmdb: 5 } }, progress: 25 });
+    expect(progressPayload({ entryKey: 'series:t5', episodeKey: 's2e3', position: 50, duration: 200 })).toEqual({ show: { ids: { tmdb: 5 } }, episode: { season: 2, number: 3 }, progress: 25 });
+    expect(progressPayload({ entryKey: 'movie:t5', position: 0.2, duration: 100 })).toBeNull();
+    expect(progressPayload({ entryKey: 'movie:i5', position: 50, duration: 100 })).toBeNull();
+  });
+});
+
+describe('Trakt queue', () => {
+  test('a removal goes to the remove call, a failure keeps it queued, the progress is a scrobble pause', async () => {
+    const db = await appDb();
+    await kvSet(db, 'trakt.token', { accessToken: 'AT', refreshToken: 'RT', expiresAt: Date.now() + 90 * 24 * 3600 * 1000 });
+    const client = { enabled: true, addHistory: jest.fn().mockResolvedValue({ ok: true }), removeHistory: jest.fn().mockResolvedValueOnce({ ok: false, status: 503 }).mockResolvedValue({ ok: true }), scrobble: jest.fn().mockResolvedValue({ ok: true }) };
+    const svc = createTraktService({ db, client });
+    expect(await svc.reportManual('movie:t1', false)).toBe(false);
+    expect(client.removeHistory).toHaveBeenCalledTimes(1);
+    expect(await svc.flush()).toHaveLength(1); // retried
+    expect(client.removeHistory).toHaveBeenCalledTimes(2);
+    expect(await svc.reportManual('series:t2', true)).toBe(true);
+    expect(client.addHistory).toHaveBeenCalledWith('AT', expect.objectContaining({ shows: expect.any(Array) }));
+    expect(await svc.reportProgress({ entryKey: 'movie:t1', position: 30, duration: 100 })).toBe(true);
+    expect(client.scrobble).toHaveBeenCalledWith('AT', 'pause', { movie: { ids: { tmdb: 1 } }, progress: 30 });
+  });
+});
+
 describe('watch-state adapter', () => {
   test('reports only the transition to watched', async () => {
     const store = new WatchStore(await appDb());
@@ -92,22 +123,78 @@ describe('watch-state adapter', () => {
     expect(await ws.seenKeys()).toEqual(new Set(['series:t3']));
   });
 
-  test('import adds Trakt movies and episodes without overwriting local progress, and can be undone', async () => {
+  const fakeTrakt = (state, extra = {}) => ({ flush: async () => [], fetchState: async () => state, ...extra });
+
+  test('sync: what Trakt has watched becomes watched here, local progress of other titles stays, and it can be undone', async () => {
     const store = new WatchStore(await appDb());
-    await store.save({ key: 'movie:t2', entryKey: 'movie:t2', type: 'movie', position: 10, duration: 100 });
+    await store.save({ key: 'movie:t2', entryKey: 'movie:t2', type: 'movie', providerId: 'p', position: 10, duration: 100 });
     await store.save({ key: 'movie:t9', entryKey: 'movie:t9', type: 'movie', position: 50, duration: 100 });
-    const trakt = {
-      recentMovies: async () => [{ tmdbId: 1, title: 'A', watchedAt: 5 }, { tmdbId: 2, title: 'B', watchedAt: 6 }],
-      watchedEpisodes: async () => [{ tmdbId: 7, title: 'S', season: 1, episode: 2, watchedAt: 8 }],
-    };
+    const trakt = fakeTrakt({ movies: [{ tmdbId: 1, title: 'A', watchedAt: 5 }, { tmdbId: 2, title: 'B', watchedAt: 6 }], episodes: [{ tmdbId: 7, title: 'S', season: 1, episode: 2, watchedAt: 8 }], playback: [] });
     const state = createWatchState({ store, trakt });
-    expect(await state.importFromTrakt()).toBe(2);
-    expect((await store.get('movie:t2')).position).toBe(10);
-    expect((await store.get('movie:t1')).watched).toBe(true);
+    expect(await state.importFromTrakt()).toBe(3);
+    const two = await store.get('movie:t2');
+    expect(two.watched).toBe(true); // Trakt says watched: aligned, the local record keeps its own data
+    expect(two.providerId).toBe('p');
+    expect((await store.get('movie:t1')).source).toBe('trakt');
     expect((await store.get('series:t7|s1e2')).watched).toBe(true);
+    expect((await store.get('movie:t9')).position).toBe(50);
     expect(await state.removeTraktData()).toBe(2);
     expect(await store.get('movie:t1')).toBeUndefined();
-    expect((await store.get('movie:t9')).position).toBe(50); // local history stays
+  });
+
+  test('sync: a title reported to Trakt (or imported from it) that Trakt no longer has is no longer watched here; local-only ones stay', async () => {
+    const store = new WatchStore(await appDb());
+    const done = { type: 'movie', position: 100, duration: 100 };
+    await store.save({ key: 'movie:t1', entryKey: 'movie:t1', ...done });
+    await store.patch('movie:t1', { traktSynced: true });
+    await store.save({ key: 'movie:t2', entryKey: 'movie:t2', ...done }); // never sent
+    await store.save({ key: 'movie:t3', entryKey: 'movie:t3', source: 'trakt', ...done });
+    const state = createWatchState({ store, trakt: fakeTrakt({ movies: [], episodes: [], playback: [] }) });
+    expect(await state.importFromTrakt()).toBe(2);
+    expect(await store.get('movie:t1')).toBeUndefined();
+    expect(await store.get('movie:t3')).toBeUndefined();
+    expect((await store.get('movie:t2')).watched).toBe(true);
+  });
+
+  test('sync: when Trakt cannot be read nothing changes', async () => {
+    const store = new WatchStore(await appDb());
+    await store.save({ key: 'movie:t1', entryKey: 'movie:t1', type: 'movie', position: 100, duration: 100, source: 'trakt' });
+    expect(await createWatchState({ store, trakt: fakeTrakt(null) }).importFromTrakt()).toBe(0);
+    expect((await store.get('movie:t1')).watched).toBe(true);
+  });
+
+  test('sync: a newer point reached on Trakt moves the local progress (known duration only)', async () => {
+    const store = new WatchStore(await appDb());
+    await store.save({ key: 'movie:t1', entryKey: 'movie:t1', type: 'movie', position: 600, duration: 6000 }, 1000);
+    await store.save({ key: 'movie:t2', entryKey: 'movie:t2', type: 'movie', position: 600, duration: 6000 }, 9000);
+    await store.save({ key: 'series:t5|s1e1', entryKey: 'series:t5', episodeKey: 's1e1', type: 'series', position: 100, duration: 2000 }, 1000);
+    const playback = [
+      { key: 'movie:t1', progress: 50, pausedAt: 5000 },
+      { key: 'movie:t2', progress: 50, pausedAt: 5000 }, // the local one is newer
+      { key: 'series:t5|s1e1', progress: 25, pausedAt: 5000 },
+      { key: 'movie:t8', progress: 40, pausedAt: 5000 }, // not known here: nothing to resume
+    ];
+    const state = createWatchState({ store, trakt: fakeTrakt({ movies: [], episodes: [], playback }) });
+    expect(await state.importFromTrakt()).toBe(2);
+    expect((await store.get('movie:t1')).position).toBe(3000);
+    expect((await store.get('movie:t2')).position).toBe(600);
+    expect((await store.get('series:t5|s1e1')).position).toBe(500);
+    expect(await store.get('movie:t8')).toBeUndefined();
+  });
+
+  test('manual seen / not seen goes to Trakt as one change on the whole title; the episodes of a series are not sent one by one', async () => {
+    const store = new WatchStore(await appDb());
+    const trakt = { reportManual: jest.fn().mockResolvedValue(true), reportWatched: jest.fn().mockResolvedValue(true) };
+    const ws = createWatchState({ store, trakt });
+    const eps = [1, 2, 3].map((n) => ({ key: `series:t4|s1e${n}`, entryKey: 'series:t4', episodeKey: `s1e${n}`, type: 'series', providerId: 'p' }));
+    await ws.markWatched(eps);
+    expect(trakt.reportManual).toHaveBeenCalledTimes(1);
+    expect(trakt.reportManual).toHaveBeenCalledWith('series:t4', true);
+    expect(trakt.reportWatched).not.toHaveBeenCalled();
+    expect((await store.get('series:t4|s1e2')).traktSynced).toBe(true);
+    await ws.clearEntry('p', 'series:t4');
+    expect(trakt.reportManual).toHaveBeenLastCalledWith('series:t4', false);
+    expect(await store.get('series:t4|s1e1')).toBeUndefined();
   });
 
   test('watched shows payload becomes a flat, capped episode list', () => {

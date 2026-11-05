@@ -85,6 +85,21 @@ export class WatchStore {
     return mine.length;
   }
 
+  /** Changes some fields of a record without touching `watched` or `updatedAt`. */
+  async patch(key, fields) {
+    await this.writes;
+    const record = await dbGet(this.db, 'watch', key);
+    if (!record) return null;
+    const next = { ...record, ...fields };
+    await dbPut(this.db, 'watch', next);
+    return next;
+  }
+
+  async remove(key) {
+    await this.writes;
+    await dbDelete(this.db, 'watch', key);
+  }
+
   /** Deletes the records that were imported from an external service. */
   async removeBySource(source) {
     await this.writes;

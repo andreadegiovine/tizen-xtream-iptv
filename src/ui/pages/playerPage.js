@@ -328,6 +328,7 @@ export function createPlayerPage(ctx, params) {
     if (state.status === 'recovering') showRecovery(t('player.recovering', { attempt: state.attempt, attempts: state.attempts }));
     else closeRecovery();
     offerNext(state);
+    if (state.status === 'paused' && lastStatus !== 'paused') saveProgress(true);
     lastStatus = state.status;
     if (state.status === 'ended') onEnded();
   }
@@ -337,7 +338,7 @@ export function createPlayerPage(ctx, params) {
     const state = controller.getState();
     if (!providerId || !(state.duration > 0) || (!force && state.status !== 'playing')) return;
     try {
-      await ctx.watch.save({
+      const saved = await ctx.watch.save({
         key: watchKey(providerId, params.entryKey, episodeKey()),
         providerId,
         entryKey: params.entryKey,
@@ -349,6 +350,8 @@ export function createPlayerPage(ctx, params) {
         position: state.status === 'ended' ? state.duration : state.position,
         duration: state.duration,
       });
+      // Pausing or closing tells Trakt the point reached (it keeps it as playback progress).
+      if (force && saved && !saved.watched && ctx.watch.reportProgress) ctx.watch.reportProgress(saved);
     } catch (err) {
       log.warn('Saving progress failed', err && err.message);
     }
