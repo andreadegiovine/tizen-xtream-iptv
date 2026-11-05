@@ -3,6 +3,9 @@ import { log } from '../core/logger.js';
 
 const TOKEN_KEY = 'trakt.token';
 const QUEUE_KEY = 'trakt.queue';
+const PROGRESS_KEY = 'trakt.progress'; // the point reached that could not be sent: one per title, the latest
+const DEFAULT_MOVIE_S = 6000;
+const DEFAULT_EPISODE_S = 2700;
 const ACCOUNT_KEY = 'trakt.account';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -34,7 +37,7 @@ export function progressPayload(record) {
   const match = /^(movie|series):t(\d+)$/.exec(record.entryKey || '');
   if (!match || !(record.duration > 1)) return null;
   const progress = Math.round((record.position / record.duration) * 10000) / 100;
-  if (!(progress >= 1) || progress >= 100) return null;
+  if (!(progress >= 1) || progress >= 99) return null; // from 99 % on the title is a watched one, not a point reached
   const tmdb = Number(match[2]);
   if (match[1] === 'movie') return { movie: { ids: { tmdb } }, progress };
   const ep = /^s(\d+)e(\d+)$/.exec(record.episodeKey || '');
@@ -59,15 +62,24 @@ export function flattenWatchedShows(data, limit = 3000, fallbackAt = Date.now())
   return out;
 }
 
-/** Trakt playback list → [{ key, progress, pausedAt }] with the keys the local watch records use. */
+/**
+ * Trakt playback list → [{ key, entryKey, episodeKey, type, title, episodeTitle, progress, pausedAt, duration }] with the keys the local
+ * watch records use. `duration` (seconds) comes from the runtime Trakt gives, or a typical one.
+ */
 export function playbackItems(data) {
   const out = [];
   data.forEach((item) => {
     const progress = Number(item.progress);
     const pausedAt = Date.parse(item.paused_at) || 0;
-    if (item.type === 'movie' && item.movie && item.movie.ids && item.movie.ids.tmdb) out.push({ key: `movie:t${item.movie.ids.tmdb}`, progress, pausedAt });
-    else if (item.type === 'episode' && item.show && item.show.ids && item.show.ids.tmdb && item.episode) {
-      out.push({ key: `series:t${item.show.ids.tmdb}|s${item.episode.season}e${item.episode.number}`, progress, pausedAt });
+    if (item.type === 'movie' && item.movie && item.movie.ids && item.movie.ids.tmdb) {
+      const entryKey = `movie:t${item.movie.ids.tmdb}`;
+      const duration = Number(item.movie.runtime) > 0 ? Number(item.movie.runtime) * 60 : DEFAULT_MOVIE_S;
+      out.push({ key: entryKey, entryKey, episodeKey: null, type: 'movie', title: item.movie.title || '', episodeTitle: '', progress, pausedAt, duration });
+    } else if (item.type === 'episode' && item.show && item.show.ids && item.show.ids.tmdb && item.episode) {
+      const entryKey = `series:t${item.show.ids.tmdb}`;
+      const episodeKey = `s${item.episode.season}e${item.episode.number}`;
+      const runtime = Number(item.episode.runtime) || Number(item.show.runtime) || 0;
+      out.push({ key: `${entryKey}|${episodeKey}`, entryKey, episodeKey, type: 'series', title: item.show.title || '', episodeTitle: item.episode.title || '', progress, pausedAt, duration: runtime > 0 ? runtime * 60 : DEFAULT_EPISODE_S });
     }
   });
   return out;
@@ -90,6 +102,24 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
     return kvGet(db, QUEUE_KEY, []);
   }
 
+  /** The points reached that could not be sent (one per title): tried again, whatever the history queue holds. */
+  async function sendWaitingProgress() {
+    try {
+      const waiting = await kvGet(db, PROGRESS_KEY, {});
+      const titles = Object.keys(waiting);
+      if (!titles.length) return;
+      const access = await token();
+      if (!access) return;
+      for (const title of titles) {
+        const res = await client.scrobble(access, 'pause', waiting[title].payload);
+        if (res.ok || res.status < 500) delete waiting[title];
+      }
+      await kvSet(db, PROGRESS_KEY, waiting);
+    } catch (err) {
+      log.warn('Trakt progress retry failed', err && err.message);
+    }
+  }
+
   let seq = 0;
   /** Queues one change and tries to send it now. Resolves true when it went out. */
   async function enqueue(op, payload) {
@@ -110,6 +140,7 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
     async disconnect() {
       await kvDelete(db, TOKEN_KEY);
       await kvDelete(db, QUEUE_KEY);
+      await kvDelete(db, PROGRESS_KEY);
       await kvDelete(db, ACCOUNT_KEY);
     },
     /** Username of the connected account (kept after the first lookup), or '' when unknown. */
@@ -159,25 +190,89 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
     async reportManual(entryKey, watched) {
       return enqueue(watched ? 'add' : 'remove', manualPayload(entryKey, watched));
     },
-    /** The point reached in a movie / episode (when paused or closed). Best effort: never throws, nothing is queued. */
+    /**
+     * The point reached in a movie / episode (when paused or closed). Never throws. When Trakt cannot be reached it is kept
+     * (one per title, the latest) and sent by flush(). Resolves true when Trakt took it.
+     */
     async reportProgress(record) {
       try {
         const payload = progressPayload(record);
         if (!payload || !(await service.isConnected())) return false;
-        const access = await token();
-        if (!access) return false;
-        return (await client.scrobble(access, 'pause', payload)).ok;
+        let ok = false;
+        let drop = false;
+        try {
+          const access = await token();
+          if (access) {
+            const res = await client.scrobble(access, 'pause', payload);
+            ok = res.ok;
+            drop = !res.ok && res.status < 500; // a 4xx would never succeed
+          }
+        } catch {
+          /* unreachable: kept below */
+        }
+        const waiting = await kvGet(db, PROGRESS_KEY, {});
+        if (ok || drop) delete waiting[record.entryKey];
+        else waiting[record.entryKey] = { payload, at: now() };
+        await kvSet(db, PROGRESS_KEY, waiting);
+        return ok;
       } catch (err) {
         log.warn('Trakt progress failed', err && err.message);
         return false;
       }
+    },
+    /**
+     * Sends watched records Trakt does not have yet, in bulk (movies, and the episodes of each show). Resolves with the keys Trakt took;
+     * what fails stays unsent and goes out the next time.
+     */
+    async sendHistory(records) {
+      const sent = [];
+      try {
+        const access = await token();
+        if (!access) return sent;
+        for (let from = 0; from < records.length; from += 200) {
+          const chunk = records.slice(from, from + 200);
+          const movies = [];
+          const shows = new Map();
+          const keys = [];
+          chunk.forEach((rec) => {
+            const match = /^(movie|series):t(\d+)$/.exec(rec.entryKey || '');
+            if (!match) return;
+            const watchedAt = new Date(rec.updatedAt || now()).toISOString();
+            const tmdb = Number(match[2]);
+            if (match[1] === 'movie') movies.push({ ids: { tmdb }, watched_at: watchedAt });
+            else {
+              const ep = /^s(\d+)e(\d+)$/.exec(rec.episodeKey || '');
+              if (!ep) return;
+              const show = shows.get(tmdb) || { ids: { tmdb }, seasons: new Map() };
+              const season = show.seasons.get(Number(ep[1])) || [];
+              season.push({ number: Number(ep[2]), watched_at: watchedAt });
+              show.seasons.set(Number(ep[1]), season);
+              shows.set(tmdb, show);
+            }
+            keys.push(rec.key);
+          });
+          if (!keys.length) continue;
+          const payload = {
+            ...(movies.length ? { movies } : {}),
+            ...(shows.size ? { shows: [...shows.values()].map((s) => ({ ids: s.ids, seasons: [...s.seasons].map(([number, episodes]) => ({ number, episodes })) })) } : {}),
+          };
+          const res = await client.addHistory(access, payload);
+          if (res.ok) sent.push(...keys);
+        }
+      } catch (err) {
+        log.warn('Trakt history upload failed', err && err.message);
+      }
+      return sent;
     },
     /** Sends what is waiting. Resolves with the ids of the entries Trakt took. */
     async flush() {
       const sent = [];
       try {
         const pending = (await queue()).map((item, i) => (item && item.op ? item : { op: 'add', payload: item, id: `old${i}` }));
-        if (!pending.length) return sent;
+        if (!pending.length) {
+          await sendWaitingProgress();
+          return sent;
+        }
         const access = await token();
         if (!access) return sent;
         const left = [];
@@ -190,6 +285,7 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
       } catch (err) {
         log.warn('Trakt flush failed', err && err.message);
       }
+      await sendWaitingProgress();
       return sent;
     },
     /** Personalised recommendations as ranked lists [{ type, items: [{ id (tmdb), popularity }] }]. */
@@ -334,15 +430,15 @@ export function createWatchState({ store, trakt }) {
       const onTrakt = new Set();
       let changed = 0;
       const aborted = () => Boolean(signal && signal.aborted);
-      const watched = async (key, base, at) => {
+      const watched = async (key, base, at, synced = true) => {
         onTrakt.add(key);
         const mine = local.get(key);
         if (mine && mine.watched) {
-          if (!mine.traktSynced) await store.patch(key, { traktSynced: true });
+          if (synced && !mine.traktSynced) await store.patch(key, { traktSynced: true });
           return;
         }
         const duration = mine && mine.duration > 1 ? mine.duration : 1;
-        await store.save({ ...(mine || { ...base, providerId: null, icon: '', source: 'trakt' }), position: duration, duration, traktSynced: true }, at);
+        await store.save({ ...(mine || { ...base, providerId: null, icon: '', source: 'trakt' }), position: duration, duration, traktSynced: synced }, at);
         changed += 1;
       };
       for (const movie of state.movies) {
@@ -360,19 +456,38 @@ export function createWatchState({ store, trakt }) {
         if (aborted()) return changed;
         if (rec.watched && (rec.source === 'trakt' || rec.traktSynced) && /:t\d+/.test(rec.key) && !onTrakt.has(rec.key)) {
           await store.remove(rec.key);
+          local.delete(rec.key);
           changed += 1;
         }
       }
+      // Every point reached that Trakt holds (a series started there: its season, episode and progress) comes here when it is newer than ours.
       for (const item of state.playback) {
         if (aborted()) return changed;
         const mine = local.get(item.key);
-        if (!mine || mine.watched || onTrakt.has(item.key) || !(mine.duration > 1) || item.pausedAt <= (mine.updatedAt || 0)) continue;
-        const position = Math.round((item.progress / 100) * mine.duration);
-        if (Math.abs(position - mine.position) < mine.duration * 0.01) continue;
-        await store.save({ ...mine, position }, item.pausedAt);
+        if (item.progress >= 99) {
+          // 99 % or more is a watched title: here now, and Trakt gets it as watched (below).
+          if (!onTrakt.has(item.key)) await watched(item.key, { key: item.key, entryKey: item.entryKey, episodeKey: item.episodeKey || undefined, type: item.type, title: item.title }, item.pausedAt, false);
+          continue;
+        }
+        if (onTrakt.has(item.key) || (mine && (mine.watched || item.pausedAt <= (mine.updatedAt || 0)))) continue;
+        const duration = mine && mine.duration > 1 ? mine.duration : item.duration;
+        const position = Math.round((item.progress / 100) * duration);
+        if (mine && duration === mine.duration && Math.abs(position - mine.position) < duration * 0.01) continue;
+        const base = mine || { key: item.key, entryKey: item.entryKey, ...(item.episodeKey ? { episodeKey: item.episodeKey } : {}), type: item.type, title: item.title, episodeTitle: item.episodeTitle, providerId: null, icon: '', source: 'trakt' };
+        await store.save({ ...base, position, duration }, item.pausedAt);
         changed += 1;
       }
+      await this.pushUnsent(); // what was watched only here goes to Trakt too
       return changed;
+    },
+    /** Watched titles Trakt has never received (watched before connecting, or when it was unreachable): sent in bulk. Resolves with how many went. */
+    async pushUnsent() {
+      if (!trakt || !trakt.sendHistory) return 0;
+      const pending = (await store.all()).filter((r) => r.watched && !r.traktSynced && /^(movie|series):t\d+$/.test(r.entryKey || ''));
+      if (!pending.length) return 0;
+      const sent = await trakt.sendHistory(pending);
+      for (const key of sent) await store.patch(key, { traktSynced: true });
+      return sent.length;
     },
     /** Forgets everything that came from Trakt (local history stays). */
     removeTraktData: () => store.removeBySource('trakt'),

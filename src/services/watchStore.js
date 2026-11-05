@@ -55,7 +55,7 @@ export class WatchStore {
     const groups = new Map();
     all.sort((a, b) => b.updatedAt - a.updatedAt);
     for (const rec of all) {
-      if (providerId && rec.providerId !== providerId) continue;
+      if (providerId && rec.providerId && rec.providerId !== providerId) continue; // a record from Trakt has no provider: it belongs to any
       if (!groups.has(rec.entryKey)) groups.set(rec.entryKey, []);
       groups.get(rec.entryKey).push(rec);
     }

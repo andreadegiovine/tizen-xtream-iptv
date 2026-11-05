@@ -166,3 +166,5 @@ Solo in sviluppo: `scripts/dev-media-proxy.js` serve `/__media?u=…` (Range, re
 - Manuale: `markWatched`/`clearEntry` → una sola chiamata sul titolo (`reportManual`), mai per episodio.
 - Progresso: `reportProgress` (scrobble pause, 1–99 %) a pausa e chiusura; best effort, senza coda.
 - Lettura (`importFromTrakt`): svuota la coda, legge visti film/serie e `/sync/playback`; segna visti, toglie i visti già allineati ma non più su Trakt (`source: 'trakt'` o `traktSynced`), applica il progresso più recente solo con durata locale nota.
+
+Aggiunte (patch 79): `trakt.progress` in `kv` = un avanzamento per titolo (il più recente) non ancora inviato, riprovato da `flush()`; `playbackItems` porta anche titolo, episodio e durata (runtime di Trakt, o 100 / 45 min); `sendHistory` invia in blocco (200 record per chiamata) i visti con `traktSynced` falso, anche all'avvio (`pushUnsent`); da 99 % l'avanzamento non è più uno scrobble ma un titolo visto.

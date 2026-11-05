@@ -51,7 +51,7 @@ export function createTraktClient({ clientId = '', clientSecret = '', getCredent
     /** Playback progress: action = start | pause | stop. `pause` keeps the point reached, so it can be resumed anywhere. */
     scrobble: (token, action, payload) => call(`/scrobble/${action}`, { method: 'POST', body: payload, token }),
     /** Titles stopped half way, with their progress (percent). */
-    playback: (token) => call('/sync/playback', { token }),
+    playback: (token) => call('/sync/playback?extended=full', { token }), // full: the runtime, to turn the percentage into a position
     watchedMovies: (token) => call('/sync/watched/movies', { token }),
     watchedShows: (token) => call('/sync/watched/shows', { token }),
     /** Personalised picks for the signed-in user. */

@@ -381,7 +381,8 @@ async function boot() {
   input.start();
 
   log.info('Xtream IPTV started');
-  ctx.trakt.flush().catch(() => undefined); // history that could not be sent last time
+  // History and progress that could not be sent last time, then what was watched only here.
+  ctx.trakt.flush().then(() => ctx.watch.pushUnsent()).catch(() => undefined);
   const [hasProvider] = await Promise.all([providers.getActive(), keysReady]);
   if (hasProvider) await ctx.refreshAdult();
   if (hasProvider) {
