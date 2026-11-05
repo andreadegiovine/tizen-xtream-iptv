@@ -304,8 +304,6 @@ async function boot() {
       ctx.catalogChanged(); // caches emptied and the new search index ready before the next search
       ctx.refreshAdult();
       queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) }); // the genre worker finds genres the lists did not carry
-      // The guide only matters once the channel list is in place; at most once a day.
-      if (!state.error) epg.maybeSync().catch(() => undefined);
     }
     wasSyncing = state.running;
   });
@@ -389,7 +387,9 @@ async function boot() {
 
   log.info('Xtream IPTV started');
   // History and progress that could not be sent last time, then what was watched only here.
-  queue.add({ name: 'trakt', priority: Priority.TRAKT, run: () => ctx.trakt.flush().then(() => ctx.watch.pushUnsent()).catch(() => undefined) });
+  queue.add({ name: 'trakt', priority: Priority.TRAKT, run: () => ctx.trakt.flush().then(() => ctx.watch.syncIfChanged()).catch(() => undefined) });
+  // Trakt stays aligned while the app is open: one small check every 15 minutes, a full read only if the account changed.
+  setInterval(() => queue.add({ name: 'trakt', priority: Priority.TRAKT, run: () => ctx.watch.syncIfChanged().catch(() => undefined) }), 15 * 60 * 1000);
   const [hasProvider] = await Promise.all([providers.getActive(), keysReady]);
   if (hasProvider) await ctx.refreshAdult();
   if (hasProvider) {

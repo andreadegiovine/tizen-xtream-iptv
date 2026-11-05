@@ -175,6 +175,24 @@ describe('watch-state adapter', () => {
     expect((await store.get('movie:t2')).watched).toBe(true);
   });
 
+  test('syncIfChanged: a full read only when last_activities changed, and the stamp is kept only after a good read', async () => {
+    const store = new WatchStore(await appDb());
+    let saved = '';
+    let stamp = 'a';
+    let reads = 0;
+    const trakt = fakeTrakt({ movies: [], episodes: [], playback: [] }, { fetchState: async () => { reads += 1; return { movies: [], episodes: [], playback: [] }; }, activitiesStamp: async () => stamp, savedActivities: async () => saved, saveActivities: async (s) => { saved = s; } });
+    const state = createWatchState({ store, trakt });
+    await state.syncIfChanged();
+    await state.syncIfChanged();
+    expect(reads).toBe(1);
+    stamp = 'b';
+    await state.syncIfChanged();
+    expect(reads).toBe(2);
+    const bad = createWatchState({ store, trakt: fakeTrakt(null, { fetchState: async () => null, activitiesStamp: async () => 'c', savedActivities: async () => saved, saveActivities: async (s) => { saved = s; } }) });
+    await bad.syncIfChanged();
+    expect(saved).toBe('b');
+  });
+
   test('sync: when Trakt cannot be read nothing changes', async () => {
     const store = new WatchStore(await appDb());
     await store.save({ key: 'movie:t1', entryKey: 'movie:t1', type: 'movie', position: 100, duration: 100, source: 'trakt' });

@@ -52,6 +52,7 @@ export function createTraktClient({ clientId = '', clientSecret = '', getCredent
     scrobble: (token, action, payload) => call(`/scrobble/${action}`, { method: 'POST', body: payload, token }),
     /** Titles stopped half way, with their progress (percent). */
     playback: (token) => call('/sync/playback?extended=full', { token }), // full: the runtime, to turn the percentage into a position
+    lastActivities: (token) => call('/sync/last_activities', { token }), // when each kind of data last changed: tells if a full read is needed
     watchedMovies: (token) => call('/sync/watched/movies', { token }),
     watchedShows: (token) => call('/sync/watched/shows', { token }),
     /** Personalised picks for the signed-in user. */

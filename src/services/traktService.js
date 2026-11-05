@@ -3,6 +3,7 @@ import { log } from '../core/logger.js';
 
 const TOKEN_KEY = 'trakt.token';
 const QUEUE_KEY = 'trakt.queue';
+const ACTIVITIES_KEY = 'trakt.activities'; // the account's last_activities at the last full alignment
 const PROGRESS_KEY = 'trakt.progress'; // the point reached that could not be sent: one per title, the latest
 const DEFAULT_MOVIE_S = 6000;
 const DEFAULT_EPISODE_S = 2700;
@@ -330,6 +331,21 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
      * Everything Trakt knows: { movies, episodes, playback }, or null when the watched lists could not be read
      * (then nothing must be removed locally). `playback`: titles stopped half way, [{ key, progress, pausedAt }].
      */
+    /** A string that changes when the account's watched titles or progress change (Trakt's last_activities), or null when unreadable. */
+    async activitiesStamp() {
+      const access = await token();
+      if (!access) return null;
+      const res = await client.lastActivities(access).catch(() => ({ ok: false }));
+      if (!res.ok || !res.data) return null;
+      const { movies = {}, episodes = {} } = res.data;
+      return [movies.watched_at, movies.paused_at, episodes.watched_at, episodes.paused_at].join('|');
+    },
+    async savedActivities() {
+      return kvGet(db, ACTIVITIES_KEY, '');
+    },
+    saveActivities(stamp) {
+      return kvSet(db, ACTIVITIES_KEY, stamp);
+    },
     async fetchState() {
       const access = await token();
       if (!access) return null;
@@ -364,6 +380,7 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
  * Same surface as WatchStore, so pages do not know whether Trakt is connected.
  */
 export function createWatchState({ store, trakt }) {
+  let importOk = false;
   // Saves run one after the other, and every read waits for the ones already requested: a page that opens right
   // after the player (which saves while it closes) must see the progress that was just written.
   let pending = Promise.resolve();
@@ -420,10 +437,23 @@ export function createWatchState({ store, trakt }) {
      * - the point reached in a title, when Trakt's is newer than the local one and the local duration is known.
      * Nothing is removed when Trakt could not be read. Resolves with the number of records that changed.
      */
+    /** The alignment, but only when Trakt says something changed since the last one (one small request otherwise). */
+    async syncIfChanged({ signal = null } = {}) {
+      if (!trakt || !trakt.activitiesStamp) return 0;
+      const stamp = await trakt.activitiesStamp();
+      if (stamp && stamp === (await trakt.savedActivities())) {
+        await this.pushUnsent();
+        return 0;
+      }
+      const changed = await this.importFromTrakt({ signal });
+      if (stamp && importOk) await trakt.saveActivities(stamp); // only when Trakt could be read in full
+      return changed;
+    },
     async importFromTrakt({ signal = null } = {}) {
       if (!trakt) return 0;
       await trakt.flush(); // what is waiting goes out first: Trakt must not look behind
       const state = await trakt.fetchState();
+      importOk = Boolean(state);
       if (!state) return 0;
       const all = await store.all();
       const local = new Map(all.map((r) => [r.key, r]));

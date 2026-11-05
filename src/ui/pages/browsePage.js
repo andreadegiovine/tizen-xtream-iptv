@@ -456,6 +456,7 @@ export function createBrowsePage(ctx, params = {}) {
     const excluded = await ctx.settings.getExcluded(providerId, type);
     pinned = await ctx.pins.list(providerId, type).catch(() => []);
     // Seen before (and the catalog has not changed since): categories, genres, networks and their numbers come from the cache.
+    if (type === 'live' && ctx.epg) ctx.epg.maybeSync().catch(() => undefined); // the guide is downloaded when Live TV is opened, at most once a day
     sidebarVersion = await derivedVersion(db, { genres: true, locale: i18n.getLocale() }).catch(() => null);
     let cachedSidebar = ctx.pageCache ? ctx.pageCache.get(sidebarKey()) : null;
     if (!cachedSidebar && sidebarVersion) {

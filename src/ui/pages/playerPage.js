@@ -385,6 +385,7 @@ export function createPlayerPage(ctx, params) {
       const { bufferSeconds, timeFormat: clockFormat } = await ctx.settings.get();
       timeFormat = clockFormat || 'auto';
       controller.load(client.streamUrl(params.type, current().id, current().ext), { startAt, bufferSeconds, onSubtitle: showSubtitle });
+      if (isLive && ctx.epg) ctx.epg.maybeSync().catch(() => {});
       if (isLive && ctx.epg) ctx.epg.nowNext(params.epgChannelId).then((n) => { if (!destroyed && n && n.now) nowEl.textContent = n.now.title; }).catch(() => {});
     } catch (err) {
       log.warn('Player start failed', err && err.message);

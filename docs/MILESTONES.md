@@ -369,3 +369,8 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
 ### Patch 81 — avvio a coda e dati derivati nel db (parte 1)
 - `backgroundQueue.js`: coda a priorità (visibili, sidebar, metadati, Trakt, ricerca); la sync del catalogo la blocca; l'icona di ricerca carica subito l'indice. `derivedStore.js`: dati derivati (righe di ricerca, sidebar) nello store `meta`, validi finché non cambia `catalogRev`/`genresRev`/lingua. Scadenza metadati TMDB 120 giorni. Non verificato su TV.
 - Resta per la parte 2: Trakt `last_activities`, EPG su richiesta, locandine e arricchimento solo delle card visibili.
+
+### Patch 82 — avvio a coda (parte 2)
+- Trakt: `syncIfChanged` legge `/sync/last_activities` (all'avvio e ogni 15 minuti) e rifà l'allineamento completo solo se è cambiato qualcosa; il marcatore si salva solo dopo una lettura completa riuscita.
+- EPG: non più dopo la sync del catalogo; si scarica aprendo Live TV o un canale live, al massimo una volta al giorno.
+- Non fatto: limitare l'arricchimento TMDB alle sole card visibili (oggi arricchisce la pagina renderizzata). Non verificato su TV.
