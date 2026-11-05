@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { cssUrl } from '../cssUrl.js';
 
 export const ROTATE_MS = 8000;
 const FADE_CLASS = 'visible';
@@ -40,7 +41,7 @@ export function createImageRotator({ host, intervalMs = ROTATE_MS, random = Math
         return;
       }
       const next = front === 0 ? 1 : 0;
-      layers[next].style.backgroundImage = `url("${url}")`;
+      layers[next].style.backgroundImage = cssUrl(url);
       layers[next].classList.add(FADE_CLASS);
       if (front >= 0) layers[front].classList.remove(FADE_CLASS);
       front = next;
@@ -138,7 +139,7 @@ export function rotatePoster({ host, before = null, urls = [], random = Math.ran
           return;
         }
         const next = front === 0 ? 1 : 0;
-        layers[next].style.backgroundImage = `url("${url}")`;
+        layers[next].style.backgroundImage = cssUrl(url);
         layers[next].classList.add(FADE_CLASS);
         if (front >= 0) layers[front].classList.remove(FADE_CLASS);
         front = next;

@@ -1,0 +1,25 @@
+// Recent searches and the scrolling log of Diagnostics.
+@use 'tokens' as *;
+
+.search-recent {
+  margin-top: -$page-top;
+  margin-left: 162px;
+
+  margin-left: calc(#{$topbar-external-margin} + #{$logo-size});
+
+  .list .row {
+    margin-bottom: 8px;
+    padding: 14px 24px;
+  }
+}
+
+// The log of Diagnostics: a box of fixed height that scrolls inside (the report above it keeps its full height).
+pre.diag-log.scroll {
+  height: 62vh; // a large part of the screen: more of the log at a glance
+  max-height: 62vh;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

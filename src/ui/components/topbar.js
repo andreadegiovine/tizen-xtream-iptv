@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { t } from '../../i18n/index.js';
+import { t, i18n } from '../../i18n/index.js';
 import { icon } from '../icons.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
@@ -11,7 +11,7 @@ export const SEARCH_BAR_ZONE = 'topbarSearch';
 export const MIN_QUERY_LENGTH = 2;
 const IME_DONE = 65376;
 const IME_CANCEL = 65385;
-const DEBOUNCE_MS = 1000; // search starts after 1 s without typing (Enter starts it at once)
+const DEBOUNCE_MS = 400; // search starts 0.4 s after the last key (Enter starts it at once): the index answers at once from its worker
 
 // `id` is the section: it is what the bar highlights as "current". `icon` items show only the icon
 // (the label stays as aria-label); `end` items are pushed to the right edge of the screen.
@@ -48,7 +48,7 @@ export const isSearchable = (text) => String(text || '').trim().length >= MIN_QU
  * `handlers.onClose()` when the user closes the search.
  */
 export function createTopbar(ctx, handlers = {}) {
-  const el = h('nav', { class: 'topbar', 'aria-label': 'Main' });
+  const el = h('nav', { class: 'topbar', 'aria-label': t('a11y.mainNav') });
   let nodes = [];
   let currentSection = 'home';
   let searching = false;
@@ -86,6 +86,7 @@ export function createTopbar(ctx, handlers = {}) {
   });
 
   function renderNav() {
+    el.setAttribute('aria-label', t('a11y.mainNav')); // again after a language change
     while (el.firstChild) el.removeChild(el.firstChild);
     nodes = [];
     let spacerAdded = false;
@@ -126,8 +127,8 @@ export function createTopbar(ctx, handlers = {}) {
   function paintClock() {
     if (!clockTime) return;
     const now = new Date();
-    clockTime.textContent = formatClockTime(now, clockFormats.timeFormat);
-    clockDate.textContent = formatClockDate(now, clockFormats.dateFormat);
+    clockTime.textContent = formatClockTime(now, clockFormats.timeFormat, i18n.getLocale());
+    clockDate.textContent = formatClockDate(now, clockFormats.dateFormat, i18n.getLocale());
   }
   function scheduleClock() {
     clearTimeout(clockTimer);

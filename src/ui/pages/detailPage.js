@@ -1,5 +1,7 @@
 import { h } from '../dom.js';
-import { t } from '../../i18n/index.js';
+import { cssUrl } from '../cssUrl.js';
+import { formatClockTime } from '../../core/clock.js';
+import { t, i18n } from '../../i18n/index.js';
 import { icon } from '../icons.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
@@ -613,6 +615,12 @@ export function createDetailPage(ctx, params) {
         poster.classList.remove('loading');
       });
       poster.appendChild(node);
+    } else if (!img && !el.classList.contains('loading') && !poster.querySelector('.card-placeholder')) {
+      // No picture anywhere (provider nor TMDB): the type's icon, as on the cards, instead of the loading sweep for ever.
+      posterUrl = '';
+      clear(poster);
+      poster.classList.remove('loading');
+      poster.appendChild(h('div', { class: 'card-placeholder' }, icon(entry && entry.type === 'live' ? 'network' : 'trailer')));
     }
     showBackdrop((info && info.backdrop) || (meta && meta.backdrop));
   }
@@ -624,7 +632,7 @@ export function createDetailPage(ctx, params) {
     const probe = new Image();
     probe.onload = () => {
       if (destroyed || backdropUrl !== url) return;
-      backdropEl.style.backgroundImage = `url("${url}")`;
+      backdropEl.style.backgroundImage = cssUrl(url);
       backdropEl.classList.add('visible');
     };
     probe.src = url;
@@ -709,7 +717,7 @@ export function createDetailPage(ctx, params) {
       if (destroyed || !list.length) return;
       epgEl.appendChild(h('h2', { text: t('detail.epg') }));
       list.forEach((p) => {
-        epgEl.appendChild(h('div', { class: 'epg-row' }, h('span', { class: 'epg-time', text: new Date(p.start).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) }), h('span', { text: p.title })));
+        epgEl.appendChild(h('div', { class: 'epg-row' }, h('span', { class: 'epg-time', text: formatClockTime(new Date(p.start), 'auto', i18n.getLocale()) }), h('span', { text: p.title })));
       });
     } catch (err) {
       log.warn('EPG failed', err && err.message);

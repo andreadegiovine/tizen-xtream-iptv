@@ -15,6 +15,9 @@
     "postbuild": "node scripts/check-dist.js",
     "test": "jest",
     "lint": "eslint .",
+    "mock": "node scripts/mock-xtream/server.js",
+    "perf": "node scripts/mock-xtream/perf.js",
+    "perf:compare": "node scripts/mock-xtream/compare.js",
     "format": "prettier --write \"src/**/*.{js,scss,json}\" \"test/**/*.js\""
   },
   "jest": {
@@ -34,6 +37,7 @@
     "@babel/core": "^7.25.0",
     "@babel/preset-env": "^7.25.0",
     "@eslint/js": "^9.0.0",
+    "@fontsource/inter": "^5.3.0",
     "autoprefixer": "^10.4.20",
     "babel-jest": "^29.7.0",
     "babel-loader": "^9.2.1",

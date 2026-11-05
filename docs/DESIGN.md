@@ -178,3 +178,10 @@ Tutto ciò che deriva dal catalogo (righe di ricerca, sidebar con generi e conte
 
 ## Generi: TMDB sostituisce il provider
 Per un titolo con generi TMDB (`entry_genre_tmdb`, `|tmdb`) le righe del provider (`entry_genre` e `|info`) sono eliminate in `writeGenres`, e `writeEntries` non riscrive `entry_genre` per quei titoli. `clearTmdb` riscrive la lista del provider dalle voci.
+
+## Ricostruzioni, sync differenziale, stile (patch 90–93)
+- Ogni ricostruzione dei titoli dai dati salvati passa da `ctx.rebuildCatalog(types)` → `startRebuild()` (`catalogRebuild.js`): op `rebuild` nel worker del catalogo, ripiego sul thread principale, operazione `rebuild` fermabile. Nessuna pagina chiama più `rebuildEntries` direttamente.
+- La sync confronta ogni riga con quella salvata (`snapshot()` + JSON) e scrive solo le differenze; `rewrite` (aggiornamento forzato da Impostazioni) riscrive tutto. `catalogRev` cambia solo se qualcosa è cambiato.
+- Generi dal provider: solo senza chiave TMDB, 1 richiesta/s, 500 al giorno (`genres:daily`). Pulizia dei titoli: preferenza `cleanTitles`.
+- Stile: `src/styles/main.scss` importa i file per parte dell'interfaccia nell'ordine originale; colori solo in `_tokens.scss`; animazioni solo su `transform`/`opacity`; font Inter da `@fontsource/inter` copiato da webpack in `dist/fonts`.
+- Date e orari "automatici" seguono la lingua dell'app (`formatClockTime/formatClockDate(date, format, locale)`).

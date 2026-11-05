@@ -1,0 +1,140 @@
+// Cards (posters, badges, focus) and the empty grid.
+@use 'tokens' as *;
+
+.card {
+  box-sizing: border-box;
+  position: relative;
+  width: $card-w + 2 * $card-pad;
+  margin: 0 ($card-gap - 2 * $card-pad) (18px - 2 * $card-pad) 0;
+  padding: $card-pad;
+  border: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  transition: transform 0.12s ease-out; // only the transform moves on the GPU: the shadow appears at once (animating a blurred shadow repaints every frame)
+
+  .card-poster {
+    position: relative;
+    height: 0;
+    padding-bottom: 150%; // 2:3 poster (aspect-ratio is not available on the TV browser)
+    overflow: hidden;
+    border-radius: 0;
+    background: $bg-focus;
+
+    img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  }
+
+  &.square .card-poster {
+    padding-bottom: 100%; // channel logos in Live TV
+  }
+
+  &.live .card-poster img {
+    object-fit: contain;
+    padding: 12%;
+  }
+
+  .card-badge {
+    position: absolute;
+    z-index: 1;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    height: 38px;
+    min-width: 38px;
+    padding: 0 10px;
+    border-radius: 0;
+    background: rgba($black, 0.72);
+    font-size: 1.375rem;
+    font-weight: 700;
+
+    &.visible {
+      display: flex;
+    }
+
+    .icon {
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  .card-badges {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+
+    .card-badge {
+      position: static;
+    }
+  }
+
+  .card-favorite {
+    color: $favorite;
+  }
+
+  .card-rating {
+
+    .icon {
+      margin-right: 6px;
+      color: $rating;
+    }
+  }
+
+  .card-status {
+    top: 8px;
+    left: 8px;
+    color: $ok;
+
+    &.group {
+      color: $text; // grouped Live TV channel
+    }
+
+    &.partial {
+      color: $warn;
+    }
+  }
+
+  .card-title {
+    margin-top: 8px;
+    padding: 0 2px;
+    overflow: hidden;
+    font-size: 1.5rem;
+    line-height: 30px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card-meta {
+    min-height: 26px;
+    padding: 0 2px;
+    overflow: hidden;
+    color: $text-muted;
+    font-size: 1.1875rem;
+    line-height: 26px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &.focused {
+    z-index: 2;
+    border-color: $text;
+    box-shadow: 0 0 0 2px $focus-ring, 0 14px 32px rgba($black, 0.95);
+    transform: scale(1.06);
+    will-change: transform;
+  }
+}
+
+.browse-empty {
+  font-size: 1.625rem;
+}

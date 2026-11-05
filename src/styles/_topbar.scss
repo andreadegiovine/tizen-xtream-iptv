@@ -1,0 +1,138 @@
+// Top bar: logo, sections, clock, search field.
+@use 'tokens' as *;
+
+.topbar {
+  display: flex;
+  align-items: center;
+  height: $topbar-height;
+  padding: 0 $gutter;
+  background: linear-gradient(to bottom, $shade-strong, rgba($black, 0));
+
+  .topbar-spacer {
+    flex: 1;
+  }
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  margin-right: 40px;
+  font-size: 1.625rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: $text;
+
+  b {
+    color: $brand-red;
+  }
+
+  .logo-mark {
+    display: flex;
+    width: $logo-size;
+    height: $logo-size;
+  }
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.topbar-clock {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 0 0 calc($topbar-external-margin/2);
+  line-height: 1.1;
+
+  .clock-time {
+    font-size: 1.875rem;
+    font-weight: 700;
+  }
+
+  .clock-date {
+    margin-top: 2px;
+    color: $text-muted;
+    font-size: 1.125rem;
+  }
+}
+
+.topbar-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: $topbar-item-height;
+  margin-right: calc(#{$topbar-external-margin} / 2);
+  padding: 0 20px;
+  border-radius: 6px;
+  color: $text-muted;
+  transition: transform 0.12s ease-out, background-color 0.12s ease-out;
+
+  .icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .icon + span {
+    margin-left: 10px;
+  }
+
+  &.icon-only {
+    width: 56px;
+    padding: 0;
+  }
+
+  &.current {
+    color: $text;
+    font-weight: 700;
+  }
+
+  &.focused {
+    background: $text;
+    color: $bg;
+    transform: scale(#{$focus-scale});
+  }
+}
+
+.topbar-search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  height: $topbar-item-height;
+  margin-right: 12px;
+  padding: 0 20px;
+  border-radius: 6px;
+  background: $bg-raised;
+
+  .icon {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    margin-right: 14px;
+    color: $text-muted;
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: $text;
+    font: inherit;
+  }
+
+  &.focused {
+    background: $bg-focus;
+  }
+}
+
+.icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+  vertical-align: middle;
+}

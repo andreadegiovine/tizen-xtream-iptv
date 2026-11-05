@@ -34,6 +34,27 @@ describe('genre index', () => {
     const active = { get: async () => ({ db }) };
     return { db, index: createGenreIndex({ active }) };
   }
+  test('restart stops the work running and starts again from the first phase', async () => {
+    let calls = 0;
+    const index = createGenreIndex({ active: { get: async () => { calls += 1; return null; } }, getTmdbKey: () => 'k' });
+    const first = index.backfill();
+    const again = index.restart(); // waits for the first run, then starts a new one
+    expect(await first).toBe(0);
+    expect(await again).toBe(0);
+    expect(calls).toBe(2); // with a TMDB key only the TMDB phase runs (no provider genre search): once, then again after the restart
+  });
+  test('the provider is asked one title at a time with a pause, and at most the daily limit', async () => {
+    const { db } = await setup([item(1, ''), item(2, ''), item(3, '')]);
+    const xtream = fakeXtream({ 1: 'Dramma', 2: 'Azione', 3: 'Horror' });
+    const waits = [];
+    const day = Date.UTC(2026, 10, 5, 12);
+    const done = await runGenreBackfill({ db, xtream, tmdb: null, language: 'it', dailyLimit: 2, wait: async (ms) => waits.push(ms), now: () => day });
+    expect(done).toBe(2);
+    expect(xtream.getVodInfo).toHaveBeenCalledTimes(2);
+    expect(waits).toEqual([1000]); // a pause between two requests, none before the first
+    expect(await runGenreBackfill({ db, xtream, tmdb: null, language: 'it', dailyLimit: 2, wait: async () => undefined, now: () => day })).toBe(0); // today's are used
+    expect(await runGenreBackfill({ db, xtream, tmdb: null, language: 'it', dailyLimit: 2, wait: async () => undefined, now: () => day + 86400000 })).toBe(1); // the next day
+  });
   const fakeTmdb = (genresById) => ({ enabled: true, details: jest.fn(async (type, id) => ({ genres: (genresById[id] || []).map((name) => ({ name })) })) });
   const fakeXtream = (genreById) => ({ getVodInfo: jest.fn(async (id) => ({ info: { genre: genreById[id] || '' } })), getSeriesInfo: jest.fn() });
 
@@ -74,21 +95,21 @@ describe('genre index', () => {
     const { db, index } = await setup([item(1, '', { tmdbId: 10 }), item(2, '', { tmdbId: 20 }), item(3, ''), item(4, 'Azione')]);
     const tmdb = fakeTmdb({ 10: ['Drama'] });
     const xtream = fakeXtream({ 3: 'Horror' }); // items 2 (no TMDB genres, id 2) and 3 go to the provider
-    await runGenreBackfill({ db, xtream, tmdb, language: 'en' });
+    await runGenreBackfill({ db, xtream, tmdb, language: 'en', pauseMs: 0 });
     expect(tmdb.details.mock.calls.map((c) => c[1]).sort()).toEqual([10, 20]);
     expect(xtream.getVodInfo.mock.calls.map((c) => c[0]).sort()).toEqual([2, 3]);
     expect((await index.list('movie')).map((g) => g.key).sort()).toEqual(['azione', 'drama', 'horror']);
     // second run: nothing is missing any more (titles with no genre anywhere are remembered)
     xtream.getVodInfo.mockClear();
     tmdb.details.mockClear();
-    await runGenreBackfill({ db, xtream, tmdb, language: 'en' });
+    await runGenreBackfill({ db, xtream, tmdb, language: 'en', pauseMs: 0 });
     expect(tmdb.details).not.toHaveBeenCalled();
     expect(xtream.getVodInfo).not.toHaveBeenCalled();
   });
 
   test('without TMDB the provider details supply the genres', async () => {
     const { db, index } = await setup([item(1, '')]);
-    await runGenreBackfill({ db, xtream: fakeXtream({ 1: 'Thriller / Horror' }), tmdb: null, language: 'it' });
+    await runGenreBackfill({ db, xtream: fakeXtream({ 1: 'Thriller / Horror' }), tmdb: null, language: 'it', pauseMs: 0 });
     expect((await index.list('movie')).map((g) => g.key).sort()).toEqual(['horror', 'thriller']);
   });
 });

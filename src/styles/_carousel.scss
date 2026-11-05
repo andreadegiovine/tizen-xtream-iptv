@@ -1,0 +1,38 @@
+// Home rows and carousels.
+@use 'tokens' as *;
+
+// ---- carousels ----
+.home-rows {
+  margin-bottom: 24px;
+}
+
+.carousel {
+  margin-bottom: 8px;
+}
+
+.carousel-title {
+  margin: 0 0 12px;
+  font-size: 2.0625rem;
+}
+
+// Full width: the track runs under the page padding, so a focused first card still has room.
+.carousel-track {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  // Room above/below/aside so a scaled, shadowed focused card is never clipped by the track.
+  margin: -24px (-$gutter) -8px;
+  padding: 32px $gutter 16px;
+  overflow: hidden;
+
+  .card {
+    flex: none;
+  }
+
+  // Padding at the end of a scrolling flex row is ignored by the TV browser: a spacer keeps the last card off the edge.
+  &::after {
+    content: '';
+    flex: none;
+    width: $gutter;
+  }
+}

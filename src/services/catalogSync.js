@@ -6,6 +6,7 @@ import {
   dbGetAllRange,
   dbDeleteMany,
   dbDelete,
+  requestToPromise,
 } from '../core/idb.js';
 import { openProviderDb } from '../db/providerDb.js';
 import { bumpCatalogRev } from './derivedStore.js';
@@ -127,12 +128,31 @@ const ranges = {
   categories: (type) => ({ range: IDBKeyRange.bound(`${type}:`, `${type}:￿`) }),
 };
 
-/** Writes the new rows, then deletes the rows of that type that are no longer present (readers never see an empty catalog). */
-async function replaceRows(db, store, type, rows, { onBatch } = {}) {
-  await dbPutMany(db, store, rows, BATCH_SIZE, onBatch);
+/** Every row of one type in a store, as key → serialized row: what the store holds now, to write only what changed. */
+async function snapshot(db, store, type) {
+  const { index, range } = ranges[store](type);
+  const os = db.transaction(store).objectStore(store);
+  const rows = await requestToPromise((index ? os.index(index) : os).getAll(range));
+  const out = new Map();
+  rows.forEach((row) => out.set(row.key, JSON.stringify(row)));
+  return out;
+}
+
+/**
+ * Writes the rows of one type, then deletes the rows of that type that are no longer present (readers never see an empty catalog).
+ * Only new or changed rows are written (`full`: all of them, the forced update from Settings): a sync of an unchanged catalog writes
+ * next to nothing, where it used to rewrite every row (most of the sync time, minutes on a TV).
+ */
+async function replaceRows(db, store, type, rows, { onBatch, full = false } = {}) {
+  const before = full ? null : await snapshot(db, store, type);
+  const changed = before ? rows.filter((row) => before.get(row.key) !== JSON.stringify(row)) : rows;
+  await dbPutMany(db, store, changed, BATCH_SIZE, onBatch);
+  if (onBatch && !changed.length) await onBatch(rows.length, rows.length);
   const fresh = new Set(rows.map((row) => row.key));
-  const existing = await dbGetAllKeys(db, store, ranges[store](type));
-  await dbDeleteMany(db, store, existing.filter((key) => !fresh.has(key)));
+  const existing = before ? Array.from(before.keys()) : await dbGetAllKeys(db, store, ranges[store](type));
+  const gone = existing.filter((key) => !fresh.has(key));
+  await dbDeleteMany(db, store, gone);
+  return changed.length + gone.length; // rows written or deleted
 }
 
 /**
@@ -140,41 +160,54 @@ async function replaceRows(db, store, type, rows, { onBatch } = {}) {
  * kept (to know what to delete afterwards). The row lists of a big catalog (one per entry and category, one per entry and genre)
  * never exist as one array. `extra` rows (few) are written at the end.
  */
-async function replaceRowsChunked(db, store, type, entries, makeRows, { extra = [], chunk = BATCH_SIZE } = {}) {
+async function replaceRowsChunked(db, store, type, entries, makeRows, { extra = [], chunk = BATCH_SIZE, full = false } = {}) {
+  const before = full ? null : await snapshot(db, store, type);
   const fresh = new Set();
+  let changes = 0;
+  const write = (rows) => {
+    const changed = before ? rows.filter((row) => before.get(row.key) !== JSON.stringify(row)) : rows;
+    changes += changed.length;
+    return dbPutMany(db, store, changed, BATCH_SIZE);
+  };
   for (let i = 0; i < entries.length; i += chunk) {
     const rows = makeRows(entries.slice(i, i + chunk));
     rows.forEach((row) => fresh.add(row.key));
-    await dbPutMany(db, store, rows, BATCH_SIZE);
+    await write(rows);
   }
   if (extra.length) {
     extra.forEach((row) => fresh.add(row.key));
-    await dbPutMany(db, store, extra, BATCH_SIZE);
+    await write(extra);
   }
-  const existing = await dbGetAllKeys(db, store, ranges[store](type));
-  await dbDeleteMany(db, store, existing.filter((key) => !fresh.has(key)));
+  const existing = before ? Array.from(before.keys()) : await dbGetAllKeys(db, store, ranges[store](type));
+  const gone = existing.filter((key) => !fresh.has(key));
+  await dbDeleteMany(db, store, gone);
+  return changes + gone.length;
 }
 
 /** Entries + their per-category rows. Shared by the sync and by "exclusions changed". */
-export async function writeEntries(db, type, entries, { onBatch, groups = [], networks = [] } = {}) {
-  await bumpCatalogRev(db); // derived data (sidebar, search rows...) is not valid while the entries change, nor after
-  await replaceRows(db, 'entries', type, entries, { onBatch });
+export async function writeEntries(db, type, entries, { onBatch, groups = [], networks = [], full = false } = {}) {
+  let changes = await replaceRows(db, 'entries', type, entries, { onBatch, full });
   let liveAllRows = [];
   if (type === MediaType.LIVE) {
     // Live TV "show all": the groups plus the channels that are in none (they live in a pseudo category).
     liveAllRows = buildLiveAllRows(entries, groups, networks);
-    await replaceRows(db, 'groups', type, groups.concat(networks)); // networks sit in the same store, keys `live:n…`
+    changes += await replaceRows(db, 'groups', type, groups.concat(networks), { full }); // networks sit in the same store, keys `live:n…`
   }
-  await replaceRowsChunked(db, 'entry_cat', type, entries, buildEntryCategoryRows, { extra: liveAllRows });
+  changes += await replaceRowsChunked(db, 'entry_cat', type, entries, buildEntryCategoryRows, { extra: liveAllRows, full });
   // The provider's genres are not written for titles that already have TMDB's (they replace them).
   const tmdbKeys = await dbGetAllKeys(db, 'entry_genre_tmdb', ranges.entry_genre_tmdb(type));
   const withTmdb = new Set(tmdbKeys.filter((key) => key.endsWith('|tmdb')).map((key) => key.slice(0, key.indexOf('|'))));
   const tmdbOnly = Boolean(await dbGet(db, 'meta', 'genres:source')); // every title went through TMDB: the provider's genres are not kept
-  await replaceRowsChunked(db, 'entry_genre', type, entries, (batch) => (tmdbOnly ? [] : buildEntryGenreRows(withTmdb.size ? batch.filter((entry) => !withTmdb.has(entry.key)) : batch)));
+  changes += await replaceRowsChunked(db, 'entry_genre', type, entries, (batch) => (tmdbOnly ? [] : buildEntryGenreRows(withTmdb.size ? batch.filter((entry) => !withTmdb.has(entry.key)) : batch)), { full });
   // TMDB genres follow the metadata, not the sync: only forget the ones of titles that left the catalog.
   const present = new Set(entries.map((entry) => entry.key));
   const known = await dbGetAllKeys(db, 'entry_genre_tmdb', ranges.entry_genre_tmdb(type));
-  await dbDeleteMany(db, 'entry_genre_tmdb', known.filter((key) => !present.has(key.slice(0, key.indexOf('|')))));
+  const gone = known.filter((key) => !present.has(key.slice(0, key.indexOf('|'))));
+  await dbDeleteMany(db, 'entry_genre_tmdb', gone);
+  changes += gone.length;
+  // Derived data (sidebar, search rows...) built on the old entries is no longer valid; with nothing changed it stays valid.
+  if (changes || full) await bumpCatalogRev(db);
+  return changes;
 }
 
 /** Deletes everything stored for one media type: the downloaded lists and categories, what is worked out from them, and the sync record. */
@@ -230,6 +263,7 @@ export async function syncType({
   gate = () => Promise.resolve(),
   now = Date.now,
   retryDelays = retryPolicy.delays,
+  full = false,
 }) {
   const progress = (phase, extra = {}) => emit({ event: 'progress', mediaType: type, phase, ...extra });
   const started = now();
@@ -270,7 +304,7 @@ export async function syncType({
     throwIfAborted(signal);
     await gate();
   };
-  await replaceRows(db, 'items', type, items, { onBatch });
+  const itemChanges = await replaceRows(db, 'items', type, items, { onBatch, full });
   const itemsMs = now() - writeStart;
 
   throwIfAborted(signal);
@@ -282,11 +316,12 @@ export async function syncType({
   const itemCount = items.length;
   items.length = 0; // the entries hold what the grids need: the items are not kept in memory while the rows are written
   projected.length = 0;
-  await dbDelete(db, 'meta', 'genres:source'); // new titles have only the provider's genres until TMDB has been through them
-  await writeEntries(db, type, entries, { groups, networks });
+  // New or changed titles have only the provider's genres until TMDB has been through them; an unchanged list keeps TMDB's.
+  if (itemChanges) await dbDelete(db, 'meta', 'genres:source');
+  const entryChanges = await writeEntries(db, type, entries, { groups, networks, full });
   if (report) await dbPut(db, 'meta', { key: NETWORK_REPORT_KEY, type, report });
   const entriesMs = now() - entriesStart;
-  await replaceRows(db, 'categories', type, categories);
+  const categoryChanges = await replaceRows(db, 'categories', type, categories, { full });
   const writeMs = now() - writeStart;
 
   const meta = {
@@ -305,15 +340,16 @@ export async function syncType({
     entriesMs,
     buildMs,
     durationMs: now() - started,
+    changes: itemChanges + entryChanges + categoryChanges, // rows written or deleted (0: the list did not change)
   };
   await dbPut(db, 'meta', meta);
-  await bumpCatalogRev(db);
+  if (meta.changes || full) await bumpCatalogRev(db);
   progress('done', { done: itemCount, total: itemCount, meta });
   return meta;
 }
 
 /** Syncs several media types in order. A failing type does not stop the others, except auth/abort errors. */
-export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, cleanTitles = true, grouping = DEFAULT_GROUPING, force = false, signal, emit = () => {}, gate, now = Date.now, retryDelays }) {
+export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, cleanTitles = true, grouping = DEFAULT_GROUPING, force = false, rewrite = false, signal, emit = () => {}, gate, now = Date.now, retryDelays }) {
   const results = [];
   for (const type of types) {
     try {
@@ -325,7 +361,7 @@ export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, c
         results.push({ type, skipped: true });
         continue;
       }
-      const meta = await syncType({ db, client, type, excludedCategories: excluded[type] || new Set(), cleanTitles, grouping, signal, emit, gate, now, retryDelays });
+      const meta = await syncType({ db, client, type, excludedCategories: excluded[type] || new Set(), cleanTitles, grouping, signal, emit, gate, now, retryDelays, full: rewrite });
       results.push({ type, meta });
     } catch (err) {
       const error = toAppError(err);
@@ -341,7 +377,7 @@ export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, c
  * Entry point shared by the Web Worker and the main-thread fallback:
  * opens the provider database, checks the account, syncs, and always ends with a `done` event.
  */
-export async function runSyncForProvider({ provider, types, excluded, cleanTitles = true, grouping = DEFAULT_GROUPING, force, signal, emit = () => {}, gate, openDb = openProviderDb, makeClient }) {
+export async function runSyncForProvider({ provider, types, excluded, cleanTitles = true, grouping = DEFAULT_GROUPING, force, rewrite = false, signal, emit = () => {}, gate, openDb = openProviderDb, makeClient }) {
   let db = null;
   let results = [];
   let failure = null;
@@ -351,7 +387,7 @@ export async function runSyncForProvider({ provider, types, excluded, cleanTitle
     const auth = await client.authenticate();
     emit({ event: 'account', expiresAt: (auth && auth.user && auth.user.expiresAt) || null });
     db = await openDb(provider.id);
-    results = await runSync({ db, client, types, excluded, cleanTitles, grouping, force, signal, emit, gate });
+    results = await runSync({ db, client, types, excluded, cleanTitles, grouping, force, rewrite, signal, emit, gate });
   } catch (err) {
     const error = toAppError(err);
     failure = { code: error.code, message: error.message };

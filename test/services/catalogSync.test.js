@@ -51,6 +51,31 @@ describe('syncType', () => {
     await deleteProviderDb('sync-test-1');
   });
 
+  test('a sync of an unchanged list writes nothing and keeps the derived data valid; a changed title is the only row written', async () => {
+    const db = await newDb();
+    const lists = { movie: [movie(1, 'A', { genre: 'Drama' }), movie(2, 'B')] };
+    const client = makeClient(lists);
+    const first = await syncType({ db, client, type: 'movie' });
+    expect(first.changes).toBeGreaterThan(0);
+    const rev = await dbGet(db, 'meta', 'catalogRev');
+    const again = await syncType({ db, client, type: 'movie' });
+    expect(again.changes).toBe(0);
+    expect(await dbGet(db, 'meta', 'catalogRev')).toEqual(rev); // sidebar and search rows saved stay valid
+    lists.movie = [movie(1, 'A', { genre: 'Drama' }), movie(2, 'B renamed')];
+    const changed = await syncType({ db, client, type: 'movie' });
+    expect(changed.changes).toBe(2); // the item and its entry (category and genre rows did not change)
+    expect((await dbGet(db, 'entries', 'movie:i2')).name).toBe('B renamed');
+    expect(await dbGet(db, 'meta', 'catalogRev')).not.toEqual(rev);
+  });
+
+  test('the forced rewrite writes every row again', async () => {
+    const db = await newDb();
+    const client = makeClient({ movie: [movie(1, 'A'), movie(2, 'B')] });
+    await syncType({ db, client, type: 'movie' });
+    const full = await syncType({ db, client, type: 'movie', full: true });
+    expect(full.changes).toBeGreaterThanOrEqual(4); // 2 items + 2 entries (+ category and category rows)
+  });
+
   test('a second sync deletes rows that disappeared and keeps the other types untouched', async () => {
     const db = await newDb();
     const lists = { movie: [movie(1, 'A'), movie(2, 'B')], series: [{ series_id: 5, name: 'S', category_id: '1', last_modified: '9' }] };

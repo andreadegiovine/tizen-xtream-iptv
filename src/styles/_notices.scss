@@ -1,0 +1,93 @@
+// Notices at the right edge.
+@use 'tokens' as *;
+
+// Standard notices: right edge, centred vertically.
+.notices {
+  position: fixed;
+  top: 50%;
+  right: $safe-x;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 520px;
+  max-height: 80%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.notice {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: 8px 0;
+  padding: 18px 24px;
+  border: 3px solid transparent;
+  border-left: 8px solid $text-muted;
+  border-radius: 6px;
+  background: $bg-raised;
+  box-shadow: 0 8px 28px rgba($black, 0.55);
+  font-size: 1.5rem;
+  pointer-events: auto;
+  transition: transform 0.12s ease-out;
+
+  .notice-icon {
+    display: flex;
+    flex: none;
+    margin-right: 18px;
+
+    .icon {
+      width: 34px;
+      height: 34px;
+    }
+  }
+
+  .notice-title {
+    margin-bottom: 4px;
+    font-weight: 700;
+  }
+
+  .notice-text {
+    line-height: 1.3;
+    word-break: break-word;
+  }
+
+  &.info {
+    border-left-color: $info;
+
+    .notice-icon {
+      color: $info;
+    }
+  }
+
+  &.success {
+    border-left-color: $ok;
+
+    .notice-icon {
+      color: $ok;
+    }
+  }
+
+  &.warning {
+    border-left-color: $warn;
+
+    .notice-icon {
+      color: $warn;
+    }
+  }
+
+  &.error {
+    border-left-color: $fail;
+
+    .notice-icon {
+      color: $fail;
+    }
+  }
+
+  &.focused {
+    border-color: $text;
+    background: $bg-focus;
+    transform: scale(1.04);
+  }
+}

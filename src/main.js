@@ -23,6 +23,7 @@ import { createComingSoonPage } from './ui/pages/simplePages.js';
 import { createHomePage } from './ui/pages/homePage.js';
 import { CatalogSyncService } from './services/catalogSyncService.js';
 import { createCatalogWorker } from './services/createCatalogWorker.js';
+import { startRebuild } from './services/catalogRebuild.js';
 import { createEpgService } from './services/epgService.js';
 import { createEpgWorker } from './services/createEpgWorker.js';
 import { createTmdbClient } from './services/tmdbClient.js';
@@ -80,10 +81,11 @@ async function boot() {
   const prefs = await settings.get();
   applyTextSize(prefs.textSize);
   i18n.setLocale(prefs.language === 'auto' ? detectLocale(navigator.language) : prefs.language);
+  document.documentElement.lang = i18n.getLocale(); // the page says which language it speaks (voices, hyphenation)
 
   const focus = new FocusManager();
   const liveGrouping = createLiveGroupingService({ db, settings });
-  const catalog = new CatalogSyncService({ providers, settings, createWorker: createCatalogWorker, getCleanTitles: () => Boolean(ctx.apiKeys && ctx.apiKeys.get().tmdbKey), getGrouping: (providerId) => liveGrouping.config(providerId) });
+  const catalog = new CatalogSyncService({ providers, settings, createWorker: createCatalogWorker, getCleanTitles: async () => (await settings.get()).cleanTitles, getGrouping: (providerId) => liveGrouping.config(providerId) });
   const active = createActiveProvider({ providers });
   const ctx = {
     db,
@@ -137,6 +139,33 @@ async function boot() {
   ctx.tmdb = tmdb;
   ctx.operations = createOperations();
   ctx.syncLog = createSyncLog({ db, operations: ctx.operations });
+  /**
+   * Works out the entries of some media types again from the stored lists (hidden categories, title cleaning, Live grouping or links
+   * changed, "update" / "empty" of the derived data). It runs in a catalog worker: on a TV rebuilding 30 000 titles on the UI thread
+   * blocked it for seconds. Listed among the operations in progress (it can be stopped); resolves with { type: entries } or null.
+   */
+  ctx.rebuildCatalog = async (types, { providerId = null } = {}) => {
+    const current = await active.get();
+    const id = providerId || (current && current.provider.id);
+    if (!id) return null;
+    const excluded = {};
+    for (const type of types) excluded[type] = Array.from(await settings.getExcluded(id, type));
+    const payload = { providerId: id, types, excluded, cleanTitles: Boolean(await catalog.getCleanTitles()), grouping: types.includes('live') ? await liveGrouping.config(id) : undefined };
+    const started = Date.now();
+    const handle = startRebuild(payload, { createWorker: createCatalogWorker });
+    const end = ctx.operations.start('rebuild', { cancel: () => handle.cancel() });
+    try {
+      const counts = await handle.promise;
+      if (counts) log.info(`Rebuild ${types.join(', ')}: ${Object.values(counts).reduce((a, b) => a + b, 0)} entries in ${Date.now() - started} ms`);
+      return counts;
+    } catch (err) {
+      log.warn('Rebuild failed', err && err.message);
+      return null;
+    } finally {
+      end();
+      ctx.catalogChanged();
+    }
+  };
   ctx.genres = createGenreIndex({
     active,
     syncLog: ctx.syncLog,
@@ -318,7 +347,7 @@ async function boot() {
   });
 
   // The page cache is bypassed while the catalog is being changed (sync, genre or TMDB downloads) and emptied when the job ends.
-  const CATALOG_JOBS = new Set(['catalog', 'genres', 'tmdb']);
+  const CATALOG_JOBS = new Set(['catalog', 'genres', 'tmdb', 'rebuild']);
   let cacheBusy = false;
   const refreshCacheState = () => {
     const busy = Boolean(catalog.getState().running) || ctx.operations.list().some((op) => CATALOG_JOBS.has(op.id));
@@ -331,6 +360,7 @@ async function boot() {
   ctx.operations.onChange(refreshCacheState);
 
   i18n.onChange(() => {
+    document.documentElement.lang = i18n.getLocale();
     ctx.pageCache.clear(); // titles and genres change with the language
     topbar.render();
     router.reload();

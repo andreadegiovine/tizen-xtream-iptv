@@ -1,0 +1,57 @@
+// Screensaver and the start splash.
+@use 'tokens' as *;
+
+// Screensaver: black screen, the logo moves and changes size now and then.
+.screensaver {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1000;
+  background: $black;
+  cursor: none;
+
+  .screensaver-mark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 360px; // MAX_SIZE of screensaver.js: place and size come from a transform
+    height: 360px;
+    transform-origin: 0 0;
+    transition: transform 1.5s ease-in-out;
+
+    svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  }
+}
+
+// Shown from the first paint until the first page replaces it (the router empties #content).
+.boot-splash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+
+  svg {
+    width: 160px;
+    height: 160px;
+    animation: boot-pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes boot-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+// Recent searches: right under the search field, text only, aligned to the left.

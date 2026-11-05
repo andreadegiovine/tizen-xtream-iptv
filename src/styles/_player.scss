@@ -1,0 +1,201 @@
+// Player.
+@use 'tokens' as *;
+
+// ---- player ----
+.player {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: transparent;
+  color: $text;
+
+  .player-top {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    padding: 40px $gutter 96px;
+    background: linear-gradient(to bottom, $shade-strong, rgba($black, 0));
+    opacity: 0;
+    transition: opacity 0.2s;
+
+    &.visible {
+      opacity: 1;
+    }
+  }
+
+  .player-controls {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    padding: 96px $gutter 40px;
+    background: linear-gradient(to top, $shade-strong, rgba($black, 0));
+    opacity: 0;
+    transition: opacity 0.2s;
+
+    &.visible {
+      opacity: 1;
+    }
+  }
+
+  .player-title {
+    font-size: 2.75rem;
+    font-weight: 700;
+  }
+
+  .player-now {
+    min-height: 30px;
+    color: $text-muted;
+    font-size: 1.625rem;
+  }
+
+  .player-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .player-group {
+    display: flex;
+    align-items: center;
+  }
+
+  // Full-width progress bar: tall hit area (pointer), no frame; the D-pad focus sits on the knob.
+  .player-seek {
+    padding: 22px 0;
+    margin-bottom: 8px;
+    cursor: pointer;
+
+    &.focused .player-knob,
+    &.scrubbing .player-knob {
+      transform: scale(1);
+      box-shadow: 0 0 0 5px $focus-ring;
+    }
+  }
+
+  .player-time {
+    flex: none;
+    margin-left: 20px;
+    font-size: 1.625rem;
+  }
+
+  .player-bar {
+    position: relative;
+    height: 10px;
+    border-radius: 5px;
+    background: rgba($text, 0.25);
+  }
+
+  // Buffered range: a lighter band behind the played part.
+  .player-buffer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 100%;
+    border-radius: 5px;
+    background: rgba($text, 0.45);
+  }
+
+  .player-fill {
+    position: relative;
+    width: 0;
+    height: 100%;
+    border-radius: 5px;
+    background: $accent;
+  }
+
+  .player-tip {
+    position: absolute;
+    bottom: 26px;
+    left: 0;
+    padding: 4px 14px;
+    border-radius: 6px;
+    background: rgba($black, 0.8);
+    font-size: 1.625rem;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateX(-50%);
+    transition: opacity 0.15s;
+
+    &.visible {
+      opacity: 1;
+    }
+  }
+
+  // Drawn at its focused size and scaled down at rest: growing it is a transform (no layout), 34 → 22 px.
+  .player-knob {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 34px;
+    height: 34px;
+    margin: -17px 0 0 -17px;
+    border-radius: 50%;
+    background: $text;
+    transform: scale(0.647);
+    transition: transform 0.1s;
+  }
+
+  .player-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 64px;
+    margin: 0 8px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: $text;
+    transition: transform 0.12s ease-out;
+
+    .icon {
+      width: 30px;
+      height: 30px;
+    }
+
+    &.focused {
+      border-color: $text;
+      background: rgba($text, 0.18);
+      transform: scale(1.1);
+    }
+  }
+
+
+  .player-status {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 2.5rem;
+    opacity: 0;
+    text-shadow: 0 2px 8px $black;
+
+    &.visible {
+      opacity: 1;
+    }
+  }
+
+  .player-subtitle {
+    position: absolute;
+    right: 160px;
+    bottom: 56px;
+    left: 160px;
+    display: none;
+    text-align: center;
+    font-size: 2.5rem;
+    line-height: 1.25;
+    text-shadow: 0 2px 6px $black, 0 0 12px $black;
+    white-space: pre-line;
+
+    &.visible {
+      display: block;
+    }
+  }
+}

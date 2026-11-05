@@ -18,7 +18,6 @@ import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { createSyncPanel, createTmdbPanel, createTraktPanel, createDevicePanel, createOperationsPanel } from '../components/syncPanel.js';
 import { log } from '../../core/logger.js';
-import { rebuildEntries } from '../../services/catalogSync.js';
 import { rebuildLive } from '../../services/rebuildLive.js';
 import { parseTerms, termsText } from '../../services/liveGrouping.js';
 import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from '../../services/liveNetworks.js';
@@ -36,14 +35,14 @@ export function textRow({ label, field, secret = false, ctx }) {
   };
   const save = (value) => {
     const before = ctx.apiKeys.getStored(field);
-    const titlesChange = field === 'tmdbKey' && Boolean(before.trim()) !== Boolean(value.trim());
-    ctx.apiKeys.set({ [field]: value }).then(() => (titlesChange ? rebuildTitles(ctx) : undefined)).then(() => {
+    ctx.apiKeys.set({ [field]: value }).then(() => {
       ctx.notices.success(t('notice.saved'));
       // A new TMDB key starts the first metadata run at once (genres and TMDB data of what was watched).
       if (field === 'tmdbKey' && value.trim() && value.trim() !== before && ctx.genres) {
+        // A provider genre search running now is stopped: TMDB's genres replace the provider's, so its download goes first.
         ctx.genres
           .forgetMisses()
-          .then(() => ctx.genres.backfill())
+          .then(() => ctx.genres.restart())
           .catch(() => undefined);
       }
       ctx.router.reload(); // rows that depend on the keys appear or disappear
@@ -51,22 +50,6 @@ export function textRow({ label, field, secret = false, ctx }) {
   };
   input = createField({ label, type: secret ? 'password' : 'text', placeholder: '—', onSubmit: save, onCancel: show });
   return { el: input.el, root: input.root, refresh: async () => show(), activate: async () => input.focus() };
-}
-
-/** Movie / series titles are cleaned only when TMDB is configured: adding or removing the key rebuilds the entries. */
-async function rebuildTitles(ctx) {
-  try {
-    const active = await ctx.active.get();
-    if (!active) return;
-    const cleanTitles = Boolean(ctx.apiKeys.get().tmdbKey);
-    for (const type of ['movie', 'series']) {
-      const excluded = await ctx.settings.getExcluded(active.provider.id, type);
-      await rebuildEntries({ db: active.db, type, excludedCategories: excluded, cleanTitles });
-    }
-    ctx.catalogChanged();
-  } catch (err) {
-    log.warn('Titles rebuild failed', err && err.message);
-  }
 }
 
 /** A row that runs an action (optionally after a confirmation). */
@@ -123,8 +106,8 @@ export function createSettingsPage(ctx) {
   const language = (v) => (v === 'auto' ? t('settings.language.auto') : v);
   const seconds = (v) => `${v} s`;
   const now = new Date();
-  const timeName = (v) => (v === 'auto' ? t('settings.format.auto') : `${v === '12h' ? t('settings.time.12h') : t('settings.time.24h')} (${formatClockTime(now, v)})`);
-  const dateName = (v) => (v === 'auto' ? t('settings.format.auto') : `${t(`settings.date.${v}`)} (${formatClockDate(now, v)})`);
+  const timeName = (v) => (v === 'auto' ? t('settings.format.auto') : `${v === '12h' ? t('settings.time.12h') : t('settings.time.24h')} (${formatClockTime(now, v, i18n.getLocale())})`);
+  const dateName = (v) => (v === 'auto' ? t('settings.format.auto') : `${t(`settings.date.${v}`)} (${formatClockDate(now, v, i18n.getLocale())})`);
 
   const autoplayValue = toggle();
   const autoplay = {
@@ -191,7 +174,8 @@ export function createSettingsPage(ctx) {
     [tmdbPanel.tmdbButtons.refresh, tmdbPanel.genreButtons.refresh].forEach((b) => b.classList.add('disabled'));
     const steps = [];
     if (ids.includes('tmdb') && ctx.tmdb && ctx.tmdb.enabled) steps.push({ id: 'tmdb', run: () => ctx.genres.download() });
-    if (ids.includes('genres')) steps.push({ id: 'genres', run: () => ctx.genres.findGenres() });
+    // Genres: with TMDB they are written again from its saved metadata (no request); without, the provider is asked (slowly).
+    if (ids.includes('genres')) steps.push({ id: 'genres', run: () => (ctx.tmdb && ctx.tmdb.enabled ? ctx.genres.restore() : ctx.genres.findGenres()) });
     const skipped = new Set();
     const ends = steps.map((step) => ctx.operations.start(step.id, { queued: true, cancel: () => skipped.add(step.id) }));
     try {
@@ -268,8 +252,7 @@ export function createSettingsPage(ctx) {
     refresh: async () => undefined,
     async activate() {
       if (ctx.catalog.getState().running) return;
-      await rebuildTitles(ctx);
-      await rebuildLive(ctx);
+      await ctx.rebuildCatalog(['movie', 'series', 'live']); // in the catalog worker
       await ctx.genres.restore().catch(() => undefined); // the genres come back from the saved TMDB metadata, not from the network
       ctx.catalogChanged();
       ctx.notices.success(t('notice.dbRebuilt'));
@@ -293,8 +276,7 @@ export function createSettingsPage(ctx) {
       await clearDerived(current.db);
       await dbDelete(current.db, 'meta', GENRES_SOURCE_KEY); // the provider's genres come back with the rebuild, then TMDB's replace them
       log.info('Derived data emptied by the user (entries, groups, genres, search index, sidebar)');
-      await rebuildTitles(ctx);
-      await rebuildLive(ctx);
+      await ctx.rebuildCatalog(['movie', 'series', 'live']); // in the catalog worker
       await ctx.genres.restore().catch(() => undefined);
       ctx.catalogChanged();
       ctx.notices.success(t('notice.removed'));
@@ -316,6 +298,19 @@ export function createSettingsPage(ctx) {
     async activate() {
       await changePin({ dialogs: ctx.dialogs, parental: ctx.parental, notices: ctx.notices });
       await pinRow.refresh();
+    },
+  };
+
+  // Clean titles: year in brackets, [tags] and language prefixes taken out of movie / series names; changing it rebuilds the titles.
+  const cleanValue = toggle();
+  const cleanTitlesRow = {
+    el: h('div', { class: 'row' }, h('span', { text: t('settings.cleanTitles') }), cleanValue),
+    refresh: () => ctx.settings.get().then((s) => { setToggle(cleanValue, s.cleanTitles); }),
+    async activate() {
+      const s = await ctx.settings.get();
+      const next = await ctx.settings.update({ cleanTitles: !s.cleanTitles });
+      setToggle(cleanValue, next.cleanTitles);
+      await ctx.rebuildCatalog(['movie', 'series']); // in the catalog worker
     },
   };
 
@@ -439,7 +434,7 @@ export function createSettingsPage(ctx) {
     },
     {
       titleKey: 'settings.section.content',
-      list: [optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }), pinRow],
+      list: [cleanTitlesRow, optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }), pinRow],
     },
     { titleKey: 'settings.section.advanced', list: [diagnostics, resetAll] },
   ];

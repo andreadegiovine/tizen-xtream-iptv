@@ -39,6 +39,11 @@ describe('SettingsService', () => {
     const settings = new SettingsService(db);
     expect(await settings.get()).toEqual(DEFAULT_SETTINGS);
 
+    expect(DEFAULT_SETTINGS.cleanTitles).toBe(true); // titles are cleaned by default, with or without TMDB
+    await settings.update({ cleanTitles: 'no' });
+    expect((await settings.get()).cleanTitles).toBe(true);
+    await settings.update({ cleanTitles: false });
+    expect((await settings.get()).cleanTitles).toBe(false);
     await settings.update({ bufferSeconds: 20, gridItems: 13, language: 'xx' });
     expect(await settings.get()).toMatchObject({ bufferSeconds: 20, gridItems: 24, language: 'auto' });
 

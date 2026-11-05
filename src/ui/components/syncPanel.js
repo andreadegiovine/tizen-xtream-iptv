@@ -100,7 +100,7 @@ export function createSyncPanel(ctx) {
     },
     /** Starts a forced sync of one media type unless one is already running. */
     syncType(type) {
-      if (!ctx.catalog.getState().running) ctx.catalog.start({ force: true, types: [type] });
+      if (!ctx.catalog.getState().running) ctx.catalog.start({ force: true, types: [type], rewrite: true }); // forced: every row written again
     },
     refreshStatus: () => refreshPersisted(),
     /** Points the panel at a provider (also called when the active provider changes). */

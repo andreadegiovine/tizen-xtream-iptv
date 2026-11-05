@@ -1,0 +1,179 @@
+// Browse pages: sidebar, sticky head, grid.
+@use 'tokens' as *;
+
+.page.browse {
+  padding-top: 0; // the sticky head starts at the very top, nothing can show above it
+}
+
+.browse-body {
+  display: flex;
+  align-items: flex-start;
+}
+
+// Sticky and exactly as tall as the visible area under the bar (page padding included).
+.browse-cats {
+  position: sticky;
+  top: $page-top;
+  flex: none;
+  width: 340px;
+  margin-top: $page-top;
+  height: calc(100vh - #{$topbar-height} - #{$page-top} - #{$gutter});
+  margin-right: $gutter;
+  overflow-y: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.browse-cat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  padding: 10px 16px;
+  border-radius: 4px;
+  font-size: 1.625rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &.focused {
+    background: $bg-focus;
+  }
+
+  &.sub {
+    margin-left: 20px;
+    font-size: 1.375rem;
+
+    .browse-cat-count {
+      font-size: 1.25rem;
+    }
+  }
+
+  .browse-cat-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .browse-cat-count {
+    flex: none;
+    margin-left: 12px;
+    color: $text-muted;
+    font-size: 1.375rem;
+    font-weight: 400;
+  }
+
+  &.current .browse-cat-count,
+  &.focused .browse-cat-count {
+    color: inherit;
+    opacity: 0.7;
+  }
+
+  .browse-cat-icon {
+    flex: none;
+    width: 24px;
+    margin-right: 16px;
+
+    .icon {
+      width: 24px;
+      height: 24px;
+      margin: 0;
+    }
+  }
+
+  .icon {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin-left: 12px;
+    transition: transform 0.12s ease-out;
+
+    &.open {
+      transform: rotate(180deg);
+    }
+  }
+
+  // Selected category: white box, black text.
+  &.current {
+    background: $text;
+    color: $bg;
+    font-weight: 700;
+  }
+}
+
+.browse-main {
+  flex: 1;
+  min-width: 0;
+}
+
+// Title and page number stay in view while the grid scrolls underneath.
+.browse-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: baseline;
+  min-height: 56px;
+  padding: $page-top 0 20px; // the padding is part of the opaque head, so cards never show above or around it
+  background: $bg;
+}
+
+.browse-title {
+  font-size: 2.375rem;
+  font-weight: 600;
+}
+
+.browse-count {
+  font-size: 1.875rem;
+}
+
+.browse-sep {
+  margin: 0 14px;
+  color: $text-muted;
+  font-size: 1.875rem;
+}
+
+// Heart of the sticky head: the .icon-btn look of the title page, a bit smaller to fit the head.
+.browse-head-actions {
+  display: flex;
+  align-self: center;
+  margin-left: auto; // right edge of the head
+}
+
+.browse-fav.icon-btn {
+  align-self: center;
+  width: 84px;
+  height: 46px;
+  margin-right: 6px; // room for the focus scale
+
+  .icon {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.browse-grid {
+  margin-top: 28px; // room for the focused card's scale and border below the sticky head
+}
+
+.browse-grid,
+.search-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -$card-gap;
+}
+
+// The browse grid always has the six columns the focus model counts: a flex row would wrap earlier when a scrollbar
+// or a narrower window takes some width, and Down would then move diagonally.
+.browse-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, #{$card-w + $card-gap}));
+
+  .card {
+    width: auto;
+    min-width: 0;
+  }
+}

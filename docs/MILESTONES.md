@@ -398,3 +398,28 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
 - Generi: con TMDB attivo, quando tutti i titoli sono passati da TMDB (nessuna richiesta fallita) i generi del provider (lista della sync e dettagli) vengono rimossi dal db e restano solo quelli TMDB, anche per i titoli senza corrispondenza (marcatore `genres:source` nello store `meta`). Prima di allora sidebar e db hanno i generi del provider con i loro conteggi; una nuova sync del catalogo riporta i titoli nuovi ai generi del provider finché TMDB non li ha elaborati. La ricerca dei generi dal provider non parte più a marcatore presente. Elimina i generi TMDB / svuota i derivati togliono il marcatore.
 - "Aggiorna" e "Svuota" dei derivati riscrivono i generi dai metadati TMDB già salvati (`genres.restore`), senza rete.
 - Impostazioni: il bottone di stop delle attività ha lo stile degli altri bottoni; nelle righe con coppia il bottone principale è prima di elimina (Sinistra non va più in diagonale e la prima riga porta in cima alla pagina); etichette Dispositivo "Catalogo" e "Derivati". Non verificato su TV.
+
+### Patch 89 — mock Xtream e misure di prestazioni
+- `scripts/mock-xtream/`: server mock (20 000 film, 8 000 serie, 3 000 canali di default, EPG XMLTV, immagini, TMDB finto; latenza e banda configurabili; conteggio richieste) e `perf.js`, che usa la build in Chromium headless solo da tastiera e misura sync, pagine, griglia, ricerca, scheda, Impostazioni, riavvio a caldo, long task, heap, richieste (opzioni `--tmdb`, `--cpu`, `--profile`). `npm run mock`, `npm run perf`. Istruzioni in `docs/MOCK-TEST.md`. Solo sviluppo: nulla cambia nell'app.
+
+### Patch 90 — ricostruzioni nel worker, TMDB prima dei generi del provider, limite della cache
+- Le ricostruzioni dei titoli dai dati salvati (chiave TMDB aggiunta/tolta, categorie nascoste, raggruppamento e collegamenti Live, "Aggiorna" e "Svuota" dei derivati) girano nel worker del catalogo (`catalogRebuild.js`, op `rebuild`), con ripiego sul thread principale se il worker non parte; compaiono tra le operazioni in corso e si possono fermare. Nel test mock con CPU ×4 bloccavano l'interfaccia per 3–5 s.
+- Chiave TMDB impostata mentre gira la ricerca dei generi dal provider: la ricerca si ferma e riparte dallo scarico TMDB (`genres.restart()`).
+- `pageCache` tiene al massimo 200 voci (le meno usate escono).
+- Istruzioni del mock spostate in `docs/MOCK-TEST.md`. Non verificato su TV.
+
+### Patch 91 — sync differenziale e confronto delle misure
+- La sync legge le righe salvate del tipo e scrive solo quelle nuove o cambiate, cancellando quelle sparite (`replaceRows` / `replaceRowsChunked` confrontano la riga serializzata); il record della sync ha `changes` (righe scritte o cancellate). Con un catalogo invariato non si scrive nulla, `catalogRev` non cambia e sidebar e indice di ricerca salvati restano validi; il marcatore "solo generi TMDB" si toglie solo se le liste sono cambiate.
+- L'aggiornamento forzato di un tipo da Impostazioni riscrive tutte le righe (`rewrite`).
+- `npm run perf:compare -- riferimento.json nuovo.json`: confronto di due misure con soglia (`scripts/mock-xtream/compare.js`); `perf.js` misura anche la sync di un catalogo invariato. Non verificato su TV.
+
+### Patch 92 — generi dal provider lenti e solo senza TMDB, pulizia titoli come preferenza, segnaposto nella scheda, ricerca a 400 ms
+- Ricerca dei generi dal provider: una richiesta al secondo, al massimo 500 al giorno (contatore `genres:daily` nello store `meta`; il resto i giorni dopo), e mai quando c'è una chiave TMDB. Con TMDB il bottone "aggiorna" dei generi riscrive i generi dai metadati TMDB salvati.
+- Pulizia dei titoli (anno tra parentesi, tag tra quadre, prefissi di lingua): preferenza in Impostazioni > Contenuti, attiva di default, non più legata alla chiave TMDB; cambiarla ricostruisce i titoli nel worker. I titoli già salvati senza pulizia si aggiornano alla prossima sync o cambiando la preferenza.
+- Scheda di un titolo senza locandina (né del provider né di TMDB): icona segnaposto come sulle card invece dell'animazione di caricamento infinita.
+- Ricerca: parte 400 ms dopo l'ultimo tasto (era 1 s). Non verificato su TV.
+
+### Patch 93 — HTML, i18n, CSS
+- HTML: `<html lang>` segue la lingua dell'app; le immagini di sfondo CSS (backdrop, rotatore) passano da `cssUrl()`, che mette tra virgolette e protegge l'indirizzo (un URL con `"` o `)` rompeva la regola). CSP di `config.xml` invariata.
+- i18n: orologio, orari della guida nella scheda, "finisce alle" del player e anteprime dei formati seguono la lingua dell'app (l'opzione "Sistema" diventa "Lingua dell'app"); etichette di accessibilità della barra e del logo tradotte.
+- CSS: `main.scss` diviso in file per parte dell'interfaccia (stesso ordine, CSS risultante identico); colori sparsi in token (`$rating`, `$favorite`, `$info`, `$current`, `$focus-ring`, ...); screensaver e cursore della barra del player animati con `transform` invece di `left/top/width/height`; font Inter incluso (`@fontsource/inter`, copiato in `dist/fonts` da webpack, latin e latin-ext, pesi 400/600/700/800) al posto di "Netflix Sans", che sulla TV non c'era. Dopo l'applicazione serve `npm install`. Non verificato su TV.

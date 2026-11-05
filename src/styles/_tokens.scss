@@ -7,6 +7,15 @@ $text-muted: #a3a3a3;
 $ok: #46d369;
 $warn: #f5a623;
 $fail: #ff5a5f;
+$black: #000;
+$brand-red: #e5202f; // the red of the logo mark
+$info: #3b9cf0; // information notices
+$current: #2fa84f; // the provider in use
+$favorite: #ff4d6d; // heart badge
+$rating: #f5c518; // rating star
+$splash: #0c0c12; // background of the logo mark and the start screen
+$focus-ring: rgba(255, 255, 255, 0.35); // light ring around focused controls
+$shade-strong: rgba(0, 0, 0, 0.85); // dark veil behind text on pictures
 
 // Layout is designed for a 1920x1080 coordinate space; keep content inside the safe area.
 // One spacing unit for everything: screen sides, bar → content, sidebar → content.
@@ -22,4 +31,5 @@ $card-gap: 18px;
 // Room between a card's content and its focus border: taken from the margin, so the footprint stays the same.
 $card-pad: 6px;
 $focus-scale: 1.06;
-$font: 'Netflix Sans', 'Helvetica Neue', Roboto, Arial, sans-serif;
+// Inter ships with the app (fonts/, copied from @fontsource/inter by webpack): the same letters on the TV and on a PC.
+$font: 'Inter', 'Helvetica Neue', Roboto, Arial, sans-serif;

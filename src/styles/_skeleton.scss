@@ -1,0 +1,112 @@
+// Loading placeholders and their animations.
+@use 'tokens' as *;
+
+// ---- skeleton loading ----
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+
+// A light band sweeps across the placeholder (transform only: cheap on the TV).
+@keyframes skeleton-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.card-poster.loading,
+.detail-poster.loading,
+.skeleton-line {
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba($text, 0), rgba($text, 0.16), rgba($text, 0));
+    animation: skeleton-sweep 1.2s ease-in-out infinite;
+  }
+}
+
+.skeleton-card {
+  pointer-events: none;
+
+  .skeleton-line {
+    height: 22px;
+    margin-top: 10px;
+    background: $bg-focus;
+
+    &.short {
+      width: 45%;
+      height: 16px;
+    }
+  }
+}
+
+.page.detail.loading {
+  .detail-title,
+  .detail-plot {
+    min-height: 44px;
+    background: $bg-focus;
+    animation: skeleton-pulse 1.1s ease-in-out infinite;
+  }
+
+  .detail-title {
+    width: 520px;
+  }
+
+  .detail-plot {
+    min-height: 120px;
+  }
+}
+
+.search-skeleton {
+  .skeleton-line.title {
+    width: 220px;
+    height: 32px;
+    margin-bottom: 12px;
+    background: $bg-focus;
+  }
+
+  .skeleton-row {
+    display: flex;
+    overflow: hidden;
+  }
+}
+
+// Sidebar placeholders: numbers and genres that are still being worked out.
+.browse-cat {
+  .skeleton-line {
+    background: $bg-focus;
+  }
+
+  .browse-cat-count.skeleton-line {
+    width: 44px;
+    height: 18px;
+  }
+
+  &.skeleton-cat {
+    pointer-events: none;
+
+    .browse-cat-name.skeleton-line {
+      flex: none;
+      width: 55%;
+      height: 20px;
+    }
+  }
+}

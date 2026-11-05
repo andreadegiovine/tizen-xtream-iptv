@@ -57,7 +57,8 @@ export class CatalogSyncService {
   }
 
   /** Starts (or restarts) a sync for the active provider. Resolves with the final `done` event, or null. */
-  async start({ force = false, types = SYNC_ORDER } = {}) {
+  /** `rewrite`: every row written again, not only what changed (the forced update of one type from Settings). */
+  async start({ force = false, types = SYNC_ORDER, rewrite = false } = {}) {
     const provider = await this.providers.getActive();
     if (!provider) return null;
     this.cancel();
@@ -78,9 +79,10 @@ export class CatalogSyncService {
       provider: { id: provider.id, baseUrl: provider.baseUrl, username: provider.username, password: provider.password },
       types,
       excluded,
-      cleanTitles: Boolean(this.getCleanTitles()),
+      cleanTitles: Boolean(await this.getCleanTitles()),
       grouping: await this.getGrouping(provider.id),
       force,
+      rewrite,
     };
 
     let outcome = null;
@@ -158,6 +160,7 @@ export class CatalogSyncService {
       cleanTitles: payload.cleanTitles,
       grouping: payload.grouping || undefined,
       force: payload.force,
+      rewrite: payload.rewrite,
       signal: this.controller.signal,
       emit: (message) => this.handle(job, message),
       gate: this.gate.wait,
@@ -178,7 +181,7 @@ export class CatalogSyncService {
       if (message.mediaType) {
         this.state.types[message.mediaType] = { ...message };
         const m = message.meta;
-        if (message.phase === 'done' && m) log.info(`Catalog ${message.mediaType}: ${m.itemCount} items, ${m.entryCount} entries, ${m.categoryCount} categories; fetch ${m.fetchMs} ms, write ${m.writeMs} ms, total ${m.durationMs} ms`);
+        if (message.phase === 'done' && m) log.info(`Catalog ${message.mediaType}: ${m.itemCount} items, ${m.entryCount} entries, ${m.categoryCount} categories, ${m.changes === undefined ? "?" : m.changes} rows changed; fetch ${m.fetchMs} ms, write ${m.writeMs} ms, total ${m.durationMs} ms`);
         else if (message.phase === 'error') log.warn(`Catalog ${message.mediaType} failed: ${message.code || ''} ${message.message || ''}`);
       } else if (message.phase === 'error') this.state.error = { code: message.code, message: message.message };
     }

@@ -60,6 +60,11 @@ module.exports = (env = {}, argv = {}) => {
             transform: (content) => content.toString().replace(/__VERSION__/g, pkg.version),
           },
           { from: 'tizen/icon.png', to: 'icon.png' },
+          // Inter (SIL Open Font License), shipped with the app: the same letters on the TV and on a PC (the TV has no "Netflix Sans" and
+          // fell back to whatever it had). Latin and Latin-extended, the four weights the stylesheet uses.
+          ...[400, 600, 700, 800].flatMap((weight) =>
+            ['latin', 'latin-ext'].map((subset) => ({ from: `node_modules/@fontsource/inter/files/inter-${subset}-${weight}-normal.woff2`, to: `fonts/inter-${subset}-${weight}.woff2` })),
+          ),
           // YouTube player page: served by the on-TV service (service/service.js) and, for development, by the dev server.
           { from: 'tizen/youtube/player.html', to: 'yt-player.html' },
           {

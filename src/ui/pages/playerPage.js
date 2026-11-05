@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { t } from '../../i18n/index.js';
+import { t, i18n } from '../../i18n/index.js';
 import { Action } from '../../core/input.js';
 import { log } from '../../core/logger.js';
 import { icon } from '../icons.js';
@@ -117,7 +117,7 @@ export function createPlayerPage(ctx, params) {
   function endsAtText(position, duration) {
     if (!(duration > 0)) return '';
     const end = new Date(Date.now() + Math.max(0, duration - position) * 1000);
-    return ` · ${t('player.endsAt', { time: formatClockTime(end, timeFormat) })}`;
+    return ` · ${t('player.endsAt', { time: formatClockTime(end, timeFormat, i18n.getLocale()) })}`;
   }
 
   function drawProgress(position, duration, bufferedEnd = null) {

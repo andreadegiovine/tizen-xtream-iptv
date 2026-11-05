@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   textSize: DEFAULT_TEXT_SIZE, // % of the base text size (75, 100, 125)
   screensaver: 15, // minutes without a key before the black screen with the moving logo (0 = off)
   suggestionSource: 'tmdb',
+  cleanTitles: true, // movie / series titles without year in brackets, [tags] and language prefixes ("IT: Inception (2010) [4K]" → "Inception")
   timeFormat: 'auto',
   dateFormat: 'auto',
   liveGrouping: true, // Live TV: versions of the same channel shown as one
@@ -47,6 +48,7 @@ function sanitize(raw) {
     screensaver: typeof raw.screensaver === 'boolean' ? (raw.screensaver ? DEFAULT_SETTINGS.screensaver : 0) : pick(raw.screensaver, SCREENSAVER_OPTIONS, DEFAULT_SETTINGS.screensaver),
     autoplayNext: typeof raw.autoplayNext === 'boolean' ? raw.autoplayNext : DEFAULT_SETTINGS.autoplayNext,
     suggestionSource: pick(raw.suggestionSource, SUGGESTION_SOURCE_OPTIONS, DEFAULT_SETTINGS.suggestionSource),
+    cleanTitles: typeof raw.cleanTitles === 'boolean' ? raw.cleanTitles : DEFAULT_SETTINGS.cleanTitles,
     timeFormat: pick(raw.timeFormat, TIME_FORMATS, DEFAULT_SETTINGS.timeFormat),
     dateFormat: pick(raw.dateFormat, DATE_FORMATS, DEFAULT_SETTINGS.dateFormat),
     liveGrouping: typeof raw.liveGrouping === 'boolean' ? raw.liveGrouping : DEFAULT_SETTINGS.liveGrouping,

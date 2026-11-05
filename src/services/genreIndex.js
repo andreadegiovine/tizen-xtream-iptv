@@ -110,6 +110,8 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
   }
 
   /** Stops the search now (the titles found so far stay). */
+  let inFlight = Promise.resolve(0); // the work running now (backfill or one phase): restart() waits for it to stop
+
   function stop() {
     again = false;
     cancelled = true;
@@ -126,7 +128,16 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
       again = true;
       return Promise.resolve(0);
     }
-    return runPhases(force);
+    inFlight = runPhases(force);
+    return inFlight;
+  }
+
+  /** Stops what is running (a provider genre search, say) and starts the work again from the first phase, the TMDB download. */
+  async function restart() {
+    stop();
+    await inFlight.catch(() => 0);
+    again = false;
+    return backfill();
   }
 
   /** One phase on its own (the "update metadata" operations). */
@@ -142,7 +153,8 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
   function phase(name, force) {
     if (running) return Promise.resolve(0);
     cancelled = false;
-    return track(name, force);
+    inFlight = track(name, force);
+    return inFlight;
   }
 
   const track = (name, force) => (syncLog ? syncLog.track(name, () => run(name, force), { cancel: stop }) : run(name, force));
@@ -153,7 +165,8 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     let done = 0;
     try {
       if (getTmdbKey()) done += await track('tmdb', force);
-      if (!cancelled) done += await track('genres', false);
+      // The provider's genre search only without TMDB: with a key TMDB's genres replace the provider's, asking the provider is wasted.
+      if (!cancelled && !getTmdbKey()) done += await track('genres', false);
     } finally {
       running = false;
     }
@@ -203,6 +216,7 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
 
   return {
     backfill,
+    restart,
     download,
     findGenres,
     restore,

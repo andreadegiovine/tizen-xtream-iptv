@@ -1,0 +1,120 @@
+// Category chooser, field reset buttons, search dialog, collections.
+@use 'tokens' as *;
+
+// Category chooser: the multiple-selection button stays at the left of the list while it scrolls;
+// focused (or while the selection is on) it is white with a dark icon.
+.btn.categories-multi.focused {
+  background: $text;
+  color: $bg;
+}
+
+.categories-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+
+  .categories-side {
+    position: sticky;
+    top: 108px;
+    flex: none;
+  }
+
+  .list {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+// Settings: a small button at the right of a field (restore the defaults).
+.list .row .btn.row-reset {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  margin: -8px -12px -8px 16px;
+  padding: 0;
+}
+
+// Search box dialog (merge channels): groups stand out.
+.dialog.search-dialog {
+  width: 720px;
+
+  .search-field {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 12px;
+
+    .icon {
+      flex: none;
+      width: 26px;
+      height: 26px;
+    }
+
+    .value-input {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+    }
+  }
+
+  .choice-list {
+    max-height: 520px;
+    overflow: hidden;
+  }
+
+  .choice.merge-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .icon {
+      flex: none;
+      width: 24px;
+      height: 24px;
+    }
+  }
+}
+
+// ---- collections ----
+.dialog-actions.stacked {
+  flex-direction: column;
+
+  .btn {
+    margin: 0 0 8px;
+  }
+}
+
+.choice.edit-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .icon {
+    width: 22px;
+    height: 22px;
+    opacity: 0.5;
+  }
+
+  &.removed {
+    opacity: 0.55;
+    text-decoration: line-through;
+
+    .icon {
+      color: $accent;
+      opacity: 1;
+    }
+  }
+}
+
+.page.detail.collection .detail-poster .card-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 6rem;
+  opacity: 0.4;
+}

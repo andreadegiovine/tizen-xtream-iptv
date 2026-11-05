@@ -31,10 +31,8 @@ export function createScreensaver({ doc = document, win = window, idleMs = IDLE_
 
   function place() {
     const spot = randomSpot(win.innerWidth || 1920, win.innerHeight || 1080, random);
-    mark.style.width = `${spot.size}px`;
-    mark.style.height = `${spot.size}px`;
-    mark.style.left = `${spot.left}px`;
-    mark.style.top = `${spot.top}px`;
+    // Moved and resized with a transform only (no layout on every frame of the 1.5 s glide): the mark is MAX_SIZE wide, scaled down.
+    mark.style.transform = `translate(${spot.left}px, ${spot.top}px) scale(${(spot.size / MAX_SIZE).toFixed(4)})`;
   }
 
   function show() {

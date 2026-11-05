@@ -6,7 +6,7 @@ import { ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { listCategories } from '../../services/catalogQuery.js';
-import { rebuildEntries, markStale } from '../../services/catalogSync.js';
+import { markStale } from '../../services/catalogSync.js';
 import { openProviderDb } from '../../db/providerDb.js';
 import { icon } from '../icons.js';
 import { log } from '../../core/logger.js';
@@ -211,8 +211,7 @@ export function createCategoriesPage(ctx, params = {}) {
     try {
       await ctx.settings.setExcluded(providerId, type, Array.from(excluded));
       if (excluded.size !== original.size || Array.from(excluded).some((id) => !original.has(id))) {
-        await rebuildEntries({ db, type, excludedCategories: excluded, cleanTitles: Boolean(ctx.apiKeys.get().tmdbKey), grouping: type === 'live' ? await ctx.liveGrouping.config(providerId) : undefined });
-        ctx.catalogChanged();
+        await ctx.rebuildCatalog([type], { providerId }); // in the catalog worker: the exclusions were saved just above
         // A category shown again: its items were not kept, so the type is downloaded again (now if this is the active provider).
         if (Array.from(original).some((id) => !excluded.has(id))) {
           await markStale(db, type);

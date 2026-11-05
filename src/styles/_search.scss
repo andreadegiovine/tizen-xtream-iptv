@@ -1,0 +1,35 @@
+// Search status and the progress bar inside posters.
+@use 'tokens' as *;
+
+// ---- search ----
+.search-status {
+  margin: 0 0 16px;
+
+  &:empty {
+    display: none;
+  }
+}
+
+// Inside the poster, along its bottom edge: same margins as the badges (8px).
+.card-progress {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  z-index: 1;
+  display: none;
+  height: 5px;
+  border-radius: 3px;
+  background: $focus-ring;
+
+  span {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: $accent;
+  }
+
+  .has-progress & {
+    display: block;
+  }
+}

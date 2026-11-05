@@ -47,13 +47,29 @@ async function missing(db, type, limit, tried) {
   });
 }
 
+/** One provider detail call a second at most, and this many a day (the rest waits for the next days). */
+export const PROVIDER_PAUSE_MS = 1000;
+export const PROVIDER_DAILY_LIMIT = 500;
+const DAILY_KEY = 'genres:daily';
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Finds the genres of titles whose list row had none: TMDB first (when it is configured and the title has a
  * tmdb id), otherwise the provider's own detail call. Runs in a worker, a few titles at a time, newest first;
  * `gate()` lets the caller pause it (playback, catalog sync).
  */
-export async function runGenreBackfill({ db, xtream, tmdb, language, signal, gate = () => Promise.resolve(), emit = () => {}, limit = MAX_PER_RUN, concurrency = 3 }) {
+export async function runGenreBackfill({ db, xtream, tmdb, language, signal, gate = () => Promise.resolve(), emit = () => {}, limit = MAX_PER_RUN, pauseMs = PROVIDER_PAUSE_MS, dailyLimit = PROVIDER_DAILY_LIMIT, now = Date.now, wait = sleep }) {
   if (await dbGet(db, 'meta', GENRES_SOURCE_KEY)) return 0; // TMDB's genres are the only ones: the provider is not asked
+  // The provider is asked slowly (one title a second) and at most `dailyLimit` times a day: thousands of detail calls in a row can get
+  // an account limited or blocked. What is left is done on the next days.
+  const today = new Date(now()).toISOString().slice(0, 10);
+  const daily = await dbGet(db, 'meta', DAILY_KEY);
+  let asked = daily && daily.day === today ? daily.count : 0;
+  if (asked >= dailyLimit) {
+    emit({ event: 'info', message: `Genres: the ${dailyLimit} provider requests of today are used, the search goes on tomorrow` });
+    return 0;
+  }
+  const saveDaily = () => dbPut(db, 'meta', { key: DAILY_KEY, day: today, count: asked });
   let total = 0;
   const aborted = () => Boolean(signal && signal.aborted);
 
@@ -68,6 +84,10 @@ export async function runGenreBackfill({ db, xtream, tmdb, language, signal, gat
       }
     }
     if (xtream) {
+      if (asked >= dailyLimit) return { retry: true };
+      if (asked > 0 && pauseMs) await wait(pauseMs);
+      asked += 1;
+      if (asked % 10 === 0) await saveDaily();
       try {
         const raw = entry.type === 'series' ? await xtream.getSeriesInfo(entry.defaultId) : await xtream.getVodInfo(entry.defaultId);
         const text = raw && raw.info && raw.info.genre;
@@ -83,23 +103,23 @@ export async function runGenreBackfill({ db, xtream, tmdb, language, signal, gat
   for (const type of ['movie', 'series']) {
     const tried = new Set();
     let list = await missing(db, type, GENRE_BATCH, tried);
-    while (list.length && total < limit && !aborted()) {
+    while (list.length && total < limit && asked < dailyLimit && !aborted()) {
       await gate();
-      for (let i = 0; i < list.length; i += concurrency) {
-        await Promise.all(
-          list.slice(i, i + concurrency).map(async (entry) => {
-            const found = await genresFor(entry);
-            if (found && found.retry) return;
-            await writeGenres(db, entry, found ? found.names : null, found ? found.source : 'none');
-          }),
-        );
+      for (const entry of list) {
+        if (aborted() || total >= limit || asked >= dailyLimit) break;
+        await gate();
+        const found = await genresFor(entry);
+        tried.add(entry.key);
+        if (found && found.retry) continue;
+        await writeGenres(db, entry, found ? found.names : null, found ? found.source : 'none');
+        total += 1;
       }
-      total += list.length;
-      list.forEach((entry) => tried.add(entry.key));
       emit({ event: 'progress', done: total });
       list = await missing(db, type, GENRE_BATCH, tried);
     }
   }
+  await saveDaily();
+  if (asked >= dailyLimit) emit({ event: 'info', message: `Genres: ${dailyLimit} provider requests reached for today, the search goes on tomorrow` });
   return total;
 }
 

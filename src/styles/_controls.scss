@@ -1,0 +1,79 @@
+// Dropdown fields, card placeholders, choice lists.
+@use 'tokens' as *;
+
+// Labelled dropdown input.
+.select-field {
+  display: inline-block;
+  min-width: 420px;
+  max-width: 720px;
+  transition: transform 0.12s ease-out;
+
+  .field-label {
+    display: block;
+    margin-bottom: 6px;
+    color: $text-muted;
+    font-size: 1.375rem;
+  }
+
+  .select-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border: 2px solid $focus-ring;
+    border-radius: 6px;
+    background: $bg-raised;
+
+    .icon {
+      flex: none;
+      width: 20px;
+      height: 20px;
+      margin-left: 20px;
+      color: $text-muted;
+    }
+  }
+
+  &.focused .select-box {
+    border-color: $text;
+    background: $bg-focus;
+  }
+}
+
+.card-placeholder {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba($text, 0.25);
+
+  .icon {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+.choice-list {
+  max-height: 560px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.choice {
+  padding: 14px 24px;
+  border-radius: 4px;
+  font-size: 1.8125rem;
+
+  &.current {
+    background: $bg-focus;
+  }
+
+  &.focused {
+    background: $text;
+    color: $bg;
+    transform: scale(1.02);
+  }
+}

@@ -18,9 +18,9 @@ test('screensaver: starts after the idle time, moves, and the first key ends it 
   jest.advanceTimersByTime(2);
   expect(saver.isActive()).toBe(true);
   expect(document.querySelector('.screensaver .screensaver-mark svg')).not.toBeNull();
-  const before = document.querySelector('.screensaver-mark').style.left;
+  const before = document.querySelector('.screensaver-mark').style.transform;
   jest.advanceTimersByTime(100);
-  expect(document.querySelector('.screensaver-mark').style.cssText).toContain('width');
+  expect(document.querySelector('.screensaver-mark').style.transform).toMatch(/translate\(\d+px, \d+px\) scale\(0?\.\d+|1\)/);
   key();
   expect(saver.isActive()).toBe(false);
   expect(seen).not.toHaveBeenCalled(); // swallowed

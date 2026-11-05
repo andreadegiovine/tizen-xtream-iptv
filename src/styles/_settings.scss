@@ -1,0 +1,236 @@
+// Settings and providers: tables, operations, provider list, framed pages, category chooser.
+@use 'tokens' as *;
+
+.sync {
+  width: 1200px;
+  margin-bottom: 16px;
+}
+
+.sync-row {
+  display: flex;
+  margin-bottom: 8px;
+  padding: 12px 20px;
+  border-radius: 6px;
+  background: $bg-raised;
+
+  .sync-name {
+    width: 280px;
+    font-weight: 700;
+  }
+
+  .sync-status {
+    color: $text-muted;
+  }
+}
+
+.sync-row.with-buttons {
+  align-items: center;
+  padding-top: 6px;
+  padding-bottom: 6px;
+
+  .sync-status {
+    flex: 1;
+  }
+
+  .row-buttons {
+    display: flex;
+    flex: none;
+
+    .btn + .btn {
+      margin-left: 12px;
+    }
+
+    .btn.panel-button {
+      width: 64px;
+      padding: 8px 0;
+    }
+  }
+}
+
+.sync-info {
+  min-height: 32px;
+  font-size: 1.375rem;
+}
+
+.btn.disabled {
+  opacity: 0.5;
+}
+
+.provider-list {
+  width: 100%;
+}
+
+.provider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  border-left: 6px solid transparent;
+  border-radius: 6px;
+  background: $bg-raised;
+
+  .provider-info {
+    flex: 1;
+  }
+
+  .provider-name {
+    display: block;
+    font-size: 2.1875rem;
+    font-weight: 700;
+  }
+
+  .provider-valid {
+    margin-left: 20px;
+    color: $ok;
+    font-size: 1.5rem;
+    font-weight: 400;
+
+    &.expired {
+      color: $fail;
+    }
+  }
+
+  .provider-meta {
+    display: block;
+    color: $text-muted;
+    font-size: 1.5rem;
+  }
+
+  .provider-actions {
+    display: flex;
+    flex: none;
+
+    .btn {
+      margin: 0 0 0 12px;
+    }
+  }
+}
+
+.provider-add {
+  width: 880px;
+}
+
+// Buttons that show only an icon.
+.btn.icon-only {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .icon {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.btn.danger.focused {
+  background: $fail;
+}
+
+// The provider that is in use: green, with the same focus look as the red "Remove".
+.btn.is-current,
+.btn.is-current.focused {
+  background: $current;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 32px 0 12px;
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.panel-buttons {
+  display: flex;
+
+  .btn + .btn {
+    margin-left: 12px;
+  }
+}
+
+.btn.panel-button {
+  flex: none;
+  width: 72px;
+  margin: 0;
+  padding: 10px 0;
+}
+
+.prefs-title {
+  margin-top: 48px;
+}
+
+// Settings and Provider: a frame that leaves the screen edges free (less height) and stretches every element.
+// The page keeps a fixed-width container (centred); what is inside it stretches to the container.
+.page.framed {
+  padding-top: $page-top + 24px;
+  padding-bottom: $gutter * 2;
+
+  .page-container {
+    width: 1400px;
+    margin: 0 auto;
+  }
+
+  .sync,
+  .provider-list,
+  .provider-add,
+  .list .row,
+  .form {
+    width: 100%;
+  }
+}
+
+.sync-status.in-progress {
+  color: $warn;
+}
+
+.sync-row.op-row {
+  align-items: center;
+
+  .sync-status {
+    flex: 1;
+  }
+
+  .op-stop {
+    flex: none;
+    width: 64px;
+    margin: 0;
+    padding: 8px 0;
+  }
+}
+
+// Category chooser: an eye per category, crossed out and dimmed when hidden.
+.list .row.cat-row {
+  justify-content: flex-start;
+  align-items: center;
+
+  .cat-mark {
+    flex: none;
+    width: 40px;
+    color: $ok;
+
+    .icon {
+      width: 28px;
+      height: 28px;
+    }
+  }
+
+  &.hidden {
+    color: $text-muted;
+
+    .cat-mark {
+      color: $text-muted;
+    }
+
+    .cat-name {
+      text-decoration: line-through;
+    }
+  }
+
+  &.focused .cat-mark {
+    color: inherit;
+  }
+}

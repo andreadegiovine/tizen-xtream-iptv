@@ -11,7 +11,7 @@ import { normalizeTitle, normalizeChannelName, makeSearchKey } from './titleNorm
  */
 export function buildEntries(type, items, { excludedCategories = new Set(), cleanTitles = true } = {}) {
   let normalize = type === MediaType.LIVE ? normalizeChannelName : normalizeTitle;
-  // Without TMDB the movie / series titles stay as the provider wrote them.
+  // With the "clean titles" preference off the movie / series titles stay as the provider wrote them.
   if (type !== MediaType.LIVE && !cleanTitles) {
     normalize = (raw) => {
       const cleanTitle = String(raw == null ? '' : raw).trim();

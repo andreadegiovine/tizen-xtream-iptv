@@ -1,0 +1,73 @@
+// Diagnostics page.
+@use 'tokens' as *;
+
+.diag-results {
+  margin-bottom: 16px;
+}
+
+.diag-row {
+  display: flex;
+  padding: 6px 12px;
+  border-left: 6px solid $text-muted;
+  background: $bg-raised;
+  margin-bottom: 4px;
+  font-size: 1.375rem;
+
+  .diag-id {
+    width: 160px;
+    font-weight: 700;
+  }
+
+  &.ok {
+    border-left-color: $ok;
+  }
+
+  &.warn {
+    border-left-color: $warn;
+  }
+
+  &.fail {
+    border-left-color: $fail;
+  }
+}
+
+.card-count-skeleton {
+  display: inline-block;
+  width: 34px;
+  height: 0.8em;
+  margin-left: 2px;
+  border-radius: 4px;
+  background: $bg-focus;
+  vertical-align: baseline;
+}
+
+.diag-subtitle {
+  position: fixed;
+  right: 160px;
+  bottom: 56px;
+  left: 160px;
+  z-index: 50;
+  text-align: center;
+  font-size: 2.5rem;
+  line-height: 1.25;
+  text-shadow: 0 2px 6px $black, 0 0 12px $black;
+  white-space: pre-line;
+  pointer-events: none;
+}
+
+.diag-log {
+  width: 100%;
+  margin: 0;
+  padding: 12px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  color: $text-muted;
+  font-size: 1.125rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+
+  &.focused {
+    border-color: $text;
+    background: $bg-raised;
+  }
+}

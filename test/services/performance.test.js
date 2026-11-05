@@ -21,6 +21,18 @@ test('page cache: stores until cleared; suspended it reads and stores nothing', 
   expect(cache.size()).toBe(0);
 });
 
+test('page cache: past the limit the least recently used entry goes', () => {
+  const cache = createPageCache({ limit: 2 });
+  cache.set('a', 1);
+  cache.set('b', 2);
+  expect(cache.get('a')).toBe(1); // a is now the most recent
+  cache.set('c', 3);
+  expect(cache.get('b')).toBeNull();
+  expect(cache.get('a')).toBe(1);
+  expect(cache.get('c')).toBe(3);
+  expect(cache.size()).toBe(2);
+});
+
 test('search history: 10 at most, newest first, no duplicates, short texts ignored', async () => {
   const history = createSearchHistory({ db: await openAppDb('history-test') });
   for (let i = 0; i < 12; i += 1) await history.add(`film ${i}`);
