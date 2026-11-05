@@ -104,11 +104,11 @@ describe('tmdb download', () => {
     expect(record.value).toMatchObject({ title: 'T7', genreList: [{ id: 1, name: 'Dramma' }] });
     expect(record.value.companies).toBeUndefined(); // the light record: only what the grids need
     expect(tmdb.details.mock.calls[0][3]).toEqual({ full: false });
-    expect(record.expiresAt).toBe(1000 + 30 * 24 * 3600 * 1000);
+    expect(record.expiresAt).toBe(1000 + 120 * 24 * 3600 * 1000);
     expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['dramma']);
     await runTmdbDownload(args); // fresh: nothing to do
     expect(tmdb.details).toHaveBeenCalledTimes(2);
-    t += 31 * 24 * 3600 * 1000; // expired: downloaded again
+    t += 121 * 24 * 3600 * 1000; // expired: downloaded again
     await runTmdbDownload(args);
     expect(tmdb.details).toHaveBeenCalledTimes(4);
     await runTmdbDownload({ ...args, force: true });

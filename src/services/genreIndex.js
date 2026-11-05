@@ -1,4 +1,5 @@
 import { dbGetAllKeys, dbDeleteMany } from '../core/idb.js';
+import { bumpGenresRev } from './derivedStore.js';
 import { listGenres, genreEntryKeys, genreCounts } from './catalogQuery.js';
 import { runGenreBackfillForProvider } from './genreBackfill.js';
 import { createGate } from '../core/gate.js';
@@ -182,6 +183,7 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     } catch (err) {
       log.warn('Background metadata job failed', err && err.message);
     } finally {
+      if (done > 0) await bumpGenresRev(current.db).catch(() => undefined); // genre lists and counts derived from it are worked out again
       running = wasRunning;
       stopRun = null;
       controller = null;

@@ -1,6 +1,7 @@
 import { continueWatching } from '../../services/continueWatching.js';
 import { h } from '../dom.js';
 import { createCard, createSkeletonCard } from '../components/card.js';
+import { derivedVersion, readDerived, writeDerived } from '../../services/derivedStore.js';
 import { t, i18n } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel, ListModel } from '../focus/models.js';
@@ -227,8 +228,12 @@ export function createBrowsePage(ctx, params = {}) {
   function storeSidebar() {
     if (!ctx.pageCache || !providerId) return;
     const catalogCounts = Array.from(counts.entries()).filter(([key]) => !/^(continue|favorites|suggestions):/.test(key));
-    ctx.pageCache.set(sidebarKey(), { categories, networks, genres, counts: catalogCounts });
+    const stored = { categories, networks, genres, counts: catalogCounts };
+    ctx.pageCache.set(sidebarKey(), stored);
+    // Also in the database: valid until the catalog or the genres change, so the next start shows it without working it out.
+    if (sidebarVersion) writeDerived(db, sidebarKey(), stored, sidebarVersion).catch(() => undefined);
   }
+  let sidebarVersion = null; // read before the sidebar is worked out: a sync meanwhile leaves the saved copy invalid
 
   const sidebarKey = () => `sidebar:${providerId}:${type}`;
 
@@ -451,7 +456,12 @@ export function createBrowsePage(ctx, params = {}) {
     const excluded = await ctx.settings.getExcluded(providerId, type);
     pinned = await ctx.pins.list(providerId, type).catch(() => []);
     // Seen before (and the catalog has not changed since): categories, genres, networks and their numbers come from the cache.
-    const cachedSidebar = ctx.pageCache ? ctx.pageCache.get(sidebarKey()) : null;
+    sidebarVersion = await derivedVersion(db, { genres: true, locale: i18n.getLocale() }).catch(() => null);
+    let cachedSidebar = ctx.pageCache ? ctx.pageCache.get(sidebarKey()) : null;
+    if (!cachedSidebar && sidebarVersion) {
+      cachedSidebar = await readDerived(db, sidebarKey(), sidebarVersion).catch(() => null);
+      if (cachedSidebar && ctx.pageCache) ctx.pageCache.set(sidebarKey(), cachedSidebar);
+    }
     if (cachedSidebar) {
       categories = cachedSidebar.categories;
       genres = cachedSidebar.genres;

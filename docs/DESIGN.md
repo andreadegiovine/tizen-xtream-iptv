@@ -172,3 +172,6 @@ Aggiunte (patch 79): `trakt.progress` in `kv` = un avanzamento per titolo (il pi
 ## Immagini e contenitori che scorrono (patch 80)
 
 `lazyImage.js` osserva ogni immagine dal suo contenitore (`.carousel-track` o `.page`) con `root` esplicito: senza, i contenitori `overflow` ritagliano senza margine e `rootMargin` non ha effetto. Gli observer sono uno per contenitore; l'immagine non è ancora nel documento quando la card nasce, quindi la registrazione avviene al frame dopo.
+
+## Avvio a coda e dati derivati
+Tutto ciò che deriva dal catalogo (righe di ricerca, sidebar con generi e conteggi) è salvato nel db provider (`meta`, chiavi `derived:*`) con la versione `schema|catalogRev|genresRev|lingua`; la versione si legge prima del calcolo e ogni sync la invalida. Le attività di avvio passano da `backgroundQueue` (una alla volta, per priorità, bloccate durante la sync del catalogo).

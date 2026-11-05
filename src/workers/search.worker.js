@@ -3,6 +3,7 @@
  * channel groups and networks): the answer carries the flags the UI needs (`group`, `isNetwork`...). */
 import { openProviderDb } from '../db/providerDb.js';
 import { loadSearchRows, searchRows } from '../services/searchIndex.js';
+import { derivedVersion, readDerivedList, writeDerivedList } from '../services/derivedStore.js';
 
 let rows = [];
 let db = null;
@@ -15,7 +16,13 @@ self.onmessage = async function (event) {
     try {
       if (db) db.close();
       db = await openProviderDb(message.providerId);
-      const next = await loadSearchRows(db, message.types);
+      const version = await derivedVersion(db); // read before working out: a sync during the build leaves the saved rows invalid
+      const name = `search:${message.types.join(',')}`;
+      let next = await readDerivedList(db, name, version).catch(() => null);
+      if (!next) {
+        next = await loadSearchRows(db, message.types);
+        await writeDerivedList(db, name, next, version).catch(() => undefined);
+      }
       if (mine === loading) rows = next;
       self.postMessage({ event: 'ready', token: message.token, count: next.length });
     } catch (err) {

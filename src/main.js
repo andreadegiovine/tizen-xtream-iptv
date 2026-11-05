@@ -6,6 +6,7 @@ import { exitApp } from './core/env.js';
 import { log } from './core/logger.js';
 import { FocusManager } from './ui/focus/FocusManager.js';
 import { Router } from './ui/router.js';
+import { createBackgroundQueue, Priority } from './services/backgroundQueue.js';
 import { createTopbar, TOPBAR_ZONE, sectionForEntry, isSearchable } from './ui/components/topbar.js';
 import { createDialogService } from './ui/components/dialog.js';
 import { createNoticeService } from './ui/components/notice.js';
@@ -70,7 +71,6 @@ import { createDiagnosticsPage } from './ui/pages/diagnosticsPage.js';
 window.addEventListener('unhandledrejection', (event) => log.error('Unhandled rejection', event.reason && event.reason.message));
 window.addEventListener('error', (event) => log.error('Uncaught error', event.message));
 
-const SEARCH_WARM_MS = 1500;
 
 async function boot() {
   const db = await openAppDb();
@@ -109,11 +109,15 @@ async function boot() {
   ctx.pins = createPinsService({ db });
   ctx.searchHistory = createSearchHistory({ db });
   ctx.pageCache = createPageCache();
+  // Start-up and background work in order of importance (see backgroundQueue.js): a catalog sync holds all of it, the search index is last.
+  const queue = createBackgroundQueue({ onError: (name, err) => log.warn(`Background task ${name} failed`, err && err.message) });
+  ctx.queue = queue;
+  const queueSearchWarm = () => queue.add({ name: 'search', priority: Priority.SEARCH, run: () => ctx.search.warm().catch(() => undefined) });
   // Everything read from the catalog is out of date (a rebuild, a sync, hidden categories): caches emptied, the search index rebuilt.
   ctx.catalogChanged = () => {
     ctx.pageCache.clear();
     ctx.search.invalidate();
-    ctx.search.warm().catch(() => undefined);
+    queueSearchWarm();
   };
   ctx.parental = createParentalService({ db });
   setAdultCheck((entry) => ctx.parental.isAdult(entry));
@@ -211,7 +215,8 @@ async function boot() {
 
   const topbar = createTopbar(ctx, {
     onOpen: () => {
-      // The search icon shows the search page at once, with the last searches.
+      // The search icon shows the search page at once, with the last searches, and loads the index now instead of last.
+      ctx.search.warm().catch(() => undefined);
       if (!(router.current && router.current.name === 'search')) router.push('search', { query: '', section: 'search' });
     },
     onCleared: () => {
@@ -291,12 +296,14 @@ async function boot() {
   let wasSyncing = false;
   let endCatalogOp = () => undefined;
   catalog.onChange((state) => {
+    if (state.running && !wasSyncing) queue.block();
+    if (!state.running && wasSyncing) queue.unblock();
     if (state.running && !wasSyncing) endCatalogOp = ctx.operations.start('catalog', { startedAt: state.startedAt, cancel: () => catalog.cancel() });
     if (!state.running) endCatalogOp();
     if (wasSyncing && !state.running && !state.cancelled) {
       ctx.catalogChanged(); // caches emptied and the new search index ready before the next search
       ctx.refreshAdult();
-      ctx.genres.backfill().catch(() => undefined); // the genre worker finds genres the lists did not carry
+      queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) }); // the genre worker finds genres the lists did not carry
       // The guide only matters once the channel list is in place; at most once a day.
       if (!state.error) epg.maybeSync().catch(() => undefined);
     }
@@ -320,7 +327,7 @@ async function boot() {
     ctx.pageCache.clear(); // titles and genres change with the language
     topbar.render();
     router.reload();
-    ctx.genres.backfill().catch(() => undefined); // metadata and genres in the new language
+    queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) }); // metadata and genres in the new language
   });
 
   const dialogs = createDialogService({ focus });
@@ -382,7 +389,7 @@ async function boot() {
 
   log.info('Xtream IPTV started');
   // History and progress that could not be sent last time, then what was watched only here.
-  ctx.trakt.flush().then(() => ctx.watch.pushUnsent()).catch(() => undefined);
+  queue.add({ name: 'trakt', priority: Priority.TRAKT, run: () => ctx.trakt.flush().then(() => ctx.watch.pushUnsent()).catch(() => undefined) });
   const [hasProvider] = await Promise.all([providers.getActive(), keysReady]);
   if (hasProvider) await ctx.refreshAdult();
   if (hasProvider) {
@@ -390,9 +397,9 @@ async function boot() {
     showSubscriptionNotice(notices, hasProvider);
     // Stale-while-revalidate: the cached catalog is usable at once, lists older than 12 h refresh in background.
     catalog.start();
-    ctx.genres.backfill().catch(() => undefined);
-    // The search index is built in its worker once the first screen is up, so the first search finds it ready.
-    setTimeout(() => ctx.search.warm().catch(() => undefined), SEARCH_WARM_MS);
+    queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) });
+    // The search index is the last start-up task; the search icon moves it to the front.
+    queueSearchWarm();
   } else {
     router.reset('providerSetup', { firstRun: true });
   }

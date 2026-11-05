@@ -2,7 +2,7 @@ import { dbGet, dbPut, dbClear, dbGetAllKeys } from '../core/idb.js';
 import { makeSearchKey } from './titleNormalizer.js';
 import { posterUrl } from './tmdbClient.js';
 
-export const META_TTL_MS = 30 * 24 * 3600 * 1000;
+export const META_TTL_MS = 120 * 24 * 3600 * 1000;
 export const NOT_FOUND_TTL_MS = 7 * 24 * 3600 * 1000;
 export const RECOMMENDATIONS_TTL_MS = 24 * 3600 * 1000;
 
@@ -123,7 +123,7 @@ export function createQueue(concurrency = 3, onChange = null) {
 }
 
 /**
- * TMDB metadata, cached by tmdb id and language (not by provider) for 30 days. A background job fills the
+ * TMDB metadata, cached by tmdb id and language (not by provider) for 120 days. A background job fills the
  * cache for the whole catalog; what the user is looking at (visible cards, an open page) is requested at
  * once by this service, and `onActivity(count)` tells the background job to wait while that goes on.
  */

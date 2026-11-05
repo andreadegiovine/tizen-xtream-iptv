@@ -7,6 +7,7 @@ import {
   dbDeleteMany,
 } from '../core/idb.js';
 import { openProviderDb } from '../db/providerDb.js';
+import { bumpCatalogRev } from './derivedStore.js';
 import { AppError, ErrorCode, Severity, toAppError } from '../core/errors.js';
 import { MediaType } from './mediaType.js';
 import { XtreamClient } from './xtreamClient.js';
@@ -155,6 +156,7 @@ async function replaceRowsChunked(db, store, type, entries, makeRows, { extra = 
 
 /** Entries + their per-category rows. Shared by the sync and by "exclusions changed". */
 export async function writeEntries(db, type, entries, { onBatch, groups = [], networks = [] } = {}) {
+  await bumpCatalogRev(db); // derived data (sidebar, search rows...) is not valid while the entries change, nor after
   await replaceRows(db, 'entries', type, entries, { onBatch });
   let liveAllRows = [];
   if (type === MediaType.LIVE) {
@@ -184,6 +186,7 @@ export async function rebuildEntries({ db, type, excludedCategories = new Set(),
   if (report) await dbPut(db, 'meta', { key: NETWORK_REPORT_KEY, type, report });
   const previous = (await getSyncMeta(db, type)) || { key: metaKey(type), type };
   await dbPut(db, 'meta', { ...previous, itemCount: items.length, entryCount: entries.length, ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, ...groupCounts(entries, groups, networks) } : {}) });
+  await bumpCatalogRev(db);
   emit({ event: 'progress', mediaType: type, phase: 'rebuilt', done: entries.length, total: entries.length });
   return entries.length;
 }
@@ -289,6 +292,7 @@ export async function syncType({
     durationMs: now() - started,
   };
   await dbPut(db, 'meta', meta);
+  await bumpCatalogRev(db);
   progress('done', { done: itemCount, total: itemCount, meta });
   return meta;
 }

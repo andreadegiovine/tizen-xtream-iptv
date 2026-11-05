@@ -124,7 +124,7 @@ describe('tmdb service', () => {
   });
 });
 
-test('requests the user waits for report activity (the background download holds back) and records expire in 30 days', async () => {
+test('requests the user waits for report activity (the background download holds back) and records expire in 120 days', async () => {
   const db = await appDb();
   const seen = [];
   const c = { enabled: true, details: jest.fn(async (type, id) => ({ id, title: 'X' })), search: jest.fn() };
