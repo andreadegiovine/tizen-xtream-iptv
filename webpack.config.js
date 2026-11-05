@@ -58,7 +58,7 @@ module.exports = (env = {}, argv = {}) => {
             to: 'config.xml',
             transform: (content) => content.toString().replace(/__VERSION__/g, pkg.version),
           },
-          { from: 'tizen/icon.svg', to: 'icon.svg' },
+          { from: 'tizen/icon.png', to: 'icon.png' },
           // YouTube player page: served by the on-TV service (service/service.js) and, for development, by the dev server.
           { from: 'tizen/youtube/player.html', to: 'yt-player.html' },
           {
