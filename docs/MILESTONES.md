@@ -374,3 +374,6 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
 - Trakt: `syncIfChanged` legge `/sync/last_activities` (all'avvio e ogni 15 minuti) e rifà l'allineamento completo solo se è cambiato qualcosa; il marcatore si salva solo dopo una lettura completa riuscita.
 - EPG: non più dopo la sync del catalogo; si scarica aprendo Live TV o un canale live, al massimo una volta al giorno.
 - Non fatto: limitare l'arricchimento TMDB alle sole card visibili (oggi arricchisce la pagina renderizzata). Non verificato su TV.
+
+### Patch 83 — log delle operazioni in Diagnostica
+- Nel blocco "Log recente": ogni attività della coda (tempo o errore), inizio/fine/errore della sync del catalogo con conteggi e tempi per tipo (scarico, scrittura, totale), sync TMDB/generi/Trakt (elementi e durata), EPG, indice di ricerca (letto dal db o costruito, righe e tempo). Non verificato su TV.

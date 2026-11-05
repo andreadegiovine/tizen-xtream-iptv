@@ -39,3 +39,13 @@ test('promote runs a task first and a failing task does not stop the queue', asy
   expect(order).toEqual(['search', 'trakt']);
   expect(errors).toEqual(['bad']);
 });
+
+test('reports the time and the error of every task', async () => {
+  let t = 0;
+  const done = [];
+  const q = createBackgroundQueue({ now: () => (t += 5), onTask: (info) => done.push(info), onError: () => undefined });
+  q.add({ name: 'ok', priority: 1, run: async () => undefined });
+  q.add({ name: 'bad', priority: 2, run: async () => { throw new Error('x'); } });
+  await q.idle();
+  expect(done.map((d) => [d.name, d.ms, Boolean(d.error)])).toEqual([['ok', 5, false], ['bad', 5, true]]);
+});

@@ -110,7 +110,10 @@ async function boot() {
   ctx.searchHistory = createSearchHistory({ db });
   ctx.pageCache = createPageCache();
   // Start-up and background work in order of importance (see backgroundQueue.js): a catalog sync holds all of it, the search index is last.
-  const queue = createBackgroundQueue({ onError: (name, err) => log.warn(`Background task ${name} failed`, err && err.message) });
+  const queue = createBackgroundQueue({
+    onError: (name, err) => log.warn(`Background task ${name} failed`, err && err.message),
+    onTask: ({ name, ms, error }) => { if (!error) log.info(`Task ${name} done in ${ms} ms`); },
+  });
   ctx.queue = queue;
   const queueSearchWarm = () => queue.add({ name: 'search', priority: Priority.SEARCH, run: () => ctx.search.warm().catch(() => undefined) });
   // Everything read from the catalog is out of date (a rebuild, a sync, hidden categories): caches emptied, the search index rebuilt.
@@ -296,8 +299,14 @@ async function boot() {
   let wasSyncing = false;
   let endCatalogOp = () => undefined;
   catalog.onChange((state) => {
-    if (state.running && !wasSyncing) queue.block();
-    if (!state.running && wasSyncing) queue.unblock();
+    if (state.running && !wasSyncing) {
+      queue.block();
+      log.info('Catalog sync started');
+    }
+    if (!state.running && wasSyncing) {
+      queue.unblock();
+      log.info(`Catalog sync ${state.cancelled ? 'cancelled' : state.error ? 'failed' : 'finished'}`);
+    }
     if (state.running && !wasSyncing) endCatalogOp = ctx.operations.start('catalog', { startedAt: state.startedAt, cancel: () => catalog.cancel() });
     if (!state.running) endCatalogOp();
     if (wasSyncing && !state.running && !state.cancelled) {

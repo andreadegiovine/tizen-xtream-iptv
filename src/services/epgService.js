@@ -105,10 +105,12 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
       }
       if (!due) return null;
       running = true;
+      const startedAt = now();
       const end = operations ? operations.start('epg', { cancel: () => cancelJob && cancelJob() }) : () => undefined;
       try {
         const outcome = await runJob(provider, force);
         if (outcome.error) log.warn('EPG sync failed', outcome.error.code);
+        else log.info(`EPG sync done in ${now() - startedAt} ms`);
         return outcome;
       } finally {
         running = false;

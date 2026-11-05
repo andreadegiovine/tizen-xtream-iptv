@@ -1,5 +1,6 @@
 import { makeSearchKey } from './titleNormalizer.js';
 import { requestToPromise } from '../core/idb.js';
+import { log } from '../core/logger.js';
 
 /** One light row per entry (name + normalized keys), kept in memory: search never touches IndexedDB. */
 export async function loadSearchRows(db, types) {
@@ -86,6 +87,7 @@ export function createSearchService({ active, types = ['movie', 'series', 'live'
           waiting.get(message.id)(message.rows);
           waiting.delete(message.id);
         } else if (message.event === 'ready' && loads.has(message.token)) {
+          log.info(`Search index ${message.cached ? 'read from the database' : 'built'}: ${message.count} rows in ${message.ms} ms`);
           loads.get(message.token).resolve();
           loads.delete(message.token);
         } else if (message.event === 'error' && loads.has(message.token)) {

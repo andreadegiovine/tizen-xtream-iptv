@@ -1,4 +1,5 @@
 import { kvGet, kvSet } from '../db/kv.js';
+import { log as appLog } from '../core/logger.js';
 
 const KEY = 'syncLog';
 
@@ -37,6 +38,7 @@ export function createSyncLog({ db, now = Date.now, operations = null }) {
         throw err;
       } finally {
         // The table reads the log when the operation disappears: write it first.
+        appLog[failed ? 'warn' : 'info'](`Sync ${name} ${failed ? 'failed' : 'done'}: ${count} items in ${now() - started} ms`);
         const log = await kvGet(db, KEY, {});
         log[name] = { lastSync: now(), durationMs: now() - started, count, failed };
         await kvSet(db, KEY, log);

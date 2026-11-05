@@ -175,8 +175,12 @@ export class CatalogSyncService {
       this.state.error = message.error || null;
       this.job = null;
     } else if (message.event === 'progress') {
-      if (message.mediaType) this.state.types[message.mediaType] = { ...message };
-      else if (message.phase === 'error') this.state.error = { code: message.code, message: message.message };
+      if (message.mediaType) {
+        this.state.types[message.mediaType] = { ...message };
+        const m = message.meta;
+        if (message.phase === 'done' && m) log.info(`Catalog ${message.mediaType}: ${m.itemCount} items, ${m.entryCount} entries, ${m.categoryCount} categories; fetch ${m.fetchMs} ms, write ${m.writeMs} ms, total ${m.durationMs} ms`);
+        else if (message.phase === 'error') log.warn(`Catalog ${message.mediaType} failed: ${message.code || ''} ${message.message || ''}`);
+      } else if (message.phase === 'error') this.state.error = { code: message.code, message: message.message };
     }
     this.notify();
   }

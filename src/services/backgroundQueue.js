@@ -6,7 +6,7 @@
  */
 export const Priority = { VISIBLE: 0, SIDEBAR: 1, METADATA: 2, TRAKT: 3, SEARCH: 4 };
 
-export function createBackgroundQueue({ onError = () => {} } = {}) {
+export function createBackgroundQueue({ onError = () => {}, onTask = () => {}, now = Date.now } = {}) {
   let waiting = [];
   let running = null;
   let blocks = 0;
@@ -25,11 +25,15 @@ export function createBackgroundQueue({ onError = () => {} } = {}) {
     waiting.sort((a, b) => a.priority - b.priority || a.seq - b.seq);
     const task = waiting.shift();
     running = task;
+    const started = now();
+    let failure = null;
     try {
       await task.run();
     } catch (err) {
+      failure = err;
       onError(task.name, err);
     }
+    onTask({ name: task.name, ms: now() - started, error: failure });
     running = null;
     return pump();
   }
