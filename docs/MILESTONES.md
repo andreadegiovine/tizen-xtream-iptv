@@ -522,3 +522,6 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
 - Adattatore `platform.js` + `exoEngine.js` (contratto di AVPlay sopra il plugin, eventi tenuti per i getter sincroni). Icone di avvio e banner TV disegnati da `logo.svg` (`build.js`, anche banner rettangolari in `scripts/platform-icons.js`); tolte le immagini del template Capacitor.
 - `npm run build:android`; `platforms/android/package.sh` (icone, `npm ci` + `cap sync`, `gradlew assemble<Flavor>Release`, versionCode dal tag); job `android` della release: `xtream-iptv-<versione>_androidtv.apk` e `_firetv.apk` (+ `.sha256`). Firma con `platforms/android/release.keystore` e i secret `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD`, altrimenti chiave di debug.
 - Non compilato in questo ambiente (Android SDK non raggiungibile): sintassi Java controllata, adattatore e motore coperti dai test, la build web Android gira nel browser con il `<video>`. Non verificato su dispositivo.
+
+### Patch 112 — Node 22 nei workflow
+- Il job `android` della release falliva: la CLI di Capacitor 8 richiede Node.js 22 o successivo. Tutti i job (release e CI) usano ora Node 22 (Node 20 è fuori supporto); `platforms/android/package.json` dichiara `engines.node >= 22`.

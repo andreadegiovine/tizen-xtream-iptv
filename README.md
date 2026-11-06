@@ -94,7 +94,7 @@ Nothing about TMDB or Trakt is compiled into the app: both stay off until you ad
 
 ## Building from source
 
-Requirements: Node.js 18 or newer, and for installing, [Tizen Studio](https://developer.tizen.org/development/tizen-studio/download)
+Requirements: Node.js 18 or newer (22 or newer to build the Android packages, as the release workflow does), and for installing, [Tizen Studio](https://developer.tizen.org/development/tizen-studio/download)
 (or its CLI) with a Samsung certificate profile.
 
 ```bash
