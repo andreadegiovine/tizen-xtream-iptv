@@ -13,7 +13,7 @@ import { listCategories, listNetworks, pageEntries, getEntry, countEntries, guid
 import { icon } from '../icons.js';
 import { formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
-import { createEpgGuide, floorHalfHour, PAST_MS, SPAN_MS } from '../components/epgGuide.js';
+import { createEpgGuide, floorHalfHour, nextProgramme, PAST_MS, SPAN_MS } from '../components/epgGuide.js';
 import { readGuideLayout, saveGuideLayout, applyGuideLayout, moveInLayout, hideInLayout } from '../../services/guideLayout.js';
 
 const CATS_ZONE = 'browseCategories';
@@ -460,7 +460,8 @@ export function createBrowsePage(ctx, params = {}) {
 
   function makeGuide(kind) {
     const common = {
-      onOpen: (entry) => ctx.openEntry(entry, { section: params.section }),
+      // The channel page opens with the focus on the programme the guide was on.
+      onOpen: (entry, row, programme) => ctx.openEntry(entry, programme ? { section: params.section, programme: programme.start } : { section: params.section }),
       getTimeFormat: () => timeFormat,
       enrich: ctx.enrich ? (list, guideCards) => ctx.enrich(list, guideCards, type) : null,
     };
@@ -469,6 +470,7 @@ export function createBrowsePage(ctx, params = {}) {
       return createEpgGuide({
         ...common,
         emptyText: '',
+        pickSegment: nextProgramme, // the scheduled programme closest to now
         loadRows: async (offset, limit) => ({ entries: (await scheduledRows()).rows.slice(offset, offset + limit) }),
         countRows: async () => (await scheduledRows()).rows.length,
         programmes: async (ids) => {

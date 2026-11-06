@@ -1,4 +1,4 @@
-import { parseXmltvTime, decodeEntities, createXmltvParser } from '../../src/services/xmltv.js';
+import { parseXmltvTime, decodeEntities, createXmltvParser, isPlaceholderTitle } from '../../src/services/xmltv.js';
 import { syncEpg, shouldSyncEpg, EPG_TTL_MS } from '../../src/services/epgSync.js';
 import { createEpgService } from '../../src/services/epgService.js';
 import { openProviderDb } from '../../src/db/providerDb.js';
@@ -27,6 +27,15 @@ describe('xmltv', () => {
       expect(got.map((p) => p.title)).toEqual(['Now', 'Next']);
       expect(got[0]).toMatchObject({ channelId: 'a', desc: 'D & E' });
     }
+  });
+
+  test('programmes that only say the guide has nothing are dropped', () => {
+    ['EPG non disponibile', '(EPG non disponibile)', 'No EPG', 'No EPG available', 'EPG not available', 'N/A', 'Nessuna informazione', 'Informazioni non disponibili', '', '  '].forEach((title) => expect([title, isPlaceholderTitle(title)]).toEqual([title, true]));
+    ['TG1', 'Programma 3', 'Info', 'Data', 'Non disponibile per sempre'].forEach((title) => expect([title, isPlaceholderTitle(title)]).toEqual([title, false]));
+    const got = [];
+    const parser = createXmltvParser({ now: NOW, onProgramme: (p) => got.push(p) });
+    parser.push(`<tv>${prog('a', 11, 13, 'EPG non disponibile')}${prog('a', 13, 14, 'Next')}</tv>`);
+    expect(got.map((p) => p.title)).toEqual(['Next']);
   });
 });
 
@@ -81,6 +90,23 @@ describe('epgService', () => {
     expect([nn.now.title, nn.next.title]).toEqual(['Now', 'Next']);
     expect((await svc.upcoming('a', 24)).map((p) => p.title)).toEqual(['Now', 'Next']);
     expect(await svc.nowNext(null)).toEqual({ now: null, next: null });
+  });
+
+  test('placeholder programmes stored by an older version are not a guide: the channel is left out, its list is empty', async () => {
+    const db = await makeDb();
+    await dbPutMany(db, 'epg', [
+      { channelId: 'a', start: NOW - 3600000, stop: NOW + 3600000, title: 'Now' },
+      { channelId: 'p', start: NOW - 3600000, stop: NOW + 3600000, title: 'EPG non disponibile' },
+      { channelId: 'p', start: NOW + 3600000, stop: NOW + 7200000, title: 'EPG non disponibile' },
+      { channelId: 'q', start: NOW - 3600000, stop: NOW + 3600000, title: 'No EPG' },
+      { channelId: 'q', start: NOW + 3600000, stop: NOW + 7200000, title: 'Late show' },
+    ]);
+    const svc = createEpgService({ active: { get: async () => ({ db }) }, providers: {}, createWorker: () => { throw new Error('none'); }, now: () => NOW });
+    expect(Array.from(await svc.channelsWithGuide(NOW - 3600000, NOW + 24 * 3600000)).sort()).toEqual(['a', 'q']);
+    const between = await svc.programmesBetween(['p', 'q'], NOW - 3600000, NOW + 24 * 3600000);
+    expect(between.get('p')).toEqual([]);
+    expect(between.get('q').map((p) => p.title)).toEqual(['Late show']);
+    expect(await svc.upcoming('p')).toEqual([]);
   });
 
   test('falls back to the main thread when the worker cannot be created', async () => {

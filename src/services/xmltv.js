@@ -33,6 +33,26 @@ function firstTag(block, tag) {
   return m ? decodeEntities(m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')).trim() : '';
 }
 
+// Titles some guides give to the hours they know nothing about ("EPG non disponibile", "No EPG", "N/A"…): no programme at all.
+const PLACEHOLDER_TITLES = [
+  /^(?:n\/?a|n\.?d\.?|tba|tbd|-+|\.+|\?+)$/,
+  /^no\s+(?:epg|guide|info|information|data|programme|program|programs|programmes|details)(?:\s+(?:info|information|data|available|found))*$/,
+  /^(?:epg|guide|guida|info|information|informazioni|informazione|dati|data|programma|programme|program|programmazione)(?:\s+(?:epg|info|information|data))?\s+(?:not\s+available|unavailable|non\s+disponibil[ei]|n\/?[ad])$/,
+  /^nessun[ao]?\s+(?:epg|guida|informazione|informazioni|info|programma|programmazione|dato|dati)(?:\s+disponibil[ei])?$/,
+  /^(?:not\s+available|non\s+disponibile|unavailable|no\s+information\s+available)$/,
+];
+
+/** True for a programme title that only says the guide has nothing for those hours (empty included). */
+export function isPlaceholderTitle(title) {
+  const text = String(title || '')
+    .toLowerCase()
+    .replace(/[[\](){}"'«»:;!.,–—_*]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return true;
+  return PLACEHOLDER_TITLES.some((re) => re.test(text));
+}
+
 /**
  * Incremental XMLTV reader: feed text chunks, get the programmes inside the window
  * (ends after `now`, starts before `now + horizonMs`) of the wanted channels. Never holds more than one
@@ -55,8 +75,11 @@ export function createXmltvParser({ now, horizonMs = 48 * 3600 * 1000, channels 
       const stop = parseXmltvTime(attrs.stop);
       if (attrs.channel && Number.isFinite(start) && Number.isFinite(stop) && stop > now && start < now + horizonMs && (!channels || channels.has(attrs.channel))) {
         const body = match[2] || '';
-        kept += 1;
-        onProgramme({ channelId: attrs.channel, start, stop, title: firstTag(body, 'title'), desc: firstTag(body, 'desc').slice(0, 400) });
+        const title = firstTag(body, 'title');
+        if (!isPlaceholderTitle(title)) {
+          kept += 1;
+          onProgramme({ channelId: attrs.channel, start, stop, title, desc: firstTag(body, 'desc').slice(0, 400) });
+        }
       }
       match = re.exec(buffer);
     }

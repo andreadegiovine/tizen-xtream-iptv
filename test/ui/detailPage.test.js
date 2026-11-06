@@ -1,4 +1,4 @@
-import { detailMetaParts, formatRuntime, castFrom, seasonOptionLabel, seasonIndexOf, seasonsLabel, episodesLabel } from '../../src/ui/pages/detailPage.js';
+import { detailMetaParts, formatRuntime, castFrom, seasonOptionLabel, seasonIndexOf, seasonsLabel, episodesLabel, landingIndex } from '../../src/ui/pages/detailPage.js';
 
 test('runtime formatting', () => {
   expect(formatRuntime(112)).toBe('1h 52m');
@@ -39,4 +39,12 @@ test('season option label and initial season', () => {
   expect(seasonOptionLabel(seasons[1])).toBe('Season 2 (1 episode)');
   expect(seasonIndexOf(seasons, { season: 2 })).toBe(1);
   expect(seasonIndexOf(seasons, null)).toBe(0);
+});
+
+test('opened from the guide: the programme list starts on the programme the guide was on', () => {
+  const list = [{ start: 10, stop: 20 }, { start: 20, stop: 30 }, { start: 30, stop: 40 }];
+  expect(landingIndex(list, 20)).toBe(1); // the same programme
+  expect(landingIndex(list, 25)).toBe(1); // not there any more: the one on at that time
+  expect(landingIndex(list, 5)).toBe(0);
+  expect(landingIndex(list, 99)).toBe(0); // past them all: the first
 });

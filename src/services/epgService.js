@@ -2,14 +2,18 @@ import { runEpgForProvider, getEpgMeta, shouldSyncEpg } from './epgSync.js';
 import { openProviderDb } from '../db/providerDb.js';
 import { requestToPromise } from '../core/idb.js';
 import { log } from '../core/logger.js';
+import { isPlaceholderTitle } from './xmltv.js';
 
 const MAX = Number.MAX_SAFE_INTEGER;
+
+/** A stored programme that is a real one: guides downloaded before the placeholders were dropped may still hold "EPG non disponibile". */
+const isReal = (p) => !isPlaceholderTitle(p.title);
 
 /** Guide queries on the active provider's database. */
 async function programmesFor(db, channelId, now) {
   const tx = db.transaction('epg', 'readonly');
   const all = await requestToPromise(tx.objectStore('epg').getAll(IDBKeyRange.bound([channelId, 0], [channelId, MAX])));
-  return all.filter((p) => p.stop > now).sort((a, b) => a.start - b.start);
+  return all.filter((p) => p.stop > now && isReal(p)).sort((a, b) => a.start - b.start);
 }
 
 export function createEpgService({ active, providers, createWorker, runLocal = runEpgForProvider, now = Date.now, readyTimeoutMs = 4000, operations = null }) {
@@ -48,15 +52,15 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
     await Promise.all(
       channelIds.map(async (id) => {
         const list = await requestToPromise(store.getAll(IDBKeyRange.bound([id, from - 12 * 3600 * 1000], [id, to])));
-        out.set(id, list.filter((p) => p.stop > from).sort((a, b) => a.start - b.start));
+        out.set(id, list.filter((p) => p.stop > from && isReal(p)).sort((a, b) => a.start - b.start));
       }),
     );
     return out;
   }
 
   /**
-   * The channels that have at least one programme on between two instants (the guide leaves out the ones without): one pass over the
-   * keys of the store, jumping from channel to channel.
+   * The channels that have at least one real programme on between two instants (the guide leaves out the ones without, and the ones
+   * whose guide only says "not available"): one pass over the store, jumping from channel to channel.
    */
   async function channelsWithGuide(from, to) {
     const out = new Set();
@@ -74,7 +78,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
         }
         const [id, start] = cursor.key;
         if (start < back) cursor.continue([id, back]); // to the part of this channel that can matter
-        else if (start < to && cursor.value.stop > from) {
+        else if (start < to && cursor.value.stop > from && isReal(cursor.value)) {
           out.add(id);
           cursor.continue([id, []]); // an array sorts after every number: the next channel
         } else if (start >= to) cursor.continue([id, []]);

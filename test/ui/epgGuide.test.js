@@ -1,4 +1,4 @@
-import { rowSegments, segmentAt, scrollFor, xOf, floorHalfHour, createEpgGuide, PX_PER_MIN } from '../../src/ui/components/epgGuide.js';
+import { rowSegments, segmentAt, scrollFor, xOf, floorHalfHour, createEpgGuide, nextProgramme, PX_PER_MIN, ROW_HEIGHT, RULER_HEIGHT } from '../../src/ui/components/epgGuide.js';
 
 const M = 60000;
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -101,6 +101,56 @@ test('OK held selects the row and shows its actions; Left / Right move between t
   expect(g.cancelRowMode()).toBe(false);
   g.activate();
   expect(ran).toEqual(['remove:live:1', 'open']);
+  g.destroy();
+  g.el.remove();
+});
+
+test('the closest programme of a row: the one on, else the next, else the last', () => {
+  const segs = rowSegments([{ start: 30 * M, stop: 60 * M, title: 'A' }, { start: 120 * M, stop: 150 * M, title: 'B' }], 0, 240 * M);
+  expect(nextProgramme(segs, 40 * M)).toBe(1); // A is on
+  expect(nextProgramme(segs, 90 * M)).toBe(3); // B is next
+  expect(nextProgramme(segs, 200 * M)).toBe(3); // both over: the last one
+  expect(nextProgramme(rowSegments([], 0, 240 * M), 0)).toBe(-1);
+});
+
+test('with pickSegment every row reached focuses the programme it picks; OK opens the channel with that programme; the rows fill the screen', async () => {
+  const now = 1000 * 30 * M;
+  const rows = [
+    { key: 'live:1', type: 'live', name: 'One', epgChannelId: 'one' },
+    { key: 'live:2', type: 'live', name: 'Two', epgChannelId: 'two' },
+  ];
+  const guide = {
+    one: [{ start: now + 120 * M, stop: now + 150 * M, title: 'Later' }],
+    two: [{ start: now + 300 * M, stop: now + 330 * M, title: 'Evening' }, { start: now + 600 * M, stop: now + 630 * M, title: 'Night' }],
+  };
+  const opened = [];
+  const g = createEpgGuide({
+    loadRows: async (offset, limit) => ({ entries: rows.slice(offset, offset + limit) }),
+    countRows: async () => rows.length,
+    programmes: async (ids) => new Map(ids.map((id) => [id, guide[id] || []])),
+    onOpen: (entry, row, programme) => opened.push([entry.key, programme && programme.title]),
+    pickSegment: nextProgramme,
+    emptyText: '',
+    now: () => now,
+  });
+  document.body.appendChild(g.el);
+  await g.start();
+  await tick();
+  await tick();
+  g.onFocus();
+  const focusedTitle = () => (g.el.querySelector('.epg-prog.focused .epg-prog-title') || {}).textContent;
+  expect(focusedTitle()).toBe('Later'); // not the empty hour at the current time
+  g.model.navigate('down');
+  expect(focusedTitle()).toBe('Evening');
+  g.activate();
+  expect(opened).toEqual([['live:2', 'Evening']]);
+  g.model.navigate('right');
+  g.model.navigate('right');
+  expect(focusedTitle()).toBe('Night');
+  g.model.navigate('up');
+  expect(focusedTitle()).toBe('Later');
+  // No fixed height: from where the rows start (under the hours; jsdom has no layout) down to the bottom of the screen.
+  expect(parseInt(g.el.querySelector('.epg-rows').style.height, 10)).toBe(Math.max(ROW_HEIGHT * 2, window.innerHeight - RULER_HEIGHT));
   g.destroy();
   g.el.remove();
 });

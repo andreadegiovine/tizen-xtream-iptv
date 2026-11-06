@@ -97,6 +97,14 @@ export function seasonIndexOf(seasons, episode) {
 }
 
 /** Movie / series / channel page. params: { entryKey, type, live?: { categoryId, offset } } */
+/** Index of the programme to focus when the page is opened from the guide on the one starting at `start`: that one, else the one on at that time, else the first after it, else the first. */
+export function landingIndex(list, start) {
+  const exact = list.findIndex((p) => p.start === start);
+  if (exact >= 0) return exact;
+  const after = list.findIndex((p) => p.stop > start);
+  return after >= 0 ? after : 0;
+}
+
 export function createDetailPage(ctx, params) {
   let entry = null;
   let providerId = null;
@@ -119,6 +127,8 @@ export function createDetailPage(ctx, params) {
   let destroyed = false;
   let focusedOnce = false;
   let autoFocus = null; // { id, index } of a row the page focused by itself before the play button existed
+  // Opened from the guide on a programme: once the list is there, the focus starts on it (its start time, or null).
+  let landOn = typeof params.programme === 'number' ? params.programme : null;
 
   let backdropUrl = '';
   let posterUrl = '';
@@ -306,6 +316,8 @@ export function createDetailPage(ctx, params) {
   }
 
   function setRows(next) {
+    const landing = landOn !== null && next.find((r) => r.id === 'detailEpg');
+    if (landing) landOn = null; // only the first time the programme list is there
     let keep = ctx.focus.activeId && rows.some((r) => r.id === ctx.focus.activeId) ? { id: ctx.focus.activeId, index: ctx.focus.active.index } : null;
     // The details of a series arrive after the first build: the focus the page chose on its own moves to the play button once it exists.
     const hasActions = next.some((r) => r.id === 'detailActions');
@@ -328,7 +340,11 @@ export function createDetailPage(ctx, params) {
     });
     if (rows.length) ctx.focus.link(TOPBAR_ZONE, 'down', rows[0].id);
     const target = keep && rows.find((r) => r.id === keep.id);
-    if (target) ctx.focus.focus(target.id, keep.index);
+    if (landing) {
+      focusedOnce = true;
+      autoFocus = null;
+      ctx.focus.focus(landing.id, landing.zone.index);
+    } else if (target) ctx.focus.focus(target.id, keep.index);
     else if (rows.length && (!focusedOnce || (autoFocus && hasActions))) {
       const actions = rows.find((r) => r.id === 'detailActions') || rows[0];
       focusedOnce = true;
@@ -771,6 +787,7 @@ export function createDetailPage(ctx, params) {
       onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
       onActivate: (i) => programmeActions(epgList[i]).catch((err) => log.warn('Programme action failed', err && err.message)),
     });
+    if (landOn !== null) zone.index = landingIndex(epgList, landOn);
     next.push({ id: 'detailEpg', zone });
   }
 
@@ -783,7 +800,7 @@ export function createDetailPage(ctx, params) {
       return;
     }
     const option = scheduled ? { label: t('schedule.cancel'), value: 'cancel', icon: 'unschedule' } : { label: t('schedule.add'), value: 'add', icon: 'schedule' };
-    const value = await ctx.dialogs.choose({ title: p.title, options: [option] });
+    const value = await ctx.dialogs.choose({ title: t('detail.actions'), options: [option] });
     if (!value || destroyed) return;
     try {
       if (value === 'add') {

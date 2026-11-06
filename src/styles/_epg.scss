@@ -6,6 +6,12 @@ $epg-row: 128px;
 $epg-channel: 132px;
 $epg-ruler: 44px;
 
+// The guide reaches the bottom edge of the screen (its rows are as tall as the space left, epgGuide.js layout()): it goes over the
+// bottom padding of the page, so the page itself has nothing to scroll.
+.epg-host {
+  margin-bottom: -$gutter;
+}
+
 .epg-guide {
   position: relative;
   overflow: hidden;

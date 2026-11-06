@@ -98,8 +98,13 @@ function xmltv() {
   const stamp = (s) => `${new Date(s * 1000).toISOString().replace(/[-:T]/g, '').slice(0, 14)} +0000`;
   const parts = ['<?xml version="1.0" encoding="UTF-8"?>\n<tv>\n'];
   ids.forEach((id) => parts.push(`<channel id="${id}"><display-name>${id}</display-name></channel>\n`));
-  ids.forEach((id) => {
-    for (let i = 0; i < 48; i += 1) parts.push(`<programme start="${stamp(day + i * 3600)}" stop="${stamp(day + (i + 1) * 3600)}" channel="${id}"><title>Programma ${i}</title><desc>Descrizione ${i} di ${id}.</desc></programme>\n`);
+  ids.forEach((id, n) => {
+    // One channel in 25 has a guide that only says it has nothing (as some providers do): the app must treat it as no guide.
+    const placeholder = n % 25 === 24;
+    for (let i = 0; i < 48; i += 1) {
+      const title = placeholder ? 'EPG non disponibile' : `Programma ${i}`;
+      parts.push(`<programme start="${stamp(day + i * 3600)}" stop="${stamp(day + (i + 1) * 3600)}" channel="${id}"><title>${title}</title><desc>Descrizione ${i} di ${id}.</desc></programme>\n`);
+    }
   });
   parts.push('</tv>\n');
   return Buffer.from(parts.join(''));

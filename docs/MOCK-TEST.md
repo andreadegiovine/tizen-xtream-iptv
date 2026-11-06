@@ -11,7 +11,7 @@ npm run mock -- [--port 8090] [--movies 20000] [--series 8000] [--live 3000] [--
 
 - Account: utente `test`, password `test`, URL `http://localhost:8090`.
 - Stessa origine per app (build in `dist`), API (`/player_api.php`, `/xmltv.php`), immagini (`/img/...svg`, in cache del browser) e un TMDB finto (`/tmdb/3/...`, `/tmdbimg/...`): nessun problema di CORS.
-- Catalogo deterministico (stesso seed, stesso catalogo): il 15% dei titoli senza id TMDB, il 30% senza generi, il 7% senza locandina, l'1% per adulti, canali con varianti di qualità (HD, FHD, 4K...) e paese per il raggruppamento; EPG XMLTV di 48 ore.
+- Catalogo deterministico (stesso seed, stesso catalogo): il 15% dei titoli senza id TMDB, il 30% senza generi, il 7% senza locandina, l'1% per adulti, canali con varianti di qualità (HD, FHD, 4K...) e paese per il raggruppamento; EPG XMLTV di 48 ore (un canale su 25 ha solo programmi "EPG non disponibile", che l'app deve trattare come guida assente).
 - `--latency` è il ritardo di ogni risposta API, `--img-latency` quello delle immagini, `--kbps` limita la banda (0 = nessun limite, risposte gzip).
 - `GET /__stats` dà le richieste ricevute per tipo, `POST /__stats` le azzera.
 - Funziona anche con la build di sviluppo (`/__proxy` e `/__media` sono gestiti).

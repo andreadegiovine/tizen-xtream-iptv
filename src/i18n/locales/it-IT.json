@@ -79,6 +79,7 @@
   "detail.season": "Stagione",
   "detail.episode": "Episodio",
   "detail.noEpisodes": "Nessun episodio disponibile.",
+  "detail.actions": "Azioni",
   "detail.epg": "Prossime 24 ore",
   "player.endsAt": "termina alle {time}",
   "player.live": "DIRETTA",

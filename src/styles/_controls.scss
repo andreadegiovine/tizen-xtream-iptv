@@ -71,6 +71,25 @@
     background: $bg-focus;
   }
 
+  // Option with an icon (the actions of a programme): icon and label on one centred line, a gap between them like the sidebar lists.
+  &.with-icon {
+    display: flex;
+    align-items: center;
+
+    .icon {
+      flex: none;
+      width: 30px;
+      height: 30px;
+      margin-right: 20px;
+    }
+
+    span {
+      flex: 1;
+      min-width: 0;
+      line-height: 1.2;
+    }
+  }
+
   &.focused {
     background: $text;
     color: $bg;

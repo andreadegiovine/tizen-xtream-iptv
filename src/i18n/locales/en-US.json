@@ -79,6 +79,7 @@
   "detail.season": "Season",
   "detail.episode": "Episode",
   "detail.noEpisodes": "No episodes available.",
+  "detail.actions": "Actions",
   "detail.epg": "Next 24 hours",
   "player.endsAt": "ends at {time}",
   "player.live": "LIVE",
