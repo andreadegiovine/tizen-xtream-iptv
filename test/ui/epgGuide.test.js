@@ -63,9 +63,9 @@ test('Up / Down keep the time, Left / Right go from programme to programme, Left
   expect(focusedTitle()).toBe('Film'); // back at the time of "Film"
   g.model.navigate('left');
   expect(focusedTitle()).toBe('News');
-  g.model.navigate('left'); // to the hole before "News" (the hour before now is on the axis)
-  expect(focusedTitle()).toBe('No information');
+  // The axis starts at the current half hour: "News", begun 10 minutes ago, is the first programme, Left leaves.
   expect(g.model.navigate('left')).toEqual({ type: 'exit', dir: 'left' });
+  expect(g.el.querySelector('.epg-tick').textContent).toBe(g.el.querySelector('.epg-corner').textContent);
   expect(g.model.navigate('up')).toEqual({ type: 'exit', dir: 'up' });
   expect(g.state().row).toBe(0);
   g.destroy();
@@ -153,4 +153,35 @@ test('with pickSegment every row reached focuses the programme it picks; OK open
   expect(parseInt(g.el.querySelector('.epg-rows').style.height, 10)).toBe(Math.max(ROW_HEIGHT * 2, window.innerHeight - RULER_HEIGHT));
   g.destroy();
   g.el.remove();
+});
+
+test('the axis never starts more than 30 minutes ago: when a new half hour begins it moves on', async () => {
+  jest.useFakeTimers();
+  let now = 1000 * 30 * M + 20 * M; // 20 minutes into a half hour
+  const rows = [{ key: 'live:1', type: 'live', name: 'One', epgChannelId: 'one' }];
+  const reads = [];
+  const g = createEpgGuide({
+    loadRows: async (offset, limit) => ({ entries: rows.slice(offset, offset + limit) }),
+    countRows: async () => rows.length,
+    programmes: async (ids, from) => {
+      reads.push(from);
+      return new Map(ids.map((id) => [id, [{ start: 1000 * 30 * M - 60 * M, stop: 1000 * 30 * M + 90 * M, title: 'Long' }]]));
+    },
+    now: () => now,
+  });
+  document.body.appendChild(g.el);
+  await g.start();
+  await Promise.resolve();
+  const firstTick = () => g.el.querySelector('.epg-tick');
+  const startOf = (ms) => Math.floor(ms / (30 * M)) * 30 * M;
+  expect(reads[0]).toBe(startOf(now)); // 20 minutes before now, not more
+  now += 15 * M; // the next half hour began 5 minutes ago
+  jest.advanceTimersByTime(30000);
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(reads[reads.length - 1]).toBe(startOf(now));
+  expect(firstTick().className).toBe('epg-tick half'); // the axis now starts at the half past
+  g.destroy();
+  g.el.remove();
+  jest.useRealTimers();
 });

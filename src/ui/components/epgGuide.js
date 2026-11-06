@@ -12,8 +12,11 @@ export const CHANNEL_WIDTH = 132;
 export const RULER_HEIGHT = 44;
 const HALF_HOUR = 30 * 60 * 1000;
 const HOUR = 2 * HALF_HOUR;
-/** How far back the axis starts (programmes before can be reached with Left) and how far forward it goes. */
-export const PAST_MS = HOUR;
+/**
+ * The axis starts at the current half hour (never more than 30 minutes ago: what began earlier shows from there) and goes 24 hours
+ * forward. PAST_MS: how far before the current half hour it starts.
+ */
+export const PAST_MS = 0;
 export const SPAN_MS = 24 * HOUR;
 const ROW_PAGE = 40;
 
@@ -85,8 +88,8 @@ export function scrollFor(segment, start, x, width) {
  * Left / Right move between them, OK runs `onRowAction(id, entry, row)`, Back (`cancelRowMode()`) gives the normal focus back.
  */
 export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTimeFormat = () => 'auto', enrich = null, now = Date.now, emptyText = null, pickSegment = null, rowActions = [], onRowAction = null, defaultRowAction = 0 }) {
-  const start = floorHalfHour(now()) - PAST_MS;
-  const end = start + SPAN_MS + PAST_MS;
+  let start = floorHalfHour(now()) - PAST_MS; // moves on with the half hours while the guide stays open
+  let end = start + SPAN_MS + PAST_MS;
   const ruler = h('div', { class: 'epg-ruler' });
   const rulerViewport = h('div', { class: 'epg-ruler-viewport' }, ruler);
   const corner = h('div', { class: 'epg-corner' });
@@ -105,7 +108,7 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
   const entries = []; // loaded rows (sparse while pages arrive)
   const pagesLoading = new Map(); // page → Promise
   const guide = new Map(); // channelId → programmes (null while loading)
-  let x = xOf(floorHalfHour(now()), start); // the axis starts at the current half hour; the hour before is reachable with Left
+  let x = xOf(floorHalfHour(now()), start); // the axis starts at the current half hour
   let first = 0; // first row on screen
   let visible = 6; // rows fully on screen
   let drawn = 7; // rows drawn: the visible ones and the one cut by the bottom edge
@@ -301,6 +304,22 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
    * The rows fill the screen down to its bottom edge (no fixed height): as many rows as fit, plus the one cut by the edge, which the
    * focus brings fully into view when it gets there.
    */
+  /** A new half hour began: the axis starts from it (the half hour gone by leaves), the programmes are read again for the new hours. */
+  function shiftAxis() {
+    const next = floorHalfHour(now()) - PAST_MS;
+    x = Math.max(0, x - xOf(next, start));
+    focusTime = Math.max(focusTime, next);
+    start = next;
+    end = start + SPAN_MS + PAST_MS;
+    ruler.style.width = `${xOf(end, start)}px`;
+    drawRuler();
+    guide.clear();
+    rowNodes.forEach((node) => node.el.remove());
+    rowNodes = new Map();
+    if (total) focusAt(focusRow);
+    else render();
+  }
+
   function layout() {
     const top = rowsEl.getBoundingClientRect().top || el.getBoundingClientRect().top + RULER_HEIGHT || 0;
     const height = Math.max(ROW_HEIGHT * 2, (window.innerHeight || 1080) - top);
@@ -359,6 +378,7 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
       focusAt(0);
       applyScroll();
       clock = setInterval(() => {
+        if (floorHalfHour(now()) - PAST_MS !== start) shiftAxis();
         drawNow();
         rowNodes.forEach((node) => node.segNodes.forEach((seg, i) => {
           const s = node.segments[i];

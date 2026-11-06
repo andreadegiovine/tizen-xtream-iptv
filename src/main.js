@@ -143,16 +143,18 @@ async function boot() {
   ctx.tmdb = tmdb;
   ctx.operations = createOperations();
   ctx.syncLog = createSyncLog({ db, operations: ctx.operations });
-  // Scheduled viewing: a notice NOTICE_MS before, then the channel starts LEAD_MS before the programme (while the app is open).
+  // Scheduled viewing: a notice NOTICE_MS before, then the channel starts LEAD_MS before the programme (while the app is open); the
+  // programme leaves the list when it ends.
   ctx.schedules = createScheduledViewing({ db });
   const runSchedules = async () => {
+    await ctx.schedules.prune(); // ended programmes leave "Scheduled"
     const due = await ctx.schedules.due();
     for (const s of due.notice) {
       await ctx.schedules.markNoticed(s);
       ctx.notices.info(t('schedule.startingSoon', { title: s.title, channel: s.entryName }), { key: 'schedule' });
     }
     for (const s of due.start) {
-      await ctx.schedules.remove(s);
+      await ctx.schedules.markStarted(s); // stays in "Scheduled" until the programme ends
       const current = await active.get();
       if (!current || current.provider.id !== s.providerId) continue;
       const entry = await getEntry(current.db, s.entryKey);
