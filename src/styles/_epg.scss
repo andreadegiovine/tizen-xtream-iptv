@@ -83,7 +83,7 @@ $epg-ruler: 44px;
   box-sizing: border-box;
   width: $epg-channel;
   padding: 6px 16px 6px 0;
-  background: $bg; // stays above the programmes that slide under it
+  background: transparent; // the programmes never reach it: their row clips them (.epg-track-viewport)
 
   // The channel's card, small and square (logo, name; the badge of a group of channels stays).
   .card {

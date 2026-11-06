@@ -52,7 +52,8 @@
       right: 0;
       bottom: 0;
       left: 0;
-      background: linear-gradient(to bottom, rgba($bg, 0.45) 0%, rgba($bg, 0.7) 55%, $bg 100%), linear-gradient(to right, rgba($bg, 0.75), rgba($bg, 0.2));
+      // Fades into the app background at the bottom of the picture (820 px): the colour of the gradient there.
+      background: linear-gradient(to bottom, rgba(bg-at(410px), 0.45) 0%, rgba(bg-at(600px), 0.7) 55%, bg-at(820px) 100%), linear-gradient(to right, rgba(bg-at(410px), 0.75), rgba(bg-at(410px), 0.2));
     }
   }
 

@@ -1,4 +1,15 @@
+@use 'sass:color';
+@use 'sass:math';
+
 $bg: #141414;
+// App background: a grey a little lighter at the top fading to a little darker at the bottom of the 1080 px screen. Opaque parts that
+// must look like the background (the sticky head of the grids, the fade under a backdrop) take the colour at their height: bg-at().
+$bg-top: #1e1e20;
+$bg-bottom: #0b0b0c;
+$bg-gradient: linear-gradient(to bottom, $bg-top, $bg-bottom);
+@function bg-at($y) {
+  @return color.mix($bg-bottom, $bg-top, math.div($y, 1080px) * 100%);
+}
 $bg-raised: #1f1f1f;
 $bg-focus: #2f2f2f;
 $accent: #e50914;

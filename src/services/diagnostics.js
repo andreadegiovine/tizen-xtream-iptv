@@ -16,9 +16,6 @@ function checkRuntime() {
   return results;
 }
 
-/** A worker built from a blob: URL. The app's workers are files (see checkFileWorker), so a blocked blob worker is not a problem. */
-const BLOB_NOTE = 'blob worker blocked, not used by the app (its workers are files: see workerFile)';
-
 function checkBlobWorker() {
   return new Promise((resolve) => {
     let url;
@@ -38,12 +35,11 @@ function checkBlobWorker() {
       };
       worker.onerror = () => {
         clearTimeout(timer);
-        resolve(warn('worker', BLOB_NOTE));
+        resolve(fail('worker', 'worker error'));
       };
       worker.postMessage(1);
     } catch (err) {
-      // Expected on Tizen: the CSP of config.xml does not allow blob: scripts. Only a warning: the app does not use blob workers.
-      resolve(warn('worker', `${BLOB_NOTE} (${err.message})`));
+      resolve(fail('worker', err.message));
     }
   });
 }

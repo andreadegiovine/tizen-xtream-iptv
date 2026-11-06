@@ -13,7 +13,7 @@ import { TIME_FORMATS, DATE_FORMATS, formatClockTime, formatClockDate } from '..
 import { t, i18n, detectLocale } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { Dir } from '../focus/models.js';
-import { LANGUAGE_OPTIONS, GRID_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SCREENSAVER_OPTIONS, SUGGESTION_SOURCE_OPTIONS } from '../../services/settings.js';
+import { LANGUAGE_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SCREENSAVER_OPTIONS, SUGGESTION_SOURCE_OPTIONS } from '../../services/settings.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { createSyncPanel, createTmdbPanel, createTraktPanel, createDevicePanel, createOperationsPanel } from '../components/syncPanel.js';
@@ -438,7 +438,6 @@ export function createSettingsPage(ctx) {
       list: [
         optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
         optionRow({ ctx, labelKey: 'settings.textSize', key: 'textSize', options: TEXT_SIZES, format: (v) => `${v}%` }),
-        optionRow({ ctx, labelKey: 'settings.gridItems', key: 'gridItems', options: GRID_OPTIONS }),
         optionRow({ ctx, labelKey: 'settings.carouselItems', key: 'carouselItems', options: CAROUSEL_OPTIONS }),
         optionRow({ ctx, labelKey: 'settings.timeFormat', key: 'timeFormat', options: TIME_FORMATS, format: timeName }),
         optionRow({ ctx, labelKey: 'settings.dateFormat', key: 'dateFormat', options: DATE_FORMATS, format: dateName }),

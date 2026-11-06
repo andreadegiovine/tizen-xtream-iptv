@@ -1,21 +1,31 @@
-import { createAvPlayEngine, AVPLAY_ASPECT_MODES } from '../../../platforms/tizen/avplayEngine.js';
+import { createAvPlayEngine } from '../../../platforms/tizen/avplayEngine.js';
 
 afterEach(() => {
   delete global.webapis;
 });
 
-test('aspect ratio: only the modes AVPlay has; the area is set again so the change shows', () => {
+test('aspect ratio: letterbox, full screen, cropped; only setDisplayMethod; false when AVPlay refuses the mode', () => {
   const calls = [];
-  global.webapis = { avplay: { open() {}, prepareAsync() {}, setDisplayRect: (...a) => calls.push(['rect', ...a]), setDisplayMethod: (m) => calls.push(['method', m]) } };
+  let refuse = false;
+  global.webapis = {
+    avplay: {
+      open() {},
+      prepareAsync() {},
+      setDisplayRect: (...a) => calls.push(['rect', ...a]),
+      setDisplayMethod: (m) => {
+        if (refuse) throw new Error('InvalidValuesError');
+        calls.push(['method', m]);
+      },
+    },
+  };
   const engine = createAvPlayEngine();
-  expect(engine.aspectModes).toEqual(AVPLAY_ASPECT_MODES);
-  expect(AVPLAY_ASPECT_MODES).toEqual(['fit', 'fill']); // no crop on AVPlay
-  engine.setAspect('fill');
-  engine.setAspect('fit');
+  expect(engine.aspectModes).toBeUndefined(); // all three modes of the player
+  expect(['fit', 'fill', 'zoom'].map((mode) => engine.setAspect(mode))).toEqual([true, true, true]);
   expect(calls).toEqual([
-    ['method', 'PLAYER_DISPLAY_MODE_FULL_SCREEN'],
-    ['rect', 0, 0, 1920, 1080],
     ['method', 'PLAYER_DISPLAY_MODE_LETTER_BOX'],
-    ['rect', 0, 0, 1920, 1080],
+    ['method', 'PLAYER_DISPLAY_MODE_FULL_SCREEN'],
+    ['method', 'PLAYER_DISPLAY_MODE_CROPPED_FULL'],
   ]);
+  refuse = true;
+  expect(engine.setAspect('zoom')).toBe(false);
 });

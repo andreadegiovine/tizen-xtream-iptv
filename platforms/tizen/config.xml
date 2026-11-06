@@ -15,7 +15,7 @@
   <access origin="*" subdomains="true"/>
   <tizen:allow-navigation>*</tizen:allow-navigation>
   <!-- The trailer player is an iframe on http://localhost:8125 (see the ytresolver service below). -->
-  <tizen:content-security-policy>default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval'; frame-src * http://localhost:8125; connect-src *;</tizen:content-security-policy>
+  <tizen:content-security-policy>default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' blob:; worker-src * blob:; frame-src * http://localhost:8125; connect-src *;</tizen:content-security-policy>
   <tizen:allow-mixed-content>true</tizen:allow-mixed-content>
   <tizen:service id="XtrmIptv01.ytresolver" type="service">
     <tizen:content src="service/service.js"/>

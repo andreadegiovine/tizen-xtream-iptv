@@ -302,9 +302,12 @@ export function createPlayerPage(ctx, params) {
   }
 
   function cycleAspect() {
-    aspect = nextAspect(engine.aspectModes || ASPECT_MODES, aspect); // the modes this engine can show (AVPlay: no zoom)
-    if (engine.setAspect) engine.setAspect(aspect);
-    ctx.notices.info(`${t('player.aspect')}: ${t(`player.aspect.${aspect}`)}`, { scope: 'playback', key: 'aspect' });
+    aspect = nextAspect(engine.aspectModes || ASPECT_MODES, aspect);
+    const applied = engine.setAspect ? engine.setAspect(aspect) : false;
+    const text = `${t('player.aspect')}: ${t(`player.aspect.${aspect}`)}`;
+    // The engine refused the mode (AVPlay throws): said, instead of a notice that suggests it changed.
+    if (applied === false) ctx.notices.warning(`${text} — ${t('player.aspect.failed')}`, { scope: 'playback', key: 'aspect' });
+    else ctx.notices.info(text, { scope: 'playback', key: 'aspect' });
   }
 
   async function openSubtitles() {

@@ -118,7 +118,8 @@
   align-items: baseline;
   min-height: 56px;
   padding: $page-top 0 20px; // the padding is part of the opaque head, so cards never show above or around it
-  background: $bg;
+  // Opaque, with the colours of the app background where it sits (under the 96 px bar, about 120 px tall).
+  background: linear-gradient(to bottom, bg-at($topbar-height), bg-at($topbar-height + 120px));
 }
 
 .browse-title {

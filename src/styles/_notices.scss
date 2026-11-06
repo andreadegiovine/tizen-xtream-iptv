@@ -23,8 +23,7 @@
   width: 100%;
   margin: 8px 0;
   padding: 18px 24px;
-  border: 3px solid transparent;
-  border-left: 8px solid $text-muted;
+  border: 3px solid transparent; // no coloured edge: the colour of the kind is on the icon only
   border-radius: 6px;
   background: $bg-raised;
   box-shadow: 0 8px 28px rgba($black, 0.55);
@@ -54,32 +53,24 @@
   }
 
   &.info {
-    border-left-color: $info;
-
     .notice-icon {
       color: $info;
     }
   }
 
   &.success {
-    border-left-color: $ok;
-
     .notice-icon {
       color: $ok;
     }
   }
 
   &.warning {
-    border-left-color: $warn;
-
     .notice-icon {
       color: $warn;
     }
   }
 
   &.error {
-    border-left-color: $fail;
-
     .notice-icon {
       color: $fail;
     }

@@ -31,30 +31,31 @@ const CACHED_KINDS = ['all', 'category', 'genre', 'network'];
 /** Every media type uses the same 6-column grid of equally sized cards (channels included). */
 export const columnsFor = () => 6;
 
-/** Where focus lands after changing page: same column, first row going forward, last row going back. */
-export function indexAfterPageChange(direction, index, pageSize, columns) {
-  const column = index % columns;
-  const rows = Math.ceil(pageSize / columns);
-  const target = direction === 'next' ? column : (rows - 1) * columns + column;
-  return Math.max(0, Math.min(target, pageSize - 1));
+/** Rows loaded beyond the bottom of the screen (the grid grows as the focus goes down; no pages). */
+export const PREFETCH_ROWS = 3;
+/** Rows on screen before they can be measured. */
+const DEFAULT_SCREEN_ROWS = 3;
+/** Cards loaded at least each time the grid grows. */
+const BATCH_ROWS = 4;
+
+/** How many cards must be loaded for the focus on `index`: up to its row, the rows on screen below it and PREFETCH_ROWS more. */
+export function wantedCount(index, columns, screenRows = DEFAULT_SCREEN_ROWS, ahead = PREFETCH_ROWS) {
+  const row = Math.floor(Math.max(0, index) / columns);
+  return (row + Math.max(1, screenRows) + ahead) * columns;
 }
 
 /**
- * Grid navigation that turns "down from the last row" / "up from the first row" into page changes
- * when another page exists; otherwise behaves as a plain GridModel (and exits the zone).
+ * Grid navigation of a grid that grows while scrolling: a plain GridModel, but Down from the last loaded row waits for the next cards
+ * (`more()` is asked for them) instead of leaving the grid when the view has more.
  */
-export function createPagedGridModel({ columns, getCount, hasNext, hasPrevious, changePage }) {
+export function createGrowingGridModel({ columns, getCount, hasMore, more }) {
   const grid = new GridModel({ columns, getCount });
   return {
     getCount,
     navigate(dir, index) {
       const result = grid.navigate(dir, index);
-      if (result.type === 'exit' && result.dir === 'down' && hasNext()) {
-        changePage('next', index);
-        return { type: 'move', index };
-      }
-      if (result.type === 'exit' && result.dir === 'up' && hasPrevious()) {
-        changePage('previous', index);
+      if (result.type === 'exit' && result.dir === 'down' && hasMore()) {
+        more();
         return { type: 'move', index };
       }
       return result;
@@ -108,7 +109,6 @@ export function indexOfFilter(items, filter) {
 export function createBrowsePage(ctx, params = {}) {
   const type = params.type;
   const columns = columnsFor(type);
-  let pageSize = 24;
   const titleEl = h('span', { class: 'browse-title' });
   const count = h('span', { class: 'muted browse-count' });
   const sepA = h('span', { class: 'browse-sep', text: '·' });
@@ -130,7 +130,6 @@ export function createBrowsePage(ctx, params = {}) {
     if (!canPin) pinBtn.classList.remove('focused');
   }
   renderHead();
-  let pages = 1;
   const catList = h('div', { class: 'browse-cats' });
   const gridEl = h('div', { class: `browse-grid ${type}` });
   const empty = h('p', { class: 'muted browse-empty', text: t('common.empty') });
@@ -149,9 +148,10 @@ export function createBrowsePage(ctx, params = {}) {
   let items = []; // sidebar entries
   let catNodes = [];
   let selected = 0; // index into `items` currently shown in the grid
-  let list = null; // fully loaded entries for continue / favourites / genre views (paged in memory)
-  let page = 0;
+  let list = null; // fully loaded entries for continue / favourites / genre views (read in memory as the grid grows)
   let hasMore = false;
+  let total = 0; // titles of the view (the number in the head)
+  let moreJob = null; // the next cards being read
   let entries = [];
   let cardNodes = [];
   let cards = [];
@@ -202,7 +202,7 @@ export function createBrowsePage(ctx, params = {}) {
     syncFavorite();
     if (stayInSidebar) ctx.focus.focus(CATS_ZONE, i);
     else revealCurrent();
-    (stayInSidebar ? loadPage(0) : loadPage(0, 0)).catch((err) => log.warn('Browse load failed', err && err.message));
+    (stayInSidebar ? loadView() : loadView(0)).catch((err) => log.warn('Browse load failed', err && err.message));
   }
 
   const countKey = (item) => `${item.kind}:${item.id === undefined ? '' : item.id}`;
@@ -290,19 +290,28 @@ export function createBrowsePage(ctx, params = {}) {
     }
   }
 
-  function renderGrid() {
-    while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
-    cards = entries.map((entry) => {
+  /** Cards for entries added at the end of the grid (the placeholders of the next row go). */
+  function appendCards(added) {
+    gridEl.querySelectorAll('.skeleton-more').forEach((node) => node.remove());
+    const made = added.map((entry) => {
       const card = createCard(entry, type, { ...(isFilterEntry(entry) ? filterCardMeta(entry) : {}), square: type === 'live' });
       gridEl.appendChild(card.el);
       return card;
     });
+    cards = cards.concat(made);
     cardNodes = cards.map((card) => card.el);
     // In the Favourites grid every card is a favourite: no heart.
-    if (ctx.enrich) ctx.enrich(entries, cards, type, false, { hideFavorite: items[selected] && items[selected].kind === 'favorites' });
+    if (ctx.enrich && made.length) ctx.enrich(added, made, type, false, { hideFavorite: items[selected] && items[selected].kind === 'favorites' });
+  }
+
+  function renderGrid() {
+    while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
+    cards = [];
+    cardNodes = [];
+    appendCards(entries);
     const name = items[selected] ? items[selected].name : '';
     titleEl.textContent = name;
-    count.textContent = entries.length ? t('browse.page', { page: formatNumber(page + 1, i18n.getLocale()), pages: formatNumber(Math.max(pages, page + 1), i18n.getLocale()) }) : '';
+    count.textContent = entries.length ? formatNumber(Math.max(total, entries.length), i18n.getLocale()) : '';
     renderHead();
     empty.style.display = entries.length ? 'none' : '';
   }
@@ -387,8 +396,68 @@ export function createBrowsePage(ctx, params = {}) {
     return null;
   }
 
-  async function loadPage(nextPage, focusIndex) {
+  /** Rows of cards the screen shows (measured once there are two rows). */
+  function screenRows() {
+    const scroller = gridEl.closest('.page');
+    const first = cardNodes[0];
+    const below = cardNodes[columns];
+    const rowHeight = first && below ? below.offsetTop - first.offsetTop : 0;
+    return scroller && rowHeight > 0 ? Math.ceil(scroller.clientHeight / rowHeight) : DEFAULT_SCREEN_ROWS;
+  }
+
+  /** The next `count` entries of the view (from the in-memory list or the catalog). */
+  async function readEntries(item, offset, count) {
+    if (LIST_KINDS.includes(item.kind)) {
+      if (!list) list = await loadList(item).catch(() => []); // read once per view, on the first cards that need it
+      return { entries: list.slice(offset, offset + count), hasMore: list.length > offset + count };
+    }
+    return pageEntries(db, { type, categoryId: viewCategory(item), offset, limit: count });
+  }
+
+  /** Adds the next cards at the end of the grid (one read at a time; a new view drops what was still arriving for the old one). */
+  function loadMore(count) {
+    if (moreJob || !hasMore) return moreJob || Promise.resolve();
+    const token = loadToken;
+    const item = items[selected] || items[0];
+    for (let i = 0; i < columns; i += 1) {
+      const placeholder = createSkeletonCard();
+      placeholder.classList.add('skeleton-more');
+      gridEl.appendChild(placeholder);
+    }
+    moreJob = readEntries(item, entries.length, Math.max(count, columns * BATCH_ROWS))
+      .then((result) => {
+        if (destroyed || token !== loadToken) return;
+        hasMore = result.hasMore;
+        entries = entries.concat(result.entries);
+        appendCards(result.entries);
+      })
+      .catch((err) => {
+        if (token === loadToken) hasMore = false; // no endless retries: the grid stops where it is
+        log.warn('Browse load failed', err && err.message);
+      })
+      .finally(() => {
+        if (token === loadToken) moreJob = null;
+        if (!hasMore) gridEl.querySelectorAll('.skeleton-more').forEach((node) => node.remove());
+      });
+    return moreJob;
+  }
+
+  /** The focus is on `index`: the cards down to PREFETCH_ROWS rows below the screen are loaded (in the background). */
+  function ensureLoaded(index) {
+    const need = wantedCount(index, columns, screenRows());
+    if (entries.length < need && hasMore) loadMore(need - entries.length).then(() => ensureLoaded(index));
+  }
+
+  /** Loads until the card at `index` exists (coming back to a title far down the grid). */
+  async function loadUntil(index) {
+    const token = loadToken;
+    while (!destroyed && token === loadToken && entries.length <= index && hasMore) await loadMore(index + 1 - entries.length);
+  }
+
+  /** Shows the grid of the selected sidebar entry from its first cards; the focus goes to `focusIndex` when given. */
+  async function loadView(focusIndex) {
     const token = (loadToken += 1);
+    moreJob = null;
     const item = items[selected] || items[0];
     if (item.kind === 'guide' || item.kind === 'scheduled') {
       await showGuide(typeof focusIndex === 'number');
@@ -399,29 +468,20 @@ export function createBrowsePage(ctx, params = {}) {
     if (!entries.length) {
       // Nothing on screen yet: pulsing placeholders instead of an empty page.
       while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
-      for (let i = 0; i < Math.min(pageSize, columns * 2); i += 1) gridEl.appendChild(createSkeletonCard());
+      for (let i = 0; i < columns * 2; i += 1) gridEl.appendChild(createSkeletonCard());
     }
-    // The first page of a catalog view (all, a category, a genre, a network) is cached; the views the user fills are not.
-    const isList = LIST_KINDS.includes(item.kind);
-    const cacheKey = nextPage === 0 && ctx.pageCache && CACHED_KINDS.includes(item.kind) ? `page:${providerId}:${type}:${item.kind}:${item.id === undefined ? '' : item.id}:${pageSize}` : null;
+    // The first cards of a catalog view (all, a category, a genre, a network) are cached; the views the user fills are not.
+    const firstCount = wantedCount(0, columns);
+    const cacheKey = ctx.pageCache && CACHED_KINDS.includes(item.kind) ? `view:${providerId}:${type}:${item.kind}:${item.id === undefined ? '' : item.id}:${firstCount}` : null;
     const hit = cacheKey ? ctx.pageCache.get(cacheKey) : null;
-    let result;
-    if (hit) {
-      list = null; // the next pages read the list on demand
-      result = { entries: hit.entries, hasMore: hit.hasMore };
-    } else {
-      if (isList && (nextPage === 0 || !list)) list = await loadList(item).catch(() => []);
-      else if (!isList) list = null;
-      if (list) result = { entries: list.slice(nextPage * pageSize, (nextPage + 1) * pageSize), hasMore: list.length > (nextPage + 1) * pageSize };
-      else result = await pageEntries(db, { type, categoryId: viewCategory(item), offset: nextPage * pageSize, limit: pageSize });
-    }
+    list = null; // the list views read their list again (on the first cards they need past the cached ones)
+    const result = hit ? { entries: hit.entries, hasMore: hit.hasMore } : await readEntries(item, 0, firstCount);
     if (destroyed || token !== loadToken) return;
-    if (nextPage === 0) {
-      pages = hit ? hit.pages : Math.max(1, Math.ceil((list ? list.length : await countEntries(db, { type, categoryId: viewCategory(item) }).catch(() => 0)) / pageSize));
-      if (cacheKey && !hit && !destroyed && token === loadToken) ctx.pageCache.set(cacheKey, { entries: result.entries, hasMore: result.hasMore, pages });
-    }
+    let count = hit ? hit.total : list ? list.length : await countEntries(db, { type, categoryId: viewCategory(item) }).catch(() => 0);
     if (destroyed || token !== loadToken) return;
-    page = nextPage;
+    count = Math.max(count, result.entries.length);
+    if (cacheKey && !hit) ctx.pageCache.set(cacheKey, { entries: result.entries, hasMore: result.hasMore, total: count });
+    total = count;
     hasMore = result.hasMore;
     entries = result.entries;
     renderGrid();
@@ -594,7 +654,7 @@ export function createBrowsePage(ctx, params = {}) {
       selected = i;
       catNodes.forEach((node, n) => node.classList.toggle('current', n === i));
       syncFavorite();
-      loadPage(0, 0).catch((err) => log.warn('Browse load failed', err && err.message));
+      loadView(0).catch((err) => log.warn('Browse load failed', err && err.message));
     },
   });
 
@@ -615,21 +675,17 @@ export function createBrowsePage(ctx, params = {}) {
 
   const gridZone = new FocusZone({
     id: GRID_ZONE,
-    model: createPagedGridModel({
+    model: createGrowingGridModel({
       columns,
       getCount: () => entries.length,
-      hasNext: () => hasMore,
-      hasPrevious: () => page > 0,
-      changePage: (direction, index) => {
-        const nextPage = direction === 'next' ? page + 1 : page - 1;
-        // The new page has a full (or last) row count; compute the landing index from the old column.
-        loadPage(nextPage, indexAfterPageChange(direction, index, pageSize, columns)).catch((err) => log.warn('Browse page failed', err && err.message));
-      },
+      hasMore: () => hasMore,
+      more: () => loadMore(columns * BATCH_ROWS),
     }),
     onFocus: (i) => {
       if (!cardNodes[i]) return;
       cardNodes[i].classList.add('focused');
       ensureVisible(cardNodes[i], { first: i < columns });
+      ensureLoaded(i);
     },
     onBlur: (i) => cardNodes[i] && cardNodes[i].classList.remove('focused'),
     onActivate: (i) => {
@@ -639,7 +695,7 @@ export function createBrowsePage(ctx, params = {}) {
         return;
       }
       const item = items[selected];
-      ctx.openEntry(entries[i], { section: params.section, live: { categoryId: item && item.kind === 'all' ? allCategory() : item && item.kind === 'category' ? item.id : null, offset: page * pageSize + i } });
+      ctx.openEntry(entries[i], { section: params.section, live: { categoryId: item && item.kind === 'all' ? allCategory() : item && item.kind === 'category' ? item.id : null, offset: i } });
     },
   });
 
@@ -652,7 +708,6 @@ export function createBrowsePage(ctx, params = {}) {
     db = current.db; // shared handle: never closed here
     providerId = current.provider.id;
     const prefs = await ctx.settings.get();
-    pageSize = prefs.gridItems;
     timeFormat = prefs.timeFormat || 'auto';
     const excluded = await ctx.settings.getExcluded(providerId, type);
     pinned = await ctx.pins.list(providerId, type).catch(() => []);
@@ -710,8 +765,8 @@ export function createBrowsePage(ctx, params = {}) {
     selected = indexOfFilter(items, filter);
     renderCategories();
     syncFavorite();
-    await loadPage(0);
-    if (!destroyed && back && back.page > 0) await loadPage(back.page);
+    await loadView();
+    if (!destroyed && back && back.zone === GRID_ZONE && back.index > 0) await loadUntil(back.index);
     if (destroyed) return;
     // Land in the grid when there is something to browse, otherwise on the sidebar (a section that became empty, like Continue
     // watching after its last title was marked as seen).
@@ -788,7 +843,7 @@ export function createBrowsePage(ctx, params = {}) {
             setCount('scheduled:', n);
             const wasScheduled = items[selected] && items[selected].kind === 'scheduled';
             if (had !== n > 0) rebuildSidebar();
-            if (wasScheduled && !n) loadPage(0);
+            if (wasScheduled && !n) loadView();
             else if (guide && guideKind === 'scheduled') guide.reload();
           });
       }
@@ -815,7 +870,6 @@ export function createBrowsePage(ctx, params = {}) {
         expanded,
         networksExpanded,
         genresExpanded,
-        page,
         zone,
         index: ctx.focus.active && ctx.focus.activeId === zone ? ctx.focus.active.index : 0,
         guide: guide ? guide.state() : null,
