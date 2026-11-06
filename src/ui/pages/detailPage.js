@@ -1,6 +1,7 @@
 import { h } from '../dom.js';
 import { cssUrl } from '../cssUrl.js';
 import { isEmptySeries, markUnavailable } from '../../services/unavailable.js';
+import { scheduleId, LEAD_MS } from '../../services/scheduledViewing.js';
 import { formatClockTime } from '../../core/clock.js';
 import { t, i18n } from '../../i18n/index.js';
 import { icon } from '../icons.js';
@@ -586,6 +587,7 @@ export function createDetailPage(ctx, params) {
     else clear(actionsEl);
 
     renderCategories(next);
+    renderEpg(next);
     renderEpisodes(next, episodes);
     renderCast(next);
     renderRelated(next);
@@ -722,17 +724,81 @@ export function createDetailPage(ctx, params) {
     if (entry.type === 'live' && ctx.epg) loadEpg();
   }
 
+  /** The programmes of the next 24 hours (same data as the guide grid) and the ones whose viewing is scheduled. */
+  let epgList = [];
+  let scheduledIds = new Set();
+  const programmeItem = (p) => ({ providerId, entryKey: entry.key, entryName: entry.name, channelId: entry.epgChannelId, title: p.title, start: p.start, stop: p.stop });
+
+  async function refreshScheduled() {
+    const list = ctx.schedules ? await ctx.schedules.list(providerId) : [];
+    scheduledIds = new Set(list.map(scheduleId));
+  }
+
   async function loadEpg() {
     try {
-      const list = await ctx.epg.upcoming(entry.epgChannelId);
-      if (destroyed || !list.length) return;
-      epgEl.appendChild(h('h2', { text: t('detail.epg') }));
-      list.forEach((p) => {
-        epgEl.appendChild(h('div', { class: 'epg-row' }, h('span', { class: 'epg-time', text: formatClockTime(new Date(p.start), 'auto', i18n.getLocale()) }), h('span', { text: p.title })));
-      });
+      epgList = await ctx.epg.upcoming(entry.epgChannelId);
+      await refreshScheduled();
+      if (destroyed || !epgList.length) return;
+      build();
     } catch (err) {
       log.warn('EPG failed', err && err.message);
     }
+  }
+
+  /** The programme list as a focusable list: OK opens its actions (schedule the viewing, or cancel it). */
+  function renderEpg(next) {
+    clear(epgEl);
+    if (!epgList.length) return;
+    epgEl.appendChild(h('h2', { text: t('detail.epg') }));
+    const at = Date.now();
+    const nodes = epgList.map((p) =>
+      h(
+        'div',
+        { class: `epg-row${p.start <= at && p.stop > at ? ' now' : ''}` },
+        h('span', { class: 'epg-time', text: formatClockTime(new Date(p.start), 'auto', i18n.getLocale()) }),
+        h('span', { class: 'epg-title', text: p.title }),
+        scheduledIds.has(scheduleId(programmeItem(p))) ? icon('scheduled', 'epg-scheduled') : null,
+      ),
+    );
+    nodes.forEach((node) => epgEl.appendChild(node));
+    const zone = new FocusZone({
+      id: 'detailEpg',
+      model: new ListModel({ orientation: 'vertical', getCount: () => nodes.length }),
+      onFocus: (i) => {
+        nodes[i].classList.add('focused');
+        ensureVisible(nodes[i], { margin: 120 });
+      },
+      onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
+      onActivate: (i) => programmeActions(epgList[i]).catch((err) => log.warn('Programme action failed', err && err.message)),
+    });
+    next.push({ id: 'detailEpg', zone });
+  }
+
+  async function programmeActions(p) {
+    if (!ctx.schedules) return;
+    const item = programmeItem(p);
+    const scheduled = scheduledIds.has(scheduleId(item));
+    if (!scheduled && p.start <= Date.now() + LEAD_MS) {
+      ctx.notices.info(t('schedule.started'), { key: 'schedule' });
+      return;
+    }
+    const option = scheduled ? { label: t('schedule.cancel'), value: 'cancel', icon: 'unschedule' } : { label: t('schedule.add'), value: 'add', icon: 'schedule' };
+    const value = await ctx.dialogs.choose({ title: p.title, options: [option] });
+    if (!value || destroyed) return;
+    try {
+      if (value === 'add') {
+        await ctx.schedules.add(item);
+        ctx.notices.success(t('schedule.added'), { key: 'schedule' });
+      } else {
+        await ctx.schedules.remove(item);
+        ctx.notices.info(t('schedule.removed'), { key: 'schedule' });
+      }
+    } catch (err) {
+      if (err && err.code === 'CONFLICT') ctx.notices.error(t('schedule.conflict'), { key: 'schedule' });
+      else throw err;
+    }
+    await refreshScheduled();
+    if (!destroyed) build(); // the icon appears / goes, the focus stays on the programme
   }
 
   return {

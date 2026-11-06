@@ -4,6 +4,7 @@ export const Action = Object.freeze({
   LEFT: 'left',
   RIGHT: 'right',
   ENTER: 'enter',
+  LONG_ENTER: 'longEnter', // OK held down (only where the focused element has a long-press action)
   BACK: 'back',
   PLAY: 'play',
   PAUSE: 'pause',
@@ -37,6 +38,9 @@ export const KEY_MAP = Object.freeze({
   34: Action.CHANNEL_DOWN,
 });
 
+/** OK held this long is a long press (row actions in the programme guide). */
+export const LONG_PRESS_MS = 600;
+
 const THROTTLED = new Set([Action.UP, Action.DOWN, Action.LEFT, Action.RIGHT]);
 const TIZEN_EXTRA_KEYS = [
   'MediaPlay',
@@ -61,8 +65,14 @@ export function isTextEditing(doc) {
 
 /** Single place that reads the keyboard/remote: the rest of the app only sees abstract actions. */
 export class InputService {
-  constructor(target = document, { minRepeatMs = 80, now = () => Date.now() } = {}) {
+  constructor(target = document, { minRepeatMs = 80, now = () => Date.now(), longPressMs = LONG_PRESS_MS, holdsEnter = () => false } = {}) {
     this.target = target;
+    this.longPressMs = longPressMs;
+    /** True when the focused element has a long-press action: then OK is told apart (short on release, long after `longPressMs`). */
+    this.holdsEnter = holdsEnter;
+    this.enterTimer = null;
+    this.enterLong = false;
+    this.onKeyUp = this.onKeyUp.bind(this);
     this.doc = target.nodeType === 9 ? target : target.ownerDocument;
     this.minRepeatMs = minRepeatMs;
     this.now = now;
@@ -73,10 +83,26 @@ export class InputService {
 
   start() {
     this.target.addEventListener('keydown', this.onKeyDown);
+    this.target.addEventListener('keyup', this.onKeyUp);
   }
 
   stop() {
     this.target.removeEventListener('keydown', this.onKeyDown);
+    this.target.removeEventListener('keyup', this.onKeyUp);
+  }
+
+  emit(action, event) {
+    Array.from(this.handlers).forEach((handler) => handler(action, event));
+  }
+
+  /** OK released: a short press when the long one did not fire. */
+  onKeyUp(event) {
+    if (actionFromKeyCode(event.keyCode) !== Action.ENTER || (!this.enterTimer && !this.enterLong)) return;
+    const short = Boolean(this.enterTimer);
+    clearTimeout(this.enterTimer);
+    this.enterTimer = null;
+    this.enterLong = false;
+    if (short) this.emit(Action.ENTER, event);
   }
 
   onAction(handler) {
@@ -100,11 +126,20 @@ export class InputService {
     // While the on-screen keyboard is open the field owns every key.
     if (isTextEditing(this.doc)) return;
     event.preventDefault();
+    if (action === Action.ENTER && (this.enterTimer || this.enterLong)) return; // OK still held (the remote repeats it)
+    if (action === Action.ENTER && this.holdsEnter()) {
+      this.enterTimer = setTimeout(() => {
+        this.enterTimer = null;
+        this.enterLong = true;
+        this.emit(Action.LONG_ENTER, event);
+      }, this.longPressMs);
+      return;
+    }
     if (THROTTLED.has(action)) {
       const t = this.now();
       if (t - (this.lastAt[action] || 0) < this.minRepeatMs) return;
       this.lastAt[action] = t;
     }
-    Array.from(this.handlers).forEach((handler) => handler(action, event));
+    this.emit(action, event);
   }
 }

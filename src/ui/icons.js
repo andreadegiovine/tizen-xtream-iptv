@@ -1,4 +1,9 @@
 import { faHouse } from '@fortawesome/free-solid-svg-icons/faHouse';
+import { faArrowUp } from '@fortawesome/free-solid-svg-icons/faArrowUp';
+import { faArrowDown } from '@fortawesome/free-solid-svg-icons/faArrowDown';
+import { faCalendarPlus } from '@fortawesome/free-solid-svg-icons/faCalendarPlus';
+import { faCalendarCheck } from '@fortawesome/free-solid-svg-icons/faCalendarCheck';
+import { faCalendarXmark } from '@fortawesome/free-solid-svg-icons/faCalendarXmark';
 import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlass';
 import { faGear } from '@fortawesome/free-solid-svg-icons/faGear';
 import { faServer } from '@fortawesome/free-solid-svg-icons/faServer';
@@ -69,6 +74,11 @@ const ICONS = {
   chevron: faChevronDown,
   user: faUser,
   clock: faClock,
+  moveUp: faArrowUp,
+  moveDown: faArrowDown,
+  schedule: faCalendarPlus, // schedule the viewing of a programme
+  scheduled: faCalendarCheck, // a programme whose viewing is scheduled
+  unschedule: faCalendarXmark,
   heart: faHeart,
   seen: faEye,
   trailer: faClapperboard,

@@ -3,11 +3,12 @@ import { createCard } from './card.js';
 import { t, i18n } from '../../i18n/index.js';
 import { formatClockTime } from '../../core/clock.js';
 import { log } from '../../core/logger.js';
+import { icon } from '../icons.js';
 
 /** Minutes → pixels on the time axis (a half hour is 240 px: a 30-minute programme shows a title of ~20 letters). */
 export const PX_PER_MIN = 8;
 export const ROW_HEIGHT = 128;
-export const CHANNEL_WIDTH = 220;
+export const CHANNEL_WIDTH = 132;
 export const RULER_HEIGHT = 44;
 const HALF_HOUR = 30 * 60 * 1000;
 const HOUR = 2 * HALF_HOUR;
@@ -66,9 +67,11 @@ export function scrollFor(segment, start, x, width) {
  * programmes; the axis and the rows scroll with transforms only, and only the rows on screen exist (thousands of channels).
  *
  * `loadRows(offset, limit)` → { entries }, `countRows()` → number, `programmes(channelIds, from, to)` → Map(channelId → list),
- * `onOpen(entry, row)`, `getTimeFormat()` → '24h' | '12h' | 'auto'.
+ * `onOpen(entry, row)`, `getTimeFormat()` → '24h' | '12h' | 'auto'. `emptyText`: what a hole of the guide says.
+ * OK held on a row selects it (channel and programmes) and shows `rowActions` ({ id, icon, label }, left to right) at its right:
+ * Left / Right move between them, OK runs `onRowAction(id, entry, row)`, Back (`cancelRowMode()`) gives the normal focus back.
  */
-export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTimeFormat = () => 'auto', enrich = null, now = Date.now }) {
+export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTimeFormat = () => 'auto', enrich = null, now = Date.now, emptyText = null, rowActions = [], onRowAction = null, defaultRowAction = 0 }) {
   const start = floorHalfHour(now()) - PAST_MS;
   const end = start + SPAN_MS + PAST_MS;
   const ruler = h('div', { class: 'epg-ruler' });
@@ -77,7 +80,12 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
   const rowsEl = h('div', { class: 'epg-rows' });
   const nowLine = h('div', { class: 'epg-now' });
   const status = h('p', { class: 'muted epg-status' });
-  const el = h('div', { class: 'epg-guide' }, h('div', { class: 'epg-top' }, corner, rulerViewport), h('div', { class: 'epg-body' }, rowsEl, nowLine), status);
+  const actionButtons = rowActions.map((a) => h('button', { class: 'icon-btn', type: 'button', 'aria-label': a.label, title: a.label }, icon(a.icon)));
+  const actionsEl = h('div', { class: 'guide-row-actions' }, actionButtons);
+  actionsEl.style.display = 'none';
+  const selection = h('div', { class: 'guide-row-selection' });
+  selection.style.display = 'none';
+  const el = h('div', { class: 'epg-guide' }, h('div', { class: 'epg-top' }, corner, rulerViewport), h('div', { class: 'epg-body' }, rowsEl, nowLine, selection, actionsEl), status);
   ruler.style.width = `${xOf(end, start)}px`;
 
   let total = 0;
@@ -94,6 +102,8 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
   let destroyed = false;
   let rowNodes = new Map(); // row → { el, track, segments, segNodes }
   let clock = null;
+  let rowMode = null; // { button } while a row is selected (OK held)
+  const noInfo = () => (emptyText === null ? t('epg.noInfo') : emptyText);
 
   const viewWidth = () => Math.max(200, (rowsEl.clientWidth || 1600) - CHANNEL_WIDTH);
 
@@ -194,13 +204,13 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
     } else channel.appendChild(h('div', { class: 'skeleton-block epg-channel-skeleton' }));
     const segments = segmentsOf(row);
     const segNodes = segments.map((seg) => {
-      const node = h('div', { class: `epg-prog${seg.empty ? ' empty' : ''}${seg.loading ? ' loading' : ''}${seg.programme && seg.start <= now() && seg.stop > now() ? ' live' : ''}` }, h('span', { class: `epg-prog-title${seg.loading ? ' skeleton-line' : ''}`, text: seg.loading ? '' : seg.title || t('epg.noInfo') }));
+      const node = h('div', { class: `epg-prog${seg.empty ? ' empty' : ''}${seg.loading ? ' loading' : ''}${seg.programme && seg.start <= now() && seg.stop > now() ? ' live' : ''}` }, h('span', { class: `epg-prog-title${seg.loading ? ' skeleton-line' : ''}`, text: seg.loading ? '' : seg.title || noInfo() }));
       node.style.left = `${xOf(seg.start, start)}px`;
       node.style.width = `${Math.max(2, xOf(seg.stop, start) - xOf(seg.start, start))}px`;
       track.appendChild(node);
       return node;
     });
-    const rowEl = h('div', { class: 'epg-row' }, channel, h('div', { class: 'epg-track-viewport' }, track));
+    const rowEl = h('div', { class: 'guide-row' }, channel, h('div', { class: 'epg-track-viewport' }, track));
     rowEl.style.transform = `translateY(${(row - first) * ROW_HEIGHT}px)`;
     track.style.transform = `translateX(${-Math.round(x)}px)`;
     const node = { el: rowEl, track, segments, segNodes, entry, loaded: Boolean(entry) && !(segments[0] && segments[0].loading) };
@@ -245,8 +255,17 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
   function paintFocus() {
     rowNodes.forEach((node, row) => {
       node.el.classList.toggle('current', focused && row === focusRow);
-      node.segNodes.forEach((seg, i) => seg.classList.toggle('focused', focused && row === focusRow && i === focusSeg));
+      node.segNodes.forEach((seg, i) => seg.classList.toggle('focused', focused && !rowMode && row === focusRow && i === focusSeg));
     });
+    // The selected row: one frame around channel and programmes, the actions on its right.
+    const shown = Boolean(rowMode && focused);
+    selection.style.display = shown ? '' : 'none';
+    actionsEl.style.display = shown ? '' : 'none';
+    if (!shown) return;
+    const y = `translateY(${(focusRow - first) * ROW_HEIGHT}px)`;
+    selection.style.transform = y;
+    actionsEl.style.transform = y;
+    actionButtons.forEach((b, i) => b.classList.toggle('focused', i === rowMode.button));
   }
 
   /** Moves the focus to a row, on the programme at `focusTime`, scrolling rows and axis as needed. */
@@ -274,6 +293,12 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
   const model = {
     getCount: () => (total > 0 ? 1 : 0),
     navigate(dir) {
+      if (rowMode) {
+        if (dir === 'left') rowMode.button = Math.max(0, rowMode.button - 1);
+        if (dir === 'right') rowMode.button = Math.min(actionButtons.length - 1, rowMode.button + 1);
+        paintFocus();
+        return { type: 'move', index: 0 };
+      }
       const segments = segmentsOf(focusRow);
       if (dir === 'left') {
         if (focusSeg <= 0 || (segments[focusSeg] && segments[focusSeg].start <= start)) return { type: 'exit', dir };
@@ -331,7 +356,45 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
     },
     activate() {
       const entry = entries[focusRow];
-      if (entry) onOpen(entry, focusRow);
+      if (!entry) return;
+      if (rowMode) {
+        if (onRowAction) onRowAction(rowActions[rowMode.button].id, entry, focusRow);
+        return;
+      }
+      onOpen(entry, focusRow);
+    },
+    /** OK held: the row is selected and its actions shown. */
+    longActivate() {
+      if (!rowActions.length || !entries[focusRow]) return;
+      rowMode = { button: Math.max(0, Math.min(defaultRowAction, rowActions.length - 1)) };
+      paintFocus();
+    },
+    /** Back while a row is selected: the normal focus again. True when there was a selection. */
+    cancelRowMode() {
+      if (!rowMode) return false;
+      rowMode = null;
+      paintFocus();
+      return true;
+    },
+    inRowMode: () => Boolean(rowMode),
+    /** The rows changed (order, removed ones): read again, focus on `row`; the selection stays when `keepRowMode`. */
+    async reload({ row = focusRow, keepRowMode = false } = {}) {
+      if (!keepRowMode) rowMode = null;
+      entries.length = 0;
+      pagesLoading.clear();
+      rowNodes.forEach((node) => node.el.remove());
+      rowNodes = new Map();
+      total = await countRows().catch(() => 0);
+      if (destroyed) return;
+      status.textContent = total ? '' : t('common.empty');
+      if (!total) {
+        rowMode = null;
+        render();
+        return;
+      }
+      await ensurePage(Math.floor(Math.min(row, total - 1) / ROW_PAGE));
+      if (destroyed) return;
+      focusAt(Math.min(row, total - 1));
     },
     /** Where the focus is (row) and the scroll, to come back to the same place. */
     state: () => ({ row: focusRow, time: focusTime }),

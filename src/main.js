@@ -25,6 +25,7 @@ import { CatalogSyncService } from './services/catalogSyncService.js';
 import { createCatalogWorker } from './services/createCatalogWorker.js';
 import { startRebuild } from './services/catalogRebuild.js';
 import { createJobQueue } from './services/jobQueue.js';
+import { createScheduledViewing } from './services/scheduledViewing.js';
 import { createEpgService } from './services/epgService.js';
 import { createEpgWorker } from './services/createEpgWorker.js';
 import { createTmdbClient } from './services/tmdbClient.js';
@@ -142,6 +143,26 @@ async function boot() {
   ctx.tmdb = tmdb;
   ctx.operations = createOperations();
   ctx.syncLog = createSyncLog({ db, operations: ctx.operations });
+  // Scheduled viewing: a notice NOTICE_MS before, then the channel starts LEAD_MS before the programme (while the app is open).
+  ctx.schedules = createScheduledViewing({ db });
+  const runSchedules = async () => {
+    const due = await ctx.schedules.due();
+    for (const s of due.notice) {
+      await ctx.schedules.markNoticed(s);
+      ctx.notices.info(t('schedule.startingSoon', { title: s.title, channel: s.entryName }), { key: 'schedule' });
+    }
+    for (const s of due.start) {
+      await ctx.schedules.remove(s);
+      const current = await active.get();
+      if (!current || current.provider.id !== s.providerId) continue;
+      const entry = await getEntry(current.db, s.entryKey);
+      if (!entry) continue;
+      log.info(`Scheduled viewing: ${s.title} on ${entry.name}`);
+      ctx.router.push('player', { type: 'live', entryKey: entry.key, title: entry.name, icon: entry.icon, playlist: [{ id: entry.defaultId, ext: '', title: '' }], index: 0, epgChannelId: entry.epgChannelId, section: 'live' });
+      break; // one channel at a time
+    }
+  };
+  setInterval(() => runSchedules().catch((err) => log.warn('Scheduled viewing failed', err && err.message)), 5000);
   // What Settings asks (updates, rebuilds) runs one job at a time, after any catalog / genre / TMDB work already running.
   const EXCLUSIVE = ['catalog', 'tmdb', 'genres', 'rebuild'];
   ctx.jobs = createJobQueue({
@@ -420,7 +441,7 @@ async function boot() {
     }),
   });
 
-  const input = new InputService(document);
+  const input = new InputService(document, { holdsEnter: () => Boolean(focus.active && focus.active.onLongActivate) });
   input.registerTizenKeys();
   input.onAction((action) => {
     if (action === Action.BACK) {

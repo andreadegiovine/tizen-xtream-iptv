@@ -10,8 +10,9 @@ const DIRECTIONS = {
 
 /** A focusable region (topbar, grid, form...). It remembers its own index. */
 export class FocusZone {
-  constructor({ id, model, onFocus, onBlur, onActivate }) {
+  constructor({ id, model, onFocus, onBlur, onActivate, onLongActivate = null }) {
     this.id = id;
+    this.onLongActivate = onLongActivate; // OK held down (null: a long press is a normal one)
     this.model = model;
     this.onFocus = onFocus || (() => {});
     this.onBlur = onBlur || (() => {});
@@ -83,6 +84,10 @@ export class FocusManager {
     if (!zone) return false;
     if (action === Action.ENTER) {
       zone.onActivate(zone.index);
+      return true;
+    }
+    if (action === Action.LONG_ENTER) {
+      (zone.onLongActivate || zone.onActivate)(zone.index);
       return true;
     }
     const dir = DIRECTIONS[action];

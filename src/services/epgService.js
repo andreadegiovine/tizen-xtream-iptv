@@ -54,6 +54,37 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
     return out;
   }
 
+  /**
+   * The channels that have at least one programme on between two instants (the guide leaves out the ones without): one pass over the
+   * keys of the store, jumping from channel to channel.
+   */
+  async function channelsWithGuide(from, to) {
+    const out = new Set();
+    const current = await active.get();
+    if (!current) return out;
+    const back = from - 12 * 3600 * 1000;
+    const store = current.db.transaction('epg', 'readonly').objectStore('epg');
+    await new Promise((resolve, reject) => {
+      const req = store.openCursor();
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (!cursor) {
+          resolve();
+          return;
+        }
+        const [id, start] = cursor.key;
+        if (start < back) cursor.continue([id, back]); // to the part of this channel that can matter
+        else if (start < to && cursor.value.stop > from) {
+          out.add(id);
+          cursor.continue([id, []]); // an array sorts after every number: the next channel
+        } else if (start >= to) cursor.continue([id, []]);
+        else cursor.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+    return out;
+  }
+
   /** Runs the sync in a worker, or on the main thread when no worker can be created. */
   function runJob(provider, force) {
     return new Promise((resolve) => {
@@ -106,6 +137,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
     },
     nowNext,
     programmesBetween,
+    channelsWithGuide,
     upcoming,
     /** Fills channel cards with "now playing" as the answers arrive. */
     decorate(entries, cards) {

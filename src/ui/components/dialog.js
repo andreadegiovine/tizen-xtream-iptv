@@ -65,8 +65,11 @@ export function createDialogService({ focus, root = document.body }) {
   function choose({ title, options, selected }) {
     if (current) return current.promise;
     const previous = snapshot();
+    // An option can carry an icon (`option.icon`) before its label: the actions of a programme, say.
     const nodes = options.map((option, i) =>
-      h('div', { class: `choice${option.value === selected ? ' current' : ''}`, text: option.label, 'data-i': i }),
+      option.icon
+        ? h('div', { class: `choice with-icon${option.value === selected ? ' current' : ''}`, 'data-i': i }, icon(option.icon), h('span', { text: option.label }))
+        : h('div', { class: `choice${option.value === selected ? ' current' : ''}`, text: option.label, 'data-i': i }),
     );
     const list = h('div', { class: 'choice-list' }, nodes);
     const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog' }, h('h2', { text: title }), list));

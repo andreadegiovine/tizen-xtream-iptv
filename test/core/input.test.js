@@ -45,3 +45,35 @@ describe('InputService', () => {
     expect(seen).toEqual([]);
   });
 });
+
+test('OK held on an element with a long-press action is a long press; a short one fires on release', () => {
+  jest.useFakeTimers();
+  const target = new EventTarget();
+  target.nodeType = 9;
+  target.activeElement = null;
+  let holds = true;
+  const input = new InputService(target, { holdsEnter: () => holds, longPressMs: 600 });
+  const seen = [];
+  input.onAction((a) => seen.push(a));
+  input.start();
+  const key = (type, repeat = false) => {
+    const e = new Event(type);
+    e.keyCode = 13;
+    e.repeat = repeat;
+    target.dispatchEvent(e);
+  };
+  key('keydown');
+  key('keyup');
+  expect(seen).toEqual(['enter']);
+  key('keydown');
+  jest.advanceTimersByTime(300);
+  key('keydown', true); // the remote repeats while held
+  jest.advanceTimersByTime(400);
+  key('keyup');
+  expect(seen).toEqual(['enter', 'longEnter']);
+  holds = false;
+  key('keydown');
+  expect(seen).toEqual(['enter', 'longEnter', 'enter']); // elsewhere OK acts at once
+  key('keyup');
+  jest.useRealTimers();
+});

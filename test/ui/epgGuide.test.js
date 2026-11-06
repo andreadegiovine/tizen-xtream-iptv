@@ -71,3 +71,36 @@ test('Up / Down keep the time, Left / Right go from programme to programme, Left
   g.destroy();
   g.el.remove();
 });
+
+test('OK held selects the row and shows its actions; Left / Right move between them, OK runs one, Back gives the focus back', async () => {
+  const now = 1000 * 30 * M;
+  const rows = [{ key: 'live:1', type: 'live', name: 'One', epgChannelId: 'one' }];
+  const ran = [];
+  const g = createEpgGuide({
+    loadRows: async () => ({ entries: rows }),
+    countRows: async () => 1,
+    programmes: async () => new Map([['one', [{ start: now, stop: now + 30 * M, title: 'News' }]]]),
+    onOpen: () => ran.push('open'),
+    rowActions: [{ id: 'down', icon: 'moveDown', label: 'Down' }, { id: 'up', icon: 'moveUp', label: 'Up' }, { id: 'remove', icon: 'remove', label: 'Remove' }],
+    defaultRowAction: 1,
+    onRowAction: (id, entry) => ran.push(`${id}:${entry.key}`),
+    now: () => now,
+  });
+  document.body.appendChild(g.el);
+  await g.start();
+  await tick();
+  g.onFocus();
+  g.longActivate();
+  expect(g.inRowMode()).toBe(true);
+  expect(g.el.querySelector('.guide-row-selection').style.display).toBe('');
+  expect(g.el.querySelector('.guide-row-actions .focused').getAttribute('aria-label')).toBe('Up');
+  g.model.navigate('right');
+  g.activate();
+  expect(ran).toEqual(['remove:live:1']);
+  expect(g.cancelRowMode()).toBe(true);
+  expect(g.cancelRowMode()).toBe(false);
+  g.activate();
+  expect(ran).toEqual(['remove:live:1', 'open']);
+  g.destroy();
+  g.el.remove();
+});

@@ -184,14 +184,46 @@
     padding: 32px $gutter 16px 24px;
   }
 
+  // Programmes of the next 24 hours: a list like the search suggestions; OK opens the actions of one.
   .epg-row {
     display: flex;
-    padding: 6px 0;
+    align-items: center;
+    max-width: 1100px;
+    padding: 10px 16px;
+    border-radius: 6px;
     font-size: 1.5rem;
 
     .epg-time {
-      width: 120px;
+      flex: none;
+      width: 130px;
       color: $text-muted;
+    }
+
+    .epg-title {
+      flex: 1;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .epg-scheduled {
+      flex: none;
+      width: 1.4rem;
+      height: 1.4rem;
+      margin-left: 16px;
+    }
+
+    &.now .epg-title {
+      font-weight: 700;
+    }
+
+    &.focused {
+      background: $text;
+      color: $bg;
+
+      .epg-time {
+        color: $bg;
+      }
     }
   }
 }

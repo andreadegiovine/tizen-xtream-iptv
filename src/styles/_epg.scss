@@ -3,7 +3,7 @@
 @use 'tokens' as *;
 
 $epg-row: 128px;
-$epg-channel: 220px;
+$epg-channel: 132px;
 $epg-ruler: 44px;
 
 .epg-guide {
@@ -62,7 +62,7 @@ $epg-ruler: 44px;
   overflow: hidden;
 }
 
-.epg-row {
+.guide-row {
   position: absolute;
   top: 0;
   left: 0;
@@ -76,38 +76,52 @@ $epg-ruler: 44px;
   flex: none;
   box-sizing: border-box;
   width: $epg-channel;
-  padding: 6px 12px 6px 0;
+  padding: 6px 16px 6px 0;
   background: $bg; // stays above the programmes that slide under it
 
+  // The channel's card, small and square (logo, name; the badge of a group of channels stays).
   .card {
-    width: 100%;
+    width: 112px;
     margin: 0;
-    padding: 2px;
+    padding: 0;
     border-width: 2px;
 
     .card-poster {
-      height: 76px;
+      width: 100%;
+      height: 84px;
       padding-bottom: 0;
     }
 
     .card-title {
       margin-top: 4px;
-      font-size: 0.85rem;
+      padding: 0 2px;
+      font-size: 0.8rem;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .card-meta,
-    .card-badges,
-    .card-status,
     .card-progress {
       display: none;
+    }
+
+    .card-badges,
+    .card-status {
+      transform: scale(0.7);
+    }
+
+    .card-badges {
+      transform-origin: top right;
+    }
+
+    .card-status {
+      transform-origin: top left;
     }
   }
 }
 
-.epg-row.current .epg-channel .card {
+.guide-row.current .epg-channel .card {
   border-color: rgba($text, 0.5);
 }
 
@@ -185,6 +199,41 @@ $epg-ruler: 44px;
     height: 12px;
     border-radius: 50%;
     background: $accent;
+  }
+}
+
+.guide-row-selection {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: $epg-row;
+  box-sizing: border-box;
+  border: 3px solid $text;
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+// The actions of the selected row, right-aligned on it.
+.guide-row-actions {
+  position: absolute;
+  top: 0;
+  right: 12px;
+  height: $epg-row;
+  display: flex;
+  align-items: center;
+  z-index: 4;
+
+  .icon-btn {
+    width: 96px;
+    margin: 0 0 0 12px;
+    background: $bg;
+
+    &.focused {
+      background: $text;
+      color: $bg;
+    }
   }
 }
 
