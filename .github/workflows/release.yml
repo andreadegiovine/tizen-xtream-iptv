@@ -7,7 +7,9 @@ name: Release
 # Assets attached to the release, named xtream-iptv-<version>_<platform>.<ext>:
 #   - xtream-iptv-<version>_tizen.wgt   Samsung Tizen, signed production widget   (+ .sha256)
 #   - xtream-iptv-<version>_webos.ipk   LG webOS, for TVs in Developer Mode       (+ .sha256)
-#   (next: _firetv.apk / _androidtv.apk, then the desktop apps — see docs/MULTIPLATFORM.md)
+#   - xtream-iptv-<version>_windows-x64.exe, _macos-x64.dmg, _macos-arm64.dmg, _linux-x64.AppImage, _linux-x64.deb
+#                                       desktop app (Electron), not signed        (+ .sha256)
+#   (next: _firetv.apk / _androidtv.apk — see docs/MULTIPLATFORM.md)
 #
 # Secrets: TIZEN_CERT_PASSWORD (password of platforms/tizen/tizencert.p12).
 # TMDB and Trakt keys are not part of the build: they are typed in the app Settings.
@@ -102,6 +104,50 @@ jobs:
 
       - name: Package the app
         run: bash platforms/webos/package.sh "$VERSION" release
+
+      - name: Upload assets to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" release/* --clobber
+
+  # The desktop app, each system on its own machine (electron-builder makes the installer of the system it runs on).
+  desktop:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: linux
+            runner: ubuntu-latest
+          - system: windows
+            runner: windows-latest
+          - system: macos
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Stamp version
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      # Production build for the desktop app -> dist/.
+      - run: npm run build:desktop
+
+      - name: Package the app
+        run: bash platforms/desktop/package.sh "$VERSION" release "${{ matrix.system }}"
 
       - name: Upload assets to the release
         env:

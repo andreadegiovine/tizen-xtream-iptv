@@ -1,0 +1,30 @@
+{
+  "appId": "com.xtrmiptv.desktop",
+  "productName": "Xtream IPTV",
+  "electronVersion": "44.9.3",
+  "directories": { "output": "out", "buildResources": "build" },
+  "files": ["main.js", "package.json", "app/**/*"],
+  "asar": true,
+  "publish": null,
+  "win": {
+    "target": [{ "target": "nsis", "arch": ["x64"] }],
+    "artifactName": "xtream-iptv-${version}_windows-x64.${ext}"
+  },
+  "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
+  "mac": {
+    "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+    "category": "public.app-category.entertainment",
+    "identity": null,
+    "artifactName": "xtream-iptv-${version}_macos-${arch}.${ext}"
+  },
+  "linux": {
+    "target": [
+      { "target": "AppImage", "arch": ["x64"] },
+      { "target": "deb", "arch": ["x64"] }
+    ],
+    "category": "AudioVideo",
+    "maintainer": "Xtream IPTV <noreply@xtream-iptv.invalid>",
+    "artifactName": "xtream-iptv-${version}_linux-x64.${ext}",
+    "syncDesktopName": true
+  }
+}

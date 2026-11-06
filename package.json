@@ -12,12 +12,15 @@
   "scripts": {
     "dev": "webpack serve --mode development",
     "dev:webos": "webpack serve --mode development --env platform=webos",
+    "desktop": "npm run build:desktop && npx --yes electron@44.9.3 platforms/desktop/electron/main.js",
     "build": "webpack --mode production",
     "build:tizen": "webpack --mode production --env platform=tizen",
     "build:webos": "webpack --mode production --env platform=webos",
+    "build:desktop": "webpack --mode production --env platform=desktop",
     "postbuild": "node scripts/check-dist.js",
     "postbuild:tizen": "node scripts/check-dist.js",
     "postbuild:webos": "node scripts/check-dist.js",
+    "postbuild:desktop": "node scripts/check-dist.js",
     "test": "jest",
     "lint": "eslint .",
     "mock": "node scripts/mock-xtream/server.js",
@@ -33,7 +36,8 @@
     "globals": {
       "__DEV__": false,
       "__APP_VERSION__": "test",
-      "__PLATFORM__": "tizen"
+      "__PLATFORM__": "tizen",
+      "__JS_DEMUX__": true
     },
     "transform": {
       "\\.js$": "babel-jest",

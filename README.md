@@ -138,6 +138,8 @@ platforms/
   tizen/      adapter (AVPlay, remote keys, system info, YouTube trailers), config.xml, YouTube service,
               signing certificate, build.js (files webpack copies) and package.sh (signed .wgt)
   webos/      adapter (<video>, Back 461, YouTube app via Luna), appinfo.json, build.js and package.sh (.ipk)
+  desktop/    adapter (<video> + hls.js / mpegts.js, keyboard), Electron main process, electron-builder.json and
+              package.sh (Windows .exe, macOS .dmg, Linux .AppImage / .deb)
 logo.svg      the app logo: top bar, start screen, screensaver, and every platform icon (drawn at build time)
 test/         Jest tests
 docs/         design decisions, milestones and screenshots
@@ -152,8 +154,8 @@ The TV runs Chromium ~76: the build targets it and ESLint blocks newer APIs (`?.
 Package id `XtrmIptv01`, application id `XtrmIptv01.XtreamIPTV` (`platforms/tizen/config.xml`).
 
 The app logic is the same on every platform: what a platform changes (video engine, remote keys, exit, system information, trailers)
-goes through the adapter in `platforms/<name>/platform.js`, picked at build time (`npm run build:tizen` / `npm run build:webos`, i.e.
-`webpack --env platform=<name>`; `npm run build` and `npm run dev` use Tizen, `npm run dev:webos` the webOS adapter). See [`docs/MULTIPLATFORM.md`](docs/MULTIPLATFORM.md).
+goes through the adapter in `platforms/<name>/platform.js`, picked at build time (`npm run build:tizen` / `build:webos` / `build:desktop`, i.e.
+`webpack --env platform=<name>`; `npm run build` and `npm run dev` use Tizen, `npm run dev:webos` the webOS adapter, `npm run desktop` opens the desktop app in Electron). See [`docs/MULTIPLATFORM.md`](docs/MULTIPLATFORM.md).
 
 ## License
 

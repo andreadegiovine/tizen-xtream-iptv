@@ -1,5 +1,6 @@
-/* Video engines shared by every platform: the <video> element (with hls.js / mpegts.js in development). The platform's own engine (AVPlay on
- * Tizen) lives in platforms/<name>/ and is chosen by the platform adapter (createEngine). */
+/* Video engines shared by every platform: the <video> element, with hls.js / mpegts.js where the browser cannot play HLS or MPEG-TS itself
+ * (development, and the desktop app). The platform's own engine (AVPlay on Tizen) lives in platforms/<name>/ and is chosen by the platform
+ * adapter (createEngine). */
 /** Aspect-ratio modes the player cycles through. */
 export const ASPECT_MODES = ['fit', 'fill', 'zoom'];
 const CSS_FIT = { fit: 'contain', fill: 'fill', zoom: 'cover' };
@@ -9,17 +10,27 @@ export function devMediaUrl(url) {
   return typeof __DEV__ !== 'undefined' && __DEV__ ? `/__media?u=${encodeURIComponent(url)}` : url;
 }
 
-/** 'hls' | 'ts' | 'native' — only in development builds; production never loads the demuxers. */
-export function devStreamKind(url) {
-  if (!(typeof __DEV__ !== 'undefined' && __DEV__)) return 'native';
+const isDev = () => typeof __DEV__ !== 'undefined' && __DEV__;
+
+/** 'hls' | 'ts' | 'native': how a stream is played by a <video> that needs a JS demuxer for HLS and MPEG-TS. */
+export function streamKind(url) {
   const path = String(url).split('?')[0].toLowerCase();
   if (path.endsWith('.m3u8')) return 'hls';
   if (path.endsWith('.ts') || /\/live\/[^/]+\/[^/]+\/\d+$/.test(path)) return 'ts';
   return 'native';
 }
 
+/** The same, only in development builds: a production build for the TV never loads the demuxers (the TV plays these streams itself). */
+export function devStreamKind(url) {
+  return isDev() ? streamKind(url) : 'native';
+}
+
+/**
+ * The demuxers are in a build only when it can use them (`__JS_DEMUX__`: development, and platforms whose build.js asks for them, the
+ * desktop app); a TV build has no hls.js / mpegts.js at all.
+ */
 async function attachHls(video, url, handlers) {
-  if (!(typeof __DEV__ !== 'undefined' && __DEV__)) return null;
+  if (!(typeof __JS_DEMUX__ !== 'undefined' && __JS_DEMUX__)) return null;
   const { default: Hls } = await import('hls.js');
   if (!Hls.isSupported()) {
     video.src = url;
@@ -35,7 +46,7 @@ async function attachHls(video, url, handlers) {
 }
 
 async function attachMpegts(video, url, handlers) {
-  if (!(typeof __DEV__ !== 'undefined' && __DEV__)) return null;
+  if (!(typeof __JS_DEMUX__ !== 'undefined' && __JS_DEMUX__)) return null;
   const { default: mpegts } = await import('mpegts.js');
   if (!mpegts.isSupported()) {
     video.src = url;
@@ -48,11 +59,14 @@ async function attachMpegts(video, url, handlers) {
   return player;
 }
 
-/** <video> engine for desktop browsers (development and tests); not used on the TV. */
-export function createHtml5Engine() {
+/**
+ * <video> engine: desktop browsers (development and tests), the desktop app and the TVs that play every stream in the page (webOS).
+ * `demux`: hls.js / mpegts.js for HLS and MPEG-TS (default: only in development; the desktop app always).
+ */
+export function createHtml5Engine({ demux = isDev() } = {}) {
   let video = null;
   let htmlHandlers = null;
-  let adapter = null; // hls.js / mpegts.js instance (development only)
+  let adapter = null; // hls.js / mpegts.js instance
   return {
     kind: 'html5',
     available: () => typeof document !== 'undefined',
@@ -69,9 +83,9 @@ export function createHtml5Engine() {
       video.addEventListener('error', () => handlers.onError(video.error ? `media error ${video.error.code}` : 'media error'));
       document.body.appendChild(video);
       document.body.classList.add('video-active');
-      const kind = devStreamKind(rawUrl);
+      const kind = demux ? streamKind(rawUrl) : 'native';
       if (kind === 'hls' || kind === 'ts') {
-        // Desktop browsers cannot play HLS (Chrome/Firefox) or raw MPEG-TS: a JS demuxer does it (development only).
+        // Desktop browsers cannot play HLS (Chrome/Firefox) or raw MPEG-TS: a JS demuxer does it.
         const attach = kind === 'hls' ? attachHls : attachMpegts;
         const current = video;
         attach(current, url, handlers).then((instance) => {

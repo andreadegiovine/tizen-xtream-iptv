@@ -1,6 +1,6 @@
 # Multi-piattaforma: analisi, decisioni e piano
 
-Stato: **struttura per piattaforme fatta (patch 104); Tizen e LG webOS (patch 108) implementati.** Le prove su TV delle altre piattaforme
+Stato: **struttura per piattaforme fatta (patch 104); Tizen, LG webOS (patch 108) e desktop (patch 110) implementati.** Le prove delle altre piattaforme
 non sono state fatte; i punti segnati "da verificare" sono ipotesi.
 
 ## Principi
@@ -13,7 +13,7 @@ non sono state fatte; i punti segnati "da verificare" sono ipotesi.
   piattaforma che fa build, firma e allega il pacchetto alla release.
 - **iOS escluso** per ora.
 - **Android solo per TV**: Fire TV (prima) e Android TV, telecomando e D-pad, niente touch.
-- **Desktop**: Windows, macOS e Linux, dopo le TV (stessa interfaccia, tastiera come telecomando).
+- **Desktop**: Windows, macOS e Linux (stessa interfaccia, tastiera come telecomando).
 
 ## Decisioni prese
 
@@ -22,7 +22,8 @@ non sono state fatte; i punti segnati "da verificare" sono ipotesi.
 | Contenitore Android | **Capacitor** |
 | Player Android | **ExoPlayer (Media3) nativo**, pilotato da JS come AVPlay: video sotto, controlli HTML sopra |
 | Distribuzione Android | **solo APK** allegato alla release GitHub (niente store) |
-| Ordine | **webOS, poi Android (Fire TV), poi desktop (Windows, macOS, Linux)** |
+| Ordine | **webOS, desktop (Windows, macOS, Linux, a costo basso), poi Android (Fire TV)** |
+| Desktop | **Electron**; pacchetti non firmati per ora (anche macOS) |
 | Certificati | restano versionati in `platforms/<nome>/`; senza password non sono utilizzabili e le password sono nei secret GitHub |
 | Trailer | solo Tizen ha un plugin (servizio locale); le altre piattaforme aprono l'app YouTube |
 | APK | per ora uno solo, per Fire TV; se servirà, due (Android TV e Fire TV) con due flavor Gradle dello stesso progetto |
@@ -114,6 +115,35 @@ platforms/webos/
 - prestazioni sui modelli 2021.
 - webOS 5 (2020) richiederebbe un target Babel più basso e polyfill; webOS 4 e precedenti non convengono.
 
+## Desktop: Windows, macOS, Linux (fatta, patch 110; da provare sui sistemi)
+
+```
+platforms/desktop/
+  platform.js            adattatore: <video> con hls.js / mpegts.js (HLS e MPEG-TS), Spazio e tasti multimediali, uscita
+                         (window.close), trailer nel browser di sistema, versione di Electron nei controlli della Diagnostica
+  build.js               demux: true (hls.js / mpegts.js nella build), icona 512 px da logo.svg
+  electron/main.js       processo principale di Electron: una finestra a schermo intero, l'app servita come app://xtream/
+                         (origine normale per worker e IndexedDB), interfaccia 1920x1080 scalata alla finestra (zoom),
+                         F11 schermo intero, F12 strumenti di sviluppo, un'istanza sola
+  electron-builder.json  pacchetti: Windows NSIS x64, macOS dmg x64 e arm64, Linux AppImage e deb x64; Electron 44.9.3
+  package.sh             cartella di staging (build + main.js + package.json) ed electron-builder 26.18.0 via npx
+```
+
+- Build: `npm run build:desktop`; `npm run desktop` la apre in Electron dal repository. Job `desktop` della release, uno per sistema
+  (Linux su ubuntu, Windows su windows, macOS su macos): `xtream-iptv-<versione>_linux-x64.AppImage` / `.deb`,
+  `_windows-x64.exe`, `_macos-x64.dmg`, `_macos-arm64.dmg`, ognuno con il suo `.sha256`.
+- **Rete:** la pagina gira con `webSecurity` disattivato (niente CORS, niente blocco dei contenuti http), come un'app TV. La pagina
+  viene solo dai file dell'app: la navigazione verso altri indirizzi è bloccata e `window.open` va al browser di sistema.
+- **Video:** `<video>` di Chromium con hls.js (HLS) e mpegts.js (MPEG-TS). Le build TV non contengono questi due moduli
+  (`__JS_DEMUX__`). Limiti: MKV e audio AC3/E-AC3 non sono supportati da Chromium (film MKV che non partono, canali senza audio);
+  la soluzione completa è un player nativo (mpv / libVLC) come plugin.
+- **Firma:** nessuna. Windows mostra l'avviso di SmartScreen; su macOS l'app si apre con tasto destro → Apri (Gatekeeper). Per firmare
+  servono un certificato Windows e l'account Apple Developer (notarizzazione).
+- **Comandi:** tastiera (frecce, Invio, Esc / Backspace, PagSu / PagGiù, Spazio, tasti multimediali). Il mouse funziona solo dove
+  l'interfaccia lo prevede già (barra del player).
+- Verificato in Electron 44.9.3 (Linux, con il mock senza header CORS): avvio, configurazione del provider, sync nei worker, home;
+  pacchetti AppImage e deb creati in locale. Windows e macOS: solo nei job della release.
+
 ## Android TV / Fire TV (dopo webOS)
 
 Fire OS 7 e 8 sono basati su Android 9 e 11: un solo progetto Capacitor in `platforms/android/` (manifest per il launcher TV con
@@ -157,7 +187,4 @@ banner, touch non richiesto). Per ora un APK per Fire TV.
    motore `<video>` per vedere l'interfaccia; job `android` con keystore nei secret.
 5. Plugin ExoPlayer con le stesse funzioni di AVPlay.
 6. Prove sui dispositivi e misure con il mock; poi l'APK nella release.
-7. Desktop (Windows, macOS, Linux): da analizzare. Probabile contenitore Electron (`platforms/desktop/`): Chromium recente, nessun CORS
-   con le richieste fatte dal processo principale, video con il `<video>` più hls.js / mpegts.js (come la build di sviluppo) o un
-   player nativo (mpv / libVLC) per TS e MKV; pacchetti `.exe`, `.dmg`, `.AppImage` / `.deb` dai job della release (firma per
-   Windows e macOS da valutare).
+7. ~~Desktop (Windows, macOS, Linux) con Electron~~ (patch 110); prove sui sistemi, poi eventuale player nativo (mpv / libVLC) per MKV e AC3.

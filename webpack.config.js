@@ -61,6 +61,8 @@ module.exports = (env = {}, argv = {}) => {
         __DEV__: JSON.stringify(!isProd),
         __APP_VERSION__: JSON.stringify(pkg.version),
         __PLATFORM__: JSON.stringify(target.name),
+        // hls.js / mpegts.js in the build: development, and the platforms that play HLS / MPEG-TS with them (build.js `demux`).
+        __JS_DEMUX__: JSON.stringify(!isProd || Boolean(target.build.demux)),
       }),
       new HtmlWebpackPlugin({
         template: 'src/index.html',

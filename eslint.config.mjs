@@ -7,6 +7,7 @@ const appGlobals = {
   tizen: 'readonly',
   webapis: 'readonly',
   __PLATFORM__: 'readonly',
+  __JS_DEMUX__: 'readonly',
 };
 
 export default [
@@ -43,7 +44,7 @@ export default [
     },
   },
   {
-    files: ['test/setup.js', 'test/svgTransform.js', 'platforms/*/build.js', 'webpack.config.js', 'babel.config.js', 'postcss.config.js', 'scripts/**/*.js'],
+    files: ['test/setup.js', 'test/svgTransform.js', 'platforms/*/build.js', 'platforms/*/electron/**/*.js', 'webpack.config.js', 'babel.config.js', 'postcss.config.js', 'scripts/**/*.js'],
     languageOptions: { sourceType: 'commonjs', globals: { ...globals.node, ...globals.browser } },
   },
 ];
