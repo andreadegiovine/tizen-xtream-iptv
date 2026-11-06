@@ -15,6 +15,7 @@ async function programmesFor(db, channelId, now) {
 export function createEpgService({ active, providers, createWorker, runLocal = runEpgForProvider, now = Date.now, readyTimeoutMs = 4000, operations = null }) {
   let running = false;
   let cancelJob = null;
+  const updated = new Set();
 
   async function nowNext(channelId) {
     if (!channelId) return { now: null, next: null };
@@ -33,6 +34,24 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
     if (!current) return [];
     const t = now();
     return (await programmesFor(current.db, channelId, t)).filter((p) => p.start < t + hours * 3600 * 1000);
+  }
+
+  /**
+   * The programmes of several channels between two instants (the guide grid): Map channelId → list sorted by start. One read
+   * transaction; programmes that started up to 12 hours before `from` are included when they are still on at `from`.
+   */
+  async function programmesBetween(channelIds, from, to) {
+    const out = new Map();
+    const current = await active.get();
+    if (!current || !channelIds.length) return out;
+    const store = current.db.transaction('epg', 'readonly').objectStore('epg');
+    await Promise.all(
+      channelIds.map(async (id) => {
+        const list = await requestToPromise(store.getAll(IDBKeyRange.bound([id, from - 12 * 3600 * 1000], [id, to])));
+        out.set(id, list.filter((p) => p.stop > from).sort((a, b) => a.start - b.start));
+      }),
+    );
+    return out;
   }
 
   /** Runs the sync in a worker, or on the main thread when no worker can be created. */
@@ -80,7 +99,13 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
   }
 
   return {
+    /** Called after every guide download that went well (the programme grid reads its programmes again). Returns the unsubscribe. */
+    onUpdated(handler) {
+      updated.add(handler);
+      return () => updated.delete(handler);
+    },
     nowNext,
+    programmesBetween,
     upcoming,
     /** Fills channel cards with "now playing" as the answers arrive. */
     decorate(entries, cards) {
@@ -110,7 +135,10 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
       try {
         const outcome = await runJob(provider, force);
         if (outcome.error) log.warn('EPG sync failed', outcome.error.code);
-        else log.info(`EPG sync done in ${now() - startedAt} ms`);
+        else {
+          log.info(`EPG sync done in ${now() - startedAt} ms`);
+          if (!outcome.cancelled) updated.forEach((handler) => handler());
+        }
         return outcome;
       } finally {
         running = false;

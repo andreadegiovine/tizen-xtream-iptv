@@ -1,0 +1,193 @@
+// Programme guide of Live TV (epgGuide.js): channel cards on the left, programmes on a horizontal time axis. Rows and axis move with
+// transforms; sizes match PX_PER_MIN, ROW_HEIGHT and CHANNEL_WIDTH of the component.
+@use 'tokens' as *;
+
+$epg-row: 128px;
+$epg-channel: 220px;
+$epg-ruler: 44px;
+
+.epg-guide {
+  position: relative;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.epg-top {
+  display: flex;
+  height: $epg-ruler;
+  border-bottom: 1px solid rgba($text, 0.15);
+}
+
+.epg-corner {
+  flex: none;
+  width: $epg-channel;
+  line-height: $epg-ruler;
+  font-weight: 700;
+  color: $text-muted;
+}
+
+.epg-ruler-viewport {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+
+.epg-ruler {
+  position: relative;
+  height: 100%;
+}
+
+.epg-tick {
+  position: absolute;
+  top: 0;
+  padding-left: 8px;
+  border-left: 2px solid rgba($text, 0.35);
+  line-height: $epg-ruler;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &.half {
+    border-left-color: rgba($text, 0.15);
+    color: $text-muted;
+  }
+}
+
+.epg-body {
+  position: relative;
+}
+
+.epg-rows {
+  position: relative;
+  overflow: hidden;
+}
+
+.epg-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  height: $epg-row;
+  border-bottom: 1px solid rgba($text, 0.08);
+}
+
+.epg-channel {
+  flex: none;
+  box-sizing: border-box;
+  width: $epg-channel;
+  padding: 6px 12px 6px 0;
+  background: $bg; // stays above the programmes that slide under it
+
+  .card {
+    width: 100%;
+    margin: 0;
+    padding: 2px;
+    border-width: 2px;
+
+    .card-poster {
+      height: 76px;
+      padding-bottom: 0;
+    }
+
+    .card-title {
+      margin-top: 4px;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-meta,
+    .card-badges,
+    .card-status,
+    .card-progress {
+      display: none;
+    }
+  }
+}
+
+.epg-row.current .epg-channel .card {
+  border-color: rgba($text, 0.5);
+}
+
+.epg-channel-skeleton {
+  height: 100%;
+  border-radius: 6px;
+}
+
+.epg-track-viewport {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+
+.epg-track {
+  position: relative;
+  height: 100%;
+}
+
+.epg-prog {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 3px solid transparent;
+  border-left: 2px solid $bg;
+  background: $bg-raised;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+
+  &.live {
+    background: $bg-focus;
+  }
+
+  &.empty,
+  &.loading {
+    background: rgba($bg-raised, 0.5);
+    color: $text-muted;
+  }
+
+  &.focused {
+    border-color: $text;
+    background: $text;
+    color: $bg;
+  }
+}
+
+.epg-prog-title {
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// The current time: a line over every row (and the axis above them), moved with a transform.
+.epg-now {
+  position: absolute;
+  top: -$epg-ruler;
+  left: 0;
+  width: 2px;
+  margin-top: 0;
+  background: $accent;
+  pointer-events: none;
+  z-index: 2;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: $accent;
+  }
+}
+
+.epg-status {
+  padding: 24px 0;
+}

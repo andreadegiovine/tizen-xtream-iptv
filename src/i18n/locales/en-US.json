@@ -180,6 +180,8 @@
   "settings.cleanTitles": "Clean movie and TV series titles",
   "a11y.mainNav": "Main menu",
   "app.name": "Xtream IPTV",
+  "epg.guide": "Schedule",
+  "epg.noInfo": "No information",
   "settings.dbUpdate": "Rebuild the databases (no download from the provider)",
   "settings.dbRemove": "Empty the derived data",
   "settings.dbRemoveConfirm": "Empty what is worked out from the catalog (titles, groups, genres, search index) and build it again? The downloaded catalog is not touched.",

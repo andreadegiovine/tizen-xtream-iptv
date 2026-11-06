@@ -9,17 +9,19 @@ import { TOPBAR_ZONE } from '../components/topbar.js';
 import { isFilterEntry, filterCardMeta } from '../components/typedRows.js';
 import { favoriteFilterEntries, openFilter } from '../../services/favoriteFilters.js';
 import { ensureVisible } from '../scroll.js';
-import { listCategories, listNetworks, pageEntries, getEntry, countEntries, LIVE_ALL } from '../../services/catalogQuery.js';
+import { listCategories, listNetworks, pageEntries, getEntry, countEntries, guideRows, LIVE_ALL } from '../../services/catalogQuery.js';
 import { icon } from '../icons.js';
 import { formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
+import { createEpgGuide } from '../components/epgGuide.js';
 
 const CATS_ZONE = 'browseCategories';
 /** Icon before the label of the fixed sidebar entries (genres and categories get an empty slot to stay aligned). */
-export const SIDEBAR_ICON = { all: 'all', continue: 'continue', favorites: 'heart', suggestions: 'suggestions', genresToggle: 'genres', toggle: 'categories', networksToggle: 'network' };
+export const SIDEBAR_ICON = { guide: 'clock', all: 'all', continue: 'continue', favorites: 'heart', suggestions: 'suggestions', genresToggle: 'genres', toggle: 'categories', networksToggle: 'network' };
 /** Placeholder rows shown while the genres load: enough that the "Categories" entry stays below the screen. */
 export const GENRE_SKELETONS = 12;
 const GRID_ZONE = 'browseGrid';
+const GUIDE_ZONE = 'browseGuide';
 const HEAD_ZONE = 'browseHead';
 /** Views that are loaded as one in-memory list and paged locally. */
 const LIST_KINDS = ['continue', 'favorites', 'suggestions', 'genre', 'network'];
@@ -64,7 +66,8 @@ export function createPagedGridModel({ columns, getCount, hasNext, hasPrevious, 
  * entry (open by default) with the genres, then a "Categories" entry that expands into the provider categories. Channels: show all, favourites, pinned categories, the "Networks" entry (open) and the categories (closed).
  */
 export function sidebarItems({ type, genres = [], categories = [], pinned = [], networks = [], networksExpanded = true, expanded = false, genresExpanded = true, genresLoading = false, labels }) {
-  const items = [{ kind: 'all', name: labels.all }];
+  // Live TV opens on the programme guide; "show all" follows it.
+  const items = type === 'live' ? [{ kind: 'guide', name: labels.guide }, { kind: 'all', name: labels.all }] : [{ kind: 'all', name: labels.all }];
   if (type === 'live') {
     items.push({ kind: 'favorites', name: labels.favorites });
     pinned.forEach((p) => items.push({ kind: p.kind, id: String(p.id), name: p.name, pinned: true }));
@@ -153,7 +156,7 @@ export function createBrowsePage(ctx, params = {}) {
   let loadToken = 0;
   const counts = new Map(); // sidebar numbers: 'kind:id' → how many titles
 
-  const labels = () => ({ all: t('browse.all'), continue: t('home.continue'), favorites: t('nav.favorites'), suggestions: t('nav.suggestions'), genres: t('detail.genres'), categories: t('detail.categories'), networks: t('networks.title') });
+  const labels = () => ({ guide: t('epg.guide'), all: t('browse.all'), continue: t('home.continue'), favorites: t('nav.favorites'), suggestions: t('nav.suggestions'), genres: t('detail.genres'), categories: t('detail.categories'), networks: t('networks.title') });
 
   function renderCategories() {
     while (catList.firstChild) catList.removeChild(catList.firstChild);
@@ -164,7 +167,7 @@ export function createBrowsePage(ctx, params = {}) {
       if (iconName) node.appendChild(h('span', { class: 'browse-cat-icon' }, icon(iconName)));
       node.appendChild(h('span', { class: 'browse-cat-name', text: item.name }));
       const text = countText(item);
-      node.appendChild(h('span', { class: `browse-cat-count${text === '' && countsLoading ? ' skeleton-line' : ''}`, text }));
+      node.appendChild(h('span', { class: `browse-cat-count${countPending(item, text) ? ' skeleton-line' : ''}`, text }));
       if (item.kind === 'toggle' || item.kind === 'genresToggle' || item.kind === 'networksToggle') node.appendChild(icon('chevron', item.expanded ? 'open' : ''));
       catList.appendChild(node);
       // While the genres are being found, grey placeholders hold their place under the "Genres" entry.
@@ -182,13 +185,14 @@ export function createBrowsePage(ctx, params = {}) {
     const n = item.kind === 'toggle' ? categories.length : item.kind === 'networksToggle' ? networks.length : item.kind === 'genresToggle' ? (genresLoading ? undefined : genres.length) : counts.get(countKey(item));
     return n === undefined ? '' : formatNumber(n, i18n.getLocale());
   };
+  const countPending = (item, text) => text === '' && countsLoading && item.kind !== 'guide'; // the guide has no number
   function showCounts() {
     items.forEach((item, i) => {
       const slot = catNodes[i] && catNodes[i].querySelector('.browse-cat-count');
       if (!slot) return;
       const text = countText(item);
       slot.textContent = text;
-      slot.classList.toggle('skeleton-line', text === '' && countsLoading);
+      slot.classList.toggle('skeleton-line', countPending(item, text));
     });
   }
 
@@ -357,6 +361,11 @@ export function createBrowsePage(ctx, params = {}) {
   async function loadPage(nextPage, focusIndex) {
     const token = (loadToken += 1);
     const item = items[selected] || items[0];
+    if (item.kind === 'guide') {
+      await showGuide(typeof focusIndex === 'number');
+      return;
+    }
+    hideGuide();
     if (!entries.length) {
       // Nothing on screen yet: pulsing placeholders instead of an empty page.
       while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
@@ -388,6 +397,64 @@ export function createBrowsePage(ctx, params = {}) {
     renderGrid();
     if (typeof focusIndex === 'number') ctx.focus.focus(GRID_ZONE, Math.min(focusIndex, entries.length - 1));
   }
+
+  // Programme guide (Live TV): shown instead of the grid while its sidebar entry is selected.
+  const guideHost = h('div', { class: 'epg-host' });
+  guideHost.style.display = 'none';
+  let guide = null;
+  let guideState = null; // where the focus was in the guide, to come back to it
+  let guideRowsJob = null;
+  let stopGuideUpdates = null;
+  const guideList = () => guideRowsJob || (guideRowsJob = guideRows(db));
+
+  async function showGuide(focusIt) {
+    entries = [];
+    cards = [];
+    cardNodes = [];
+    while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
+    gridEl.style.display = 'none';
+    empty.style.display = 'none';
+    titleEl.textContent = items[selected] ? items[selected].name : '';
+    count.textContent = '';
+    renderHead();
+    guideHost.style.display = '';
+    ctx.focus.link(CATS_ZONE, 'right', GUIDE_ZONE);
+    ctx.focus.link(HEAD_ZONE, 'down', GUIDE_ZONE);
+    if (!guide) {
+      guide = createEpgGuide({
+        loadRows: async (offset, limit) => ({ entries: (await guideList()).slice(offset, offset + limit) }),
+        countRows: async () => (await guideList()).length,
+        programmes: (ids, from, to) => (ctx.epg && ctx.epg.programmesBetween ? ctx.epg.programmesBetween(ids, from, to) : Promise.resolve(new Map())),
+        onOpen: (entry) => ctx.openEntry(entry, { section: params.section }),
+        getTimeFormat: () => timeFormat,
+        enrich: ctx.enrich ? (list, guideCards) => ctx.enrich(list, guideCards, type) : null,
+      });
+      guideHost.appendChild(guide.el);
+      if (ctx.epg && ctx.epg.onUpdated) stopGuideUpdates = ctx.epg.onUpdated(() => guide && guide.reloadProgrammes());
+      await guide.start();
+      if (destroyed) return;
+      if (guideState) guide.restore(guideState);
+    }
+    if (focusIt && guide.count) ctx.focus.focus(GUIDE_ZONE, 0);
+  }
+
+  function hideGuide() {
+    gridEl.style.display = '';
+    guideHost.style.display = 'none';
+    ctx.focus.link(CATS_ZONE, 'right', GRID_ZONE);
+    ctx.focus.link(HEAD_ZONE, 'down', GRID_ZONE);
+  }
+
+  const guideZone = new FocusZone({
+    id: GUIDE_ZONE,
+    model: {
+      getCount: () => (guide && guideHost.style.display !== 'none' ? guide.model.getCount() : 0),
+      navigate: (dir, index) => guide.model.navigate(dir, index),
+    },
+    onFocus: () => guide && guide.onFocus(),
+    onBlur: () => guide && guide.onBlur(),
+    onActivate: () => guide && guide.activate(),
+  });
 
   const catsZone = new FocusZone({
     id: CATS_ZONE,
@@ -446,13 +513,16 @@ export function createBrowsePage(ctx, params = {}) {
   });
 
   let restored = null; // state saved when the page was left (set right after mount, read by init)
+  let timeFormat = 'auto';
 
   async function init() {
     const current = await ctx.active.get();
     if (!current || destroyed) return;
     db = current.db; // shared handle: never closed here
     providerId = current.provider.id;
-    pageSize = (await ctx.settings.get()).gridItems;
+    const prefs = await ctx.settings.get();
+    pageSize = prefs.gridItems;
+    timeFormat = prefs.timeFormat || 'auto';
     const excluded = await ctx.settings.getExcluded(providerId, type);
     pinned = await ctx.pins.list(providerId, type).catch(() => []);
     // Seen before (and the catalog has not changed since): categories, genres, networks and their numbers come from the cache.
@@ -513,8 +583,12 @@ export function createBrowsePage(ctx, params = {}) {
     if (destroyed) return;
     // Land in the grid when there is something to browse, otherwise on the sidebar (a section that became empty, like Continue
     // watching after its last title was marked as seen).
+    if (back && back.guide) guideState = back.guide;
     if (back && back.zone === CATS_ZONE) ctx.focus.focus(CATS_ZONE, selected);
-    else if (entries.length) ctx.focus.focus(GRID_ZONE, back && back.zone === GRID_ZONE ? Math.min(back.index, entries.length - 1) : 0);
+    else if (items[selected] && items[selected].kind === 'guide') {
+      if (guide && guideState) guide.restore(guideState);
+      if (!ctx.focus.focus(GUIDE_ZONE, 0)) ctx.focus.focus(CATS_ZONE, selected);
+    } else if (entries.length) ctx.focus.focus(GRID_ZONE, back && back.zone === GRID_ZONE ? Math.min(back.index, entries.length - 1) : 0);
     else ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
     if (!wantsGenre && type !== 'live') {
       await loadGenres();
@@ -535,10 +609,11 @@ export function createBrowsePage(ctx, params = {}) {
   }
 
   return {
-    el: h('section', { class: 'page browse' }, h('div', { class: 'browse-body' }, catList, h('div', { class: 'browse-main' }, head, gridEl, empty))),
+    el: h('section', { class: 'page browse' }, h('div', { class: 'browse-body' }, catList, h('div', { class: 'browse-main' }, head, gridEl, guideHost, empty))),
     mount() {
       ctx.focus.register(catsZone);
       ctx.focus.register(gridZone);
+      ctx.focus.register(guideZone);
       ctx.focus.register(headZone);
       ctx.focus.link(HEAD_ZONE, 'up', TOPBAR_ZONE);
       ctx.focus.link(HEAD_ZONE, 'down', GRID_ZONE);
@@ -547,11 +622,16 @@ export function createBrowsePage(ctx, params = {}) {
       ctx.focus.link(CATS_ZONE, 'right', GRID_ZONE);
       ctx.focus.link(GRID_ZONE, 'left', CATS_ZONE);
       ctx.focus.link(GRID_ZONE, 'up', HEAD_ZONE);
+      ctx.focus.link(GUIDE_ZONE, 'left', CATS_ZONE);
+      ctx.focus.link(GUIDE_ZONE, 'up', HEAD_ZONE);
       ctx.focus.link(TOPBAR_ZONE, 'down', HEAD_ZONE);
       init().catch((err) => log.warn('Browse init failed', err && err.message));
     },
     destroy() {
       destroyed = true;
+      if (guide) guide.destroy();
+      if (stopGuideUpdates) stopGuideUpdates();
+      ctx.focus.unregister(GUIDE_ZONE);
       ctx.focus.unregister(HEAD_ZONE);
       ctx.focus.unregister(CATS_ZONE);
       ctx.focus.unregister(GRID_ZONE);
@@ -568,6 +648,7 @@ export function createBrowsePage(ctx, params = {}) {
         page,
         zone,
         index: ctx.focus.active && ctx.focus.activeId === zone ? ctx.focus.active.index : 0,
+        guide: guide ? guide.state() : null,
       };
     },
     restoreState(state) {

@@ -170,3 +170,16 @@ export function countEntries(db, { type, categoryId = null }) {
   const range = useCategory ? IDBKeyRange.bound([type, String(categoryId), 0], [type, String(categoryId), MAX_ADDED]) : IDBKeyRange.bound([type, 0], [type, MAX_ADDED]);
   return requestToPromise(index.count(range));
 }
+
+/**
+ * The rows of the programme guide: the Live TV groups (one per channel in several qualities) and the channels in no group, by name.
+ * Networks are left out (they gather many channels and have no guide of their own).
+ */
+export async function guideRows(db) {
+  const entries = await requestToPromise(db.transaction('entries', 'readonly').objectStore('entries').index('byTypeAdded').getAll(IDBKeyRange.bound(['live', 0], ['live', Number.MAX_SAFE_INTEGER])));
+  const groups = await requestToPromise(db.transaction('groups', 'readonly').objectStore('groups').getAll());
+  return groups
+    .filter((g) => !g.isNetwork)
+    .concat(entries.filter((e) => !e.groupKey))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base', numeric: true }));
+}

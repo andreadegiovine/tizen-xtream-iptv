@@ -180,6 +180,8 @@
   "settings.cleanTitles": "Pulisci titoli film e serie TV",
   "a11y.mainNav": "Menu principale",
   "app.name": "Xtream IPTV",
+  "epg.guide": "Programmazione",
+  "epg.noInfo": "Nessuna informazione",
   "settings.dbUpdate": "Ricostruisci i database (senza scaricare dal provider)",
   "settings.dbRemove": "Svuota i dati derivati",
   "settings.dbRemoveConfirm": "Svuotare ciò che deriva dal catalogo (titoli, gruppi, generi, indice di ricerca) e ricostruirlo? Il catalogo scaricato non viene toccato.",

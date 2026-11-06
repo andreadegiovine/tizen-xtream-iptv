@@ -435,3 +435,9 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
 
 ### Patch 96 — nomi in Impostazioni
 - Dispositivo: "Dimensioni totali", "Dimensioni catalogo", "Dimensioni database". Live TV: "Raggruppa canali uguali", "Crea reti di canali", "Somiglianza minima nomi per reti di canali", "Differenza massima nomi per reti di canali", "Rimuovi dai nomi dei canali". Contenuti: "Pulisci titoli film e serie TV". Solo testi (italiano e inglese).
+
+### Patch 98 — Programmazione (guida a griglia) in Live TV
+- Nuova voce "Programmazione" in cima alla sidebar di Live TV, selezionata all'apertura al posto di "Mostra tutto". Mostra una griglia: a sinistra la card piccola del canale / gruppo (fissa), a destra i programmi su un asse orizzontale del tempo (8 px al minuto, un'ora prima di adesso e 24 ore dopo), con ore e mezz'ore in alto (fisse scorrendo su/giù) e una linea rossa sull'ora attuale che attraversa tutte le righe; i buchi senza guida sono segmenti "Nessuna informazione".
+- Su/Giù cambiano riga restando sullo stesso orario, Destra/Sinistra passano da un programma all'altro (Sinistra dal primo torna alla sidebar), OK apre il canale. Righe e asse si muovono solo con `transform` e esistono solo le righe a schermo (migliaia di canali); il titolo di un programma iniziato prima del bordo sinistro scivola per restare leggibile.
+- Righe: gruppi e canali senza gruppo, per nome (le reti no: non hanno una guida propria). Programmi letti per le righe a schermo (`epg.programmesBetween`) e riletti quando finisce uno scarico della guida (`epg.onUpdated`).
+- Componente `src/ui/components/epgGuide.js`, stile `src/styles/_epg.scss`. Non verificato su TV.

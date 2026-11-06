@@ -68,9 +68,10 @@ describe('sidebar', () => {
     expect(open.some((i) => i.kind === 'genresToggle')).toBe(false);
   });
 
-  test('live: all, favourites and a categories group', () => {
-    expect(sidebarItems({ type: 'live', categories: cats, labels }).map((i) => i.kind)).toEqual(['all', 'favorites', 'toggle']);
-    expect(sidebarItems({ type: 'live', categories: cats, expanded: true, labels }).map((i) => i.kind)).toEqual(['all', 'favorites', 'toggle', 'category', 'category']);
+  test('live: the guide first (where the page opens), then all, favourites and a categories group', () => {
+    expect(sidebarItems({ type: 'live', categories: cats, labels }).map((i) => i.kind)).toEqual(['guide', 'all', 'favorites', 'toggle']);
+    expect(sidebarItems({ type: 'live', categories: cats, expanded: true, labels }).map((i) => i.kind)).toEqual(['guide', 'all', 'favorites', 'toggle', 'category', 'category']);
+    expect(indexOfFilter(sidebarItems({ type: 'live', categories: cats, labels }), null)).toBe(0);
   });
 
   test('filter lookup falls back to "show all"', () => {
@@ -92,6 +93,6 @@ test('sidebar: pinned entries sit between suggestions and genres', () => {
 test('sidebar: pinned categories sit after the favourites on Live TV', () => {
   const labels = { all: 'All', favorites: 'F', categories: 'Cat' };
   const items = sidebarItems({ type: 'live', categories: [{ id: 3, name: 'Sport' }], pinned: [{ kind: 'category', id: 3, name: 'Sport' }], labels });
-  expect(items.map((i) => i.kind)).toEqual(['all', 'favorites', 'category', 'toggle']);
-  expect(items[2]).toMatchObject({ pinned: true, id: '3' });
+  expect(items.map((i) => i.kind)).toEqual(['guide', 'all', 'favorites', 'category', 'toggle']);
+  expect(items[3]).toMatchObject({ pinned: true, id: '3' });
 });
