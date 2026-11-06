@@ -479,3 +479,9 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
 - Il `dist/` di Tizen è identico a prima (stessi file, stesso `config.xml`, servizio e pagina; JS con lo stesso contenuto).
 - Release: job `verify` (tag, lint, test) e un job per piattaforma (per ora `tizen`: build, `platforms/tizen/package.sh`, upload di `.wgt` e `.sha256`). Stesso nome del pacchetto di prima.
 - `docs/MULTIPLATFORM.md` aggiornato con l'analisi di fattibilità e le decisioni (Capacitor, ExoPlayer, solo APK, webOS prima di Android, certificati versionati). Test di contratto per gli adattatori. Non verificato su TV.
+
+### Patch 105 — formato su AVPlay, tasti del player Live, focus all'apertura, diagnostica worker
+- Player, Formato: AVPlay ha solo letterbox, schermo intero e automatico; "Ingrandisci" usava una modalità che non esiste (`CROPPED_FULL`) e non faceva nulla. Su Tizen il tasto Formato alterna Originale / Adatta allo schermo (il ritaglio non è possibile: la finestra video non può essere più grande dello schermo); dopo il cambio l'area video viene reimpostata perché la modifica si veda subito, e il log della Diagnostica scrive la modalità applicata o l'errore. Su un video 16:9 le due modalità sono uguali. `aspectModes` del motore (contratto).
+- Player Live: le frecce non cambiano più canale (solo CH+ / CH-); qualunque freccia mostra i controlli con il focus sul primo bottone da sinistra (anche con il video in errore, dove OK riprova). CH+/CH- senza categoria scorrono "Mostra tutto" come prima.
+- Pagine con sidebar aperte dal menu: quando la griglia principale non ha ancora contenuto (la Programmazione prima del primo scarico della guida) il focus va sulla voce della sidebar e passa alla griglia appena il contenuto arriva, se nel frattempo non ci si è mossi.
+- Diagnostica: il worker da blob (bloccato dalla CSP di Tizen) è un avviso e non un errore: l'app usa solo worker da file (riga `workerFile`). Non verificato su TV.

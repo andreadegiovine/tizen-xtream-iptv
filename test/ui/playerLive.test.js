@@ -78,9 +78,9 @@ test('live: end of the programme after LIVE; network, previous and next before i
 
 test('live group: "Versions" lists its streams and plays the chosen one', async () => {
   const { page, ctx, engine } = await setup();
-  page.onAction(Action.DOWN); // Down without a category: next channel over "show all" → the network's second channel
+  page.onAction(Action.CHANNEL_UP); // CH+ without a category: next channel over "show all" → the network's second channel
   await wait();
-  page.onAction(Action.DOWN); // → the group
+  page.onAction(Action.CHANNEL_UP); // → the group
   await wait();
   expect(page.el.querySelector('.player-title').textContent).toBe('Rai 1');
   expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).toBe('http://h/live/11');
@@ -90,5 +90,24 @@ test('live group: "Versions" lists its streams and plays the chosen one', async 
   await wait();
   expect(ctx.dialogs.choose.mock.calls[0][0]).toMatchObject({ options: [{ label: 'Rai 1 HD', value: 11 }, { label: 'Rai 1 SD', value: 12 }], selected: 11 });
   expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).toBe('http://h/live/12');
+  page.destroy();
+});
+
+test('live: the arrows do not change channel, they bring the controls with the focus on the first button on the left', async () => {
+  const { page, engine } = await setup();
+  const starts = engine.start.mock.calls.length;
+  page.onAction(Action.DOWN);
+  await wait();
+  expect(engine.start.mock.calls.length).toBe(starts); // same channel
+  expect(page.el.querySelector('.player-btn.focused').getAttribute('aria-label')).toBe('Open the network'); // the first one shown
+  page.onBack(); // out of the controls
+  page.onAction(Action.UP);
+  await wait();
+  expect(engine.start.mock.calls.length).toBe(starts);
+  expect(page.el.querySelector('.player-btn.focused')).not.toBeNull();
+  page.onBack();
+  page.onAction(Action.CHANNEL_DOWN); // CH- changes channel: the last of "show all" (wraps)
+  await wait();
+  expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).toBe('http://h/live/2');
   page.destroy();
 });

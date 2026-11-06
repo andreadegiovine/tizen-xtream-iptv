@@ -302,7 +302,7 @@ export function createPlayerPage(ctx, params) {
   }
 
   function cycleAspect() {
-    aspect = nextAspect(ASPECT_MODES, aspect);
+    aspect = nextAspect(engine.aspectModes || ASPECT_MODES, aspect); // the modes this engine can show (AVPlay: no zoom)
     if (engine.setAspect) engine.setAspect(aspect);
     ctx.notices.info(`${t('player.aspect')}: ${t(`player.aspect.${aspect}`)}`, { scope: 'playback', key: 'aspect' });
   }
@@ -578,7 +578,7 @@ export function createPlayerPage(ctx, params) {
     if (entry) switchTo(entry);
   }
 
-  /** Up / Down and Channel +/-: in the category the player was opened from, otherwise over "show all" like previous / next. */
+  /** Channel +/-: in the category the player was opened from, otherwise over "show all" like previous / next. */
   async function changeChannel(delta) {
     if (!live) {
       await stepChannel(delta);
@@ -607,12 +607,13 @@ export function createPlayerPage(ctx, params) {
     [Action.PLAY]: () => controller.getState().status === 'paused' && controller.togglePause(),
     [Action.PAUSE]: () => controller.getState().status === 'playing' && controller.togglePause(),
     [Action.PLAY_PAUSE]: () => controller.togglePause(),
-    [Action.LEFT]: () => controller.seekBy(-SEEK_SHORT),
-    [Action.RIGHT]: () => controller.seekBy(SEEK_SHORT),
+    // Live: the arrows bring the controls with the focus on the first button on the left; only CH+ / CH- change channel.
+    [Action.LEFT]: () => (isLive ? enterFocus() : controller.seekBy(-SEEK_SHORT)),
+    [Action.RIGHT]: () => (isLive ? enterFocus() : controller.seekBy(SEEK_SHORT)),
     [Action.REWIND]: () => controller.seekBy(-SEEK_LONG),
     [Action.FAST_FORWARD]: () => controller.seekBy(SEEK_LONG),
-    [Action.UP]: () => (isLive ? changeChannel(-1) : focusBar()),
-    [Action.DOWN]: () => (isLive ? changeChannel(1) : enterFocus()),
+    [Action.UP]: () => (isLive ? enterFocus() : focusBar()),
+    [Action.DOWN]: () => enterFocus(),
     [Action.CHANNEL_UP]: () => (isLive ? changeChannel(1) : stepEpisode(1)),
     [Action.CHANNEL_DOWN]: () => (isLive ? changeChannel(-1) : stepEpisode(-1)),
     [Action.STOP]: () => ctx.router.back(),

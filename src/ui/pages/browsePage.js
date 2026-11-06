@@ -392,6 +392,7 @@ export function createBrowsePage(ctx, params = {}) {
     const item = items[selected] || items[0];
     if (item.kind === 'guide' || item.kind === 'scheduled') {
       await showGuide(typeof focusIndex === 'number');
+      handOff();
       return;
     }
     hideGuide();
@@ -424,6 +425,7 @@ export function createBrowsePage(ctx, params = {}) {
     hasMore = result.hasMore;
     entries = result.entries;
     renderGrid();
+    if (typeof focusIndex !== 'number') handOff();
     if (typeof focusIndex === 'number') ctx.focus.focus(GRID_ZONE, Math.min(focusIndex, entries.length - 1));
   }
 
@@ -572,12 +574,14 @@ export function createBrowsePage(ctx, params = {}) {
     id: CATS_ZONE,
     model: new ListModel({ orientation: 'vertical', getCount: () => items.length }),
     onFocus: (i) => {
+      if (i !== selected) autoSidebar = false; // the user moved in the sidebar: the focus is theirs
       if (!catNodes[i]) return;
       catNodes[i].classList.add('focused');
       catNodes[i].scrollIntoView({ block: 'nearest' });
     },
     onBlur: (i) => catNodes[i] && catNodes[i].classList.remove('focused'),
     onActivate: (i) => {
+      autoSidebar = false;
       const item = items[i];
       if (item.kind === 'toggle' || item.kind === 'genresToggle' || item.kind === 'networksToggle') {
         if (item.kind === 'toggle') expanded = !expanded;
@@ -593,6 +597,18 @@ export function createBrowsePage(ctx, params = {}) {
       loadPage(0, 0).catch((err) => log.warn('Browse load failed', err && err.message));
     },
   });
+
+  /**
+   * The page opened with nothing to show yet (the guide of Live TV before its first download) and put the focus on the sidebar entry:
+   * when the content arrives the focus goes to it, unless the user has moved since.
+   */
+  let autoSidebar = false;
+  function handOff() {
+    if (!autoSidebar || destroyed || ctx.focus.activeId !== CATS_ZONE || catsZone.index !== selected) return;
+    const item = items[selected];
+    const ok = item && (item.kind === 'guide' || item.kind === 'scheduled') ? ctx.focus.focus(GUIDE_ZONE, 0) : entries.length > 0 && ctx.focus.focus(GRID_ZONE, 0);
+    if (ok) autoSidebar = false;
+  }
 
   /** The main grid of the page: the guide for Live TV, "show all" for the others. */
   const mainIndex = () => items.findIndex((item) => item.kind === (type === 'live' ? 'guide' : 'all'));
@@ -703,9 +719,15 @@ export function createBrowsePage(ctx, params = {}) {
     if (back && back.zone === CATS_ZONE) ctx.focus.focus(CATS_ZONE, selected);
     else if (items[selected] && (items[selected].kind === 'guide' || items[selected].kind === 'scheduled')) {
       if (guide && guideState) guide.restore(guideState);
-      if (!ctx.focus.focus(GUIDE_ZONE, 0)) ctx.focus.focus(CATS_ZONE, selected);
+      if (!ctx.focus.focus(GUIDE_ZONE, 0)) {
+        ctx.focus.focus(CATS_ZONE, selected);
+        autoSidebar = true; // no rows yet (guide still downloading): the focus goes to them when they arrive
+      }
     } else if (entries.length) ctx.focus.focus(GRID_ZONE, back && back.zone === GRID_ZONE ? Math.min(back.index, entries.length - 1) : 0);
-    else ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
+    else {
+      ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
+      autoSidebar = true;
+    }
     if (!wantsGenre && type !== 'live') {
       await loadGenres();
       genresLoading = false;
@@ -753,7 +775,7 @@ export function createBrowsePage(ctx, params = {}) {
         if (ctx.epg && ctx.epg.onUpdated)
           stopGuideUpdates = ctx.epg.onUpdated(() => {
             guideRowsJob = null;
-            if (guide && guideKind === 'guide') guide.reload();
+            if (guide && guideKind === 'guide') guide.reload().then(handOff);
             safe(async () => setCount('guide:', (await guideList()).length));
           });
         // Scheduled programmes added or removed (here or from a channel page): the "scheduled" entry and its view follow.

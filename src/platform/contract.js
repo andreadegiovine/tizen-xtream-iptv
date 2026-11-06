@@ -8,6 +8,7 @@
  *   registerKeys()            asks the platform to deliver the media / channel keys
  *   exit()                    closes the app
  *   createEngine()            the video engine (contract of createHtml5Engine in src/services/playerEngines.js)
+ *                             (`aspectModes`: the aspect ratios it can show, when not all of ASPECT_MODES)
  *   createTrailerEngine()     an engine that plays `youtube:<id>` inside the app, or null (then the trailer opens in YouTube)
  *   createDiagnosticPlayer()  the player lab of the Diagnostics page ({ play, stop, textTracks, selectText })
  *   runtimeChecks()           extra rows of the Diagnostics checks: [{ id, status: 'ok' | 'warn' | 'fail', detail }]

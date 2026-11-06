@@ -2,7 +2,12 @@
  * <video> engine of src/services/playerEngines.js. */
 import { log } from '../../src/core/logger.js';
 
-const AVPLAY_DISPLAY = { fit: 'PLAYER_DISPLAY_MODE_LETTER_BOX', fill: 'PLAYER_DISPLAY_MODE_FULL_SCREEN', zoom: 'PLAYER_DISPLAY_MODE_CROPPED_FULL' };
+/**
+ * Display modes AVPlay has (Samsung AVPlay API: LETTER_BOX, FULL_SCREEN, AUTO_ASPECT_RATIO). There is no crop: the "zoom" of the
+ * <video> engine is not offered (the video window cannot be larger than the screen), and CROPPED_FULL, used before, does not exist.
+ */
+const AVPLAY_DISPLAY = { fit: 'PLAYER_DISPLAY_MODE_LETTER_BOX', fill: 'PLAYER_DISPLAY_MODE_FULL_SCREEN' };
+export const AVPLAY_ASPECT_MODES = Object.freeze(['fit', 'fill']);
 
 /** AVPlay track list → tracks of one kind: [{ index, language }] (language is the 3-letter code or ''). */
 export function parseAvPlayTracks(list, kind = 'TEXT') {
@@ -87,11 +92,16 @@ export function createAvPlayEngine() {
     seekTo: (ms) => av().seekTo(ms),
     getTime: () => av().getCurrentTime(),
     getDuration: () => av().getDuration(),
+    aspectModes: AVPLAY_ASPECT_MODES,
     setAspect(mode) {
+      const method = AVPLAY_DISPLAY[mode] || AVPLAY_DISPLAY.fit;
       try {
-        av().setDisplayMethod(AVPLAY_DISPLAY[mode] || AVPLAY_DISPLAY.fit);
+        const api = av();
+        api.setDisplayMethod(method);
+        api.setDisplayRect(0, 0, 1920, 1080); // the mode is applied to the area: set it again so the change shows at once
+        log.info('AVPlay display mode', method);
       } catch (err) {
-        log.warn('avplay setDisplayMethod failed', err && err.message);
+        log.warn('avplay setDisplayMethod failed', method, err && (err.name || ''), err && err.message);
       }
     },
     getSubtitleTracks() {
