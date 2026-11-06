@@ -599,7 +599,9 @@ export function createDetailPage(ctx, params) {
       buttons.push({ id: 'ungroup', icon: 'remove', label: t('merge.remove'), run: ungroupChannel });
     }
     buttons.note = note;
-    if (buttons.length) next.push({ id: 'detailActions', zone: createActions(buttons, 0) });
+    // Opened from "Continue watching": the focus starts on Resume, so OK continues from the point reached instead of starting over.
+    const resumeAt = params.resume && canResume ? buttons.findIndex((b) => b.id === 'resume') : -1;
+    if (buttons.length) next.push({ id: 'detailActions', zone: createActions(buttons, Math.max(0, resumeAt)) });
     else clear(actionsEl);
 
     renderCategories(next);

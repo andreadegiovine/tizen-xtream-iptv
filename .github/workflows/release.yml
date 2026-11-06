@@ -4,9 +4,9 @@ name: Release
 # to the release. Everything a platform needs (manifest, certificate, packaging script) is in platforms/<name>/; the app code is the
 # same for all. The release tag must be a plain semantic version (v1.2.3 or 1.2.3): Tizen widget versions only accept numeric x.y.z.
 #
-# Assets attached to the release:
-#   - xtream-iptv-<version>.wgt         Samsung Tizen, signed production widget   (+ .sha256)
-#   (next: LG webOS .ipk, then Android / Fire TV .apk — see docs/MULTIPLATFORM.md)
+# Assets attached to the release, named xtream-iptv-<version>_<platform>.<ext>:
+#   - xtream-iptv-<version>_tizen.wgt   Samsung Tizen, signed production widget   (+ .sha256)
+#   (next: _webos.ipk, then _firetv.apk / _androidtv.apk — see docs/MULTIPLATFORM.md)
 #
 # Secrets: TIZEN_CERT_PASSWORD (password of platforms/tizen/tizencert.p12).
 # TMDB and Trakt keys are not part of the build: they are typed in the app Settings.

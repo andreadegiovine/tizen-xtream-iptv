@@ -1,11 +1,18 @@
 import { watchKey } from './watchStore.js';
 
-/** Groups watch records per title: { watchedMovie, watchedEpisodes, started }. Keys follow watchKey(). */
+/**
+ * Groups watch records per title: { watchedMovie, watchedEpisodes, started, progress }. Keys follow watchKey(). `progress` (0..1) is the
+ * point reached in the title (series: in the episode watched last) when it was started and not finished: the bar on its card.
+ */
 export function summarizeWatch(records) {
   const map = new Map();
   records.forEach((rec) => {
     const key = watchKey(rec.providerId, rec.entryKey);
-    const item = map.get(key) || { watchedMovie: false, watchedEpisodes: 0, started: false };
+    const item = map.get(key) || { watchedMovie: false, watchedEpisodes: 0, started: false, progress: 0, progressAt: -1 };
+    if (!rec.watched && rec.position > 0 && rec.duration > 0 && (rec.updatedAt || 0) > item.progressAt) {
+      item.progress = Math.min(1, rec.position / rec.duration);
+      item.progressAt = rec.updatedAt || 0;
+    }
     if (rec.episodeKey) {
       if (rec.watched) item.watchedEpisodes += 1;
       else if (rec.position > 0) item.started = true;

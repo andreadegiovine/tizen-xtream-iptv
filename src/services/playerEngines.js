@@ -54,6 +54,7 @@ export function createHtml5Engine() {
   let htmlHandlers = null;
   let adapter = null; // hls.js / mpegts.js instance (development only)
   return {
+    kind: 'html5',
     available: () => typeof document !== 'undefined',
     start(rawUrl, { handlers }) {
       this.stop();

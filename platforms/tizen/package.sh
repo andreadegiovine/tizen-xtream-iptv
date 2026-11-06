@@ -4,7 +4,7 @@
 #   CERT_PASSWORD=... bash platforms/tizen/package.sh <version> [out-dir]
 #
 # Installs the Tizen Studio CLI, registers the signing profile with platforms/tizen/tizencert.p12 (its password comes from the
-# TIZEN_CERT_PASSWORD secret, passed as CERT_PASSWORD) and writes <out-dir>/xtream-iptv-<version>.wgt with its .sha256 (out-dir: release).
+# TIZEN_CERT_PASSWORD secret, passed as CERT_PASSWORD) and writes <out-dir>/xtream-iptv-<version>_tizen.wgt with its .sha256 (out-dir: release).
 # Run by the "tizen" job of .github/workflows/release.yml; it works on any Linux machine with curl.
 set -euo pipefail
 
@@ -78,7 +78,7 @@ EXP
 
 # Sign the production widget
 mkdir -p "${ROOT}/${OUT}"
-NAME="xtream-iptv-${VERSION}"
+NAME="xtream-iptv-${VERSION}_tizen" # the platform after the version: one file per platform in the release
 WGT_DIR="${TMP}/wgt-${NAME}"
 mkdir -p "$WGT_DIR"
 export CERT_PASSWORD

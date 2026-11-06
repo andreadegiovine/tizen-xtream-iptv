@@ -24,6 +24,24 @@ export function parseAvPlayTracks(list, kind = 'TEXT') {
     });
 }
 
+/** State and picture size of the stream, for the log ("state PLAYING, video 1920x1080"): what decides whether a display mode shows. */
+function describeState(api) {
+  const parts = [];
+  try {
+    parts.push(`state ${api.getState()}`);
+  } catch {
+    /* not on every firmware */
+  }
+  try {
+    const video = (api.getCurrentStreamInfo() || []).find((info) => info.type === 'VIDEO');
+    const extra = video ? JSON.parse(video.extra_info || '{}') : {};
+    if (extra.Width) parts.push(`video ${extra.Width}x${extra.Height}`);
+  } catch {
+    /* extra_info is not JSON on some firmware */
+  }
+  return parts.join(', ');
+}
+
 export function createAvPlayEngine() {
   // A page outside the TV can have a partial `webapis` (extensions, emulators): AVPlay counts only when it is complete.
   const av = () => {
@@ -40,6 +58,7 @@ export function createAvPlayEngine() {
     subtitleWatch = null;
   };
   return {
+    kind: 'avplay',
     available: () => Boolean(av()),
     start(url, { bufferSeconds, handlers }) {
       const api = av();
@@ -95,8 +114,9 @@ export function createAvPlayEngine() {
     setAspect(mode) {
       const method = AVPLAY_DISPLAY[mode] || AVPLAY_DISPLAY.fit;
       try {
-        av().setDisplayMethod(method);
-        log.info('AVPlay display mode', method);
+        const api = av();
+        api.setDisplayMethod(method);
+        log.info('AVPlay display mode', method, describeState(api));
         return true;
       } catch (err) {
         log.warn('avplay setDisplayMethod failed', method, err && (err.name || ''), err && err.message);

@@ -70,7 +70,8 @@ Tutte le voci sono facoltative: quelle mancanti prendono il comportamento di un 
 
 - `verify`: valida il tag (`v1.2.3`), `npm ci`, lint, test.
 - `tizen`: versione nel `package.json`, `npm run build:tizen`, `platforms/tizen/package.sh <versione> release` (installa Tizen Studio
-  CLI, registra il profilo con il certificato copiato in una cartella temporanea, firma), carica `xtream-iptv-<versione>.wgt` e `.sha256`.
+  CLI, registra il profilo con il certificato copiato in una cartella temporanea, firma), carica `xtream-iptv-<versione>_tizen.wgt` e `.sha256`.
+- Nome dei pacchetti: `xtream-iptv-<versione>_<piattaforma>.<estensione>` (es. `xtream-iptv-1.0.1_tizen.wgt`).
 - Le prossime piattaforme aggiungono un job con la stessa forma (`webos`, `android`): ognuno dipende solo da `verify`, quindi una
   piattaforma che fallisce non blocca le altre.
 - Versioni: Tizen vuole x.y.z; Android vorrà anche un `versionCode` intero, ricavabile dal tag (1.2.3 → 10203).

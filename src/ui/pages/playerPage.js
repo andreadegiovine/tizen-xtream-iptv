@@ -34,6 +34,7 @@ export function createPlayerPage(ctx, params) {
   const isTrailer = params.type === 'trailer'; // a YouTube trailer: same player and controls, no aspect ratio / subtitles
   const engine = isTrailer ? ctx.createTrailerEngine() : ctx.createEngine();
   const controller = createPlayerController({ engine });
+  log.info('Player engine', engine.kind || 'unknown'); // which one plays (AVPlay on the TV): says why aspect / subtitles behave as they do
   const isLive = params.type === 'live';
   let playlist = params.playlist;
   let index = params.index || 0;

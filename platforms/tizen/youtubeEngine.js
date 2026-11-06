@@ -68,6 +68,7 @@ export function createYouTubeEngine() {
   };
 
   return {
+    kind: 'youtube',
     available: () => typeof document !== 'undefined',
     start(url, { handlers }) {
       this.stop();

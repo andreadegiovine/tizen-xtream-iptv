@@ -38,6 +38,15 @@ const DEFAULT_SCREEN_ROWS = 3;
 /** Cards loaded at least each time the grid grows. */
 const BATCH_ROWS = 4;
 
+/**
+ * Rows of the grid that keep their pictures for the focus on `index`: from PREFETCH_ROWS rows above the screen down (the rows further
+ * up free theirs and show the skeleton again until they are near the screen). `screenRows`: rows on screen. Returns the first such row.
+ */
+export function firstKeptRow(index, columns, screenRows = DEFAULT_SCREEN_ROWS, margin = PREFETCH_ROWS) {
+  const row = Math.floor(Math.max(0, index) / columns);
+  return Math.max(0, row - Math.max(1, screenRows) + 1 - margin); // the focused row can be the last one on screen
+}
+
 /** How many cards must be loaded for the focus on `index`: up to its row, the rows on screen below it and PREFETCH_ROWS more. */
 export function wantedCount(index, columns, screenRows = DEFAULT_SCREEN_ROWS, ahead = PREFETCH_ROWS) {
   const row = Math.floor(Math.max(0, index) / columns);
@@ -442,6 +451,15 @@ export function createBrowsePage(ctx, params = {}) {
     return moreJob;
   }
 
+  /** The pictures of the rows more than PREFETCH_ROWS above the screen are freed; the ones near it again are loaded back. */
+  function syncImages(index) {
+    const keepFrom = firstKeptRow(index, columns, screenRows()) * columns;
+    cards.forEach((card, i) => {
+      if (i < keepFrom) card.release();
+      else card.restore();
+    });
+  }
+
   /** The focus is on `index`: the cards down to PREFETCH_ROWS rows below the screen are loaded (in the background). */
   function ensureLoaded(index) {
     const need = wantedCount(index, columns, screenRows());
@@ -686,6 +704,7 @@ export function createBrowsePage(ctx, params = {}) {
       cardNodes[i].classList.add('focused');
       ensureVisible(cardNodes[i], { first: i < columns });
       ensureLoaded(i);
+      syncImages(i);
     },
     onBlur: (i) => cardNodes[i] && cardNodes[i].classList.remove('focused'),
     onActivate: (i) => {
@@ -695,7 +714,7 @@ export function createBrowsePage(ctx, params = {}) {
         return;
       }
       const item = items[selected];
-      ctx.openEntry(entries[i], { section: params.section, live: { categoryId: item && item.kind === 'all' ? allCategory() : item && item.kind === 'category' ? item.id : null, offset: i } });
+      ctx.openEntry(entries[i], { section: params.section, ...(item && item.kind === 'continue' ? { resume: true } : {}), live: { categoryId: item && item.kind === 'all' ? allCategory() : item && item.kind === 'category' ? item.id : null, offset: i } });
     },
   });
 

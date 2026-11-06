@@ -492,3 +492,10 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
 - Diagnostica: il worker da blob era bloccato dalla CSP di `config.xml` (introdotta con i trailer: `script-src` senza `blob:`). Aggiunti `blob:` a `script-src` e `worker-src * blob:`; la riga torna come prima.
 - Notice: niente bordo colorato a sinistra, il colore del tipo resta sull'icona.
 - Sfondo dell'app: sfumatura da un grigio un po' più chiaro in alto (#1e1e20) a uno un po' più scuro in basso (#0b0b0c); la testata fissa delle griglie e la sfumatura sotto l'immagine della scheda usano il colore dello sfondo alla loro altezza (`bg-at()`); la colonna dei canali della Programmazione è trasparente (i programmi non ci passano sotto). Non verificato su TV.
+
+### Patch 107 — barra di avanzamento ovunque, riprendi da Continua a guardare, immagini liberate, nome dei pacchetti, log del formato
+- Barra di avanzamento su ogni card di un titolo iniziato e non finito (griglie, caroselli, ricerca, scheda), non solo nel "Continua a guardare" della home: `summarizeWatch` calcola `progress` (serie: l'episodio visto per ultimo) e `ctx.enrich` la disegna.
+- Un titolo aperto da "Continua a guardare" (home o sidebar) apre la scheda con il focus su Riprendi: OK continua dal punto raggiunto invece di ricominciare.
+- Griglie: scendendo, le immagini delle righe oltre 3 sopra lo schermo vengono liberate (`card.release()`, resta lo skeleton); risalendo tornano a caricarsi quando sono a 3 righe dallo schermo (`card.restore()`, skeleton fino al caricamento).
+- Release: i pacchetti hanno la piattaforma nel nome, `xtream-iptv-<versione>_tizen.wgt` (e `.sha256`).
+- Formato: con un AVPlay simulato nel browser le build 103 e 106 fanno le stesse chiamate (`setDisplayMethod` FULL_SCREEN / CROPPED_FULL / LETTER_BOX al cambio). Per trovare la differenza sulla TV il log della Diagnostica scrive il motore usato dal player (`Player engine avplay | html5`) e, a ogni cambio di formato, stato di AVPlay e risoluzione del video. Non verificato su TV.

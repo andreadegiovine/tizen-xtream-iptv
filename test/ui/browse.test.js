@@ -1,4 +1,4 @@
-import { createGrowingGridModel, wantedCount, PREFETCH_ROWS, columnsFor, sidebarItems, indexOfFilter } from '../../src/ui/pages/browsePage.js';
+import { createGrowingGridModel, wantedCount, firstKeptRow, PREFETCH_ROWS, columnsFor, sidebarItems, indexOfFilter } from '../../src/ui/pages/browsePage.js';
 
 const GRID_COLUMNS = 6;
 
@@ -9,6 +9,11 @@ describe('growing grid (no pages)', () => {
     expect(wantedCount(13, GRID_COLUMNS, 3)).toBe((2 + 3 + 3) * GRID_COLUMNS); // focus on the third row
     expect(columnsFor('live')).toBe(6);
     expect(columnsFor('movie')).toBe(6);
+  });
+
+  test('the pictures are kept from 3 rows above the screen down', () => {
+    expect(firstKeptRow(0, GRID_COLUMNS, 3)).toBe(0);
+    expect(firstKeptRow(12 * GRID_COLUMNS, GRID_COLUMNS, 3)).toBe(12 - 3 + 1 - 3); // focus on row 12, the last on screen
   });
 
   test('down from the last loaded row waits for the next cards when the view has more, otherwise leaves', () => {

@@ -231,7 +231,9 @@ async function boot() {
       if (!summaries || !cards[i]) return;
       const entry = entries[i];
       const providerId = summaries.providerId;
-      cards[i].update({ status: watchStatus(type, summaries.map.get(watchKey(providerId, entry.key)), totals.get(entry.key)) });
+      const summary = summaries.map.get(watchKey(providerId, entry.key));
+      // The badge, and the progress bar of a title started and not finished (on every card: grids, carousels, search).
+      cards[i].update({ status: watchStatus(type, summary, totals.get(entry.key)), ...(summary && summary.progress > 0 ? { progress: summary.progress } : {}) });
     };
     tmdb.enrich(entries, cards, type, (entry, i, meta) => {
       if (meta.episodes) totals.set(entry.key, meta.episodes);

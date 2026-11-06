@@ -54,8 +54,13 @@ export function createCard(entry, type, meta = {}) {
   let img = null;
   let rotation = null; // a collection card: its poster changes among the pictures of its titles
 
+  let posterUrl = ''; // the picture asked for last (to show it again after release())
+  let released = false;
+
   function setPoster(url) {
     if (!url || locked) return;
+    posterUrl = url;
+    if (released) return; // shown again by restore()
     if (!img) {
       img = h('img', { alt: '', referrerpolicy: 'no-referrer' });
       const done = () => poster.classList.remove('loading');
@@ -147,6 +152,23 @@ export function createCard(entry, type, meta = {}) {
   delete fields.square;
   // A network says how many items (channels and groups) it holds, like a collection.
   const units = entry.isNetwork ? (entry.memberKeys || []).length : 0;
+  /** Frees the picture (a card far above the screen in a long grid): the image goes, the poster keeps its place. */
+  function release() {
+    if (released || rotation || !img) return;
+    released = true;
+    img.remove();
+    img = null;
+    poster.classList.add('loading'); // the skeleton until restore() has the picture again
+  }
+
+  /** The picture again (the card comes back near the screen): the skeleton stays until it has loaded. */
+  function restore() {
+    if (!released) return;
+    released = false;
+    if (posterUrl) setPoster(posterUrl);
+    else poster.classList.remove('loading');
+  }
+
   update({ title: entry.name, poster: entry.icon, ...(entry.icons && entry.icons.length > 1 ? { posters: entry.icons } : {}), rating: entry.rating, year: entry.year, ...(units ? { subtitle: t('collections.items', { count: units }) } : {}), ...fields });
-  return { el, update };
+  return { el, update, release, restore };
 }

@@ -32,3 +32,10 @@ test('a series with only a started episode is partial', () => {
   const map = summarizeWatch([rec({ entryKey: 'series:i9', episodeKey: 's1e1', position: 20 })]);
   expect(watchStatus('series', map.get('p1:series:i9'), 10)).toBe('partial');
 });
+
+test('progress of a title started and not finished: the episode watched last for a series, nothing once watched', () => {
+  const rec = (over) => ({ providerId: 'p1', entryKey: 'series:i1', position: 0, duration: 100, watched: false, updatedAt: 1, ...over });
+  const map = summarizeWatch([rec({ episodeKey: 's1e1', position: 90, updatedAt: 1 }), rec({ episodeKey: 's1e2', position: 30, updatedAt: 5 }), rec({ episodeKey: 's1e3', position: 100, watched: true, updatedAt: 9 })]);
+  expect(map.get('p1:series:i1').progress).toBeCloseTo(0.3);
+  expect(summarizeWatch([rec({ entryKey: 'movie:i2', position: 100, watched: true })]).get('p1:movie:i2').progress).toBe(0);
+});
