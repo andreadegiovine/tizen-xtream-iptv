@@ -3,6 +3,7 @@ import { t, i18n } from '../../i18n/index.js';
 import { Action } from '../../core/input.js';
 import { log } from '../../core/logger.js';
 import { icon } from '../icons.js';
+import { platform } from '../../platform/index.js';
 import { createPlayerController, cleanSubtitle, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer } from '../../services/playerController.js';
 import { ASPECT_MODES } from '../../services/playerEngines.js';
 import { youtubeStreamUrl } from '../../services/trailer.js';
@@ -10,6 +11,8 @@ import { formatClockTime } from '../../core/clock.js';
 import { watchKey, shouldResume } from '../../services/watchStore.js';
 import { pageEntries, getEntry, liveSequence, neighborKey } from '../../services/catalogQuery.js';
 import { streamLabel } from './detailPage.js';
+import { portableKeyFor } from '../../services/shareKeys.js';
+import { cueAt, subtitleLanguages } from '../../services/openSubtitles.js';
 
 const CONTROLS_MS = 4000;
 const SAVE_EVERY_MS = 10000;
@@ -21,6 +24,9 @@ const SEEK_LONG = 30;
 const SCRUB_STEP = 30;
 const SCRUB_CONFIRM_MS = 2000; // the moved position is applied after this long without a key
 const SUBTITLE_FALLBACK_MS = 5000;
+const ONLINE_CHECK_MS = 1500; // after the start, when the file's own tracks are known on every engine
+const ONLINE_TICK_MS = 200;
+const ONLINE = 'online'; // value of the downloaded track in the subtitle list
 
 /**
  * Full-screen player. All controls are HTML on top of the video plane; keys arrive through
@@ -50,7 +56,11 @@ export function createPlayerPage(ctx, params) {
   let loadToken = 0;
   let providerId = null; // known once playback started, so saving on exit needs no await
   let aspect = 'fit';
-  let subtitle = -1; // -1 = off
+  let subtitle = -1; // -1 = off, ONLINE = the downloaded subtitles, otherwise the engine's track
+  let online = null; // { language, cues } downloaded from OpenSubtitles for what is playing
+  let onlineTimer = null; // draws the downloaded cues while they are chosen
+  let onlineCue = null;
+  let onlineCheck = null;
   let audioTrack = null; // null = the file's default
   let appliedFor = 0; // load token the aspect mode was last applied to
   let focusMode = false; // the D-pad moves over the controls (progress pointer + buttons) instead of seeking
@@ -94,7 +104,8 @@ export function createPlayerPage(ctx, params) {
     { id: 'aspect', icon: 'aspect', label: () => t('player.aspect'), group: 'end', run: () => cycleAspect() },
     { id: 'subtitles', icon: 'subtitles', label: () => t('player.subtitles'), group: 'end', run: () => openSubtitles() },
     { id: 'audio', icon: 'audio', label: () => t('player.audio'), group: 'end', hidden: true, run: () => openAudio() }, // shown once the file has several audio tracks
-  ].filter((def) => !(isLive && def.vodOnly) && !(!isLive && def.liveOnly) && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles' || def.id === 'audio')));
+    { id: 'fullscreen', icon: 'fullscreen', label: () => t('player.fullscreen'), group: 'end', run: () => toggleFullscreen() }, // desktop only: the window is not always full screen
+  ].filter((def) => def.id !== 'fullscreen' || platform.toggleFullscreen).filter((def) => !(isLive && def.vodOnly) && !(!isLive && def.liveOnly) && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles' || def.id === 'audio')));
   buttonDefs.forEach((def) => {
     // Previous / next channel: the name of the channel they go to shows above them while focused.
     if (def.tip) def.tipEl = h('span', { class: 'player-btn-tip' });
@@ -105,7 +116,7 @@ export function createPlayerPage(ctx, params) {
   });
   const buttonEl = (id) => (buttonDefs.find((d) => d.id === id) || {}).el;
   // Full-width progress bar, then one row: back, play/pause, forward and the time on the left, aspect ratio and subtitles on the right.
-  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('back'), buttonEl('toggle'), buttonEl('forward'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio')));
+  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('back'), buttonEl('toggle'), buttonEl('forward'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen')));
   const top = h('div', { class: 'player-top' }, titleEl, nowEl);
   const controls = h('div', { class: 'player-controls' }, ...(isLive ? [] : [seek]), row);
   const el = h('section', { class: 'player' }, top, controls, statusEl, subtitleEl);
@@ -113,7 +124,24 @@ export function createPlayerPage(ctx, params) {
   const current = () => playlist[index];
   const episodeKey = () => (params.type === 'series' && current().season !== undefined ? `s${current().season}e${current().number}` : null);
 
+  /** The full-screen button shows the opposite of the window's state (F11 or the window may have changed it). */
+  function paintFullscreen(on) {
+    const def = buttonDefs.find((d) => d.id === 'fullscreen');
+    const name = on ? 'fullscreenExit' : 'fullscreen';
+    if (!def || def.icon === name) return;
+    def.icon = name;
+    def.el.replaceChild(icon(name), def.el.firstChild);
+    def.el.setAttribute('aria-label', t(on ? 'player.fullscreen.exit' : 'player.fullscreen'));
+  }
+  function syncFullscreen() {
+    if (platform.toggleFullscreen) platform.isFullscreen().then(paintFullscreen).catch(() => undefined);
+  }
+  async function toggleFullscreen() {
+    paintFullscreen(Boolean(await platform.toggleFullscreen()));
+  }
+
   function showControls() {
+    if (!controls.classList.contains('visible')) syncFullscreen();
     controls.classList.add('visible');
     top.classList.add('visible');
     clearTimeout(hideTimer);
@@ -313,13 +341,14 @@ export function createPlayerPage(ctx, params) {
 
   async function openSubtitles() {
     const tracks = engine.getSubtitleTracks ? engine.getSubtitleTracks() : [];
-    if (!tracks.length) {
+    if (!tracks.length && !online) {
       ctx.notices.warning(t('player.subtitles.none'), { scope: 'playback', key: 'track' });
       return;
     }
     const options = [
       { label: t('player.subtitles.off'), value: -1 },
       ...tracks.map((track, i) => ({ label: subtitleLabel(track, i + 1, t('player.track')), value: track.index })),
+      ...(online ? [{ label: onlineLabel(), value: ONLINE }] : []),
     ];
     const value = await ctx.dialogs.choose({ title: t('player.subtitles'), options, selected: subtitle });
     if (value === null || destroyed) return;
@@ -329,9 +358,88 @@ export function createPlayerPage(ctx, params) {
     // The engine call can stall the picture for a moment: let the list close first.
     const chosen = options.find((o) => o.value === value);
     ctx.notices.info(`${t('player.subtitles')}: ${chosen ? chosen.label : ''}`, { scope: 'playback', key: 'track' });
+    stopOnline();
     setTimeout(() => {
-      if (!destroyed && engine.setSubtitleTrack) engine.setSubtitleTrack(value < 0 ? null : value);
+      if (destroyed) return;
+      if (value === ONLINE) {
+        if (engine.setSubtitleTrack && tracks.length) engine.setSubtitleTrack(null);
+        startOnline();
+      } else if (engine.setSubtitleTrack) engine.setSubtitleTrack(value < 0 ? null : value);
     }, 150);
+  }
+
+  const onlineLanguage = () => subtitleLabel({ language: online.language }, 1, t('player.track'));
+  const onlineLabel = () => t('player.subtitles.online', { language: onlineLanguage() });
+  let onlineNotice = null; // the "downloading" notice, closed if the player changes title or closes first
+  function closeOnlineNotice() {
+    if (onlineNotice !== null) ctx.notices.close(onlineNotice);
+    onlineNotice = null;
+  }
+
+  /** The downloaded cues follow the position of the engine (read a few times a second). */
+  function startOnline() {
+    stopOnline();
+    if (!online) return;
+    onlineTimer = setInterval(() => {
+      let ms = 0;
+      try {
+        ms = Number(engine.getTime()) || 0;
+      } catch {
+        return;
+      }
+      const cue = cueAt(online.cues, ms);
+      if (cue === onlineCue) return;
+      onlineCue = cue;
+      showSubtitle(cue ? cue.text : '', cue ? cue.end - ms : 0);
+    }, ONLINE_TICK_MS);
+  }
+  function stopOnline() {
+    clearInterval(onlineTimer);
+    onlineTimer = null;
+    onlineCue = null;
+  }
+
+  /** TMDB id (and episode) of what is playing: from the key, or from the provider's list row when it has one. */
+  async function tmdbQuery() {
+    let key = params.entryKey || '';
+    if (!/^(movie|series):t\d+$/.test(key)) {
+      const current = await ctx.active.get();
+      key = (current && (await portableKeyFor(current.db, key))) || key;
+    }
+    const m = /^(movie|series):t(\d+)$/.exec(key);
+    if (!m || m[1] !== params.type) return null;
+    const languages = subtitleLanguages(i18n.getLocale());
+    if (m[1] === 'movie') return { tmdbId: Number(m[2]), languages };
+    const ep = current();
+    return ep && ep.season !== undefined && ep.number !== undefined ? { tmdbId: Number(m[2]), season: Number(ep.season), episode: Number(ep.number), languages } : null;
+  }
+
+  /**
+   * A title that starts without subtitles of its own: when OpenSubtitles is set up and the title has a TMDB id, its subtitles are
+   * downloaded (kept in memory for this session only) and added to the list.
+   */
+  async function fetchOnline(token) {
+    const service = ctx.openSubtitles;
+    if (isLive || isTrailer || !service || !service.enabled || token !== loadToken || destroyed) return;
+    if (engine.getSubtitleTracks && engine.getSubtitleTracks().length) return;
+    const query = await tmdbQuery().catch(() => null);
+    if (!query || token !== loadToken || destroyed) return;
+    onlineNotice = ctx.notices.info(t('player.subtitles.downloading'), { scope: 'playback', key: 'subs-online', permanent: true });
+    let found = null;
+    let failed = false;
+    try {
+      found = await service.fetch(query);
+    } catch (err) {
+      failed = true;
+      log.warn('OpenSubtitles download failed', err && err.message, err && err.details ? JSON.stringify(err.details) : '');
+    }
+    if (token !== loadToken || destroyed) return;
+    onlineNotice = null; // replaced below (same key)
+    if (found) {
+      online = found;
+      log.info('OpenSubtitles', found.language, `${found.cues.length} lines`);
+      ctx.notices.info(t('player.subtitles.downloaded', { language: onlineLanguage() }), { scope: 'playback', key: 'subs-online' });
+    } else ctx.notices.warning(t(failed ? 'player.subtitles.failed' : 'player.subtitles.notFound'), { scope: 'playback', key: 'subs-online' });
   }
 
   async function openAudio() {
@@ -383,6 +491,9 @@ export function createPlayerPage(ctx, params) {
       appliedFor = loadToken;
       if (engine.setAspect && aspect !== 'fit') engine.setAspect(aspect);
       if (engine.getAudioTracks) setAudioVisible(engine.getAudioTracks().length > 1);
+      const token = loadToken;
+      clearTimeout(onlineCheck);
+      onlineCheck = setTimeout(() => fetchOnline(token).catch(() => undefined), ONLINE_CHECK_MS);
     }
     if ((state.status === 'paused' || state.status === 'error' || state.status === 'recovering') && state.status !== lastStatus) showControls();
     if (state.status === 'error' && lastStatus !== 'error') showPlayerError(`${t('error.PLAYER')} ${state.error || ''}`.trim());
@@ -425,6 +536,10 @@ export function createPlayerPage(ctx, params) {
     closeNextNotice();
     nextOffered = false;
     subtitle = -1;
+    online = null;
+    closeOnlineNotice();
+    stopOnline();
+    clearTimeout(onlineCheck);
     audioTrack = null;
     setAudioVisible(false);
     showSubtitle('');
@@ -702,6 +817,9 @@ export function createPlayerPage(ctx, params) {
       clearTimeout(hideTimer);
       clearTimeout(scrubTimer);
       clearTimeout(subtitleTimer);
+      clearTimeout(onlineCheck);
+      closeOnlineNotice();
+      stopOnline();
       clearTimeout(programmeTimer);
       clearInterval(saveTimer);
       saveProgress(true);

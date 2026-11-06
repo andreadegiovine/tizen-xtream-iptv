@@ -49,14 +49,8 @@ export function createAvPlayEngine() {
     return api && typeof api.open === 'function' && typeof api.setDisplayRect === 'function' && typeof api.prepareAsync === 'function' ? api : null;
   };
   let element = null;
-  let subtitleWatch = null;
-  let nativeSubtitles = false; // the player draws them itself (fallback when no event ever arrives)
-  let subtitlesOn = false; // a track is selected: events are shown
+  let subtitlesOn = false; // a track is selected: its lines (onsubtitlechange) are drawn by the page
   let eventsLogged = 0;
-  const stopWatch = () => {
-    clearTimeout(subtitleWatch);
-    subtitleWatch = null;
-  };
   return {
     kind: 'avplay',
     available: () => Boolean(av()),
@@ -76,14 +70,14 @@ export function createAvPlayEngine() {
         onbufferingcomplete: () => handlers.onBufferingDone(),
         onstreamcompleted: () => handlers.onEnded(),
         onerror: (error) => handlers.onError(error),
-        // Embedded subtitles arrive as events; the page draws them (see setSubtitleTrack).
-        // Callback arguments: (duration, subtitles, type, attributes).
+        // Embedded subtitles arrive as events (text in HTML, duration in ms); the page draws them (see setSubtitleTrack).
+        // Callback arguments: (duration, subtitles, type, attributes). An empty text clears the line.
         onsubtitlechange: (duration, text, type) => {
           if (eventsLogged < 5) {
             eventsLogged += 1;
             log.info('AVPlay subtitle event', JSON.stringify({ duration, type, text: String(text || '').slice(0, 60), on: subtitlesOn }));
           }
-          if (subtitlesOn && !nativeSubtitles && handlers.onSubtitle) handlers.onSubtitle(String(text || ''), Number(duration) || 0);
+          if (subtitlesOn && handlers.onSubtitle) handlers.onSubtitle(String(text || ''), Number(duration) || 0);
         },
       });
       try {
@@ -94,7 +88,7 @@ export function createAvPlayEngine() {
       document.body.classList.add('video-active');
       api.prepareAsync(
         () => {
-          // The app draws the subtitles from the events: the player must stay silent (set once, not at every track change).
+          // No events until the user picks a track (AVPlay may select one by itself).
           try {
             api.setSilentSubtitle(true);
           } catch (err) {
@@ -156,42 +150,51 @@ export function createAvPlayEngine() {
         log.warn('avplay audio selection failed', err && err.message);
       }
     },
-    /** index = track to show, null = subtitles off. The player draws the text itself. */
+    /**
+     * index = track to show, null = subtitles off. AVPlay does not draw subtitles: with silent mode off it sends each line in
+     * `onsubtitlechange` and the page draws it (silent mode on stops the events). The track is changed while paused, as other
+     * Tizen players do: some firmwares ignore a change made while playing.
+     */
     setSubtitleTrack(index) {
-      stopWatch();
       eventsLogged = 0;
-      try {
-        if (index === null) {
-          subtitlesOn = false;
-          if (nativeSubtitles) av().setSilentSubtitle(true);
-          nativeSubtitles = false;
-          return;
-        }
-        subtitlesOn = true;
+      const api = av();
+      if (!api) return;
+      if (index === null) {
+        subtitlesOn = false;
         try {
-          av().setSilentSubtitle(false); // before the selection: some firmwares only draw tracks chosen while visible
+          api.setSilentSubtitle(true);
         } catch (err) {
           log.warn('avplay setSilentSubtitle failed', err && err.message);
         }
-        av().setSelectTrack('TEXT', index);
-        // The player draws the track itself (the app-drawn text from the events never showed on the TV).
-        // Events are still logged, and shown by the app only if the native rendering could not be switched on.
-        try {
-          av().setSilentSubtitle(false);
-          nativeSubtitles = true;
-        } catch (err) {
-          nativeSubtitles = false;
-          log.warn('avplay native subtitles failed', err && err.message);
-        }
-        log.info('AVPlay subtitle track selected', index, nativeSubtitles ? 'native' : 'app');
+        log.info('AVPlay subtitles off');
+        return;
+      }
+      let playing = false;
+      try {
+        playing = api.getState() === 'PLAYING';
+      } catch {
+        /* state unknown: no pause */
+      }
+      try {
+        if (playing) api.pause();
+        api.setSilentSubtitle(false);
+        api.setSelectTrack('TEXT', index);
+        subtitlesOn = true;
+        log.info('AVPlay subtitle track selected', index);
       } catch (err) {
         log.warn('avplay subtitle selection failed', err && err.message);
+      } finally {
+        if (playing) {
+          try {
+            api.play();
+          } catch (err) {
+            log.warn('avplay resume after subtitle change failed', err && err.message);
+          }
+        }
       }
     },
     stop() {
-      stopWatch();
       subtitlesOn = false;
-      nativeSubtitles = false;
       eventsLogged = 0;
       const api = av();
       try {

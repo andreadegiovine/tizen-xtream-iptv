@@ -21,6 +21,8 @@ import { faForward } from '@fortawesome/free-solid-svg-icons/faForward';
 import { faBackwardStep } from '@fortawesome/free-solid-svg-icons/faBackwardStep';
 import { faForwardStep } from '@fortawesome/free-solid-svg-icons/faForwardStep';
 import { faExpand } from '@fortawesome/free-solid-svg-icons/faExpand';
+import { faMaximize } from '@fortawesome/free-solid-svg-icons/faMaximize';
+import { faMinimize } from '@fortawesome/free-solid-svg-icons/faMinimize';
 import { faClosedCaptioning } from '@fortawesome/free-solid-svg-icons/faClosedCaptioning';
 import { faVolumeHigh } from '@fortawesome/free-solid-svg-icons/faVolumeHigh';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons/faChevronDown';
@@ -73,6 +75,8 @@ const ICONS = {
   previous: faBackwardStep,
   next: faForwardStep,
   aspect: faExpand,
+  fullscreen: faMaximize,
+  fullscreenExit: faMinimize,
   subtitles: faClosedCaptioning,
   audio: faVolumeHigh,
   chevron: faChevronDown,

@@ -69,6 +69,7 @@ All entries are optional: missing ones get the behavior of a browser.
 | `exit()` | closes the app | `tizen.application…exit()` |
 | `createEngine()` | video engine (same contract as `createHtml5Engine`) | AVPlay, `<video>` in the browser |
 | `createTrailerEngine()` | engine that plays `youtube:<id>` inside the app, or null | iframe + `localhost:8125` service |
+| `toggleFullscreen()` / `isFullscreen()` | switches the window to full screen and says whether it is (desktop only; without them the player has no full-screen button) | — |
 | `openTrailer(id)` | opens the trailer outside the app (webOS: YouTube app); with neither of the two, no trailer button | — |
 | `createDiagnosticPlayer()` | player lab of Diagnostics | `avplaySpike` |
 | `runtimeChecks()` | extra rows in the Diagnostics checks | tizen, webapis, AVPlay |
@@ -124,9 +125,10 @@ platforms/desktop/
   platform.js            adapter: <video> with hls.js / mpegts.js (HLS and MPEG-TS), Space and media keys, exit
                          (window.close), trailer in the system browser, Electron version in the Diagnostics checks
   build.js               demux: true (hls.js / mpegts.js in the build), 512 px icon from logo.svg
-  electron/main.js       Electron main process: a full-screen window, the app served as app://xtream/
+  electron/main.js       Electron main process: a normal resizable 16:9 window, the app served as app://xtream/
                          (normal origin for workers and IndexedDB), 1920x1080 interface scaled to the window (zoom),
                          F11 full screen, F12 developer tools, a single instance
+  electron/preload.js    exposes to the page only `toggleFullscreen()` / `isFullscreen()` of its own window (the player button)
   electron-builder.json  packages: Windows NSIS x64, macOS dmg x64 and arm64, Linux AppImage and deb x64; Electron 44.9.3
   package.sh             staging folder (build + main.js + package.json) and electron-builder 26.18.0 via npx
 ```
@@ -143,7 +145,7 @@ platforms/desktop/
   needs a Windows certificate and the Apple Developer account (notarization).
 - **Controls:** keyboard (arrows, Enter, Esc / Backspace, PageUp / PageDown, Space, media keys). The mouse works only where the
   interface already provides for it (player bar).
-- **Window:** known issue to fix — the app opens full screen; it should be a normal window, with a player button to send the video full screen.
+- **Window:** a normal, resizable window (1280x720, or 85% of the work area on small screens); the player's full-screen button and F11 switch the whole window.
 - Verified in Electron 44.9.3 (Linux, with the mock without CORS headers): startup, provider configuration, sync in the workers, home;
   AppImage and deb packages created locally. Windows (tried on a PC after patch 110) works; macOS: only in the release jobs.
 
@@ -198,9 +200,26 @@ platforms/android/
 - **Google: developer verification also for apps outside the Play Store** (from 2026 in some countries, global from 2027); there is a reduced
   tier for hobbyists that limits distribution to a few devices. To follow for the Android TV APK.
 
+## Data shared between providers (patch 114)
+
+Several providers can be configured; what the user builds is not tied to one of them. The key of an item decides how far it is shared (`src/services/shareKeys.js`):
+
+| Key | Meaning | Shared? |
+| --- | --- | --- |
+| `movie:t603`, `series:t1396` | a title with a TMDB id | yes |
+| `live:g<name>`, `live:n<name>` | a channel group / network, named after the normalised channel name | yes |
+| `genre:…`, `category:<folded name>` | a genre; a category saved by its folded name | yes |
+| `movie:i12`, `live:i45` | a provider's own title (no TMDB id): the number means another title elsewhere | no: stored with the provider id |
+
+- **Favorites, collections, pins** live in the app database and are visible to every provider. A provider that lacks a saved item just does not show it. **Nothing is deleted** when switching or removing a provider (only the removed provider's own titles go).
+- A title saved under the provider key **moves to the shared key** when the catalog gives it a TMDB id (`portableKeyFor`, at start and after each sync), merging duplicates.
+- **Programme layout** is shared too; a save from one provider rewrites only the places its keys had.
+- Already global: watch history, Trakt, TMDB metadata, settings, search history, PIN.
+- **Per provider on purpose:** hidden categories, manual Live merges / network links, scheduled viewings, the catalog.
+- Collections and favorites count only the titles the active provider carries.
+
 ## Open issues
 
-- **Desktop window (reported on Windows):** the app must open as a normal window, not full screen; the player needs a button to send the video full screen (F11 does it for the whole window today).
 - Tizen aspect ratio ("format"): cause not found; waiting for the TV logs (see patches 106–107 in MILESTONES).
 
 ## Order of work

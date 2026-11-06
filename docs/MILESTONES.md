@@ -531,3 +531,29 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - Installation procedures moved to `platforms/tizen/`, `platforms/webos/`, `platforms/desktop/` and `platforms/android/` (`README.md` each, with notes and the content of the folder).
 - Build, packaging, releases, secrets, project layout and code constraints moved to the new `docs/BUILD.md`.
 - All documents in `docs/` translated from Italian to English (`MILESTONES.md`, `DESIGN.md`, `MOCK-TEST.md`, `MULTIPLATFORM.md`); the convention for new milestone notes is now English. The app's Italian dictionary (`it-IT`) is unchanged. Documentation only: no code change. Not verified on the TV.
+
+### Patch 114 — shared data between providers, desktop window, full-screen button
+- **Shared keys** (`src/services/shareKeys.js`): favorites, collections, pins and the Programme layout are no longer tied to one provider. Titles with a TMDB id are kept as `movie:t<id>` / `series:t<id>`, channel groups and networks by name key, categories by folded name, genres by key; a provider's own title (no TMDB id) is stored with the provider id so numbers of different providers never collide.
+- A provider that lacks an item does not show it and does not delete it; switching or removing a provider leaves shared items alone. Counts (favorites, collection cards) count only what the active provider carries.
+- A title saved under the provider key moves to the shared key when the catalog gives it a TMDB id (at start and after each sync; duplicates merge). Existing data is migrated on first read.
+- API changes: `collections.get/update/addEntry` take the provider; `favorites.hasFilter` and `pins.has` take the name; `ctx.guideLayout` replaces the per-provider layout functions.
+- Checked: watch history, Trakt, TMDB cache, settings, search history and PIN were already global; hidden categories, manual Live links and scheduled viewings stay per provider (provider-specific ids/streams).
+- **Desktop**: normal resizable 16:9 window; new platform entries `toggleFullscreen()` / `isFullscreen()` (`electron/preload.js`) and a full-screen button in the player (F11 too). Checked in Electron under Xvfb. Not verified on Windows, macOS, Linux desktops or the TVs.
+
+### Patch 115 — Trakt counters, custom EPG, keys guide in the README
+- Settings → Trakt: two new rows with the number of watched titles and of "continue watching" titles aligned with Trakt (`traktCounts` of the watch state).
+- Settings → Preferences → Live TV (last field): **Custom EPG**, an http(s) XMLTV address that replaces the provider's guide. Saved only if it is a valid address and answers with an XMLTV file (`probeGuide`); empty goes back to the provider's; if it fails at download time the provider's guide is used. Saving starts a new download.
+- README: how to get the TMDB and Trakt keys, what each gives, and the Custom EPG. TMDB does not store watch history (it is metadata); Trakt does and is the one used for it.
+- Applies on top of patch 114. Tests: address check, probe, custom/fallback download, counters. Not verified on the TV.
+
+### Patch 116 — Tizen: embedded subtitles drawn by the app
+- Cause: AVPlay never draws subtitles; it sends each line in `onsubtitlechange`, and only while silent mode is off (`setSilentSubtitle(true)` stops the events). Since patch 30 the engine switched silent mode off expecting AVPlay to draw, and dropped the events (`nativeSubtitles`): the track could be chosen but nothing appeared. Earlier (patch 28) silent mode was on, so no events arrived.
+- Now: choosing a track pauses (if playing), sets `setSilentSubtitle(false)`, `setSelectTrack('TEXT', i)` and resumes; every line goes to the page overlay for the duration AVPlay gives. "Off" sets `setSilentSubtitle(true)`. Lines from a track AVPlay selects by itself are ignored until the user picks one. Removed the native-drawing fallback.
+- `cleanSubtitle` also decodes HTML entities (AVPlay sends the text as HTML: `&amp;`, `&#233;`), after the tags are removed.
+- Same approach as other Tizen players (Vemm, MSX). Applies after patches 114 and 115. Not verified on the TV: check that the text appears and the Diagnostics log shows `AVPlay subtitle event` lines.
+
+### Patch 117 — subtitles from OpenSubtitles
+- Settings: *OpenSubtitles* section with the API key field (`apiKeys.openSubtitlesKey`, hidden like the Trakt secret).
+- A movie or episode that starts without subtitle tracks of its own and has a TMDB id (the shared key, or the provider row's `tmdbId`) gets subtitles from OpenSubtitles in the app language, then English: notice "Downloading subtitles" while it happens, then "Subtitles downloaded: <language>" (or not found / failed). They appear in the Subtitles list as "<language> (OpenSubtitles)" and are drawn by the app following the position. Not saved: memory for the session (no second download of the same title) and the browser cache.
+- Works the same on every platform (the app draws the text). The OpenSubtitles requests (CORS from the TVs, `X-User-Agent`, download quota without login) are not verified on the devices: check the Diagnostics log (`OpenSubtitles …`) if nothing arrives.
+- Applies after patches 114, 115 and 116. Not verified on the TV.

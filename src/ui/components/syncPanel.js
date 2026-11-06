@@ -193,6 +193,8 @@ export function createTraktPanel(ctx) {
   const table = createTable('Trakt', [removeButton, syncButton, connectButton], [
     { name: 'account', label: t('trakt.account') },
     { name: 'trakt', label: t('trakt.sync') },
+    { name: 'watched', label: t('trakt.watched') },
+    { name: 'progress', label: t('trakt.progress') },
   ]);
   let connected = false;
   removeButton.style.display = 'none'; // shown once an account is known to be connected
@@ -204,13 +206,21 @@ export function createTraktPanel(ctx) {
     const enabled = Boolean(ctx.trakt && ctx.trakt.enabled);
     connected = enabled ? await ctx.trakt.isConnected().catch(() => false) : false;
     const active = new Map(ctx.operations.list().map((op) => [op.id, op]));
-    const [account, sync] = table.rows;
+    const [account, sync, watchedRow, progressRow] = table.rows;
     if (!enabled) account.status.textContent = t('settings.notConfigured');
     else if (!connected) account.status.textContent = t('settings.notConfigured');
     else account.status.textContent = (await ctx.trakt.account().catch(() => '')) || t('settings.connected');
     sync.status.classList.toggle('in-progress', active.has('trakt'));
     sync.status.textContent = describeMeta(log.trakt, locale, enabled && connected, active.get('trakt'));
     if (enabled && !connected && !active.has('trakt')) sync.status.textContent = t('settings.notConfigured');
+    // Titles aligned with Trakt: watched, and in progress ("continue watching").
+    const counts = connected && ctx.watch && ctx.watch.traktCounts ? await ctx.watch.traktCounts().catch(() => null) : null;
+    watchedRow.el.style.display = counts ? '' : 'none';
+    progressRow.el.style.display = counts ? '' : 'none';
+    if (counts) {
+      watchedRow.status.textContent = formatNumber(counts.watched, locale);
+      progressRow.status.textContent = formatNumber(counts.progress, locale);
+    }
     connectButton.style.display = connected ? 'none' : '';
     removeButton.style.display = connected ? '' : 'none';
     syncButton.style.display = connected ? '' : 'none';

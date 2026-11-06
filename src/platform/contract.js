@@ -11,6 +11,9 @@
  *                             (`aspectModes`: the aspect ratios it can show, when not all of ASPECT_MODES)
  *   createTrailerEngine()     an engine that plays `youtube:<id>` inside the app, or null (then openTrailer is used)
  *   openTrailer(videoId)      opens the trailer outside the app (the platform's YouTube app); without either, no trailer button
+ *   toggleFullscreen()        Promise: switches the window between full screen and a window, resolves true when it is now full screen; only desktop has
+ *                             one (a TV is always full screen): without it the player has no full-screen button
+ *   isFullscreen()            Promise of whether the window is full screen now (the button shows the opposite action)
  *   createDiagnosticPlayer()  the player lab of the Diagnostics page ({ play, stop, textTracks, selectText })
  *   runtimeChecks()           extra rows of the Diagnostics checks: [{ id, status: 'ok' | 'warn' | 'fail', detail }]
  *   display(env)              Promise of the panel size { width, height } or null
@@ -24,6 +27,8 @@ export const PLATFORM_API = Object.freeze([
   'createEngine',
   'createTrailerEngine',
   'openTrailer',
+  'toggleFullscreen',
+  'isFullscreen',
   'createDiagnosticPlayer',
   'runtimeChecks',
   'display',
@@ -61,6 +66,8 @@ export function withDefaults(adapter, { createDefaultEngine } = {}) {
     createEngine: createDefaultEngine || null,
     createTrailerEngine: null,
     openTrailer: null,
+    toggleFullscreen: null,
+    isFullscreen: async () => false,
     createDiagnosticPlayer: () => createNoDiagnosticPlayer(),
     runtimeChecks: () => [],
     display: async () => null,

@@ -510,6 +510,17 @@ export function createWatchState({ store, trakt }) {
       await this.pushUnsent(); // what was watched only here goes to Trakt too
       return changed;
     },
+    /** How many titles are aligned with Trakt: watched (movies and episodes) and in progress (continue watching). */
+    async traktCounts() {
+      let watched = 0;
+      let progress = 0;
+      for (const r of await store.all()) {
+        if (r.watched) {
+          if (r.source === 'trakt' || r.traktSynced) watched += 1;
+        } else if (r.source === 'trakt' && r.position > 0) progress += 1;
+      }
+      return { watched, progress };
+    },
     /** Watched titles Trakt has never received (watched before connecting, or when it was unreachable): sent in bulk. Resolves with how many went. */
     async pushUnsent() {
       if (!trakt || !trakt.sendHistory) return 0;

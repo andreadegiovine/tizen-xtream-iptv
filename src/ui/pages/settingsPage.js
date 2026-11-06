@@ -13,11 +13,12 @@ import { TIME_FORMATS, DATE_FORMATS, formatClockTime, formatClockDate } from '..
 import { t, i18n, detectLocale } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { Dir } from '../focus/models.js';
-import { LANGUAGE_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SCREENSAVER_OPTIONS, SUGGESTION_SOURCE_OPTIONS } from '../../services/settings.js';
+import { LANGUAGE_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SCREENSAVER_OPTIONS, SUGGESTION_SOURCE_OPTIONS, isEpgUrl } from '../../services/settings.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { createSyncPanel, createTmdbPanel, createTraktPanel, createDevicePanel, createOperationsPanel } from '../components/syncPanel.js';
 import { log } from '../../core/logger.js';
+import { probeGuide } from '../../services/epgSync.js';
 import { rebuildLive } from '../../services/rebuildLive.js';
 import { parseTerms, termsText } from '../../services/liveGrouping.js';
 import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from '../../services/liveNetworks.js';
@@ -299,6 +300,7 @@ export function createSettingsPage(ctx) {
   const tmdbTokenRow = textRow({ ctx, label: t('settings.tmdbKey'), field: 'tmdbKey' });
   const traktIdRow = textRow({ ctx, label: t('settings.traktId'), field: 'traktId' });
   const traktSecretRow = textRow({ ctx, label: t('settings.traktSecret'), field: 'traktSecret', secret: true });
+  const openSubtitlesRow = textRow({ ctx, label: t('settings.openSubtitlesKey'), field: 'openSubtitlesKey', secret: true });
 
   const pinValue = h('span', { class: 'value' });
   const pinRow = {
@@ -393,6 +395,27 @@ export function createSettingsPage(ctx) {
     },
   };
 
+  // Custom EPG: saved only when it is an http(s) address that answers with an XMLTV guide; empty goes back to the provider's guide.
+  const showEpg = () => ctx.settings.get().then((st) => { epgField.setValue(st.customEpgUrl); });
+  const epgField = createField({
+    label: t('settings.customEpg'),
+    placeholder: t('settings.customEpgPlaceholder'),
+    inputmode: 'url',
+    onCancel: showEpg,
+    onSubmit: async (value) => {
+      const url = value.trim();
+      if (url && !(isEpgUrl(url) && (await probeGuide(url)))) {
+        ctx.notices.error(t('settings.customEpgInvalid'), { key: 'setting' });
+        await showEpg();
+        return;
+      }
+      await ctx.settings.update({ customEpgUrl: url });
+      ctx.notices.success(t('settings.customEpgSaved'), { key: 'setting' });
+      if (ctx.epg) ctx.epg.maybeSync({ force: true }).catch(() => undefined);
+    },
+  });
+  const epgRow = { el: epgField.el, root: epgField.root, refresh: showEpg, activate: async () => epgField.focus() };
+
   /** A number field (with its reset button, a second row like the one of the words) for a network setting; Enter saves and rebuilds Live TV. */
   function numberRows({ key, labelKey, resetKey, fallback }) {
     const reset = h('button', { class: 'btn danger icon-only row-reset', type: 'button', 'aria-label': t(resetKey), title: t(resetKey) }, icon('remove'));
@@ -451,7 +474,7 @@ export function createSettingsPage(ctx) {
     {
       titleKey: 'settings.section.live',
       // The toggle for the numbers sits right under the maximum difference, the setting it goes with.
-      parts: [{ list: [liveGrouping, liveNetworks] }, { fields: [similarityRow, similarityResetRow, maxDiffRow, maxDiffResetRow] }, { list: [ignoreNumbersRow] }, { fields: [patternsRow, patternsResetRow] }],
+      parts: [{ list: [liveGrouping, liveNetworks] }, { fields: [similarityRow, similarityResetRow, maxDiffRow, maxDiffResetRow] }, { list: [ignoreNumbersRow] }, { fields: [patternsRow, patternsResetRow] }, { fields: [epgRow] }],
     },
     {
       titleKey: 'settings.section.content',
@@ -470,7 +493,7 @@ export function createSettingsPage(ctx) {
     ]),
   ]);
   // Focus order follows the page: catalog, TMDB, Trakt, preferences.
-  const rows = [...catalogRows, ...tmdbRows, tmdbTokenRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktSecretRow, dbUpdateRow, dbRemoveRow, ...prefs];
+  const rows = [...catalogRows, ...tmdbRows, tmdbTokenRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktSecretRow, openSubtitlesRow, dbUpdateRow, dbRemoveRow, ...prefs];
   // The Trakt sync / remove buttons exist only while an account is connected.
   const visibleRows = () => rows.filter((row) => row.el.style.display !== 'none');
   rows.forEach((row) => row.refresh());
@@ -531,7 +554,7 @@ export function createSettingsPage(ctx) {
   };
 
   return {
-    el: framedPage(h('h1', { text: t('nav.settings') }), opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), devicePanel.el, prefsBlocks),
+    el: framedPage(h('h1', { text: t('nav.settings') }), opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), h('h2', { class: 'prefs-title', text: 'OpenSubtitles' }), h('div', { class: 'fields' }, openSubtitlesRow.root), devicePanel.el, prefsBlocks),
     mount() {
       opsPanel.mount();
       tmdbPanel.mount();

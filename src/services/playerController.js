@@ -1,3 +1,4 @@
+import { decodeEntities } from './xmltv.js';
 /**
  * Playback state machine on top of an engine (AVPlay on the TV, <video> in a desktop browser).
  * Engine contract: start(url, { bufferSeconds, handlers }), play(), pause(), seekTo(ms), getTime() ms,
@@ -182,7 +183,7 @@ export function neighborEpisode(list, index, delta) {
   return next >= 0 && next < list.length ? { episode: list[next], index: next } : null;
 }
 
-const LANGUAGE_NAMES = { ita: 'Italiano', eng: 'English', spa: 'Español', fre: 'Français', fra: 'Français', ger: 'Deutsch', deu: 'Deutsch', por: 'Português', rus: 'Русский', ara: 'العربية', tur: 'Türkçe', rum: 'Română', ron: 'Română', alb: 'Shqip', sqi: 'Shqip' };
+const LANGUAGE_NAMES = { ita: 'Italiano', eng: 'English', spa: 'Español', fre: 'Français', fra: 'Français', ger: 'Deutsch', deu: 'Deutsch', por: 'Português', rus: 'Русский', ara: 'العربية', tur: 'Türkçe', rum: 'Română', ron: 'Română', alb: 'Shqip', sqi: 'Shqip', it: 'Italiano', en: 'English', es: 'Español', fr: 'Français', de: 'Deutsch', pt: 'Português', 'pt-br': 'Português (BR)', ru: 'Русский', ar: 'العربية', tr: 'Türkçe', ro: 'Română', sq: 'Shqip' };
 
 /** Subtitle text from the engine → plain lines: no markup (<i>, ASS overrides like {\\an8}), line breaks as \n. */
 export function cleanSubtitle(text) {
@@ -192,6 +193,7 @@ export function cleanSubtitle(text) {
     .replace(/<[^>]*>/g, '')
     .replace(/\r/g, '')
     .replace(/&nbsp;/g, ' ')
+    .replace(/&(#x?[0-9a-f]+|amp|lt|gt|quot|apos);/gi, (m) => decodeEntities(m))
     .trim();
 }
 

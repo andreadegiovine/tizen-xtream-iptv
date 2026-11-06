@@ -23,9 +23,9 @@ export async function addToCollection(ctx, { providerId, entry }) {
       ctx.notices.success(t('notice.added'), { key: 'collection' });
       return { collection, created: true };
     }
-    const added = await ctx.collections.addEntry(picked.collectionId, entry.key);
+    const added = await ctx.collections.addEntry(picked.collectionId, entry.key, providerId);
     ctx.notices.success(t(added ? 'notice.added' : 'notice.done'), { key: 'collection' });
-    return { collection: await ctx.collections.get(picked.collectionId), created: false };
+    return { collection: await ctx.collections.get(picked.collectionId, providerId), created: false };
   } catch (err) {
     log.warn('Add to collection failed', err && err.message);
     ctx.notices.error(t('error.UNKNOWN'), { key: 'collection' });

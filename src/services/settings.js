@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   dateFormat: 'auto',
   liveGrouping: true, // Live TV: versions of the same channel shown as one
   liveNetworks: true, // Live TV: the channels of one broadcaster (Rai 1, Rai 2...) gathered in a network
+  customEpgUrl: '', // XMLTV guide that replaces the provider's one (http / https); empty = the provider's
   liveGroupPatterns: '', // words removed from channel names to compare them; empty = the defaults
   liveNetworkSimilarity: DEFAULT_SIMILARITY, // networks: least % of a name its common beginning must be
   liveNetworkMaxDiff: DEFAULT_MAX_DIFF, // networks: most characters a name can have beyond the common beginning
@@ -37,6 +38,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
 const whole = (value, min, max, fallback) => (Number.isFinite(Number(value)) && value !== '' && value !== null ? Math.min(max, Math.max(min, Math.round(Number(value)))) : fallback);
 
 const pick = (value, options, fallback) => (options.includes(value) ? value : fallback);
+
+/** A usable guide address: http or https, with a host. */
+export function isEpgUrl(value) {
+  const text = String(value || '').trim();
+  if (!/^https?:\/\/[^\s/]+\S*$/i.test(text) || text.length > 1000) return false;
+  try {
+    return Boolean(new URL(text).hostname);
+  } catch {
+    return false;
+  }
+}
 
 function sanitize(raw) {
   return {
@@ -54,6 +66,7 @@ function sanitize(raw) {
     dateFormat: pick(raw.dateFormat, DATE_FORMATS, DEFAULT_SETTINGS.dateFormat),
     liveGrouping: typeof raw.liveGrouping === 'boolean' ? raw.liveGrouping : DEFAULT_SETTINGS.liveGrouping,
     liveNetworks: typeof raw.liveNetworks === 'boolean' ? raw.liveNetworks : DEFAULT_SETTINGS.liveNetworks,
+    customEpgUrl: typeof raw.customEpgUrl === 'string' && isEpgUrl(raw.customEpgUrl) ? raw.customEpgUrl.trim() : '',
     liveGroupPatterns: typeof raw.liveGroupPatterns === 'string' ? raw.liveGroupPatterns.slice(0, 600) : '',
     liveNetworkSimilarity: whole(raw.liveNetworkSimilarity, 10, 100, DEFAULT_SETTINGS.liveNetworkSimilarity),
     liveNetworkMaxDiff: whole(raw.liveNetworkMaxDiff, 0, 50, DEFAULT_SETTINGS.liveNetworkMaxDiff),

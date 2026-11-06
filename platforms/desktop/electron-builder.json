@@ -3,7 +3,7 @@
   "productName": "Xtream IPTV",
   "electronVersion": "44.9.3",
   "directories": { "output": "out", "buildResources": "build" },
-  "files": ["main.js", "package.json", "app/**/*"],
+  "files": ["main.js", "preload.js", "package.json", "app/**/*"],
   "asar": true,
   "publish": null,
   "win": {

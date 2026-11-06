@@ -1,6 +1,7 @@
 /*
  * Electron main process of the desktop app: one window showing the built app (dist/, served as app://xtream/ so that workers and
- * IndexedDB have a normal origin), full screen, the 1920x1080 interface scaled to the window.
+ * IndexedDB have a normal origin) in a normal, resizable window (the player has a button for full screen, F11 does the same), with the
+ * 1920x1080 interface scaled to the window.
  *
  * Network: the Xtream servers send no CORS headers and are often plain http, so the page runs with webSecurity off (no CORS, no mixed
  * content block), as a TV app does. The page only ever comes from the app's own files: navigation elsewhere is blocked and window.open
@@ -8,7 +9,7 @@
  */
 const path = require('path');
 const { pathToFileURL } = require('url');
-const { app, BrowserWindow, protocol, net, shell, screen } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, screen, ipcMain } = require('electron');
 
 const SCHEME = 'app';
 const ORIGIN = `${SCHEME}://xtream`;
@@ -27,16 +28,20 @@ function serveFile(request) {
 }
 
 function createWindow() {
-  // As large as the screen from the start (full screen): the first zoom is already the right one.
-  const { width, height } = screen.getPrimaryDisplay().size;
+  // A 16:9 window, 1280x720 at most as large as 85% of the work area (the interface scales with it).
+  const area = screen.getPrimaryDisplay().workAreaSize;
+  const scale = Math.min(1, (area.width * 0.85) / 1280, (area.height * 0.85) / 720);
   const win = new BrowserWindow({
-    width,
-    height,
-    fullscreen: true,
+    width: Math.round(1280 * scale),
+    height: Math.round(720 * scale),
+    minWidth: 640,
+    minHeight: 360,
+    useContentSize: true,
+    center: true,
     backgroundColor: '#0c0c12',
     autoHideMenuBar: true,
     icon: path.join(ROOT, 'icon.png'),
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: false },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: false },
   });
   win.removeMenu();
   // The interface is drawn for 1920x1080: the zoom makes it fit the window (and the screen in full screen).
@@ -69,6 +74,14 @@ function createWindow() {
   });
   win.loadURL(`${ORIGIN}/index.html`);
 }
+
+// The player's full-screen button (preload.js): switches the window of the caller, or just reports its state.
+ipcMain.handle('window:fullscreen', (event, toggle) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return false;
+  if (toggle) win.setFullScreen(!win.isFullScreen());
+  return win.isFullScreen();
+});
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {

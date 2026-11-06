@@ -130,6 +130,17 @@ describe('watch-state adapter', () => {
     expect(trakt.reportWatched).toHaveBeenCalledTimes(1);
   });
 
+  test('counts the titles aligned with Trakt: watched and in progress', async () => {
+    const store = new WatchStore(await appDb());
+    const ws = createWatchState({ store, trakt: null });
+    await store.save({ key: 'movie:t1', entryKey: 'movie:t1', type: 'movie', position: 100, duration: 100, source: 'trakt' });
+    await store.save({ key: 'movie:t2', entryKey: 'movie:t2', type: 'movie', position: 100, duration: 100, traktSynced: true });
+    await store.save({ key: 'movie:t3', entryKey: 'movie:t3', type: 'movie', position: 100, duration: 100 });
+    await store.save({ key: 'movie:t4', entryKey: 'movie:t4', type: 'movie', position: 30, duration: 100, source: 'trakt' });
+    await store.save({ key: 'movie:t5', entryKey: 'movie:t5', type: 'movie', position: 30, duration: 100 });
+    expect(await ws.traktCounts()).toEqual({ watched: 2, progress: 1 });
+  });
+
   test('reads wait for a save that is still being written', async () => {
     const store = new WatchStore(await appDb());
     const ws = createWatchState({ store, trakt: null });

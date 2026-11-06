@@ -56,6 +56,8 @@ import { createCollectionsPage } from './ui/pages/collectionsPage.js';
 import { createCollectionPage } from './ui/pages/collectionPage.js';
 import { createNetworkPage } from './ui/pages/networkPage.js';
 import { createPinsService } from './services/pins.js';
+import { createGuideLayoutStore } from './services/guideLayout.js';
+import { portableKeyFor } from './services/shareKeys.js';
 import { createSearchPage } from './ui/pages/searchPage.js';
 import { createDetailPage } from './ui/pages/detailPage.js';
 import { createPlayerPage } from './ui/pages/playerPage.js';
@@ -64,6 +66,7 @@ import { createProvidersPage } from './ui/pages/providersPage.js';
 import { createProviderSetupPage } from './ui/pages/providerSetupPage.js';
 import { createCategoriesPage } from './ui/pages/categoriesPage.js';
 import { createTraktClient } from './services/traktClient.js';
+import { createOpenSubtitles } from './services/openSubtitles.js';
 import { createTraktService, createWatchState } from './services/traktService.js';
 import { createScreensaver } from './ui/screensaver.js';
 import { applyTextSize } from './core/textSize.js';
@@ -117,6 +120,16 @@ async function boot() {
   ctx.favorites = createFavoritesService({ db });
   ctx.collections = createCollectionsService({ db });
   ctx.pins = createPinsService({ db });
+  ctx.guideLayout = createGuideLayoutStore({ db });
+  // Favourites and collections are shared by all providers under keys that mean the same everywhere (the TMDB id). A title saved under its
+  // provider's own key moves to the shared one as soon as the catalog gives it a TMDB id (after a sync, or at start).
+  ctx.shareKeys = async () => {
+    const current = await active.get();
+    if (!current) return;
+    const resolve = (key) => portableKeyFor(current.db, key);
+    const moved = (await ctx.favorites.upgrade(current.provider.id, resolve)) + (await ctx.collections.upgrade(current.provider.id, resolve));
+    if (moved) log.info(`Saved titles now shared between providers (TMDB id): ${moved}`);
+  };
   ctx.searchHistory = createSearchHistory({ db });
   ctx.pageCache = createPageCache();
   // Start-up and background work in order of importance (see backgroundQueue.js): a catalog sync holds all of it, the search index is last.
@@ -143,6 +156,7 @@ async function boot() {
   keysReady.catch(() => undefined);
   ctx.trakt = createTraktService({ db, client: createTraktClient({ getCredentials: () => ({ clientId: ctx.apiKeys.get().traktId, clientSecret: ctx.apiKeys.get().traktSecret }) }) });
   ctx.watch = createWatchState({ store: new WatchStore(db), trakt: ctx.trakt });
+  ctx.openSubtitles = createOpenSubtitles({ getKey: () => ctx.apiKeys.get().openSubtitlesKey });
   const tmdb = createTmdbService({ db, client: createTmdbClient({ getApiKey: () => ctx.apiKeys.get().tmdbKey }), getLanguage: () => i18n.getLocale(), onActivity: (count) => ctx.genres && ctx.genres.hold('ui', count > 0) });
   ctx.tmdb = tmdb;
   ctx.operations = createOperations();
@@ -213,7 +227,7 @@ async function boot() {
   });
   ctx.suggestions = createSuggestionsService({ active, watch: ctx.watch, tmdb, trakt: ctx.trakt, getSource: async () => (await settings.get()).suggestionSource });
   ctx.meta = { forEntry: (entry) => tmdb.forEntry(entry) };
-  const epg = createEpgService({ active, providers, createWorker: createEpgWorker, operations: ctx.operations });
+  const epg = createEpgService({ active, providers, createWorker: createEpgWorker, operations: ctx.operations, customUrl: () => ctx.settings.get().then((s) => s.customEpgUrl) });
   ctx.epg = epg;
   // Favourite categories and genres show how many titles they hold; a grey sweep stands in until it is known.
   const filterTotals = (type) => (filterTotals.cache[type] = filterTotals.cache[type] || ctx.genres.counts(type).catch(() => new Map()));
@@ -380,6 +394,7 @@ async function boot() {
     if (wasSyncing && !state.running && !state.cancelled) {
       ctx.catalogChanged(); // caches emptied and the new search index ready before the next search
       ctx.refreshAdult();
+      queue.add({ name: 'share-keys', priority: Priority.METADATA, run: () => ctx.shareKeys().catch(() => undefined) });
       queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) }); // the genre worker finds genres the lists did not carry
     }
     wasSyncing = state.running;
@@ -467,6 +482,7 @@ async function boot() {
 
   log.info('Xtream IPTV started');
   // History and progress that could not be sent last time, then what was watched only here.
+  queue.add({ name: 'share-keys', priority: Priority.METADATA, run: () => ctx.shareKeys().catch(() => undefined) });
   queue.add({ name: 'trakt', priority: Priority.TRAKT, run: () => ctx.trakt.flush().then(() => ctx.watch.syncIfChanged()).catch(() => undefined) });
   // Trakt stays aligned while the app is open: one small check every 15 minutes, a full read only if the account changed.
   setInterval(() => queue.add({ name: 'trakt', priority: Priority.TRAKT, run: () => ctx.watch.syncIfChanged().catch(() => undefined) }), 15 * 60 * 1000);

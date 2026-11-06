@@ -100,7 +100,7 @@ export function createCollectionPage(ctx, params) {
     });
     if (!result || destroyed) return;
     try {
-      collection = await ctx.collections.update(collection.id, result);
+      collection = await ctx.collections.update(collection.id, result, providerId);
       await reload();
       ctx.notices.success(t('notice.saved'), { key: 'collection' });
     } catch (err) {
@@ -213,7 +213,7 @@ export function createCollectionPage(ctx, params) {
     if (!current || destroyed) return;
     providerId = current.provider.id;
     db = current.db;
-    collection = await ctx.collections.get(params.id);
+    collection = await ctx.collections.get(params.id, providerId);
     if (!collection || destroyed) return;
     favorite = await ctx.favorites.has(providerId, collectionKey(collection.id));
     await reload();

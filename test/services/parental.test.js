@@ -1,3 +1,4 @@
+import { dbPut } from '../../src/core/idb.js';
 import { openAppDb } from '../../src/db/appDb.js';
 import { openProviderDb } from '../../src/db/providerDb.js';
 import { dbPutMany } from '../../src/core/idb.js';
@@ -47,7 +48,7 @@ test('adult entries come from the category names', async () => {
   expect(svc.isAdult({ type: 'movie' })).toBe(false);
 });
 
-test('pins: per provider and type, toggle, order of addition', async () => {
+test('pins: shared by all providers, categories by folded name, toggle, order of addition', async () => {
   const db = await newDb();
   let clock = 0;
   const pins = createPinsService({ db, now: () => (clock += 1) });
@@ -55,11 +56,27 @@ test('pins: per provider and type, toggle, order of addition', async () => {
   await pins.toggle('p', { kind: 'category', type: 'movie', id: 7, name: 'Premiere' });
   await pins.toggle('p', { kind: 'genre', type: 'series', id: 'drama', name: 'Drama' });
   expect((await pins.list('p', 'movie')).map((x) => x.name)).toEqual(['Drama', 'Premiere']);
-  expect(await pins.has('p', 'category', 'movie', '7')).toBe(true);
+  expect(await pins.has('p', 'category', 'movie', '7', 'Premiere')).toBe(true);
+  // Another provider: its own id for the same category, but the same name — and the pin is there, with the folded name as id.
+  expect(await pins.has('q', 'category', 'movie', '99', ' premiére ')).toBe(true);
+  expect((await pins.list('q', 'movie')).map((x) => [x.kind, x.id])).toEqual([['genre', 'drama'], ['category', 'premiere']]);
   expect(await pins.toggle('p', { kind: 'genre', type: 'movie', id: 'drama' })).toBe(false);
   expect((await pins.list('p', 'movie')).map((x) => x.name)).toEqual(['Premiere']);
-  await pins.removeProvider('p');
-  expect(await pins.list('p', 'series')).toEqual([]);
+  await pins.removeProvider('p'); // removing a provider deletes no pin
+  expect((await pins.list('q', 'movie')).length).toBe(1);
+});
+
+test('pins saved per provider and by category id are moved to the shared form (names folded, duplicates merged)', async () => {
+  const db = await newDb();
+  await dbPut(db, 'kv', { key: 'pins', value: [
+    { providerId: 'a', kind: 'category', type: 'live', id: '5', name: 'Sport', addedAt: 1 },
+    { providerId: 'b', kind: 'category', type: 'live', id: '88', name: 'SPORT', addedAt: 2 },
+    { providerId: 'b', kind: 'genre', type: 'movie', id: 'drama', name: 'Drama', addedAt: 3 },
+  ] });
+  const pins = createPinsService({ db });
+  expect((await pins.list('z', 'live')).map((x) => [x.id, x.providerId])).toEqual([['sport', undefined]]);
+  expect((await pins.list('z', 'movie')).map((x) => x.id)).toEqual(['drama']);
+  expect((await createPinsService({ db }).list('a', 'live')).length).toBe(1); // saved in the new form
 });
 
 test('subscription notice: only under 10 days, error once ended', () => {

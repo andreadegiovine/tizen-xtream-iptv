@@ -188,6 +188,9 @@ describe('subtitles and aspect helpers', () => {
 });
 
 describe('cleanSubtitle', () => {
+  test('AVPlay HTML: entities decoded after the tags are removed', () => {
+    expect(cleanSubtitle('<font color="#fff">Tom &amp; Jerry</font><br>&lt;3 &#233;')).toBe('Tom & Jerry\n<3 é');
+  });
   test('removes markup and ASS overrides, keeps line breaks', () => {
     expect(cleanSubtitle('<i>Hello</i>\\NWorld')).toBe('Hello\nWorld');
     expect(cleanSubtitle('{\\an8}Top line<br/>Second')).toBe('Top line\nSecond');

@@ -14,7 +14,8 @@ import { icon } from '../icons.js';
 import { formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
 import { createEpgGuide, floorHalfHour, nextProgramme, PAST_MS, SPAN_MS } from '../components/epgGuide.js';
-import { readGuideLayout, saveGuideLayout, applyGuideLayout, moveInLayout, hideInLayout } from '../../services/guideLayout.js';
+import { applyGuideLayout, moveInLayout, hideInLayout } from '../../services/guideLayout.js';
+import { foldName } from '../../services/shareKeys.js';
 
 const CATS_ZONE = 'browseCategories';
 /** Icon before the label of the fixed sidebar entries (genres and categories get an empty slot to stay aligned). */
@@ -236,6 +237,14 @@ export function createBrowsePage(ctx, params = {}) {
   };
   const safe = (job) => job().catch(() => undefined);
 
+  /** Favourites of this type that this provider can show (shared ones it does not carry are not counted). */
+  async function favoriteCount() {
+    const saved = (await ctx.favorites.list(providerId)).filter((f) => f.type === type);
+    const filters = await favoriteFilterEntries(saved, () => Promise.resolve(categories));
+    const titles = await byKeys(saved.filter((f) => !f.kind).map((f) => f.entryKey));
+    return filters.length + titles.length;
+  }
+
   /** The numbers that depend on the user (continue watching, favourites, suggestions): read every time, never cached. */
   async function loadUserCounts() {
     if (type === 'live') {
@@ -243,7 +252,7 @@ export function createBrowsePage(ctx, params = {}) {
       setCount('scheduled:', scheduledCount);
     }
     if (type !== 'live') await safe(async () => setCount('continue:', (await continueWatching(ctx, { providerId, limit: 200 })).filter((r) => r.type === type).length));
-    await safe(async () => setCount('favorites:', (await ctx.favorites.list(providerId)).filter((f) => f.type === type).length));
+    await safe(async () => setCount('favorites:', await favoriteCount()));
     if (type !== 'live') await safe(async () => setCount('suggestions:', (await suggestionEntries()).length));
   }
 
@@ -285,10 +294,28 @@ export function createBrowsePage(ctx, params = {}) {
     return suggestionsCache;
   }
 
+  /**
+   * The pins as sidebar entries for this provider. Pins are shared by all providers: a category is pinned by its folded name and found here by it;
+   * a hidden category, a genre or a network this provider does not have is not shown (the pin stays saved for the providers that have it).
+   */
+  function pinnedView() {
+    return pinned
+      .map((p) => {
+        if (p.kind === 'category') {
+          const found = categories.find((c) => foldName(c.name) === p.id);
+          return found ? { ...p, id: String(found.id), name: found.name } : null;
+        }
+        if (p.kind === 'network') return networks.some((n) => n.key === p.id) ? p : null;
+        if (p.kind === 'genre' && !genresLoading && type !== 'live') return genres.some((g) => g.key === p.id) ? p : null;
+        return p;
+      })
+      .filter(Boolean);
+  }
+
   /** Rebuilds the sidebar keeping the same entry selected (genres arrive late, categories expand). */
   function rebuildSidebar(focusKey) {
     const keep = items[selected];
-    items = sidebarItems({ type, genres, categories, pinned, networks, networksExpanded, expanded, genresExpanded, genresLoading, scheduled: scheduledCount > 0, labels: labels() });
+    items = sidebarItems({ type, genres, categories, pinned: pinnedView(), networks, networksExpanded, expanded, genresExpanded, genresLoading, scheduled: scheduledCount > 0, labels: labels() });
     const same = keep ? items.findIndex((item) => item.kind === keep.kind && String(item.id) === String(keep.id)) : -1;
     selected = same >= 0 ? same : 0;
     renderCategories();
@@ -337,7 +364,7 @@ export function createBrowsePage(ctx, params = {}) {
     // A network is a title of its own (the same record as the heart on its page); categories and genres are favourite filters.
     const isNetwork = item.kind === 'network';
     const active = await (isNetwork ? ctx.favorites.has(providerId, item.id) : ctx.favorites.hasFilter(providerId, item.kind, type, item.id)).catch(() => false);
-    const pinActive = await ctx.pins.has(providerId, item.kind, type, item.id).catch(() => false);
+    const pinActive = await ctx.pins.has(providerId, item.kind, type, item.id, item.name).catch(() => false);
     if (destroyed || items[selected] !== item) return;
     const target = { kind: item.kind, type, id: item.id, name: item.name };
     favState = {
@@ -345,8 +372,7 @@ export function createBrowsePage(ctx, params = {}) {
       pinActive,
       onToggle: async () => {
         const now = await (isNetwork ? ctx.favorites.toggle(providerId, item.id, type) : ctx.favorites.toggleFilter(providerId, target));
-        const saved = await ctx.favorites.list(providerId);
-        counts.set('favorites:', saved.filter((f) => f.type === type).length);
+        counts.set('favorites:', await favoriteCount());
         if (!destroyed) {
           showCounts();
           syncFavorite();
@@ -529,7 +555,7 @@ export function createBrowsePage(ctx, params = {}) {
       const from = floorHalfHour(t0) - PAST_MS;
       const withGuide = ctx.epg && ctx.epg.channelsWithGuide ? await ctx.epg.channelsWithGuide(from, from + PAST_MS + SPAN_MS) : new Set();
       const rows = (await guideRows(db)).filter((row) => row.epgChannelId && withGuide.has(row.epgChannelId));
-      return applyGuideLayout(rows, await readGuideLayout(db));
+      return applyGuideLayout(rows, await ctx.guideLayout.read(providerId, db));
     })());
 
   /** The scheduled programmes of this provider, and the rows of their channels (the "scheduled" view). */
@@ -546,9 +572,9 @@ export function createBrowsePage(ctx, params = {}) {
 
   async function onGuideRowAction(id, entry) {
     const list = await guideList();
-    const layout = await readGuideLayout(db);
+    const layout = await ctx.guideLayout.read(providerId, db);
     if (id === 'remove') {
-      await saveGuideLayout(db, hideInLayout(layout, entry.key));
+      await ctx.guideLayout.save(providerId, hideInLayout(layout, entry.key));
       guideRowsJob = null;
       await guide.reload({ row: list.findIndex((r) => r.key === entry.key) });
       setCount('guide:', (await guideList()).length);
@@ -556,7 +582,7 @@ export function createBrowsePage(ctx, params = {}) {
     }
     const moved = moveInLayout(list, layout, entry.key, id === 'up' ? -1 : 1);
     if (!moved) return;
-    await saveGuideLayout(db, moved.layout);
+    await ctx.guideLayout.save(providerId, moved.layout);
     guideRowsJob = null;
     await guide.reload({ row: moved.row, keepRowMode: true });
   }
@@ -778,9 +804,7 @@ export function createBrowsePage(ctx, params = {}) {
     networks = cachedSidebar ? cachedSidebar.networks : type === 'live' ? await listNetworks(db).catch(() => []) : [];
     if (stale) listCategories(db, type).then((found) => { if (!destroyed) { categories = found.filter((c) => !excluded.has(String(c.id))).map((c) => ({ id: c.id, name: c.name })); rebuildSidebar(); } }).catch(() => undefined);
     if (stale && type === 'live') listNetworks(db).then((found) => { if (!destroyed) { networks = found; rebuildSidebar(); } }).catch(() => undefined);
-    // A hidden category or a network that no longer exists is not pinned in the sidebar.
-    pinned = pinned.filter((p) => (p.kind !== 'category' || !excluded.has(String(p.id))) && (p.kind !== 'network' || networks.some((n) => n.key === p.id)));
-    items = sidebarItems({ type, genres, categories, pinned, networks, networksExpanded, expanded, genresExpanded, genresLoading, scheduled: scheduledCount > 0, labels: labels() });
+    items = sidebarItems({ type, genres, categories, pinned: pinnedView(), networks, networksExpanded, expanded, genresExpanded, genresLoading, scheduled: scheduledCount > 0, labels: labels() });
     selected = indexOfFilter(items, filter);
     renderCategories();
     syncFavorite();

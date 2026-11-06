@@ -9,7 +9,7 @@ Packages attached to every [release](../../../../releases) (each with a `.sha256
 | macOS, Apple Silicon | `xtream-iptv-<version>_macos-arm64.dmg` |
 | Linux (x64) | `xtream-iptv-<version>_linux-x64.AppImage` and `xtream-iptv-<version>_linux-x64.deb` |
 
-The interface is the TV one (1920x1080, scaled to the window) and is driven by the keyboard. The Windows app has been tried; macOS and Linux packages are built by the release
+The interface is the TV one (1920x1080, scaled to the window, which opens as a normal window) and is driven by the keyboard. The Windows app has been tried; macOS and Linux packages are built by the release
 but not yet tried on those systems.
 
 ## Install
@@ -48,7 +48,7 @@ Then add your provider (see the [main README](../../README.md#first-steps)).
 | `Esc` / `Backspace` | Back |
 | `PageUp` / `PageDown` | Channel up / down (previous / next channel or episode in the player) |
 | `Space`, media keys | Play / pause, and the other player controls |
-| `F11` | Toggle full screen |
+| `F11` | Toggle full screen (the player also has a full-screen button) |
 | `F12` | Developer tools |
 
 The mouse works only where the interface already provides for it (the player progress bar). Only one instance of the app runs at a time.
@@ -59,14 +59,14 @@ The mouse works only where the interface already provides for it (the player pro
   navigation to other addresses is blocked and links open in the system browser. Trailers open in the system browser.
 - **Video:** Chromium's `<video>` with hls.js (HLS) and mpegts.js (MPEG-TS). **MKV files and AC3 / E-AC3 audio are not supported by Chromium**: some films do not start and some
   channels have no audio. A native player (mpv / libVLC) would solve it and may come later.
-- **Known issue:** the app currently opens full screen; it should open as a normal window, with a button in the player to send the video full screen. Use `F11` to leave full screen meanwhile.
+- **Window:** the app opens as a normal, resizable 16:9 window (the interface scales with it). The player has a full-screen button (also `F11`) that switches the whole window.
 
 ## What is in this folder
 
 | File | Role |
 |---|---|
 | `platform.js` | the adapter (see [`docs/MULTIPLATFORM.md`](../../docs/MULTIPLATFORM.md)) |
-| `electron/main.js` | the Electron main process |
+| `electron/main.js`, `electron/preload.js` | the Electron main process, and the preload that lets the page switch its own window to full screen |
 | `electron-builder.json` | installer targets (NSIS, dmg, AppImage, deb) |
 | `build.js`, `package.sh` | demuxers and icon at build; staging folder and electron-builder at packaging |
 

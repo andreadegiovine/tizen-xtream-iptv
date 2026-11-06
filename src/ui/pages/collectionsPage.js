@@ -8,7 +8,7 @@ import { createCard } from '../components/card.js';
 import { ensureVisible } from '../scroll.js';
 import { SIDEBAR_ICON, columnsFor } from './browsePage.js';
 import { getEntry, entryGenres } from '../../services/catalogQuery.js';
-import { collectionGenres, collectionImages, collectionKey, unionGenres } from '../../services/collections.js';
+import { collectionGenres, collectionImages, collectionKey, presentKeys, unionGenres } from '../../services/collections.js';
 import { formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
 
@@ -213,7 +213,8 @@ export function createCollectionsPage(ctx, params = {}) {
     if (!current || destroyed) return;
     db = current.db;
     providerId = current.provider.id;
-    collections = await ctx.collections.list(providerId);
+    // Only the titles this provider carries count (the collections are shared by all providers).
+    collections = await Promise.all((await ctx.collections.list(providerId)).map(async (c) => ({ ...c, entryKeys: await presentKeys(db, c.entryKeys, getEntry) })));
     const fav = await ctx.favorites.list(providerId);
     favoriteIds = new Set(fav.filter((f) => f.type === 'collection').map((f) => String(f.entryKey).slice('collection:'.length)));
     genresById = new Map(await Promise.all(collections.map(async (c) => [c.id, await collectionGenres(db, c.entryKeys, entryGenres)])));

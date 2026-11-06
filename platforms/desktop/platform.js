@@ -32,6 +32,18 @@ export default {
     }
   },
   createEngine: () => createHtml5Engine({ demux: true }),
+  // Full screen of the window, through the preload of electron/main.js (in a plain browser: the page's own full screen).
+  toggleFullscreen() {
+    const bridge = typeof window !== 'undefined' ? window.xtreamDesktop : null;
+    if (bridge) return bridge.toggleFullscreen();
+    if (document.fullscreenElement) return Promise.resolve(document.exitFullscreen()).then(() => false);
+    if (!document.documentElement.requestFullscreen) return Promise.resolve(false);
+    return Promise.resolve(document.documentElement.requestFullscreen()).then(() => true, () => false);
+  },
+  isFullscreen() {
+    const bridge = typeof window !== 'undefined' ? window.xtreamDesktop : null;
+    return bridge ? bridge.isFullscreen() : Promise.resolve(Boolean(document.fullscreenElement));
+  },
   createTrailerEngine: null,
   // The main process sends every window.open to the system browser.
   openTrailer(videoId) {

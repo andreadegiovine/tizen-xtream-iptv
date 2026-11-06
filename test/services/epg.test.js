@@ -1,5 +1,6 @@
 import { parseXmltvTime, decodeEntities, createXmltvParser, isPlaceholderTitle } from '../../src/services/xmltv.js';
-import { syncEpg, shouldSyncEpg, EPG_TTL_MS } from '../../src/services/epgSync.js';
+import { isEpgUrl } from '../../src/services/settings.js';
+import { syncEpg, shouldSyncEpg, EPG_TTL_MS, probeGuide, runEpgForProvider } from '../../src/services/epgSync.js';
 import { createEpgService } from '../../src/services/epgService.js';
 import { openProviderDb } from '../../src/db/providerDb.js';
 import { dbPutMany, dbGetAll } from '../../src/core/idb.js';
@@ -117,5 +118,41 @@ describe('epgService', () => {
     const outcome = await svc.maybeSync({ force: true });
     expect(runLocal).toHaveBeenCalledTimes(1);
     expect(outcome.meta.programmes).toBe(1);
+  });
+});
+
+describe('custom guide', () => {
+  const xml = '<tv><programme start="20261102110000 +0000" stop="20261102130000 +0000" channel="a"><title>Custom</title></programme></tv>';
+  test('address check', () => {
+    expect(isEpgUrl('https://epg.example.com/guide.xml')).toBe(true);
+    expect(isEpgUrl('http://10.0.0.5:8080/x?y=1')).toBe(true);
+    for (const bad of ['', 'epg.example.com', 'ftp://a/b', 'http://', 'javascript:alert(1)', 'https://a b/c']) expect(isEpgUrl(bad)).toBe(false);
+  });
+  test('probe: XMLTV yes, a web page or an error no', async () => {
+    expect(await probeGuide('https://x/g.xml', { fetchImpl: async () => ({ ok: true, text: async () => `<?xml version="1.0"?><tv>${xml}` }) })).toBe(true);
+    expect(await probeGuide('https://x/g', { fetchImpl: async () => ({ ok: true, text: async () => '<html></html>' }) })).toBe(false);
+    expect(await probeGuide('https://x/g', { fetchImpl: async () => ({ ok: false }) })).toBe(false);
+    expect(await probeGuide('https://x/g', { fetchImpl: async () => { throw new Error('down'); } })).toBe(false);
+  });
+  test('the custom guide replaces the provider one; when it fails the provider one is used', async () => {
+    const provider = { id: 'p', baseUrl: 'http://prov', username: 'u', password: 'p' };
+    const urls = [];
+    const fetchImpl = async (url) => {
+      urls.push(url);
+      if (url.includes('custom-ok')) return { ok: true, text: async () => xml };
+      if (url.includes('xmltv.php')) return { ok: true, text: async () => xml.replace('Custom', 'Provider') };
+      return { ok: false, status: 404, text: async () => '' };
+    };
+    const db1 = await makeDb();
+    db1.close = () => undefined;
+    const ok = await runEpgForProvider({ provider, customUrl: 'http://custom-ok/g.xml', force: true, openDb: async () => db1, fetchImpl, now: Date.UTC(2026, 10, 2, 12) });
+    expect(ok.error).toBeNull();
+    expect((await dbGetAll(db1, 'epg')).map((r) => r.title)).toEqual(['Custom']);
+    expect(urls.some((u) => u.includes('xmltv.php'))).toBe(false);
+    const db2 = await makeDb();
+    db2.close = () => undefined;
+    const back = await runEpgForProvider({ provider, customUrl: 'http://custom-bad/g.xml', force: true, openDb: async () => db2, fetchImpl, now: Date.UTC(2026, 10, 2, 12) });
+    expect(back.error).toBeNull();
+    expect((await dbGetAll(db2, 'epg')).map((r) => r.title)).toEqual(['Provider']);
   });
 });

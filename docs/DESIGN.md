@@ -47,7 +47,7 @@ Decisions agreed during the design phase. Update this file when a decision chang
 - Detail page: icon-only play / resume buttons, version dropdown under the subtitle, plot, category chips, genre tags, season
   dropdown (no label) + episode carousel (series), cast carousel (TMDB credits, placeholder when no photo; not clickable yet).
   Buttons: play, trailer (only when the provider sends `youtube_trailer`), resume, watched, favourite.
-- Player: title at the top; a full-width progress bar (no frame; Up puts the focus on the pointer, left/right move it by 30 s, OK applies, or pointer drag) and below it one row: back 30 s, play-pause (initial focus), forward 30 s and the time on the left, aspect ratio and subtitles on the right. Subtitles are drawn by the app from AVPlay events; if no event arrives, the player draws them itself.
+- Player: title at the top; a full-width progress bar (no frame; Up puts the focus on the pointer, left/right move it by 30 s, OK applies, or pointer drag) and below it one row: back 30 s, play-pause (initial focus), forward 30 s and the time on the left, aspect ratio and subtitles on the right. Subtitles are drawn by the app from AVPlay events (`setSilentSubtitle(false)` while a track is chosen, `true` when off; AVPlay never draws them itself).
 - Browse sidebar (Movies/Series): Show all, Continue watching, Favorites, Suggestions, Genres (an open group; provider + TMDB merged under one normalised, untranslated key; only those with titles), Categories (expandable group). Counts and genres still being worked out show skeleton placeholders. Detail chips link back to the matching filter. API keys can be typed in Settings; suggestions come from TMDB or Trakt (setting). Fixed entries have an icon (genres and categories do not, and have no empty slot); every entry shows its title count on the right; categories under the toggle use a smaller font.
   Down (or OK on live) puts the D-pad on the buttons, Back leaves that mode first.
 - AVPlay is the engine; all player controls are built in HTML. On-screen keyboard is the native IME.
@@ -185,3 +185,18 @@ For a title with TMDB genres (`entry_genre_tmdb`, `|tmdb`) the provider rows (`e
 - Genres from the provider: only without a TMDB key, 1 request/s, 500 per day (`genres:daily`). Title cleaning: `cleanTitles` preference.
 - Style: `src/styles/main.scss` imports the files per part of the interface in the original order; colors only in `_tokens.scss`; animations only on `transform`/`opacity`; Inter font from `@fontsource/inter` copied by webpack into `dist/fonts`.
 - "Automatic" dates and times follow the app language (`formatClockTime/formatClockDate(date, format, locale)`).
+
+## Several providers: what is shared (patch 114)
+- Favorites, collections and pins are one list in the app database, visible to every provider. Keys mean the same everywhere (`shareKeys.js`): TMDB id for movies and series (`movie:t603`), normalised name for channel groups and networks, folded name for categories, genre key for genres. A provider's own title (no TMDB id) is stored with the provider id (`<providerId>@movie:i12`).
+- A provider that does not carry a saved item shows nothing for it; nothing is deleted. Counts count what the provider can show.
+- A title saved under a provider key moves to the shared key once its row has a TMDB id (`portableKeyFor`); duplicates merge.
+- The Programme layout is shared (`createGuideLayoutStore`). Hidden categories, manual Live links and scheduled viewings stay per provider.
+- Desktop: normal resizable window; the player's full-screen button (`toggleFullscreen`) and F11 switch it.
+
+## Custom EPG and Trakt counters (patch 115)
+- `settings.customEpgUrl`: an http(s) XMLTV address. The field (Preferences → Live TV, last) saves it only when `isEpgUrl` accepts it and `probeGuide` finds a `<tv` start in the answer; an empty value clears it. `runEpgForProvider` tries the custom guide first and falls back to the provider's when it fails (an abort is not a failure); saving forces a new download. Channels are still matched by the provider's `epgChannelId`.
+- Settings → Trakt shows two more rows, watched and continue watching titles aligned with Trakt (`watch.traktCounts()`: watched records with `source: 'trakt'` or `traktSynced`; unfinished records with `source: 'trakt'`).
+
+## Subtitles from OpenSubtitles (patch 117)
+- `src/services/openSubtitles.js`: `GET /subtitles` by `tmdb_id` (movies) or `parent_tmdb_id` + season + episode, languages = app language then English (parameters sorted, lowercase); best file = language order, not machine / AI translated, most downloaded; `POST /download` → link → SRT / WebVTT text → cues. Headers `Api-Key` and `X-User-Agent` (browsers cannot set `User-Agent`). Results stay in memory for the session (same title: no second download); nothing is written to the databases.
+- Player: 1.5 s after the start, if the engine lists no subtitle track and a key is set, the TMDB id comes from the key (`movie:t…`) or from the provider row (`portableKeyFor`); notice "Downloading subtitles" (closed when the title changes or the player closes), then "Subtitles downloaded: <language>" or "none found" / "failed". The track is added to the Subtitles list (`value: 'online'`); when chosen, the page draws the cue at `engine.getTime()` every 200 ms (the engine's own track is switched off).

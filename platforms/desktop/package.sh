@@ -3,7 +3,7 @@
 #
 #   bash platforms/desktop/package.sh <version> [out-dir] [linux|windows|macos]
 #
-# Puts the build (app/), the Electron main process (electron/main.js) and a package.json in a staging folder and runs electron-builder
+# Puts the build (app/), the Electron main process (electron/main.js, preload.js) and a package.json in a staging folder and runs electron-builder
 # (npx, pinned version; Electron is downloaded by it) with electron-builder.json:
 #   linux    xtream-iptv-<version>_linux-x64.AppImage and .deb
 #   windows  xtream-iptv-<version>_windows-x64.exe (NSIS installer)
@@ -35,6 +35,7 @@ rm -rf "$STAGE"
 mkdir -p "${STAGE}/app" "${STAGE}/build" "$OUT"
 cp -R "${ROOT}/dist/." "${STAGE}/app/"
 cp "${HERE}/electron/main.js" "${STAGE}/main.js"
+cp "${HERE}/electron/preload.js" "${STAGE}/preload.js"
 cp "${ROOT}/dist/icon.png" "${STAGE}/build/icon.png" # electron-builder makes the .ico / .icns from it
 cat > "${STAGE}/package.json" <<JSON
 {

@@ -29,7 +29,7 @@ The released `.wgt` is signed with the project's certificate. If the TV refuses 
 
 ## Notes
 
-- **Player:** AVPlay, the Samsung native engine. All the controls are drawn by the app. Subtitles are drawn by the player.
+- **Player:** AVPlay, the Samsung native engine. All the controls are drawn by the app. Subtitles of the file are drawn by the app from the lines AVPlay sends (`onsubtitlechange`).
 - **Trailers:** played inside the app, with the same controls as a movie. A small service on the TV (`ytresolver`, port 8125) serves the
   YouTube player page, because a `file://` page has no origin YouTube accepts.
 - **Remote keys:** Back is `10009`, Play/Pause `10252`, channels `427` / `428`; the media keys are registered with `tvinputdevice`.

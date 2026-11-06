@@ -95,7 +95,31 @@ export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => 
   return meta;
 }
 
-export async function runEpgForProvider({ provider, force = false, signal, emit = () => {}, openDb = openProviderDb, fetchImpl, now = Date.now() }) {
+/** Reads the start of a guide address and says whether it looks like an XMLTV file. Resolves true / false, never throws. */
+export async function probeGuide(url, { fetchImpl = fetch, signal } = {}) {
+  try {
+    const res = await fetchImpl(wrapApiUrl(url), { signal });
+    if (!res.ok) return false;
+    let head = '';
+    if (res.body && res.body.getReader && typeof TextDecoder !== 'undefined') {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      while (head.length < 4096) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        head += decoder.decode(value, { stream: true });
+      }
+      reader.cancel().catch(() => undefined);
+    } else {
+      head = (await res.text()).slice(0, 4096);
+    }
+    return /<tv[\s>]/i.test(head);
+  } catch {
+    return false;
+  }
+}
+
+export async function runEpgForProvider({ provider, customUrl = '', force = false, signal, emit = () => {}, openDb = openProviderDb, fetchImpl, now = Date.now() }) {
   let db = null;
   let failure = null;
   let meta = null;
@@ -104,7 +128,15 @@ export async function runEpgForProvider({ provider, force = false, signal, emit 
     if (!force && !shouldSyncEpg(await getEpgMeta(db), now)) {
       emit({ event: 'progress', phase: 'skipped' });
     } else {
-      meta = await syncEpg({ db, url: wrapApiUrl(xmltvUrl(provider)), now, signal, emit, fetchImpl });
+      // The custom guide replaces the provider's; when it cannot be read, the provider's is used.
+      if (customUrl) {
+        try {
+          meta = await syncEpg({ db, url: wrapApiUrl(customUrl), now, signal, emit, fetchImpl });
+        } catch (err) {
+          if (signal && signal.aborted) throw err;
+        }
+      }
+      if (!meta) meta = await syncEpg({ db, url: wrapApiUrl(xmltvUrl(provider)), now, signal, emit, fetchImpl });
     }
   } catch (err) {
     const error = toAppError(err);

@@ -28,7 +28,7 @@ export function createFavoritesPage(ctx) {
     for (const item of saved) {
       if (item.kind) continue;
       if (isCollectionKey(item.entryKey)) {
-        const collection = await ctx.collections.get(item.entryKey.slice('collection:'.length));
+        const collection = await ctx.collections.get(item.entryKey.slice('collection:'.length), current.provider.id);
         if (collection) entries.push(await collectionEntry(current.db, collection, getEntry, (count) => t('collections.items', { count })));
         continue;
       }

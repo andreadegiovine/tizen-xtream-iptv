@@ -85,6 +85,42 @@ The screenshots use a fictional demo provider.
 
 Nothing about TMDB or Trakt is compiled into the app: both stay off until you add the keys.
 
+## TMDB and Trakt keys
+
+Both services are free for personal use. The app works without them, but with them it is much better. You type the keys in **Settings** (with a remote, the on-screen keyboard works; on a phone it is easier to copy them into a note first).
+
+### TMDB: posters, plots, cast, trailers
+
+What you get: posters and backdrops, plots in your language, cast, genres, ratings, trailers, recommendations, and the TMDB id that merges the same title coming from different categories or providers and lets your favorites, collections and pins follow you from one provider to another.
+
+1. Create a free account on [themoviedb.org](https://www.themoviedb.org) and confirm the email.
+2. Open *Profile → Settings → API* ([direct link](https://www.themoviedb.org/settings/api)) and request an API key (type *Developer*; any short description of a personal use is fine).
+3. Copy the **API Read Access Token** (the long one, v4) or the 32-character **API Key** (v3) into *Settings → TMDB*.
+
+### Trakt: watch history and progress on every device
+
+What you get: what you watch is saved on your Trakt account and read back, so *watched* marks and *continue watching* follow you between the TV, the PC and the phone (and any other app that uses Trakt). Movies and episodes you finish are sent to Trakt, the ones you already watched there appear as watched here, and the point reached in a title is shared. Suggestions can also be based on your Trakt history. *Settings → Trakt* shows how many watched titles and "continue watching" titles are aligned. Trakt keeps the history; TMDB does not, which is why the two are used together.
+
+1. Create a free account on [trakt.tv](https://trakt.tv).
+2. Open [trakt.tv/oauth/applications](https://trakt.tv/oauth/applications) and press **New Application**. Choose any name, put `urn:ietf:wg:oauth:2.0:oob` as *Redirect uri* and leave the rest empty, then save.
+3. Copy the **Client ID** and **Client Secret** of the application into *Settings → Trakt*, press connect and scan the QR code (or open the address shown and type the code).
+
+### OpenSubtitles: subtitles for titles that have none
+
+What you get: when a movie or an episode starts without subtitles of its own, and its TMDB id is known (from TMDB or from the provider), the app looks for subtitles on OpenSubtitles in your language (then English) while it plays. A notice says *Downloading subtitles*; when they are found they appear in the player's **Subtitles** list as "<language> (OpenSubtitles)". They are not saved: they stay in memory until the app is closed (and in the browser cache).
+
+1. Create a free account on [opensubtitles.com](https://www.opensubtitles.com).
+2. Open the API consumers page of your profile ([opensubtitles.com/consumers](https://www.opensubtitles.com/en/consumers)) and create a consumer (any name): it gives an **API key**.
+3. Type the key in *Settings → OpenSubtitles*.
+
+OpenSubtitles limits downloads without logging in to a few a day (5 at the time of writing); every title started without subtitles uses one, the same title again in the same session does not.
+
+The keys stay on your device (they are not part of the app and never sent anywhere but to TMDB / Trakt).
+
+## Custom EPG
+
+If your provider's guide is missing or poor, *Settings → Preferences → Live TV → Custom EPG* accepts the address of an XMLTV guide (`http://` or `https://`). It is saved only if the address answers with a valid XMLTV file; when it is set, it replaces the provider's guide (if it stops working the provider's is used again). The channels are matched by the `epg_channel_id` of the provider, so the guide must use the same ids. Empty the field to go back to the provider's guide.
+
 ## Remote control
 
 | Key | Action |
@@ -96,7 +132,7 @@ Nothing about TMDB or Trakt is compiled into the app: both stay off until you ad
 | Play / pause / rewind / forward | In the player |
 | Left / right in the player | Seek (after OK on the progress bar) |
 
-On the desktop app the keyboard is the remote: arrows, `Enter`, `Esc` / `Backspace` for Back, `PageUp` / `PageDown` for channel up / down, `Space` for play / pause.
+On the desktop app, which opens as a normal window (the player has a full-screen button), the keyboard is the remote: arrows, `Enter`, `Esc` / `Backspace` for Back, `PageUp` / `PageDown` for channel up / down, `Space` for play / pause.
 
 ## Documentation
 

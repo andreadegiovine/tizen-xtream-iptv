@@ -16,7 +16,7 @@ async function programmesFor(db, channelId, now) {
   return all.filter((p) => p.stop > now && isReal(p)).sort((a, b) => a.start - b.start);
 }
 
-export function createEpgService({ active, providers, createWorker, runLocal = runEpgForProvider, now = Date.now, readyTimeoutMs = 4000, operations = null }) {
+export function createEpgService({ active, providers, createWorker, runLocal = runEpgForProvider, now = Date.now, readyTimeoutMs = 4000, operations = null, customUrl = () => Promise.resolve('') }) {
   let running = false;
   let cancelJob = null;
   const updated = new Set();
@@ -90,7 +90,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
   }
 
   /** Runs the sync in a worker, or on the main thread when no worker can be created. */
-  function runJob(provider, force) {
+  function runJob(provider, force, custom) {
     return new Promise((resolve) => {
       let settled = false;
       const finish = (outcome) => {
@@ -99,7 +99,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
           resolve(outcome);
         }
       };
-      const local = () => runLocal({ provider, force, emit: (m) => m.event === 'done' && finish(m) }).then(finish);
+      const local = () => runLocal({ provider, customUrl: custom, force, emit: (m) => m.event === 'done' && finish(m) }).then(finish);
       let worker = null;
       cancelJob = () => {
         if (worker) worker.terminate();
@@ -119,7 +119,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
         const m = event.data || {};
         if (m.event === 'ready') {
           clearTimeout(timer);
-          worker.postMessage({ op: 'start', provider, force });
+          worker.postMessage({ op: 'start', provider, customUrl: custom, force });
         } else if (m.event === 'done') {
           worker.terminate();
           finish(m);
@@ -169,7 +169,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
       const startedAt = now();
       const end = operations ? operations.start('epg', { cancel: () => cancelJob && cancelJob() }) : () => undefined;
       try {
-        const outcome = await runJob(provider, force);
+        const outcome = await runJob(provider, force, await customUrl().catch(() => ''));
         if (outcome.error) log.warn('EPG sync failed', outcome.error.code);
         else {
           log.info(`EPG sync done in ${now() - startedAt} ms`);
