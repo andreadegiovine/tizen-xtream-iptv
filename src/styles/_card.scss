@@ -5,7 +5,7 @@
   box-sizing: border-box;
   position: relative;
   width: $card-w + 2 * $card-pad;
-  margin: 0 ($card-gap - 2 * $card-pad) (18px - 2 * $card-pad) 0;
+  margin: 0 ($card-gap - 2 * $card-pad) ($card-gap - 2 * $card-pad) 0;
   padding: $card-pad;
   border: 3px solid transparent;
   border-radius: 0;

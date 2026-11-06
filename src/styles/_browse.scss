@@ -117,8 +117,9 @@
   display: flex;
   align-items: baseline;
   min-height: 56px;
-  padding: $page-top 0 20px; // the padding is part of the opaque head, so cards never show above or around it
+  padding: $page-top 20px 20px; // the padding is part of the opaque head, so cards never show above or around it
   // Opaque, with the colours of the app background where it sits (under the 96 px bar, about 120 px tall).
+  margin: 0 -20px;
   background: linear-gradient(to bottom, bg-at($topbar-height), bg-at($topbar-height + 120px));
 }
 
@@ -164,7 +165,7 @@
 .search-grid {
   display: flex;
   flex-wrap: wrap;
-  margin-right: -$card-gap;
+  margin-right: -($card-gap - 2 * $card-pad);
 }
 
 // The browse grid always has the six columns the focus model counts: a flex row would wrap earlier when a scrollbar
