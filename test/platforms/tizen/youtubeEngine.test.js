@@ -1,5 +1,5 @@
-import { videoIdOf, youtubeStreamUrl, playerPageUrl, applyBridgeMessage, createYouTubeEngine, YOUTUBE_SERVICE_PORT } from '../../src/services/youtubeEngine.js';
-import { trailerKeyOf } from '../../src/services/tmdbService.js';
+import { videoIdOf, youtubeStreamUrl, playerPageUrl, applyBridgeMessage, createYouTubeEngine, YOUTUBE_SERVICE_PORT } from '../../../platforms/tizen/youtubeEngine.js';
+import { trailerKeyOf } from '../../../src/services/tmdbService.js';
 
 const handlers = () => ({ onPrepared: jest.fn(), onEnded: jest.fn(), onBuffering: jest.fn(), onBufferingDone: jest.fn(), onError: jest.fn() });
 

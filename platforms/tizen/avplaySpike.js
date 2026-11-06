@@ -1,4 +1,4 @@
-import { log } from '../core/logger.js';
+import { log } from '../../src/core/logger.js';
 
 /**
  * Minimal AVPlay wrapper used only by the diagnostics page (milestone 0).

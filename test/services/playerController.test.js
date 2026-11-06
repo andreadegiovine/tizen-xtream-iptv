@@ -1,5 +1,6 @@
 import { createPlayerController, cleanSubtitle, formatClock, neighborEpisode, subtitleLabel, nextAspect } from '../../src/services/playerController.js';
-import { parseAvPlayTracks, ASPECT_MODES } from '../../src/services/playerEngines.js';
+import { ASPECT_MODES } from '../../src/services/playerEngines.js';
+import { parseAvPlayTracks } from '../../platforms/tizen/avplayEngine.js';
 
 function fakeEngine() {
   const e = {

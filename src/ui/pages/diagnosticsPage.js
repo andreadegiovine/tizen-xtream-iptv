@@ -4,7 +4,7 @@ import { t } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { Dir, ListModel } from '../focus/models.js';
 import { runDiagnostics } from '../../services/diagnostics.js';
-import { createAvPlaySpike } from '../../services/avplaySpike.js';
+import { platform } from '../../platform/index.js';
 import { log } from '../../core/logger.js';
 import { ensureVisible } from '../scroll.js';
 import { dbGet } from '../../core/idb.js';
@@ -15,7 +15,7 @@ const ZONE_ID = 'diagnostics';
 const IME_DONE = 65376;
 
 export function createDiagnosticsPage(ctx) {
-  const spike = createAvPlaySpike();
+  const spike = platform.createDiagnosticPlayer(); // the player lab of the platform (AVPlay on Tizen)
   const results = h('div', { class: 'diag-results' });
   const logBox = h('pre', { class: 'diag-log scroll' });
   const runButton = h('button', { class: 'btn primary', type: 'button', text: t('diag.run') });
@@ -24,7 +24,7 @@ export function createDiagnosticsPage(ctx) {
   const playButton = h('button', { class: 'btn', type: 'button', text: t('diag.play') });
   const stopButton = h('button', { class: 'btn', type: 'button', text: t('operations.stop') });
   // The log is focusable too: it is the last stop, so Down scrolls the page all the way to it.
-  // Subtitle lab: pick a text track, then try one way of showing it (see avplaySpike.selectText).
+  // Subtitle lab: pick a text track, then try one way of showing it (see platforms/tizen/avplaySpike.js, selectText).
   let labTrack = 0;
   const subtitleOverlay = h('div', { class: 'diag-subtitle' });
   const modeButtons = ['events', 'native', 'before', 'late', 'off'].map((mode) => ({ mode, el: h('button', { class: 'btn', type: 'button', text: t(`diag.sub.${mode}`) }) }));

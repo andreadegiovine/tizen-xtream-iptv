@@ -1,5 +1,6 @@
 import { openDb, deleteDb, dbPut, dbGet } from '../core/idb.js';
 import { XtreamClient } from './xtreamClient.js';
+import { platform } from '../platform/index.js';
 
 const ok = (id, detail = '') => ({ id, status: 'ok', detail });
 const warn = (id, detail = '') => ({ id, status: 'warn', detail });
@@ -10,9 +11,7 @@ function checkRuntime() {
   const match = /Chrom(?:e|ium)\/(\d+)/.exec(navigator.userAgent);
   if (match) results.push(Number(match[1]) >= 76 ? ok('chromium', `Chromium ${match[1]}`) : warn('chromium', `Chromium ${match[1]} (< 76)`));
   else results.push(warn('chromium', navigator.userAgent));
-  results.push(typeof tizen !== 'undefined' ? ok('tizen', 'tizen API present') : warn('tizen', 'not running inside Tizen'));
-  results.push(typeof webapis !== 'undefined' ? ok('webapis', 'webapis present') : warn('webapis', 'webapis.js not loaded'));
-  results.push(typeof webapis !== 'undefined' && webapis.avplay ? ok('avplay', 'AVPlay available') : warn('avplay', 'AVPlay not available'));
+  results.push(...platform.runtimeChecks()); // what the platform has (on Tizen: tizen, webapis, AVPlay)
   results.push(ok('screen', `${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio}x`));
   return results;
 }

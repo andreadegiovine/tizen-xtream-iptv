@@ -1,4 +1,4 @@
-import { createAvPlayEngine } from '../../src/services/playerEngines.js';
+import { createAvPlayEngine } from '../../platforms/tizen/avplayEngine.js';
 import { createCard } from '../../src/ui/components/card.js';
 import { createNoticeService } from '../../src/ui/components/notice.js';
 

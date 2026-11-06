@@ -1,57 +1,35 @@
-export const Action = Object.freeze({
-  UP: 'up',
-  DOWN: 'down',
-  LEFT: 'left',
-  RIGHT: 'right',
-  ENTER: 'enter',
-  LONG_ENTER: 'longEnter', // OK held down (only where the focused element has a long-press action)
-  BACK: 'back',
-  PLAY: 'play',
-  PAUSE: 'pause',
-  PLAY_PAUSE: 'playPause',
-  STOP: 'stop',
-  FAST_FORWARD: 'fastForward',
-  REWIND: 'rewind',
-  CHANNEL_UP: 'channelUp',
-  CHANNEL_DOWN: 'channelDown',
-});
+import { Action } from './actions.js';
+import { platform } from '../platform/index.js';
 
-/** Samsung remote key codes, plus desktop keys (Esc/Backspace/PageUp/PageDown) for browser debugging. */
-export const KEY_MAP = Object.freeze({
+export { Action };
+
+/**
+ * Keys every platform shares (arrows, OK, the standard media keys) plus desktop keys for browser debugging (Esc / Backspace = Back,
+ * PageUp / PageDown = channel). The platform adds its own remote keys (`keyCodes`, e.g. 10009 = Back on Samsung).
+ */
+export const COMMON_KEY_MAP = Object.freeze({
   37: Action.LEFT,
   38: Action.UP,
   39: Action.RIGHT,
   40: Action.DOWN,
   13: Action.ENTER,
-  10009: Action.BACK,
   27: Action.BACK,
   8: Action.BACK,
   415: Action.PLAY,
   19: Action.PAUSE,
-  10252: Action.PLAY_PAUSE,
   413: Action.STOP,
   417: Action.FAST_FORWARD,
   412: Action.REWIND,
-  427: Action.CHANNEL_UP,
-  428: Action.CHANNEL_DOWN,
   33: Action.CHANNEL_UP,
   34: Action.CHANNEL_DOWN,
 });
+
+export const KEY_MAP = Object.freeze({ ...COMMON_KEY_MAP, ...(platform.keyCodes || {}) });
 
 /** OK held this long is a long press (row actions in the programme guide). */
 export const LONG_PRESS_MS = 600;
 
 const THROTTLED = new Set([Action.UP, Action.DOWN, Action.LEFT, Action.RIGHT]);
-const TIZEN_EXTRA_KEYS = [
-  'MediaPlay',
-  'MediaPause',
-  'MediaPlayPause',
-  'MediaStop',
-  'MediaFastForward',
-  'MediaRewind',
-  'ChannelUp',
-  'ChannelDown',
-];
 
 export function actionFromKeyCode(code) {
   return KEY_MAP[code] || null;
@@ -110,14 +88,9 @@ export class InputService {
     return () => this.handlers.delete(handler);
   }
 
-  /** Asks Tizen to deliver media/channel keys, which are not forwarded by default. */
-  registerTizenKeys() {
-    try {
-      const device = window.tizen && window.tizen.tvinputdevice;
-      if (device) TIZEN_EXTRA_KEYS.forEach((name) => device.registerKey(name));
-    } catch {
-      /* keys stay unregistered; navigation keys still work */
-    }
+  /** Asks the platform to deliver the media / channel keys (on Tizen they are not forwarded by default). */
+  registerPlatformKeys() {
+    platform.registerKeys();
   }
 
   onKeyDown(event) {

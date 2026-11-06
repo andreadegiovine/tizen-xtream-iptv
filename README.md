@@ -119,8 +119,9 @@ tizen install -n dist/XtreamIPTV.wgt -t <tv-name>
 
 ### Releases
 
-Publishing a GitHub release runs `.github/workflows/release.yml`: it validates the tag (`v1.2.3`),
-stamps the version, runs lint and tests, builds, and uploads the signed `.wgt` with its checksum.
+Publishing a GitHub release runs `.github/workflows/release.yml`: it validates the tag (`v1.2.3`) and runs lint and tests,
+then one job per platform stamps the version, builds and uploads its package (today the signed Tizen `.wgt` with its checksum,
+made by `platforms/tizen/package.sh`).
 
 ## For developers
 
@@ -132,7 +133,10 @@ src/
   ui/         focus manager, router, top bar, pages, components
   i18n/       en-US and it-IT dictionaries
   styles/     SCSS
-tizen/        config.xml, icon and the YouTube service
+  platform/   the contract of a platform adapter (contract.js) and the adapter of the build (index.js)
+platforms/
+  tizen/      adapter (AVPlay, remote keys, system info, YouTube trailers), config.xml, icon, YouTube service,
+              signing certificate, build.js (files webpack copies) and package.sh (signed .wgt)
 test/         Jest tests
 docs/         design decisions, milestones and screenshots
 ```
@@ -143,7 +147,11 @@ TV) live in [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/MILESTONES.md`](docs/M
 The TV runs Chromium ~76: the build targets it and ESLint blocks newer APIs (`?.`, `??`,
 `String.replaceAll`, `.at()`, `structuredClone`). CSS must avoid flexbox `gap`, `aspect-ratio` and `inset`.
 
-Package id `XtrmIptv01`, application id `XtrmIptv01.XtreamIPTV` (`tizen/config.xml`).
+Package id `XtrmIptv01`, application id `XtrmIptv01.XtreamIPTV` (`platforms/tizen/config.xml`).
+
+The app logic is the same on every platform: what a platform changes (video engine, remote keys, exit, system information, trailers)
+goes through the adapter in `platforms/<name>/platform.js`, picked at build time (`npm run build:tizen`, i.e.
+`webpack --env platform=tizen`; `npm run build` and `npm run dev` use Tizen). See [`docs/MULTIPLATFORM.md`](docs/MULTIPLATFORM.md).
 
 ## License
 

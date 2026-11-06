@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "webpack serve --mode development",
     "build": "webpack --mode production",
+    "build:tizen": "webpack --mode production --env platform=tizen",
     "postbuild": "node scripts/check-dist.js",
     "test": "jest",
     "lint": "eslint .",
@@ -27,7 +28,11 @@
     ],
     "globals": {
       "__DEV__": false,
-      "__APP_VERSION__": "test"
+      "__APP_VERSION__": "test",
+      "__PLATFORM__": "tizen"
+    },
+    "moduleNameMapper": {
+      "^@platform$": "<rootDir>/platforms/tizen/platform.js"
     },
     "testMatch": [
       "<rootDir>/test/**/*.test.js"

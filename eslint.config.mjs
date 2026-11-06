@@ -6,14 +6,15 @@ const appGlobals = {
   __APP_VERSION__: 'readonly',
   tizen: 'readonly',
   webapis: 'readonly',
+  __PLATFORM__: 'readonly',
 };
 
 export default [
-  // tizen/youtube/service.js is a template for the on-TV service (placeholders filled in by webpack), not app code.
-  { ignores: ['dist/**', 'build/**', 'coverage/**', 'node_modules/**', 'tizen/youtube/service.js'] },
+  // platforms/tizen/youtube/service.js is a template for the on-TV service (placeholders filled in by webpack), not app code.
+  { ignores: ['dist/**', 'build/**', 'coverage/**', 'node_modules/**', 'platforms/tizen/youtube/service.js'] },
   js.configs.recommended,
   {
-    files: ['src/**/*.js'],
+    files: ['src/**/*.js', 'platforms/**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -42,7 +43,7 @@ export default [
     },
   },
   {
-    files: ['test/setup.js', 'webpack.config.js', 'babel.config.js', 'postcss.config.js', 'scripts/**/*.js'],
+    files: ['test/setup.js', 'platforms/*/build.js', 'webpack.config.js', 'babel.config.js', 'postcss.config.js', 'scripts/**/*.js'],
     languageOptions: { sourceType: 'commonjs', globals: { ...globals.node, ...globals.browser } },
   },
 ];

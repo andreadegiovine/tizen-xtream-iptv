@@ -1,16 +1,14 @@
-import { log } from '../core/logger.js';
+/* Tizen trailer plugin: YouTube in an iframe served by an on-TV service (the embed refuses a file:// origin, error 153). */
+import { log } from '../../src/core/logger.js';
+import { videoIdOf } from '../../src/services/trailer.js';
 
-/** Port of the on-TV service that serves the YouTube player page (see tizen/youtube/service.js). */
+export { youtubeStreamUrl, videoIdOf } from '../../src/services/trailer.js';
+
+/** Port of the on-TV service that serves the YouTube player page (see platforms/tizen/youtube/service.js). */
 export const YOUTUBE_SERVICE_PORT = 8125;
 const READY_TIMEOUT_MS = 20000;
 const SERVICE_WAIT_MS = 1500;
 
-/** `youtube:<id>` is how the player controller is told which trailer to open. */
-export const youtubeStreamUrl = (id) => `youtube:${id}`;
-export const videoIdOf = (url) => {
-  const match = /^youtube:([\w-]{11})$/.exec(String(url || ''));
-  return match ? match[1] : '';
-};
 
 /** Player page: the on-TV service when the app runs from a package (file://), otherwise the page next to the app. */
 export function playerPageUrl(videoId, location = typeof window !== 'undefined' ? window.location : { protocol: 'http:' }) {

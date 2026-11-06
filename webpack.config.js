@@ -8,10 +8,22 @@ const pkg = require('./package.json');
 const devProxy = require('./scripts/dev-proxy');
 const devMediaProxy = require('./scripts/dev-media-proxy');
 
-const YOUTUBE_SERVICE_PORT = 8125; // keep in sync with src/services/youtubeEngine.js
+/**
+ * One build per platform: `--env platform=<name>` (default tizen) picks platforms/<name>/: its adapter (imported by the app as `@platform`,
+ * see src/platform/contract.js) and its build.js (files to copy next to the app, page options). The app code is the same for all.
+ */
+function platformOf(env) {
+  const name = String(env.platform || process.env.PLATFORM || 'tizen');
+  const dir = path.resolve(__dirname, 'platforms', name);
+  if (!/^[a-z0-9-]+$/.test(name) || !fs.existsSync(path.join(dir, 'platform.js'))) throw new Error(`Unknown platform "${name}": no platforms/${name}/platform.js`);
+  const build = fs.existsSync(path.join(dir, 'build.js')) ? require(path.join(dir, 'build.js')) : {};
+  return { name, dir, build };
+}
 
 module.exports = (env = {}, argv = {}) => {
   const isProd = argv.mode === 'production';
+  const target = platformOf(env);
+  const buildOptions = { isProd, version: pkg.version };
 
   return {
     mode: isProd ? 'production' : 'development',
@@ -24,6 +36,7 @@ module.exports = (env = {}, argv = {}) => {
       clean: true,
     },
     devtool: isProd ? false : 'cheap-module-source-map',
+    resolve: { alias: { '@platform$': path.join(target.dir, 'platform.js') } },
     module: {
       rules: [
         { test: /\.js$/, exclude: /node_modules/, use: 'babel-loader' },
@@ -44,38 +57,25 @@ module.exports = (env = {}, argv = {}) => {
       new webpack.DefinePlugin({
         __DEV__: JSON.stringify(!isProd),
         __APP_VERSION__: JSON.stringify(pkg.version),
+        __PLATFORM__: JSON.stringify(target.name),
       }),
       new HtmlWebpackPlugin({
         template: 'src/index.html',
         inject: 'body',
         scriptLoading: 'blocking',
-        // webapis.js only exists inside a packaged Tizen app.
-        includeWebapis: isProd,
+        // Options of the page template given by the platform (Tizen: webapis.js, which only exists inside a packaged app).
+        includeWebapis: false,
+        ...(target.build.html ? target.build.html(buildOptions) : {}),
       }),
       new CopyPlugin({
         patterns: [
-          {
-            from: 'tizen/config.xml',
-            to: 'config.xml',
-            transform: (content) => content.toString().replace(/__VERSION__/g, pkg.version),
-          },
-          { from: 'tizen/icon.png', to: 'icon.png' },
           // Inter (SIL Open Font License), shipped with the app: the same letters on the TV and on a PC (the TV has no "Netflix Sans" and
           // fell back to whatever it had). Latin and Latin-extended, the four weights the stylesheet uses.
           ...[400, 600, 700, 800].flatMap((weight) =>
             ['latin', 'latin-ext'].map((subset) => ({ from: `node_modules/@fontsource/inter/files/inter-${subset}-${weight}-normal.woff2`, to: `fonts/inter-${subset}-${weight}.woff2` })),
           ),
-          // YouTube player page: served by the on-TV service (service/service.js) and, for development, by the dev server.
-          { from: 'tizen/youtube/player.html', to: 'yt-player.html' },
-          {
-            from: 'tizen/youtube/service.js',
-            to: 'service/service.js',
-            transform: (content) =>
-              content
-                .toString()
-                .replace(/__PORT__/g, String(YOUTUBE_SERVICE_PORT))
-                .replace('__PLAYER_HTML__', () => JSON.stringify(fs.readFileSync(path.resolve(__dirname, 'tizen/youtube/player.html'), 'utf8'))),
-          },
+          // The platform's own files (Tizen: config.xml, icon, the YouTube service).
+          ...(target.build.copy ? target.build.copy(buildOptions) : []),
         ],
       }),
       new MiniCssExtractPlugin({ filename: 'css/[name].css' }),

@@ -5,7 +5,7 @@ import { log } from '../../core/logger.js';
 import { icon } from '../icons.js';
 import { createPlayerController, cleanSubtitle, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer } from '../../services/playerController.js';
 import { ASPECT_MODES } from '../../services/playerEngines.js';
-import { youtubeStreamUrl } from '../../services/youtubeEngine.js';
+import { youtubeStreamUrl } from '../../services/trailer.js';
 import { formatClockTime } from '../../core/clock.js';
 import { watchKey, shouldResume } from '../../services/watchStore.js';
 import { pageEntries, getEntry, liveSequence, neighborKey } from '../../services/catalogQuery.js';

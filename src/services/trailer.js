@@ -8,3 +8,10 @@ export function youtubeId(value) {
 }
 
 export const youtubeUrl = (id) => `https://www.youtube.com/watch?v=${id}`;
+
+/** `youtube:<id>` is how the player controller is told which trailer to open (the platform's trailer engine plays it). */
+export const youtubeStreamUrl = (id) => `youtube:${id}`;
+export const videoIdOf = (url) => {
+  const match = /^youtube:([\w-]{11})$/.exec(String(url || ''));
+  return match ? match[1] : '';
+};

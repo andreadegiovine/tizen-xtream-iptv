@@ -2,7 +2,6 @@ import './styles/main.scss';
 import { i18n, t, detectLocale } from './i18n/index.js';
 import { openAppDb } from './db/appDb.js';
 import { InputService, Action } from './core/input.js';
-import { exitApp } from './core/env.js';
 import { log } from './core/logger.js';
 import { FocusManager } from './ui/focus/FocusManager.js';
 import { Router } from './ui/router.js';
@@ -40,8 +39,7 @@ import { createSearchService } from './services/searchIndex.js';
 import { createDetailsService } from './services/details.js';
 import { WatchStore, watchKey } from './services/watchStore.js';
 import { summarizeWatch, watchStatus } from './services/watchStatus.js';
-import { createDefaultEngine } from './services/playerEngines.js';
-import { createYouTubeEngine } from './services/youtubeEngine.js';
+import { platform } from './platform/index.js';
 import { createSyncLog } from './services/syncLog.js';
 import { createOperations } from './services/operations.js';
 import { countEntries, getEntry } from './services/catalogQuery.js';
@@ -104,8 +102,8 @@ async function boot() {
     trakt: null,
     details: createDetailsService({ active }),
     search: createSearchService({ active, createWorker: createSearchWorker }),
-    createEngine: createDefaultEngine,
-    createTrailerEngine: createYouTubeEngine,
+    createEngine: () => platform.createEngine(),
+    createTrailerEngine: () => (platform.createTrailerEngine ? platform.createTrailerEngine() : null),
     openEntry: null,
     enrich: null,
     meta: null,
@@ -434,7 +432,7 @@ async function boot() {
     router,
     getSection: sectionForEntry,
     goHome: () => router.reset('home', { section: 'home', focusTopbar: true }),
-    requestExit: exitApp,
+    requestExit: () => platform.exit(),
     texts: () => ({
       title: t('exit.title'),
       message: t('exit.message'),
@@ -444,7 +442,7 @@ async function boot() {
   });
 
   const input = new InputService(document, { holdsEnter: () => Boolean(focus.active && focus.active.onLongActivate) });
-  input.registerTizenKeys();
+  input.registerPlatformKeys();
   input.onAction((action) => {
     if (action === Action.BACK) {
       // An open dialog or search closes first; then the page may use Back for itself (a grid that is not the main one, the player's controls).
