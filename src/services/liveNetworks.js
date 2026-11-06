@@ -15,25 +15,30 @@ const GENERIC = new Set([
   'movie', 'movies', 'premium', 'live', 'event', 'eventi', 'ppv',
 ]);
 
+/** Whether numbers are left out of the comparison by default ("Dazn 11 Serie B", "Dazn 12 Serie B": one network "Dazn Serie B"). */
+export const DEFAULT_IGNORE_NUMBERS = true;
+
 /**
  * A name for comparing: its words (letters and digits; every other character separates them), a word repeated right after itself
  * counts once ("Dazn: Dazn 1" → "Dazn 1"), and the key is those words lowercase, without accents and spaces ("rai31"). `starts` are the
- * key positions where a word starts.
+ * key positions where a word starts. With `ignoreNumbers` the words made only of digits are left out of the key ("Dazn 11 Serie B" →
+ * "daznserieb"); `full` is the key with them, to tell apart names that differ only by a number.
  */
-function analyseName(name) {
-  const words = [];
+function analyseName(name, ignoreNumbers = false) {
+  const all = [];
   (String(name || '').normalize('NFC').match(/[\p{L}\p{N}]+/gu) || []).forEach((text) => {
     const key = text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-    if (words.length && words[words.length - 1].key === key) words.pop(); // the repeat replaces the first
-    words.push({ text, key });
+    if (all.length && all[all.length - 1].key === key) all.pop(); // the repeat replaces the first
+    all.push({ text, key });
   });
+  const words = ignoreNumbers ? all.filter((word) => !/^\p{N}+$/u.test(word.key)) : all;
   const starts = new Set();
   let length = 0;
   words.forEach((word) => {
     starts.add(length);
     length += word.key.length;
   });
-  return { key: words.map((w) => w.key).join(''), words, starts };
+  return { key: words.map((w) => w.key).join(''), full: all.map((w) => w.key).join(''), words, starts };
 }
 
 const commonLength = (a, b) => {
@@ -82,12 +87,14 @@ function unitsOf(entries, groups) {
  * `similarity`% of every name and no name goes more than `maxDiff` characters beyond it. The network is named by that common beginning.
  * Returns { networks: [{ id, name, units }], rejected: [{ name, units, reason, sample }] }: gatherings of one name written many ways
  * ("duplicates", also "X" and "X Channel"), of a generic word ("generic") and whose common part cuts a word ("partial") are not networks.
+ * `ignoreNumbers`: the numbers written as words are not compared, so a number in the middle of the name does not split a network
+ * ("Dazn 5 Serie B" … "Dazn 20 Serie B" → "Dazn Serie B", apart from "Dazn 1", "Dazn 2" → "Dazn").
  */
-export function analyzeNetworks(units, { similarity = DEFAULT_SIMILARITY, maxDiff = DEFAULT_MAX_DIFF, min = MIN_NETWORK_UNITS } = {}) {
+export function analyzeNetworks(units, { similarity = DEFAULT_SIMILARITY, maxDiff = DEFAULT_MAX_DIFF, min = MIN_NETWORK_UNITS, ignoreNumbers = false } = {}) {
   const items = units
-    .map((unit) => ({ unit, info: analyseName(unit.name) }))
+    .map((unit) => ({ unit, info: analyseName(unit.name, ignoreNumbers) }))
     .filter((item) => item.info.key)
-    .sort((a, b) => (a.info.key < b.info.key ? -1 : a.info.key > b.info.key ? 1 : 0));
+    .sort((a, b) => (a.info.key < b.info.key ? -1 : a.info.key > b.info.key ? 1 : a.info.full < b.info.full ? -1 : a.info.full > b.info.full ? 1 : 0)); // same key: by the full name, numbers included
   const fits = (list, length) => length >= MIN_NAME_CHARS && list.every((u) => 100 * length >= similarity * u.info.key.length && u.info.key.length - length <= maxDiff);
   const gatherings = [];
   let members = [];
@@ -118,7 +125,7 @@ export function analyzeNetworks(units, { similarity = DEFAULT_SIMILARITY, maxDif
       const mixed = list.find((u) => writtenName(u.info, shown) !== writtenName(u.info, shown).toUpperCase()) || list[0];
       const name = writtenName(mixed.info, shown);
       const id = common.slice(0, length);
-      if (new Set(list.map((u) => u.info.key.replace(/(?<=.{3})channel$/, ''))).size < 2) rejected.push({ name, units: list.length, reason: 'duplicates', sample });
+      if (new Set(list.map((u) => u.info.full.replace(/(?<=.{3})channel$/, ''))).size < 2) rejected.push({ name, units: list.length, reason: 'duplicates', sample });
       else if (!length) rejected.push({ name, units: list.length, reason: 'partial', sample });
       else if (GENERIC.has(id) || /^\d+$/.test(id)) rejected.push({ name, units: list.length, reason: 'generic', sample });
       else if (networks.has(id)) networks.get(id).units.push(...list.map((u) => u.unit));
@@ -132,10 +139,10 @@ export function analyzeNetworks(units, { similarity = DEFAULT_SIMILARITY, maxDif
  * Returns rows for the `groups` store: { key: 'live:n<id>', isNetwork, name, icon, memberKeys, manualKeys, channelCount, added, ... };
  * `report` (when given an object) receives what the Diagnostics page shows.
  */
-export function buildNetworks(entries, groups, { enabled = true, links = [], min = MIN_NETWORK_UNITS, similarity = DEFAULT_SIMILARITY, maxDiff = DEFAULT_MAX_DIFF, report = null } = {}) {
+export function buildNetworks(entries, groups, { enabled = true, links = [], min = MIN_NETWORK_UNITS, similarity = DEFAULT_SIMILARITY, maxDiff = DEFAULT_MAX_DIFF, ignoreNumbers = DEFAULT_IGNORE_NUMBERS, report = null } = {}) {
   if (!enabled) return [];
   const units = unitsOf(entries, groups);
-  const analysis = analyzeNetworks(units, { similarity, maxDiff, min });
+  const analysis = analyzeNetworks(units, { similarity, maxDiff, min, ignoreNumbers });
   const known = new Map(analysis.networks.map((n) => [n.id, n]));
   const linkOf = new Map((links || []).map(([id, network]) => [id, network]));
   const members = new Map(); // network id → [{ unit, manual }]
@@ -174,7 +181,7 @@ export function buildNetworks(entries, groups, { enabled = true, links = [], min
     };
   }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   if (report) {
-    report.params = { similarity, maxDiff };
+    report.params = { similarity, maxDiff, ignoreNumbers };
     report.networks = rows.map((row) => ({ name: row.name, id: row.networkId, units: row.memberKeys.length, channels: row.channelCount, manual: row.manualKeys.length, sample: members.get(row.networkId).slice(0, 3).map(({ unit }) => unit.name) }));
     report.rejected = analysis.rejected.slice().sort((a, b) => b.units - a.units).slice(0, MAX_REPORT_REJECTED); // the biggest first: they matter most
     report.unassigned = units.filter((unit) => !own.has(unit.key)).length;

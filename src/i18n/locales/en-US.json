@@ -299,6 +299,7 @@
   "home.updatedAt": "updated {time}",
   "settings.liveNetworkSimilarity": "Minimum name similarity for channel networks",
   "settings.liveNetworkMaxDiff": "Maximum name difference for channel networks",
+  "settings.liveNetworkIgnoreNumbers": "Leave numbers out of the similarity comparison",
   "settings.liveNetworkReset": "Restore the default value",
   "settings.liveNetworks": "Build channel networks",
   "networks.title": "Networks",

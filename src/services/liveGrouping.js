@@ -14,10 +14,16 @@ export const isNetworkKey = (key) => typeof key === 'string' && key.startsWith(N
 /** Groups and networks are stored apart from the single channels. */
 export const isCompositeKey = (key) => isGroupKey(key) || isNetworkKey(key);
 
-/** Words taken out of a channel name before comparing it with the others (quality and feed markers). */
+/**
+ * Words taken out of a channel name before comparing it with the others (quality and feed markers), and two patterns: a short tag in
+ * square brackets at the start ("[V] DAZN FA CUP 01", "[VIP] ...") and a language code closed by a bar anywhere in the name
+ * ("DAZN IT| Event 1", "SKY |IT| Sport"; at the start the title cleaning already removes it).
+ */
 export const DEFAULT_TERMS = Object.freeze([
   'full hd', 'fullhd', 'ultra hd', 'uhd', 'fhd', 'hd', 'sd', '4k', '8k', 'hdr', 'hevc', 'h265', 'h264', 'x265', 'x264',
   '2160p', '1080p', '1080i', '720p', '576p', '480p', '50fps', '60fps', 'raw', 'hq', 'lq', 'backup',
+  '/^\\s*\\[[^\\]]{1,4}\\](?=\\s*\\S)/',
+  '/(?:\\|\\s*)?(?<![\\p{L}\\p{N}])(?:it|ita|en|eng|fr|de|es|pt|nl|pl|ru|tr|ar|el|ro|fi|uk|us)\\s*\\|/',
 ]);
 
 /** A term written as `/pattern/` is a regular expression. */
@@ -383,7 +389,7 @@ export function createLiveGroupingService({ db, settings }) {
         terms: resolveTerms(s.liveGroupPatterns),
         links: await read(linksKey(providerId)),
         splits: await read(splitsKey(providerId)),
-        networks: { enabled: s.liveNetworks, links: await read(networkLinksKey(providerId)), similarity: s.liveNetworkSimilarity, maxDiff: s.liveNetworkMaxDiff },
+        networks: { enabled: s.liveNetworks, links: await read(networkLinksKey(providerId)), similarity: s.liveNetworkSimilarity, maxDiff: s.liveNetworkMaxDiff, ignoreNumbers: s.liveNetworkIgnoreNumbers },
       };
     },
     /** Streams added to a group by hand. */

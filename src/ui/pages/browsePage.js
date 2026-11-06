@@ -180,6 +180,29 @@ export function createBrowsePage(ctx, params = {}) {
       }
       return node;
     });
+    revealCurrent();
+  }
+
+  /**
+   * While the focus is elsewhere (the grid, coming back from a title) the sidebar shows the entry of the grid on screen, in its middle,
+   * and Left from the grid lands on it.
+   */
+  function revealCurrent() {
+    if (ctx.focus.activeId === CATS_ZONE) return;
+    catsZone.index = Math.max(0, selected);
+    const node = catNodes[selected];
+    if (!node || !catList.clientHeight) return;
+    catList.scrollTop = Math.max(0, node.offsetTop - (catList.clientHeight - node.offsetHeight) / 2);
+  }
+
+  /** Shows the grid of a sidebar entry; the focus goes to the grid (or the guide) unless `stayInSidebar`. */
+  function selectItem(i, stayInSidebar = true) {
+    selected = i;
+    catNodes.forEach((node, n) => node.classList.toggle('current', n === i));
+    syncFavorite();
+    if (stayInSidebar) ctx.focus.focus(CATS_ZONE, i);
+    else revealCurrent();
+    (stayInSidebar ? loadPage(0) : loadPage(0, 0)).catch((err) => log.warn('Browse load failed', err && err.message));
   }
 
   const countKey = (item) => `${item.kind}:${item.id === undefined ? '' : item.id}`;
@@ -571,6 +594,9 @@ export function createBrowsePage(ctx, params = {}) {
     },
   });
 
+  /** The main grid of the page: the guide for Live TV, "show all" for the others. */
+  const mainIndex = () => items.findIndex((item) => item.kind === (type === 'live' ? 'guide' : 'all'));
+
   const gridZone = new FocusZone({
     id: GRID_ZONE,
     model: createPagedGridModel({
@@ -702,7 +728,12 @@ export function createBrowsePage(ctx, params = {}) {
     el: h('section', { class: 'page browse' }, h('div', { class: 'browse-body' }, catList, h('div', { class: 'browse-main' }, head, gridEl, guideHost, empty))),
     /** Back while a row of the guide is selected: the selection goes, the page stays. */
     onBack() {
-      return Boolean(guide && guide.cancelRowMode());
+      if (guide && guide.cancelRowMode()) return true;
+      // On another grid (a category, a genre, a network...) Back first goes to the main one, the page is left from there.
+      const main = mainIndex();
+      if (main < 0 || selected === main || !catNodes.length) return false;
+      selectItem(main, ctx.focus.activeId === CATS_ZONE);
+      return true;
     },
     mount() {
       ctx.focus.register(catsZone);

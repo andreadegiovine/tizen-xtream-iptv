@@ -447,7 +447,9 @@ async function boot() {
   input.registerTizenKeys();
   input.onAction((action) => {
     if (action === Action.BACK) {
-      if (router.page && router.page.onBack && router.page.onBack()) return;
+      // An open dialog or search closes first; then the page may use Back for itself (a grid that is not the main one, the player's controls).
+      const overlay = dialogs.isOpen() || topbar.isSearching();
+      if (!overlay && router.page && router.page.onBack && router.page.onBack()) return;
       onBack();
       return;
     }

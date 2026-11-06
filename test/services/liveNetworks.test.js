@@ -169,7 +169,7 @@ test('the same name more than once, and generic names, are not networks; the rep
   buildNetworks(buildEntries('live', items.map((i) => ({ ...i, tmdbId: null, ext: '', genre: '' }))), [], { report });
   expect(report.networks[0]).toMatchObject({ name: 'Rai', id: 'rai', units: 3 });
   expect(report.rejected.map((r) => [r.name, r.reason])).toEqual([['Bbb', 'duplicates'], ['Aaa', 'duplicates'], ['Sport', 'generic']]);
-  expect(report.params).toEqual({ similarity: 50, maxDiff: 13 });
+  expect(report.params).toEqual({ similarity: 50, maxDiff: 13, ignoreNumbers: true });
   const text = formatNetworkReport(report, (key) => key);
   expect(text).toContain('+ Rai [rai] 3/3');
   expect(text).toContain('- Bbb (3) diag.networks.duplicates');
@@ -199,4 +199,25 @@ test('words repeated right after themselves count once, special characters are s
   const report = {};
   buildNetworks(buildEntries('live', [ch(1, '* Veneto *'), ch(2, 'Venezia')].map((i) => ({ ...i, tmdbId: null, ext: '', genre: '' }))), [], { report });
   expect(report.rejected[0]).toMatchObject({ reason: 'partial', units: 2 });
+});
+
+test('numbers left out of the comparison (default): a number in the middle of the name does not split a network', () => {
+  const names = ['Dazn 1', 'Dazn 2', 'Dazn 11 Serie B', 'Dazn 12 Serie B', 'Dazn 13 Serie B', 'Dazn 17 Serie B', 'Dazn 20 Serie B', 'Dazn 5 Serie B'];
+  const items = names.map((name, i) => ch(i + 1, name));
+  const members = (result) => Object.fromEntries(result.networks.map((n) => [n.name, n.memberKeys.length]));
+  expect(members(build(items))).toEqual({ Dazn: 2, 'Dazn Serie B': 6 }); // on its own, apart from "Dazn"
+  expect(members(build(items, { ignoreNumbers: false }))).toEqual({}); // as before: sorted, the Serie B names fall between "Dazn 1" and "Dazn 2" and split everything
+  expect(build([ch(1, 'Rai 1'), ch(2, 'Rai 1')]).networks).toEqual([]); // the same name twice is still not a network
+});
+
+test('channel names: a short tag in brackets at the start and a language code closed by a bar go away', async () => {
+  const { channelBase, compileTerms, DEFAULT_TERMS } = await import('../../src/services/liveGrouping.js');
+  const clean = (name) => channelBase(name, compileTerms(DEFAULT_TERMS)).display;
+  expect(clean('DAZN IT| Event 1')).toBe('DAZN Event 1');
+  expect(clean('SKY |IT| Sport HD')).toBe('SKY Sport');
+  expect(clean('[V] DAZN FA CUP 01')).toBe('DAZN FA CUP 01');
+  expect(clean('[VIP] Sky Cinema')).toBe('Sky Cinema');
+  expect(clean('Rai Italia')).toBe('Rai Italia'); // without the bar nothing is touched
+  expect(clean('EDIT| X')).toBe('EDIT| X'); // not a code on its own
+  expect(clean('[TG5]')).toBe('[TG5]'); // nothing after it: the tag is the name
 });

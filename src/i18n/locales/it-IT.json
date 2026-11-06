@@ -299,6 +299,7 @@
   "home.updatedAt": "aggiornato {time}",
   "settings.liveNetworkSimilarity": "Somiglianza minima nomi per reti di canali",
   "settings.liveNetworkMaxDiff": "Differenza massima nomi per reti di canali",
+  "settings.liveNetworkIgnoreNumbers": "Escludi i numeri dal confronto somiglianza",
   "settings.liveNetworkReset": "Ripristina il valore predefinito",
   "settings.liveNetworks": "Crea reti di canali",
   "networks.title": "Reti",

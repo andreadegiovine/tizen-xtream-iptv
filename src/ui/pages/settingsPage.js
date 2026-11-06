@@ -347,6 +347,19 @@ export function createSettingsPage(ctx) {
     },
   };
 
+  // Numbers left out when comparing names for networks: "Dazn 11 Serie B" and "Dazn 12 Serie B" end in one network.
+  const ignoreNumbersValue = toggle();
+  const ignoreNumbersRow = {
+    el: h('div', { class: 'row' }, h('span', { text: t('settings.liveNetworkIgnoreNumbers') }), ignoreNumbersValue),
+    refresh: () => ctx.settings.get().then((s) => { setToggle(ignoreNumbersValue, s.liveNetworkIgnoreNumbers); }),
+    async activate() {
+      const s = await ctx.settings.get();
+      const next = await ctx.settings.update({ liveNetworkIgnoreNumbers: !s.liveNetworkIgnoreNumbers });
+      setToggle(ignoreNumbersValue, next.liveNetworkIgnoreNumbers);
+      await regroup();
+    },
+  };
+
   /** Rebuilds Live TV with the grouping settings as they are now. */
   async function regroup() {
     try {
@@ -438,8 +451,8 @@ export function createSettingsPage(ctx) {
     },
     {
       titleKey: 'settings.section.live',
-      list: [liveGrouping, liveNetworks],
-      fields: [similarityRow, similarityResetRow, maxDiffRow, maxDiffResetRow, patternsRow, patternsResetRow],
+      // The toggle for the numbers sits right under the maximum difference, the setting it goes with.
+      parts: [{ list: [liveGrouping, liveNetworks] }, { fields: [similarityRow, similarityResetRow, maxDiffRow, maxDiffResetRow] }, { list: [ignoreNumbersRow] }, { fields: [patternsRow, patternsResetRow] }],
     },
     {
       titleKey: 'settings.section.content',
@@ -447,11 +460,15 @@ export function createSettingsPage(ctx) {
     },
     { titleKey: 'settings.section.advanced', list: [diagnostics, resetAll] },
   ];
-  const prefs = sections.flatMap((section) => (section.list || []).concat(section.fields || []));
+  // A section is a list of rows and / or text fields, or `parts` of both in the order given.
+  const partsOf = (section) => section.parts || [{ list: section.list, fields: section.fields }];
+  const prefs = sections.flatMap((section) => partsOf(section).flatMap((part) => (part.list || []).concat(part.fields || [])));
   const prefsBlocks = sections.flatMap((section) => [
     h('h2', { class: 'prefs-title', text: t(section.titleKey) }),
-    section.list ? h('div', { class: 'list' }, section.list.map((r) => r.el)) : null,
-    section.fields ? h('div', { class: 'fields' }, section.fields.filter((r) => !r.secondary).map((r) => r.root)) : null,
+    ...partsOf(section).flatMap((part) => [
+      part.list ? h('div', { class: 'list' }, part.list.map((r) => r.el)) : null,
+      part.fields ? h('div', { class: 'fields' }, part.fields.filter((r) => !r.secondary).map((r) => r.root)) : null,
+    ]),
   ]);
   // Focus order follows the page: catalog, TMDB, Trakt, preferences.
   const rows = [...catalogRows, ...tmdbRows, tmdbTokenRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktSecretRow, dbUpdateRow, dbRemoveRow, ...prefs];

@@ -84,6 +84,16 @@ export function createCollectionsPage(ctx, params = {}) {
       catList.appendChild(node);
       return node;
     });
+    revealCurrent();
+  }
+
+  /** While the focus is elsewhere the sidebar shows the entry of the grid on screen, in its middle, and Left from the grid lands on it. */
+  function revealCurrent() {
+    if (ctx.focus.activeId === CATS_ZONE) return;
+    catsZone.index = Math.max(0, selected);
+    const node = catNodes[selected];
+    if (!node || !catList.clientHeight) return;
+    catList.scrollTop = Math.max(0, node.offsetTop - (catList.clientHeight - node.offsetHeight) / 2);
   }
 
   function rebuildSidebar(focusKind) {
@@ -226,6 +236,23 @@ export function createCollectionsPage(ctx, params = {}) {
 
   return {
     el: h('section', { class: 'page browse' }, h('div', { class: 'browse-body' }, catList, h('div', { class: 'browse-main' }, head, gridEl, empty))),
+    /** On a genre (or favourites) Back first goes to "show all", the page is left from there. */
+    onBack() {
+      const main = items.findIndex((item) => item.kind === 'all');
+      if (main < 0 || selected === main || !catNodes.length) return false;
+      const inSidebar = ctx.focus.activeId === CATS_ZONE;
+      selected = main;
+      catNodes.forEach((node, n) => node.classList.toggle('current', n === main));
+      syncPin();
+      showView();
+      if (inSidebar) ctx.focus.focus(CATS_ZONE, main);
+      else {
+        revealCurrent();
+        if (shown.length) ctx.focus.focus(GRID_ZONE, 0);
+        else ctx.focus.focus(CATS_ZONE, main);
+      }
+      return true;
+    },
     mount() {
       ctx.focus.register(catsZone);
       ctx.focus.register(gridZone);

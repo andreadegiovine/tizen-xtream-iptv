@@ -1,7 +1,7 @@
 import { kvGet, kvSet } from '../db/kv.js';
 import { TIME_FORMATS, DATE_FORMATS } from '../core/clock.js';
 import { TEXT_SIZES, DEFAULT_TEXT_SIZE } from '../core/textSize.js';
-import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from './liveNetworks.js';
+import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF, DEFAULT_IGNORE_NUMBERS } from './liveNetworks.js';
 
 export const BUFFER_OPTIONS = [2, 5, 10, 20, 30];
 export const CAROUSEL_OPTIONS = [10, 15, 20, 30];
@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   liveGroupPatterns: '', // words removed from channel names to compare them; empty = the defaults
   liveNetworkSimilarity: DEFAULT_SIMILARITY, // networks: least % of a name its common beginning must be
   liveNetworkMaxDiff: DEFAULT_MAX_DIFF, // networks: most characters a name can have beyond the common beginning
+  liveNetworkIgnoreNumbers: DEFAULT_IGNORE_NUMBERS, // networks: numbers left out of the name comparison ("Dazn 11 Serie B" ~ "Dazn 12 Serie B")
   excluded: {},
 });
 
@@ -56,6 +57,7 @@ function sanitize(raw) {
     liveGroupPatterns: typeof raw.liveGroupPatterns === 'string' ? raw.liveGroupPatterns.slice(0, 600) : '',
     liveNetworkSimilarity: whole(raw.liveNetworkSimilarity, 10, 100, DEFAULT_SETTINGS.liveNetworkSimilarity),
     liveNetworkMaxDiff: whole(raw.liveNetworkMaxDiff, 0, 50, DEFAULT_SETTINGS.liveNetworkMaxDiff),
+    liveNetworkIgnoreNumbers: typeof raw.liveNetworkIgnoreNumbers === 'boolean' ? raw.liveNetworkIgnoreNumbers : DEFAULT_SETTINGS.liveNetworkIgnoreNumbers,
     excluded: raw.excluded && typeof raw.excluded === 'object' ? raw.excluded : {},
   };
 }
