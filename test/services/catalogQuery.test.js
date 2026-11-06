@@ -2,7 +2,7 @@ import { openProviderDb } from '../../src/db/providerDb.js';
 import { dbPutMany } from '../../src/core/idb.js';
 import { writeEntries } from '../../src/services/catalogSync.js';
 import { buildEntries } from '../../src/services/grouping.js';
-import { listCategories, pageEntries } from '../../src/services/catalogQuery.js';
+import { listCategories, pageEntries, liveSequence, neighborKey, LIVE_ALL } from '../../src/services/catalogQuery.js';
 
 let counter = 0;
 
@@ -58,4 +58,19 @@ describe('catalogQuery', () => {
     const db = await seed();
     expect(await pageEntries(db, { type: 'series', offset: 0, limit: 10 })).toEqual({ entries: [], hasMore: false });
   });
+});
+
+test('previous / next channel walk "show all" with the networks opened up, a grouped channel counts as its group', async () => {
+  const db = await openProviderDb(`query-test-${(counter += 1)}`);
+  const ALL_TIER = 1e13;
+  const row = (entryKey, added) => ({ key: `${entryKey}|${LIVE_ALL}`, entryKey, type: 'live', categoryId: LIVE_ALL, added });
+  await dbPutMany(db, 'entry_cat', [row('live:nSky', 2 * ALL_TIER + 1), row('live:gRai', ALL_TIER + 5), row('live:i1', 9), row('live:i2', 8)]);
+  await dbPutMany(db, 'groups', [{ key: 'live:nSky', type: 'live', name: 'Sky', memberKeys: ['live:i7', 'live:gSport'] }]);
+  const sequence = await liveSequence(db);
+  expect(sequence).toEqual(['live:i7', 'live:gSport', 'live:gRai', 'live:i1', 'live:i2']);
+  expect(neighborKey(sequence, 'live:gRai', 1)).toBe('live:i1');
+  expect(neighborKey(sequence, 'live:i7', -1)).toBe('live:i2'); // wraps
+  expect(neighborKey(sequence, 'live:i2', 1)).toBe('live:i7');
+  expect(neighborKey(sequence, 'live:i50', 1, 'live:gRai')).toBe('live:i1'); // a version of a group
+  expect(neighborKey(sequence, 'live:i50', 1)).toBe(null);
 });

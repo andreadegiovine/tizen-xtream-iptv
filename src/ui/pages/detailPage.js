@@ -792,6 +792,12 @@ export function createDetailPage(ctx, params) {
   }
 
   async function programmeActions(p) {
+    // A programme on now: OK plays the channel, as the play button does.
+    const at = Date.now();
+    if (p.start <= at && p.stop > at) {
+      play({ restart: true });
+      return;
+    }
     if (!ctx.schedules) return;
     const item = programmeItem(p);
     const scheduled = scheduledIds.has(scheduleId(item));

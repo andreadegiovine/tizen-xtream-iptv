@@ -8,7 +8,8 @@ import { ASPECT_MODES } from '../../services/playerEngines.js';
 import { youtubeStreamUrl } from '../../services/youtubeEngine.js';
 import { formatClockTime } from '../../core/clock.js';
 import { watchKey, shouldResume } from '../../services/watchStore.js';
-import { pageEntries } from '../../services/catalogQuery.js';
+import { pageEntries, getEntry, liveSequence, neighborKey } from '../../services/catalogQuery.js';
+import { streamLabel } from './detailPage.js';
 
 const CONTROLS_MS = 4000;
 const SAVE_EVERY_MS = 10000;
@@ -26,6 +27,8 @@ const SUBTITLE_FALLBACK_MS = 5000;
  * `onAction` (see main.js) so the page does not need a focus zone.
  * params: { type, entryKey, title, icon, playlist: [{ id, ext, title, season?, number? }], index,
  *           live?: { categoryId, offset } }
+ * Live TV: before "LIVE" the versions of a group, the channels of its network and previous / next channel (over the whole of "show
+ * all", networks opened up); after it, when the guide knows the programme on, when it ends.
  */
 export function createPlayerPage(ctx, params) {
   const isTrailer = params.type === 'trailer'; // a YouTube trailer: same player and controls, no aspect ratio / subtitles
@@ -60,6 +63,11 @@ export function createPlayerPage(ctx, params) {
   let tipTimer = null;
   let timeFormat = 'auto'; // the clock format of the top bar, for the end time
   let scrubTimer = null;
+  let liveEntry = null; // the channel / group playing (live)
+  let liveProgramme = null; // the programme on, from the guide (live)
+  let programmeTimer = null;
+  let sequence = null; // Promise of the keys previous / next channel walk
+  const neighborNames = new Map(); // key → name, for the tooltip of previous / next
 
   const titleEl = h('div', { class: 'player-title' });
   const statusEl = h('div', { class: 'player-status' });
@@ -78,19 +86,25 @@ export function createPlayerPage(ctx, params) {
     { id: 'back', icon: 'backward', label: () => t('player.back'), vodOnly: true, group: 'start', run: () => controller.seekBy(-SEEK_LONG) },
     { id: 'toggle', icon: 'pause', label: () => t('player.pause'), vodOnly: true, group: 'start', run: () => controller.togglePause() },
     { id: 'forward', icon: 'forward', label: () => t('player.forward'), vodOnly: true, group: 'start', run: () => controller.seekBy(SEEK_LONG) },
+    { id: 'versions', icon: 'group', label: () => t('player.versions'), liveOnly: true, hidden: true, run: () => openVersions() }, // a group with several versions
+    { id: 'network', icon: 'network', label: () => t('networks.open'), liveOnly: true, hidden: true, run: () => openNetwork() }, // a channel of a network
+    { id: 'prevChannel', icon: 'previous', label: () => t('player.prevChannel'), liveOnly: true, tip: true, run: () => stepChannel(-1) },
+    { id: 'nextChannel', icon: 'next', label: () => t('player.nextChannel'), liveOnly: true, tip: true, run: () => stepChannel(1) },
     { id: 'aspect', icon: 'aspect', label: () => t('player.aspect'), group: 'end', run: () => cycleAspect() },
     { id: 'subtitles', icon: 'subtitles', label: () => t('player.subtitles'), group: 'end', run: () => openSubtitles() },
     { id: 'audio', icon: 'audio', label: () => t('player.audio'), group: 'end', hidden: true, run: () => openAudio() }, // shown once the file has several audio tracks
-  ].filter((def) => !(isLive && def.vodOnly) && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles' || def.id === 'audio')));
+  ].filter((def) => !(isLive && def.vodOnly) && !(!isLive && def.liveOnly) && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles' || def.id === 'audio')));
   buttonDefs.forEach((def) => {
-    def.el = h('button', { class: 'player-btn', type: 'button', 'aria-label': def.label() }, icon(def.icon));
+    // Previous / next channel: the name of the channel they go to shows above them while focused.
+    if (def.tip) def.tipEl = h('span', { class: 'player-btn-tip' });
+    def.el = h('button', { class: 'player-btn', type: 'button', 'aria-label': def.label() }, icon(def.icon), def.tipEl || null);
   });
   buttonDefs.forEach((def) => {
     if (def.hidden) def.el.style.display = 'none';
   });
   const buttonEl = (id) => (buttonDefs.find((d) => d.id === id) || {}).el;
   // Full-width progress bar, then one row: back, play/pause, forward and the time on the left, aspect ratio and subtitles on the right.
-  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('back'), buttonEl('toggle'), buttonEl('forward'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio')));
+  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('back'), buttonEl('toggle'), buttonEl('forward'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio')));
   const top = h('div', { class: 'player-top' }, titleEl, nowEl);
   const controls = h('div', { class: 'player-controls' }, ...(isLive ? [] : [seek]), row);
   const el = h('section', { class: 'player' }, top, controls, statusEl, subtitleEl);
@@ -120,6 +134,31 @@ export function createPlayerPage(ctx, params) {
     return ` · ${t('player.endsAt', { time: formatClockTime(end, timeFormat, i18n.getLocale()) })}`;
   }
 
+  /** " · termina alle 23:30" after LIVE: the end of the programme on (nothing when the guide does not know it). */
+  function liveEndText() {
+    const p = liveProgramme;
+    if (!p || !(p.stop > Date.now()) || p.start > Date.now()) return '';
+    return ` · ${t('player.endsAt', { time: formatClockTime(new Date(p.stop), timeFormat, i18n.getLocale()) })}`;
+  }
+
+  /** Reads the programme on (title on top, end after LIVE) and reads it again when it ends. */
+  function loadProgramme(token) {
+    clearTimeout(programmeTimer);
+    liveProgramme = null;
+    if (!ctx.epg || !params.epgChannelId) return;
+    ctx.epg
+      .nowNext(params.epgChannelId)
+      .then((n) => {
+        if (destroyed || token !== loadToken) return;
+        liveProgramme = n && n.now ? n.now : null;
+        nowEl.textContent = liveProgramme ? liveProgramme.title : '';
+        drawProgress(lastState.position, lastState.duration);
+        const next = liveProgramme ? liveProgramme.stop : n && n.next ? n.next.start : null;
+        if (next) programmeTimer = setTimeout(() => loadProgramme(token), Math.max(1000, next - Date.now() + 1000));
+      })
+      .catch(() => {});
+  }
+
   function drawProgress(position, duration, bufferedEnd = null) {
     const pct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0;
     const bufferPct = duration > 0 && bufferedEnd !== null ? Math.min(100, Math.max(pct, (bufferedEnd / duration) * 100)) : 0;
@@ -128,7 +167,7 @@ export function createPlayerPage(ctx, params) {
     knob.style.left = `${pct}%`;
     tip.style.left = `${pct}%`;
     tip.textContent = formatClock(position);
-    timeEl.textContent = isLive ? t('player.live') : `${formatClock(position)} / ${formatClock(duration)}${endsAtText(position, duration)}`;
+    timeEl.textContent = isLive ? `${t('player.live')}${liveEndText()}` : `${formatClock(position)} / ${formatClock(duration)}${endsAtText(position, duration)}`;
   }
 
   /** The minute the picture now starts from, shown above the knob for a moment after a jump. */
@@ -188,19 +227,38 @@ export function createPlayerPage(ctx, params) {
   });
 
   const shown = () => buttonDefs.filter((d) => !d.hidden);
-  function setAudioVisible(visible) {
-    const def = buttonDefs.find((d) => d.id === 'audio');
+  function setVisible(id, visible) {
+    const def = buttonDefs.find((d) => d.id === id);
     if (!def || def.hidden === !visible) return;
+    const focusedDef = shown()[focusIndex];
     def.hidden = !visible;
     def.el.style.display = visible ? '' : 'none';
-    if (focusIndex >= shown().length) focusIndex = shown().length - 1;
+    const at = shown().indexOf(focusedDef);
+    focusIndex = at >= 0 ? at : Math.min(focusIndex, shown().length - 1);
     paintFocus();
   }
+  const setAudioVisible = (visible) => setVisible('audio', visible);
 
   function paintFocus() {
     const list = shown();
-    buttonDefs.forEach((def) => def.el.classList.toggle('focused', focusMode && !barFocus && list[focusIndex] === def));
+    buttonDefs.forEach((def) => {
+      const on = focusMode && !barFocus && list[focusIndex] === def;
+      def.el.classList.toggle('focused', on);
+      if (def.tipEl && on) fillTip(def);
+    });
     seek.classList.toggle('focused', focusMode && barFocus);
+  }
+
+  /** The tooltip of previous / next channel: the name of the channel it goes to. */
+  async function fillTip(def) {
+    const key = await neighbor(def.id === 'prevChannel' ? -1 : 1);
+    if (destroyed || !key) return;
+    if (!neighborNames.has(key)) {
+      const { db } = await ctx.active.get();
+      const entry = await getEntry(db, key).catch(() => null);
+      neighborNames.set(key, entry ? entry.name : '');
+    }
+    def.tipEl.textContent = neighborNames.get(key);
   }
 
   /** Position of play / pause among the buttons (the first button for live channels). */
@@ -368,6 +426,8 @@ export function createPlayerPage(ctx, params) {
     showSubtitle('');
     titleEl.textContent = [title, current().title].filter(Boolean).join(' · ');
     nowEl.textContent = '';
+    liveProgramme = null;
+    clearTimeout(programmeTimer);
     showControls();
     if (isTrailer) {
       controller.load(youtubeStreamUrl(params.trailer.videoId), { bufferSeconds: 0 });
@@ -386,7 +446,7 @@ export function createPlayerPage(ctx, params) {
       timeFormat = clockFormat || 'auto';
       controller.load(client.streamUrl(params.type, current().id, current().ext), { startAt, bufferSeconds, onSubtitle: showSubtitle });
       if (isLive && ctx.epg) ctx.epg.maybeSync().catch(() => {});
-      if (isLive && ctx.epg) ctx.epg.nowNext(params.epgChannelId).then((n) => { if (!destroyed && n && n.now) nowEl.textContent = n.now.title; }).catch(() => {});
+      if (isLive) loadProgramme(token);
     } catch (err) {
       log.warn('Player start failed', err && err.message);
       showPlayerError(t('error.PLAYER'));
@@ -457,18 +517,79 @@ export function createPlayerPage(ctx, params) {
     });
   }
 
+  /** Plays another channel / group (or another version of this one, `memberId`): title, guide and buttons follow. */
+  function switchTo(entry, memberId = null) {
+    liveEntry = entry;
+    title = entry.name;
+    params.entryKey = entry.key;
+    params.icon = entry.icon;
+    params.epgChannelId = entry.epgChannelId;
+    playlist = [{ id: memberId || entry.defaultId, ext: '', title: '' }];
+    index = 0;
+    updateLiveButtons();
+    play(0);
+  }
+
+  /** Versions and network buttons for the channel playing; the tooltips are worked out again. */
+  function updateLiveButtons() {
+    setVisible('versions', Boolean(liveEntry && liveEntry.isGroup && (liveEntry.members || []).length > 1));
+    setVisible('network', Boolean(liveEntry && liveEntry.networkKey));
+    buttonDefs.forEach((def) => {
+      if (def.tipEl) def.tipEl.textContent = '';
+    });
+    paintFocus();
+  }
+
+  /** The key `delta` channels away in "show all" (the list is read once per player). */
+  async function neighbor(delta) {
+    if (!liveEntry) return null;
+    if (!sequence) sequence = ctx.active.get().then(({ db }) => liveSequence(db)).catch(() => []);
+    return neighborKey(await sequence, liveEntry.key, delta, liveEntry.groupKey || null);
+  }
+
+  async function stepChannel(delta) {
+    const key = await neighbor(delta);
+    if (!key || destroyed) return;
+    const { db } = await ctx.active.get();
+    const entry = await getEntry(db, key).catch(() => null);
+    if (entry && !destroyed) switchTo(entry);
+  }
+
+  /** "Versions": the streams of the group playing; the chosen one plays. */
+  async function openVersions() {
+    if (!liveEntry || !liveEntry.isGroup) return;
+    const options = liveEntry.members.map((m) => ({ label: streamLabel(m), value: m.id }));
+    const value = await ctx.dialogs.choose({ title: t('player.versions'), options, selected: current().id });
+    if (value === null || destroyed || value === current().id) return;
+    switchTo(liveEntry, value);
+  }
+
+  /** The channels of the network of the one playing (dialog titled with the network's name); the chosen one plays. */
+  async function openNetwork() {
+    if (!liveEntry || !liveEntry.networkKey) return;
+    const { db } = await ctx.active.get();
+    const network = await getEntry(db, liveEntry.networkKey).catch(() => null);
+    if (!network || destroyed) return;
+    const members = (await Promise.all((network.memberKeys || []).map((key) => getEntry(db, key).catch(() => null)))).filter(Boolean);
+    const playing = members.find((m) => m.key === liveEntry.key || m.key === liveEntry.groupKey);
+    const value = await ctx.dialogs.choose({ title: network.name, options: members.map((m) => ({ label: m.name, value: m.key })), selected: playing ? playing.key : null });
+    if (value === null || destroyed || (playing && value === playing.key)) return;
+    const entry = members.find((m) => m.key === value);
+    if (entry) switchTo(entry);
+  }
+
+  /** Up / Down and Channel +/-: in the category the player was opened from, otherwise over "show all" like previous / next. */
   async function changeChannel(delta) {
-    if (!live) return;
+    if (!live) {
+      await stepChannel(delta);
+      return;
+    }
     const { db } = await ctx.active.get();
     const page = await pageEntries(db, { type: 'live', categoryId: live.categoryId, offset: Math.max(0, live.offset + delta), limit: 1 });
     const entry = page.entries[0];
     if (!entry || destroyed) return;
     live.offset = Math.max(0, live.offset + delta);
-    title = entry.name;
-    params.epgChannelId = entry.epgChannelId;
-    playlist = [{ id: entry.defaultId, ext: '', title: '' }];
-    index = 0;
-    play(0);
+    switchTo(entry);
   }
 
   function stepEpisode(delta) {
@@ -556,6 +677,17 @@ export function createPlayerPage(ctx, params) {
       controller.onChange(render);
       saveTimer = setInterval(() => saveProgress(), SAVE_EVERY_MS);
       play(index);
+      if (isLive && params.entryKey) {
+        ctx.active
+          .get()
+          .then((active) => getEntry(active.db, params.entryKey))
+          .then((entry) => {
+            if (!entry || destroyed) return;
+            liveEntry = entry;
+            updateLiveButtons();
+          })
+          .catch((err) => log.warn('Player entry failed', err && err.message));
+      }
     },
     destroy() {
       destroyed = true;
@@ -565,6 +697,7 @@ export function createPlayerPage(ctx, params) {
       clearTimeout(hideTimer);
       clearTimeout(scrubTimer);
       clearTimeout(subtitleTimer);
+      clearTimeout(programmeTimer);
       clearInterval(saveTimer);
       saveProgress(true);
       controller.stop();

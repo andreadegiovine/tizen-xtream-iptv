@@ -66,6 +66,47 @@ export function pageEntries(db, { type, categoryId = null, offset = 0, limit = 2
   });
 }
 
+/**
+ * Every channel / group of Live TV in the order of "show all" (networks first, then groups, then channels, newest first in each), each
+ * network replaced by its channels and groups in its own order: the sequence the player's previous / next channel buttons walk.
+ * Only keys are read (one pass over the index), plus the few network rows.
+ */
+export async function liveSequence(db) {
+  const keys = await new Promise((resolve, reject) => {
+    const out = [];
+    const tx = db.transaction('entry_cat', 'readonly');
+    const request = tx.objectStore('entry_cat').index('byCatAdded').openCursor(IDBKeyRange.bound(['live', LIVE_ALL, 0], ['live', LIVE_ALL, MAX_ADDED]), 'prev');
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      out.push(cursor.value.entryKey);
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve(out);
+    tx.onerror = () => reject(tx.error);
+  });
+  const sequence = [];
+  for (const key of keys) {
+    if (key.indexOf(NETWORK_PREFIX) !== 0) sequence.push(key);
+    else {
+      const network = await getEntry(db, key).catch(() => null);
+      (network ? network.memberKeys || [] : []).forEach((member) => sequence.push(member));
+    }
+  }
+  return sequence;
+}
+
+/** The key `delta` steps from `key` in a sequence (wrapping at the ends); a channel inside a group counts as its group. Null when not there. */
+export function neighborKey(sequence, key, delta, groupKey = null) {
+  if (!sequence.length) return null;
+  let i = sequence.indexOf(key);
+  if (i < 0 && groupKey) i = sequence.indexOf(groupKey);
+  if (i < 0) return null;
+  const n = sequence.length;
+  return sequence[(((i + delta) % n) + n) % n];
+}
+
 /** The networks of Live TV, alphabetical: [{ key, name, icon, memberKeys, manualKeys, channelCount }]. */
 export async function listNetworks(db) {
   const all = await requestToPromise(db.transaction('groups', 'readonly').objectStore('groups').getAll(IDBKeyRange.bound(NETWORK_PREFIX, `${NETWORK_PREFIX}\uffff`)));

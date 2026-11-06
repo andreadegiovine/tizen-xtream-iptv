@@ -185,3 +185,35 @@ test('the axis never starts more than 30 minutes ago: when a new half hour begin
   g.el.remove();
   jest.useRealTimers();
 });
+
+test('programmesOnly: Left / Right skip the holes, only programmes take the focus', async () => {
+  const now = 1000 * 30 * M;
+  const rows = [{ key: 'live:1', type: 'live', name: 'One', epgChannelId: 'one' }];
+  const guide = { one: [{ start: now + 60 * M, stop: now + 90 * M, title: 'A' }, { start: now + 300 * M, stop: now + 330 * M, title: 'B' }] };
+  const g = createEpgGuide({
+    loadRows: async (offset, limit) => ({ entries: rows.slice(offset, offset + limit) }),
+    countRows: async () => rows.length,
+    programmes: async (ids) => new Map(ids.map((id) => [id, guide[id] || []])),
+    onOpen: () => undefined,
+    pickSegment: nextProgramme,
+    programmesOnly: true,
+    emptyText: '',
+    now: () => now,
+  });
+  document.body.appendChild(g.el);
+  await g.start();
+  await tick();
+  await tick();
+  g.onFocus();
+  const focusedTitle = () => (g.el.querySelector('.epg-prog.focused .epg-prog-title') || {}).textContent;
+  expect(focusedTitle()).toBe('A');
+  g.model.navigate('right');
+  expect(focusedTitle()).toBe('B'); // over the hole between them
+  expect(g.model.navigate('right')).toEqual({ type: 'move', index: 0 }); // nothing after: stays
+  expect(focusedTitle()).toBe('B');
+  g.model.navigate('left');
+  expect(focusedTitle()).toBe('A');
+  expect(g.model.navigate('left')).toEqual({ type: 'exit', dir: 'left' }); // only a hole before: leaves
+  g.destroy();
+  g.el.remove();
+});

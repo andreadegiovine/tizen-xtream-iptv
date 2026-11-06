@@ -1,0 +1,94 @@
+import { createPlayerPage } from '../../src/ui/pages/playerPage.js';
+import { createNoticeService } from '../../src/ui/components/notice.js';
+import { Action } from '../../src/core/input.js';
+import { openProviderDb } from '../../src/db/providerDb.js';
+import { dbPutMany } from '../../src/core/idb.js';
+import { LIVE_ALL } from '../../src/services/catalogQuery.js';
+
+const wait = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
+let counter = 0;
+
+async function setup() {
+  const db = await openProviderDb(`player-live-${(counter += 1)}`);
+  const row = (entryKey, added) => ({ key: `${entryKey}|${LIVE_ALL}`, entryKey, type: 'live', categoryId: LIVE_ALL, added });
+  await dbPutMany(db, 'entries', [
+    { key: 'live:i1', type: 'live', name: 'Sky Uno', defaultId: 1, networkKey: 'live:nSky', epgChannelId: 'c1' },
+    { key: 'live:i3', type: 'live', name: 'Sky Due', defaultId: 3, networkKey: 'live:nSky' },
+    { key: 'live:i2', type: 'live', name: 'Cielo', defaultId: 2 },
+  ]);
+  await dbPutMany(db, 'groups', [
+    { key: 'live:nSky', type: 'live', name: 'Sky', memberKeys: ['live:i1', 'live:i3'] },
+    { key: 'live:gRai', type: 'live', name: 'Rai 1', isGroup: true, defaultId: 11, members: [{ id: 11, name: 'Rai 1 HD' }, { id: 12, name: 'Rai 1 SD' }] },
+  ]);
+  await dbPutMany(db, 'entry_cat', [row('live:nSky', 30), row('live:gRai', 20), row('live:i2', 10)]);
+  const engine = { available: () => true, start: jest.fn(), play: jest.fn(), pause: jest.fn(), seekTo: jest.fn(), stop: jest.fn(), getTime: () => 0, getDuration: () => 0 };
+  const now = Date.now();
+  const client = { streamUrl: (type, id) => `http://h/${type}/${id}` };
+  const ctx = {
+    createEngine: () => engine,
+    notices: createNoticeService({ root: document.body }),
+    catalog: { pause() {}, resume() {} },
+    settings: { get: async () => ({ bufferSeconds: 5, timeFormat: '24h' }) },
+    active: { get: async () => ({ provider: { id: 'p' }, client, db }), authenticatedClient: async () => client },
+    epg: { maybeSync: async () => null, nowNext: async (id) => (id === 'c1' ? { now: { title: 'News', start: now - 60000, stop: now + 3600000 }, next: null } : { now: null, next: null }) },
+    dialogs: { isOpen: () => false, choose: jest.fn() },
+    router: { back: jest.fn() },
+  };
+  const page = createPlayerPage(ctx, { type: 'live', entryKey: 'live:i1', title: 'Sky Uno', playlist: [{ id: 1, ext: '', title: '' }], index: 0, epgChannelId: 'c1' });
+  document.body.appendChild(page.el);
+  page.mount();
+  await wait();
+  return { page, ctx, engine };
+}
+
+const visible = (page) => Array.from(page.el.querySelectorAll('.player-btn')).filter((b) => b.style.display !== 'none').map((b) => b.getAttribute('aria-label'));
+const focusedTip = (page) => (page.el.querySelector('.player-btn.focused .player-btn-tip') || {}).textContent;
+
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
+test('live: end of the programme after LIVE; network, previous and next before it; next goes over "show all" with networks opened up', async () => {
+  const { page, ctx, engine } = await setup();
+  expect(page.el.querySelector('.player-time').textContent).toMatch(/^LIVE · ends at \d\d:\d\d$/);
+  expect(page.el.querySelector('.player-now').textContent).toBe('News');
+  expect(visible(page).slice(0, 3)).toEqual(['Open the network', 'Previous channel', 'Next channel']); // Versions hidden: not a group
+  page.onAction(Action.ENTER); // focus on the controls: the first button
+  page.onAction(Action.RIGHT); // previous channel: the last of "show all" (wraps)
+  await wait();
+  expect(focusedTip(page)).toBe('Cielo');
+  page.onAction(Action.RIGHT); // next channel: the other channel of the network
+  await wait();
+  expect(focusedTip(page)).toBe('Sky Due');
+  page.onAction(Action.ENTER);
+  await wait();
+  expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).toBe('http://h/live/3');
+  expect(page.el.querySelector('.player-title').textContent).toBe('Sky Due');
+  expect(page.el.querySelector('.player-time').textContent).toMatch(/^LIVE$/); // no guide for this one
+  // The network button lists its channels, titled with its name.
+  ctx.dialogs.choose.mockResolvedValueOnce('live:i1');
+  page.onAction(Action.LEFT);
+  page.onAction(Action.LEFT);
+  page.onAction(Action.ENTER);
+  await wait();
+  expect(ctx.dialogs.choose.mock.calls[0][0]).toMatchObject({ title: 'Sky', options: [{ label: 'Sky Uno', value: 'live:i1' }, { label: 'Sky Due', value: 'live:i3' }], selected: 'live:i3' });
+  expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).toBe('http://h/live/1');
+  page.destroy();
+});
+
+test('live group: "Versions" lists its streams and plays the chosen one', async () => {
+  const { page, ctx, engine } = await setup();
+  page.onAction(Action.DOWN); // Down without a category: next channel over "show all" → the network's second channel
+  await wait();
+  page.onAction(Action.DOWN); // → the group
+  await wait();
+  expect(page.el.querySelector('.player-title').textContent).toBe('Rai 1');
+  expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).toBe('http://h/live/11');
+  ctx.dialogs.choose.mockResolvedValueOnce(12);
+  page.onAction(Action.ENTER); // focus on the first button: Versions (the group is in no network)
+  page.onAction(Action.ENTER);
+  await wait();
+  expect(ctx.dialogs.choose.mock.calls[0][0]).toMatchObject({ options: [{ label: 'Rai 1 HD', value: 11 }, { label: 'Rai 1 SD', value: 12 }], selected: 11 });
+  expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).toBe('http://h/live/12');
+  page.destroy();
+});

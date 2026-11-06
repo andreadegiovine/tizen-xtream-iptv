@@ -471,6 +471,7 @@ export function createBrowsePage(ctx, params = {}) {
         ...common,
         emptyText: '',
         pickSegment: nextProgramme, // the scheduled programme closest to now
+        programmesOnly: true, // the focus moves only between scheduled programmes
         loadRows: async (offset, limit) => ({ entries: (await scheduledRows()).rows.slice(offset, offset + limit) }),
         countRows: async () => (await scheduledRows()).rows.length,
         programmes: async (ids) => {

@@ -83,11 +83,11 @@ export function scrollFor(segment, start, x, width) {
  * `loadRows(offset, limit)` → { entries }, `countRows()` → number, `programmes(channelIds, from, to)` → Map(channelId → list),
  * `onOpen(entry, row, programme)` (the focused programme, null on a hole), `getTimeFormat()` → '24h' | '12h' | 'auto'. `emptyText`: what
  * a hole of the guide says. `pickSegment(segments, now)` → index or -1: the programme a row focuses when reached with Up / Down (by
- * default the one at the time the focus was on).
+ * default the one at the time the focus was on). `programmesOnly`: Left / Right skip the holes, only programmes take the focus.
  * OK held on a row selects it (channel and programmes) and shows `rowActions` ({ id, icon, label }, left to right) at its right:
  * Left / Right move between them, OK runs `onRowAction(id, entry, row)`, Back (`cancelRowMode()`) gives the normal focus back.
  */
-export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTimeFormat = () => 'auto', enrich = null, now = Date.now, emptyText = null, pickSegment = null, rowActions = [], onRowAction = null, defaultRowAction = 0 }) {
+export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTimeFormat = () => 'auto', enrich = null, now = Date.now, emptyText = null, pickSegment = null, programmesOnly = false, rowActions = [], onRowAction = null, defaultRowAction = 0 }) {
   let start = floorHalfHour(now()) - PAST_MS; // moves on with the half hours while the guide stays open
   let end = start + SPAN_MS + PAST_MS;
   const ruler = h('div', { class: 'epg-ruler' });
@@ -340,15 +340,13 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
         return { type: 'move', index: 0 };
       }
       const segments = segmentsOf(focusRow);
-      if (dir === 'left') {
-        if (focusSeg <= 0 || (segments[focusSeg] && segments[focusSeg].start <= start)) return { type: 'exit', dir };
-        focusAt(focusRow, focusSeg - 1);
-        focusTime = segmentsOf(focusRow)[focusSeg].start;
-        return { type: 'move', index: 0 };
-      }
-      if (dir === 'right') {
-        if (focusSeg >= segments.length - 1) return { type: 'move', index: 0 };
-        focusAt(focusRow, focusSeg + 1);
+      if (dir === 'left' || dir === 'right') {
+        const step = dir === 'left' ? -1 : 1;
+        let target = focusSeg + step;
+        if (programmesOnly) while (segments[target] && !segments[target].programme) target += step;
+        if (dir === 'left' && (target < 0 || !segments[target] || (segments[focusSeg] && segments[focusSeg].start <= start))) return { type: 'exit', dir };
+        if (!segments[target]) return { type: 'move', index: 0 };
+        focusAt(focusRow, target);
         focusTime = segmentsOf(focusRow)[focusSeg].start;
         return { type: 'move', index: 0 };
       }
