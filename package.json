@@ -17,10 +17,12 @@
     "build:tizen": "webpack --mode production --env platform=tizen",
     "build:webos": "webpack --mode production --env platform=webos",
     "build:desktop": "webpack --mode production --env platform=desktop",
+    "build:android": "webpack --mode production --env platform=android",
     "postbuild": "node scripts/check-dist.js",
     "postbuild:tizen": "node scripts/check-dist.js",
     "postbuild:webos": "node scripts/check-dist.js",
     "postbuild:desktop": "node scripts/check-dist.js",
+    "postbuild:android": "node scripts/check-dist.js",
     "test": "jest",
     "lint": "eslint .",
     "mock": "node scripts/mock-xtream/server.js",
@@ -43,6 +45,10 @@
       "\\.js$": "babel-jest",
       "\\.svg$": "<rootDir>/test/svgTransform.js"
     },
+    "modulePathIgnorePatterns": [
+      "<rootDir>/platforms/android/node_modules",
+      "<rootDir>/platforms/android/android"
+    ],
     "moduleNameMapper": {
       "^@platform$": "<rootDir>/platforms/tizen/platform.js"
     },

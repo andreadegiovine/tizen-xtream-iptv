@@ -5,3 +5,6 @@ coverage/
 *.wgt
 .DS_Store
 dev.patch
+release/
+*.apk
+*.ipk

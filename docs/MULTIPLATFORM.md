@@ -1,6 +1,6 @@
 # Multi-piattaforma: analisi, decisioni e piano
 
-Stato: **struttura per piattaforme fatta (patch 104); Tizen, LG webOS (patch 108) e desktop (patch 110) implementati.** Le prove delle altre piattaforme
+Stato: **struttura per piattaforme fatta (patch 104); Tizen, LG webOS (patch 108), desktop (patch 110) e Android TV / Fire TV (patch 111) implementati.** Le prove delle altre piattaforme
 non sono state fatte; i punti segnati "da verificare" sono ipotesi.
 
 ## Principi
@@ -26,7 +26,7 @@ non sono state fatte; i punti segnati "da verificare" sono ipotesi.
 | Desktop | **Electron**; pacchetti non firmati per ora (anche macOS) |
 | Certificati | restano versionati in `platforms/<nome>/`; senza password non sono utilizzabili e le password sono nei secret GitHub |
 | Trailer | solo Tizen ha un plugin (servizio locale); le altre piattaforme aprono l'app YouTube |
-| APK | per ora uno solo, per Fire TV; se servirà, due (Android TV e Fire TV) con due flavor Gradle dello stesso progetto |
+| APK | due, dallo stesso progetto con due flavor Gradle: `_androidtv.apk` e `_firetv.apk` |
 
 ## Struttura (fatta)
 
@@ -72,7 +72,7 @@ Tutte le voci sono facoltative: quelle mancanti prendono il comportamento di un 
 | `runtimeChecks()` | righe in più dei controlli della Diagnostica | tizen, webapis, AVPlay |
 | `display / memory / networkType` | dati di sistema per la tabella Dispositivo | `tizen.systeminfo` |
 
-## Release (fatta: Tizen e webOS)
+## Release (fatta: Tizen, webOS, desktop, Android)
 
 - `verify`: valida il tag (`v1.2.3`), `npm ci`, lint, test.
 - `tizen`: versione nel `package.json`, `npm run build:tizen`, `platforms/tizen/package.sh <versione> release` (installa Tizen Studio
@@ -144,29 +144,46 @@ platforms/desktop/
 - Verificato in Electron 44.9.3 (Linux, con il mock senza header CORS): avvio, configurazione del provider, sync nei worker, home;
   pacchetti AppImage e deb creati in locale. Windows e macOS: solo nei job della release.
 
-## Android TV / Fire TV (dopo webOS)
+## Android TV / Fire TV (fatta, patch 111; non compilata in locale, da provare sui dispositivi)
 
-Fire OS 7 e 8 sono basati su Android 9 e 11: un solo progetto Capacitor in `platforms/android/` (manifest per il launcher TV con
-banner, touch non richiesto). Per ora un APK per Fire TV.
+Fire OS 7 e 8 sono basati su Android 9 e 11: un solo progetto Capacitor 8.5.3 in `platforms/android/` con due flavor, **androidtv**
+(Leanback richiesto) e **firetv** (Leanback non richiesto); il codice è lo stesso.
 
-### Criticità tecniche e soluzioni
+```
+platforms/android/
+  platform.js            adattatore: ExoPlayer (exoEngine.js), tasti dal'activity, uscita, trailer nell'app YouTube, schermo
+  exoEngine.js           motore video con lo stesso contratto di AVPlay, sopra il plugin ExoPlayer (comandi e eventi)
+  build.js               icone di avvio (mipmap) e banner TV 320x180 disegnati da logo.svg in dist/android-res/
+  package.json           Capacitor (@capacitor/android, cli, core 8.5.3): progetto npm a sé, non tocca l'app web
+  capacitor.config.json  webDir ../../dist, androidScheme http, contenuti misti consentiti
+  package.sh             icone nel progetto, npm ci + cap sync, gradlew assemble<Flavor>Release → xtream-iptv-<v>_androidtv.apk / _firetv.apk
+  android/               progetto Gradle (generato da `cap add android`, poi adattato)
+    app/src/main/java/com/xtrmiptv/tv/
+      MainActivity.java          viewport a 1920 (useWideViewPort + overview), WebView trasparente, tasti, client di rete
+      ProviderWebViewClient.java ogni GET verso un altro host fatto in modo nativo e restituito con Access-Control-Allow-Origin: *
+      RemoteKeys.java            Indietro, tasti media e canali → keydown 10000 + codice Android
+      ExoPlayerPlugin.java       ExoPlayer (Media3 1.6.1) in un PlayerView sotto la WebView: TS, HLS, MKV, MP4, AC3 del dispositivo,
+                                 tracce audio, sottotitoli disegnati da ExoPlayer, formato (fit / fill / zoom), pausa in background
+      TvHostPlugin.java          uscita, apertura di link (YouTube), informazioni sul dispositivo
+    app/src/androidtv, app/src/firetv   manifest dei due flavor
+```
 
-1. **Video (la più pesante).** Le linee Xtream sono quasi sempre MPEG-TS, a volte MKV/AC3: il `<video>` della WebView non li gestisce
-   e MSE (hls.js / mpegts.js) pesa troppo sugli stick. → Plugin Capacitor con **ExoPlayer** su una superficie sotto la WebView
-   trasparente, esposto come motore con lo stesso contratto di AVPlay (start/play/pause/seek/stop, tempo e durata, tracce audio e
-   sottotitoli, formato, buffering ed errori). È il lavoro più corposo.
-2. **Rete (CORS e http).** I server Xtream non mandano header CORS e sono spesso in http. La soluzione "facile" usata dai client web
-   è non passare dal browser: con Capacitor si attiva **CapacitorHttp** (fetch e XHR eseguiti in modo nativo, niente CORS), si serve
-   l'app con `server.androidScheme: 'http'` e si permette il traffico in chiaro (`usesCleartextTraffic`), così immagini e flussi http
-   non sono contenuto misto. Da verificare con il nostro client HTTP (timeout, AbortController, risposte grandi come `get_live_streams`
-   e l'XMLTV: CapacitorHttp legge la risposta intera in memoria).
-3. **Scala dello schermo.** Su un TV 1080p la WebView presenta 960 px CSS invece di 1920: va forzata la viewport a 1920 nella
-   configurazione della WebView, altrimenti l'interfaccia (disegnata in px a 1920) è raddoppiata.
-4. **Tasti.** Indietro va intercettato dall'Activity e passato alla pagina; tasti media e canali hanno codici diversi da Samsung e
-   tra telecomandi Fire e Android TV (`keyCodes` dell'adattatore). OK tenuto premuto da verificare.
-5. **Ciclo di vita.** Home / standby: pausa e rilascio del player, ripresa al ritorno.
-6. **Trailer.** Apertura dell'app YouTube (intent), presente su Fire TV e Android TV.
-7. **Prestazioni.** Gli stick Fire più vecchi sono lenti: prove con il mock e il profilo CPU sul dispositivo.
+- **Rete:** non serve CapacitorHttp. `ProviderWebViewClient` intercetta le richieste GET verso host diversi da `localhost` (API del
+  provider, immagini, TMDB) anche dai worker, le fa con `HttpURLConnection` (redirect seguiti, anche da http a https) e le
+  restituisce alla pagina con `Access-Control-Allow-Origin: *`. Le altre richieste (POST di Trakt, che ha CORS) vanno normalmente.
+  Traffico in chiaro consentito (`usesCleartextTraffic`), pagina servita in http (`androidScheme`).
+- **Tasti:** D-pad e OK arrivano come frecce e Invio; Indietro, Play/Pausa, Play, Pausa, Stop, avanti/indietro veloce, traccia
+  successiva/precedente e CH+/CH- li intercetta l'activity e li passa alla pagina (`window.__xtreamKey`).
+- **Video:** `kind: 'exoplayer'`; tempo, durata, buffer e tracce arrivano come eventi ogni 500 ms e sono tenuti in JS per i getter
+  sincroni del contratto. Con l'app in background il video va in pausa.
+- **Firma:** `platforms/android/release.keystore` (da creare con `keytool` e versionare, come il certificato Tizen) e i secret
+  `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (default `xtream`), `ANDROID_KEY_PASSWORD`. Senza, gli APK sono firmati con la
+  chiave di debug della macchina: si installano, ma la versione successiva non li aggiorna (va disinstallata prima).
+- **Versioni:** versionName = tag, versionCode = x*10000 + y*100 + z.
+- **Release:** job `android` (ubuntu, Java 21, Android SDK del runner): `xtream-iptv-<v>_androidtv.apk` e `_firetv.apk` con `.sha256`.
+- **Non verificato:** l'APK non è stato compilato qui (Android SDK e repository Google non raggiungibili da questo ambiente): la prima
+  compilazione sarà quella del job della release. Da provare sui dispositivi: rete dai worker, tasti dei telecomandi Fire e Android TV,
+  ExoPlayer (formati, tracce, sottotitoli), scala dell'interfaccia, prestazioni degli stick.
 
 ### Criticità di distribuzione
 
@@ -183,8 +200,7 @@ banner, touch non richiesto). Per ora un APK per Fire TV.
 1. ~~Interfaccia di piattaforma nel core, Tizen in `platforms/tizen/`~~ (patch 104; da verificare sulla TV Samsung che nulla sia cambiato).
 2. ~~Release multi-pacchetto con il solo Tizen~~ (patch 104).
 3. ~~webOS: `platforms/webos/` (adattatore, `appinfo.json`, icone, `package.sh`), job `webos` nella release~~ (patch 108); prove su TV.
-4. Android / Fire TV: progetto Capacitor in `platforms/android/` (WebView, viewport, tasti, uscita, CapacitorHttp), all'inizio con il
-   motore `<video>` per vedere l'interfaccia; job `android` con keystore nei secret.
-5. Plugin ExoPlayer con le stesse funzioni di AVPlay.
-6. Prove sui dispositivi e misure con il mock; poi l'APK nella release.
+4. ~~Android / Fire TV: progetto Capacitor in `platforms/android/`, rete nativa, tasti, viewport~~ (patch 111).
+5. ~~Plugin ExoPlayer con le stesse funzioni di AVPlay~~ (patch 111).
+6. Prima compilazione nel job della release, prove sui dispositivi e misure con il mock.
 7. ~~Desktop (Windows, macOS, Linux) con Electron~~ (patch 110); prove sui sistemi, poi eventuale player nativo (mpv / libVLC) per MKV e AC3.

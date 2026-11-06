@@ -12,7 +12,8 @@ const appGlobals = {
 
 export default [
   // platforms/tizen/youtube/service.js is a template for the on-TV service (placeholders filled in by webpack), not app code.
-  { ignores: ['dist/**', 'build/**', 'coverage/**', 'node_modules/**', 'platforms/tizen/youtube/service.js'] },
+  // platforms/android: its own node_modules (Capacitor) and the Android project (with a copy of the built app in its assets).
+  { ignores: ['dist/**', 'build/**', 'coverage/**', 'node_modules/**', 'platforms/tizen/youtube/service.js', 'platforms/android/node_modules/**', 'platforms/android/android/**', 'release/**'] },
   js.configs.recommended,
   {
     files: ['src/**/*.js', 'platforms/**/*.js'],

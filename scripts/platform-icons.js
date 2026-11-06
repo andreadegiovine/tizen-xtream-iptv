@@ -1,6 +1,7 @@
 /*
  * The app icons of a platform, drawn at build time from logo.svg (repository root): no picture is kept in platforms/<name>/. The
- * platform's build.js lists them as [{ file, size }] (`icons`); webpack.config.js adds them to the build with this plugin.
+ * platform's build.js lists them as [{ file, size }] (square) or [{ file, width, height }] (a banner: the logo in the middle of a
+ * background of its colour) in `icons`; webpack.config.js adds them to the build with this plugin.
  */
 const fs = require('fs');
 const path = require('path');
@@ -11,6 +12,18 @@ const LOGO = path.resolve(__dirname, '..', 'logo.svg');
 function renderPng(svg, size) {
   const { Resvg } = require('@resvg/resvg-js'); // loaded only when a build needs icons
   return new Resvg(svg, { fitTo: { mode: 'width', value: size } }).render().asPng();
+}
+
+/** Background of the logo (its square), around it on a banner. */
+const BANNER_BACKGROUND = '#0c0c12';
+
+/** PNG of one icon of the list (see above). */
+function renderIcon(svg, { size, width, height }) {
+  if (!width || !height) return renderPng(svg, size);
+  const side = Math.round(Math.min(width, height) * 0.9);
+  const inner = svg.replace('<svg ', `<svg x="${Math.round((width - side) / 2)}" y="${Math.round((height - side) / 2)}" width="${side}" height="${side}" `);
+  const banner = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="${BANNER_BACKGROUND}"/>${inner}</svg>`;
+  return renderPng(banner, width);
 }
 
 class PlatformIconsPlugin {
@@ -26,10 +39,10 @@ class PlatformIconsPlugin {
         if (!this.icons.length) return;
         compilation.fileDependencies.add(this.logo); // the dev server draws them again when the logo changes
         const svg = fs.readFileSync(this.logo, 'utf8');
-        this.icons.forEach(({ file, size }) => compilation.emitAsset(file, new RawSource(renderPng(svg, size))));
+        this.icons.forEach((icon) => compilation.emitAsset(icon.file, new RawSource(renderIcon(svg, icon))));
       });
     });
   }
 }
 
-module.exports = { PlatformIconsPlugin, renderPng, LOGO };
+module.exports = { PlatformIconsPlugin, renderPng, renderIcon, LOGO };

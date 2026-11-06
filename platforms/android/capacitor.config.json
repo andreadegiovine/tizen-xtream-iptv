@@ -1,0 +1,12 @@
+{
+  "appId": "com.xtrmiptv.tv",
+  "appName": "Xtream IPTV",
+  "webDir": "../../dist",
+  "server": {
+    "androidScheme": "http"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#0c0c12"
+  }
+}

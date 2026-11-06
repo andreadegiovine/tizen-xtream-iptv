@@ -1,0 +1,11 @@
+{
+  "name": "xtream-iptv-android",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Android TV / Fire TV shell of Xtream IPTV (Capacitor). Built by platforms/android/package.sh; not part of the web app.",
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/cli": "8.5.3",
+    "@capacitor/core": "8.5.3"
+  }
+}
