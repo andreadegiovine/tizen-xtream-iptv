@@ -66,122 +66,122 @@ Decisions agreed during the design phase. Update this file when a decision chang
 - Suggestions: TMDB recommendations seeded from watch history (trending as fallback), intersected with
   the provider catalog by tmdb id. Trakt follows in a second phase behind the watch-state adapter.
 
-## Back, uscita e sezioni (2026-11-02)
-- Back: dialog aperto → lo chiude; pagina con cronologia → indietro; altra sezione → Home; Home/primo avvio → conferma di uscita (default "Resta").
-- La topbar evidenzia la *sezione* corrente; cambiando sezione il focus resta sulla barra.
+## Back, exit and sections (2026-11-02)
+- Back: open dialog → closes it; page with history → back; other section → Home; Home / first run → exit confirmation (default "Stay").
+- The top bar highlights the current *section*; when the section changes the focus stays on the bar.
 
-## Sync del catalogo (2026-11-02)
-- Un'unica implementazione (`catalogSync.js`) in un worker da file; fallback sul thread principale.
-- Ordine film → serie → live; TTL 12 h; avvio all'apertura e dopo l'aggiunta di un provider; pausa durante la riproduzione.
-- Righe nuove prima, vecchie cancellate dopo; lista vuota non sostituisce un catalogo esistente.
-- Schema provider v2: `items` senza indici, `entries` senza indice tmdb (chiave `type:t<tmdbId>`).
+## Catalog sync (2026-11-02)
+- A single implementation (`catalogSync.js`) in a worker loaded from a file; fallback on the main thread.
+- Order movies → series → live; TTL 12 h; starts when the app opens and after adding a provider; paused during playback.
+- New rows first, old ones deleted afterwards; an empty list does not replace an existing catalog.
+- Provider schema v2: `items` without indexes, `entries` without a tmdb index (key `type:t<tmdbId>`).
 
 
 ## Provider (2026-11-02)
-- Sezione Provider = elenco (`providers`) con Usa/Modifica/Rimuovi per riga e "Aggiungi"; il modulo (`providerSetup`) serve sia per aggiungere sia per modificare (`params.providerId`).
-- Cambiare provider attivo = `setActiveId` + `catalog.start()` (annulla il job in corso).
+- The Provider section = list (`providers`) with Use/Edit/Remove per row and "Add"; the form (`providerSetup`) serves both adding and editing (`params.providerId`).
+- Changing the active provider = `setActiveId` + `catalog.start()` (cancels the running job).
 
-## Sfoglia il catalogo (2026-11-02)
-- Una pagina `browse` per film/serie/live: categorie a sinistra, griglia paginata a destra (21 titoli per pagina). Le pagine si leggono con cursori sugli indici `byTypeAdded` / `byCatAdded`; nessuna lista intera viene caricata in memoria.
-- Dettagli del sync e aggiornamento manuale: in cima alle Impostazioni (tabelle Catalogo, Metadata e Dispositivo, ciascuna con il proprio pulsante; poi il titolo Preferenze). La sezione Provider ha solo l'elenco.
+## Browsing the catalog (2026-11-02)
+- One `browse` page for movies/series/live: categories on the left, paginated grid on the right (21 titles per page). Pages are read with cursors on the `byTypeAdded` / `byCatAdded` indexes; no full list is ever loaded in memory.
+- Sync details and manual update: at the top of Settings (Catalog, Metadata and Device tables, each with its own button; then the Preferences title). The Provider section has only the list.
 
-## Riproduzione, stato di visione e metadati (2026-11-02, notte)
-- Un solo `playerController` (macchina a stati) sopra un motore intercambiabile: AVPlay sulla TV, `<video>` in un browser desktop. I controlli sono HTML.
-- Stato di visione nel DB app, chiave `movie:t<tmdb>` (condivisa tra provider) o `<provider>:movie:i<id>`; serie per episodio. Trakt è un adattatore sopra lo store locale, che resta la fonte per la ripresa.
-- `activeProvider` è l'unico handle condiviso su DB e client del provider attivo.
-- Le chiavi TMDB/Trakt non stanno nel repository né nella build: si digitano nelle Impostazioni.
-- EPG: XMLTV filtrato per i canali presenti, letto a blocchi in un worker, una volta al giorno dopo il sync del catalogo.
-- Suggerimenti: raccomandazioni TMDB dalla cronologia, intersecate per tmdb id con il catalogo.
+## Playback, watch state and metadata (2026-11-02, night)
+- A single `playerController` (state machine) on top of an interchangeable engine: AVPlay on the TV, `<video>` in a desktop browser. Controls are HTML.
+- Watch state in the app DB, key `movie:t<tmdb>` (shared across providers) or `<provider>:movie:i<id>`; series per episode. Trakt is an adapter over the local store, which remains the source for resuming.
+- `activeProvider` is the single shared handle on the active provider's DB and client.
+- TMDB/Trakt keys are not in the repository nor in the build: they are typed in Settings.
+- EPG: XMLTV filtered for the channels present, read in blocks in a worker, once a day after the catalog sync.
+- Suggestions: TMDB recommendations from the history, intersected by tmdb id with the catalog.
 
-## Preferiti di categorie e generi, record TMDB leggeri (2026-11-03)
-I preferiti possono essere titoli o filtri (`kind` category/genre). Le card dei filtri precedono i titoli e aprono la griglia (`openFilter`). Nel database TMDB resta solo `gridMeta`; i dettagli completi si recuperano con `getFull` e vivono in memoria. I suggerimenti non propongono titoli già visti.
-Il cuore dei preferiti sta nella testata sticky della griglia (titolo · pagina · cuore), zona `browseHead`. I registi arrivano dal record completo TMDB (`directors`).
+## Favorites of categories and genres, light TMDB records (2026-11-03)
+Favorites can be titles or filters (`kind` category/genre). Filter cards come before titles and open the grid (`openFilter`). The TMDB database keeps only `gridMeta`; full details are fetched with `getFull` and live in memory. Suggestions do not propose titles already seen.
+The favorites heart sits in the grid's sticky header (title · page · heart), zone `browseHead`. Directors come from the full TMDB record (`directors`).
 
-## Notice, orologio, fissati e parental control (2026-11-04)
-Le notice usano un solo servizio (`ctx.notices`): a destra, al centro, senza focus (si chiudono da sole, le permanenti con un clic); in riproduzione solo quelle `scope: 'playback'`. L'orologio è nella topbar (non focalizzabile), formati in `settings`. I fissati sono `pins` (kv) e compaiono nella sidebar tra Suggerimenti e Generi. Il PIN parental è salvato con hash salato; un titolo è adulto se una sua categoria ha un nome adulti, e la scheda si apre solo da `ctx.openEntry`, che chiede il PIN.
+## Notices, clock, pins and parental control (2026-11-04)
+Notices use a single service (`ctx.notices`): on the right, centred, without focus (they close by themselves, permanent ones with a click); during playback only those with `scope: 'playback'`. The clock is in the top bar (not focusable), formats in `settings`. Pins are `pins` (kv) and appear in the sidebar between Suggestions and Genres. The parental PIN is stored with a salted hash; a title is adult if one of its categories has an adult name, and the detail page opens only through `ctx.openEntry`, which asks for the PIN.
 
-Canali Live raggruppati: `src/services/liveGrouping.js` (puro) decide i gruppi durante il sync/rebuild; i gruppi sono nello store `groups`, le righe di "Mostra tutto" (`@all`) in `entry_cat`. `getEntry` e `pageEntries` leggono da `groups` per le chiavi `live:g…`. I collegamenti manuali sono nel kv `liveLinks:<provider>`.
+Grouped Live channels: `src/services/liveGrouping.js` (pure) decides the groups during sync/rebuild; the groups are in the `groups` store, the "Show all" rows (`@all`) in `entry_cat`. `getEntry` and `pageEntries` read from `groups` for the `live:g…` keys. Manual links are in the kv `liveLinks:<provider>`.
 
-## Collezioni
+## Collections
 
-- Una collezione (`src/services/collections.js`, `kv` `collections`) è un insieme con nome di elementi di un provider: film, serie, canali e gruppi Live (si salvano le chiavi `entryKeys`; quelle non più nel catalogo si saltano senza cancellarle).
-- I generi non sono salvati: sono l'unione dei generi degli elementi (`entryGenres` legge `entry_genre` e `entry_genre_tmdb` per prefisso di chiave; i canali non ne hanno).
-- Preferiti: record `favorites` con chiave `collection:<id>` e tipo `collection` (non compaiono nelle pagine per tipo). Generi fissati: `pins` con tipo `collection`.
-- Pagina "Collezioni" (sidebar + griglia) e scheda `collection` (conteggio, generi, Preferiti/Modifica/Elimina, carosello). L'aggiunta parte dalla scheda di un titolo con `dialogs.search` (lo stesso box dell'unione dei canali, con `createLabel` per la riga "crea"); la modifica usa `dialogs.editCollection`.
+- A collection (`src/services/collections.js`, `kv` `collections`) is a named set of items of a provider: movies, series, channels and Live groups (the `entryKeys` are saved; those no longer in the catalog are skipped without deleting them).
+- Genres are not stored: they are the union of the items' genres (`entryGenres` reads `entry_genre` and `entry_genre_tmdb` by key prefix; channels have none).
+- Favorites: `favorites` record with key `collection:<id>` and type `collection` (they do not appear in the pages by type). Pinned genres: `pins` with type `collection`.
+- "Collections" page (sidebar + grid) and `collection` detail page (count, genres, Favorites/Edit/Delete, carousel). Adding starts from a title's detail page with `dialogs.search` (the same box as the channel merge, with `createLabel` for the "create" row); editing uses `dialogs.editCollection`.
 
-## Download del catalogo: nuovi tentativi
+## Catalog download: retries
 
-- Categorie e liste (`syncType`) passano da `loadWithRetries`: se il provider dà un errore (rete, timeout, HTTP, risposta illeggibile) o una lista vuota, si riprova 2 volte con pause crescenti (`retryPolicy.delays`, 3 s e 8 s), mostrando "nuovo tentativo n/2" nella fase `retry`. Dopo l'ultimo tentativo l'errore viene lanciato, la lista vuota accettata se non c'è un catalogo salvato (se c'è, resta il rifiuto "lista vuota": non si cancella nulla). Gli errori non ripetibili (autenticazione, annullamento) non si ritentano; annullare la sync interrompe anche la pausa. Si somma al tentativo unico di `fetchJson` per timeout/5xx.
+- Categories and lists (`syncType`) go through `loadWithRetries`: if the provider gives an error (network, timeout, HTTP, unreadable response) or an empty list, it retries 2 times with growing pauses (`retryPolicy.delays`, 3 s and 8 s), showing "retry n/2" in the `retry` phase. After the last attempt the error is thrown, the empty list accepted if there is no saved catalog (if there is, the "empty list" rejection stands: nothing is deleted). Non-retryable errors (authentication, cancellation) are not retried; cancelling the sync also interrupts the pause. It adds to the single attempt of `fetchJson` for timeout/5xx.
 
-## Reti Live TV
+## Live TV networks
 
-- Una rete raccoglie i canali e i gruppi che iniziano con la stessa parola (≥ 2 elementi; `networkToken` scarta parole generiche, numeri e parole corte). È calcolata nella stessa sync/rebuild dei gruppi (`buildNetworks` dopo `groupLiveItems`) e salvata nello store `groups` con chiave `live:n<id>` (`isCompositeKey` vale per gruppi e reti); in "Mostra tutto" è elencata per prima (poi i gruppi senza rete, poi i canali senza gruppo né rete; i membri di una rete non si ripetono).
-- Algoritmo (`analyzeNetworks`): i nomi si confrontano senza spazi, simboli e accenti, in minuscolo (`Rai 3 +1` → `rai31`). Ordinati, un nome entra nella rete precedente finché l'inizio comune di tutti i nomi (min 3 caratteri) resta almeno il **X%** di ogni nome (`liveNetworkSimilarity`, predefinito 50) e nessun nome supera l'inizio comune di più di **N** caratteri (`liveNetworkMaxDiff`, predefinito 13). Le parole sono lettere e cifre (ogni altro carattere è uno spazio, spazi multipli → uno) e una parola ripetuta subito dopo se stessa vale una volta (`Dazn: Dazn 1` → `Dazn 1`, anche in `channelBase`). Il nome della rete è l'inizio comune, scritto come nei canali con spazi singoli (maiuscolo → titolo, sigle ≤ 3 lettere restano) e portato a fine parola (`amazonprime1`/`…10` → `Amazon Prime`). Si scartano il nome ripetuto (`duplicates`, anche "X" e "X Channel"), quello generico (`generic`: Sport, TV…) e quello che taglia una parola a metà (`partial`: `Vene` per Veneto/Venezia). Valori predefiniti scelti su ~200 nomi dei rapporti reali (griglia soglia 20–100%, differenza 1–30): sotto 50% entrano nomi sbagliati (precisione 0,71 a 20%), sopra 50% si perdono reti (richiamo 0,47 a 60%); oltre 13 caratteri non cambia nulla. Limite noto: marchi con sottomarchi diversi (`Sky Cinema …`, `Sky Sport …`, `Rai Sport`) hanno un inizio comune troppo corto e non si uniscono.
-- Il rapporto (reti con prova, nomi scartati, unità fuori) è salvato in `meta` (`networkReport`, scartati ordinati per dimensione, max 150) a ogni sync/rebuild Live e mostrato in Diagnostica.
-- Aggiunte a mano: `[streamId, reteId]` in `liveNetworkLinks:<provider>` (`linkNetwork`/`unlinkNetwork`), valide solo per reti esistenti; si tolgono solo quelle. Un'unità (gruppo o canale) appartiene alla rete se uno dei suoi stream è collegato.
-- I canali e i gruppi portano `networkKey`. Preferiti = record titolo con la chiave della rete; collezioni = chiave tra gli `entryKeys`. `ctx.openEntry` apre la pagina `network` per le reti.
+- A network collects the channels and groups that start with the same word (≥ 2 items; `networkToken` discards generic words, numbers and short words). It is computed in the same sync/rebuild as the groups (`buildNetworks` after `groupLiveItems`) and saved in the `groups` store with key `live:n<id>` (`isCompositeKey` is true for groups and networks); in "Show all" it is listed first (then groups without a network, then channels with neither group nor network; network members are not repeated).
+- Algorithm (`analyzeNetworks`): names are compared without spaces, symbols and accents, in lowercase (`Rai 3 +1` → `rai31`). Sorted, a name joins the previous network as long as the common start of all names (min 3 characters) stays at least **X%** of each name (`liveNetworkSimilarity`, default 50) and no name exceeds the common start by more than **N** characters (`liveNetworkMaxDiff`, default 13). Words are letters and digits (every other character is a space, multiple spaces → one) and a word repeated right after itself counts once (`Dazn: Dazn 1` → `Dazn 1`, also in `channelBase`). The network name is the common start, written as in the channels with single spaces (uppercase → title case, acronyms ≤ 3 letters stay) and carried to the end of the word (`amazonprime1`/`…10` → `Amazon Prime`). Discarded are the repeated name (`duplicates`, also "X" and "X Channel"), the generic one (`generic`: Sport, TV…) and the one that cuts a word in half (`partial`: `Vene` for Veneto/Venezia). Defaults chosen on ~200 names from real reports (grid of threshold 20–100%, difference 1–30): below 50% wrong names enter (precision 0.71 at 20%), above 50% networks are lost (recall 0.47 at 60%); beyond 13 characters nothing changes. Known limit: brands with different sub-brands (`Sky Cinema …`, `Sky Sport …`, `Rai Sport`) have a common start that is too short and do not merge.
+- The report (networks with evidence, discarded names, units left out) is saved in `meta` (`networkReport`, discarded sorted by size, max 150) at every Live sync/rebuild and shown in Diagnostics.
+- Manual additions: `[streamId, networkId]` in `liveNetworkLinks:<provider>` (`linkNetwork`/`unlinkNetwork`), valid only for existing networks; only these can be removed. A unit (group or channel) belongs to the network if one of its streams is linked.
+- Channels and groups carry `networkKey`. Favorites = title record with the network key; collections = key among the `entryKeys`. `ctx.openEntry` opens the `network` page for networks.
 
-- Le parole da rimuovere dai nomi (`liveGroupPatterns`) si sommano a quelle predefinite (`resolveTerms`: predefinite + aggiunte), mantengono il maiuscolo/minuscolo scritto e accettano `/regex/`; si applicano ai nomi dei canali singoli (`cleanChannelNames`) e dei gruppi, prima di calcolare reti e gruppi.
-- Una rete si può aggiungere ai preferiti (record titolo con la chiave `live:n…`) e fissare nella sidebar Live (`pins` con `kind: 'network'`).
+- The words to remove from names (`liveGroupPatterns`) add to the default ones (`resolveTerms`: defaults + additions), keep the upper/lower case as written and accept `/regex/`; they apply to single-channel names (`cleanChannelNames`) and to groups, before networks and groups are computed.
+- A network can be added to favorites (title record with the `live:n…` key) and pinned in the Live sidebar (`pins` with `kind: 'network'`).
 
-## Immagini delle collezioni e connessione
+## Collection images and connection
 
-- La pagina di una collezione ha locandina rettangolare (come film e serie); solo l'entità Rete usa la locandina quadrata.
-- `imageRotator.js`: due livelli sovrapposti con dissolvenza; ogni rotatore sceglie a caso (mai la stessa due volte di fila) tra le immagini dei titoli, con precarico. Locandina e sfondo sono rotatori indipendenti, quindi non sono accoppiati. Lo sfondo usa anche i backdrop TMDB dei titoli con `tmdbId` (primi 12) man mano che arrivano.
-- Dispositivo: la riga "Connessione internet" usa `navigator.onLine`, `navigator.connection` (tipo, `effectiveType`, `downlink`, `rtt`) e `tizen.systeminfo` `NETWORK` quando presente; i campi di qualità compaiono solo se il browser li fornisce.
-- Player: il cambio formato usa le notice standard (`scope: 'playback'`, `key: 'aspect'`) come audio e sottotitoli; rimosso il riquadro `player-flash`.
+- A collection's page has a rectangular poster (like movies and series); only the Network entity uses the square poster.
+- `imageRotator.js`: two overlapping layers with a fade; each rotator picks at random (never the same twice in a row) among the images of the titles, with preloading. Poster and background are independent rotators, so they are not coupled. The background also uses the TMDB backdrops of titles with a `tmdbId` (first 12) as they arrive.
+- Device: the "Internet connection" row uses `navigator.onLine`, `navigator.connection` (type, `effectiveType`, `downlink`, `rtt`) and `tizen.systeminfo` `NETWORK` when present; the quality fields appear only if the browser provides them.
+- Player: the aspect-ratio change uses the standard notices (`scope: 'playback'`, `key: 'aspect'`) like audio and subtitles; the `player-flash` box was removed.
 
-Vedi anche `docs/MULTIPLATFORM.md`.
+See also `docs/MULTIPLATFORM.md`.
 
-## Titoli iniziati e ora di fine
+## Started titles and end time
 
-- `STARTED_RATIO = 0.1`: `isStarted` è vero oltre il 10% (esclusivo); `shouldResume` = iniziato e non finito (prima: almeno 30 s). `WatchStore.recent` raggruppa i record per titolo: un film resta se iniziato e non visto; una serie resta se un suo episodio è finito o iniziato.
-- "Visto" poi tolto esegue `clearEntry` (nessun record resta), quindi il titolo non è iniziato.
-- Player: `endsAtText` = ora attuale + tempo restante; formato `timeFormat` delle impostazioni (come l'orologio). Non mostrato in diretta o con durata ignota.
+- `STARTED_RATIO = 0.1`: `isStarted` is true beyond 10% (exclusive); `shouldResume` = started and not finished (before: at least 30 s). `WatchStore.recent` groups the records by title: a movie stays if started and not watched; a series stays if one of its episodes is finished or started.
+- "Watched" then removed runs `clearEntry` (no record remains), so the title is not started.
+- Player: `endsAtText` = current time + remaining time; `timeFormat` format of the settings (like the clock). Not shown for live or unknown duration.
 
-## Dimensione del testo, screensaver, locandine delle card
+## Text size, screensaver, card posters
 
-- `html { font-size: 16px }`; tutti i `font-size` del foglio di stile sono in **rem** (px / 16) e `body` è 1.625rem (26 px). Si usa rem e non em perché gli em si compongono tra elementi annidati e avrebbero cambiato le dimensioni relative. `applyTextSize` (core/textSize.js) imposta il font di `<html>` a 12 / 16 / 20 px. Le misure dei box restano in px: a 125% i testi lunghi si troncano come già avviene.
-- Screensaver (ui/screensaver.js): ascolta in cattura tasti e puntatore; dopo 15 minuti mostra un overlay nero con il logo (`MARK`) che cambia posto e dimensione ogni 10 s; il primo evento lo chiude e viene inghiottito. Sospeso nella pagina player e quando la preferenza è disattivata.
-- `rotatePoster` (imageRotator.js): le card con `posters` (collezioni) cambiano immagine ogni 8 s su un solo `setInterval` condiviso; le card non più nel DOM (`isConnected`) escono dal giro da sole, quindi non servono distruttori.
-- Screensaver: `screensaver` è in minuti (`SCREENSAVER_OPTIONS = [0, 1, 5, 15]`, 0 = spento); `setMinutes` sostituisce `setEnabled`. Un booleano salvato da versioni precedenti vale 15 (true) o 0 (false).
+- `html { font-size: 16px }`; all `font-size` values in the stylesheet are in **rem** (px / 16) and `body` is 1.625rem (26 px). rem is used and not em because ems compound across nested elements and would have changed the relative sizes. `applyTextSize` (core/textSize.js) sets the `<html>` font to 12 / 16 / 20 px. Box measures stay in px: at 125% long texts are truncated as already happens.
+- Screensaver (ui/screensaver.js): listens in capture to keys and pointer; after 15 minutes it shows a black overlay with the logo (`MARK`) that changes place and size every 10 s; the first event closes it and is swallowed. Suspended in the player page and when the preference is off.
+- `rotatePoster` (imageRotator.js): cards with `posters` (collections) change image every 8 s on a single shared `setInterval`; cards no longer in the DOM (`isConnected`) leave the round by themselves, so no destructors are needed.
+- Screensaver: `screensaver` is in minutes (`SCREENSAVER_OPTIONS = [0, 1, 5, 15]`, 0 = off); `setMinutes` replaces `setEnabled`. A boolean saved by earlier versions counts as 15 (true) or 0 (false).
 
-## Form, ricerca, cache (patch 70)
+## Forms, search, cache (patch 70)
 
-- `field.js`, `formPage.js`: campo di testo, form (campi, riga azioni) e pagina incorniciata riusabili; `formModel` gestisce il focus (Giù dall'ultimo campo → Conferma).
-- Ricerca: indice in `search.worker.js` (fallback sul thread principale), scaldato all'avvio e invalidato a ogni `catalogChanged()`; cronologia in `searchHistory` (ultime 10); la pagina mostra recenti, scheletro o risultati.
-- Adulti: flag `is_adult` del provider, poi regex sul nome.
-- Immagini: caricamento a 600px, rilascio a 1800px, `decoding=async`, scheletro al ritorno.
-- `pageCache`: chiavi `sidebar:` e `page:`; sospesa durante i job sul catalogo, svuotata alla fine, al cambio lingua e a `catalogChanged()`.
-- `connectivity.js`: avviso offline.
+- `field.js`, `formPage.js`: reusable text field, form (fields, action row) and framed page; `formModel` handles the focus (Down from the last field → Confirm).
+- Search: index in `search.worker.js` (fallback on the main thread), warmed up at startup and invalidated at every `catalogChanged()`; history in `searchHistory` (last 10); the page shows recents, skeleton or results.
+- Adult: the provider's `is_adult` flag, then a regex on the name.
+- Images: loading at 600px, release at 1800px, `decoding=async`, skeleton on return.
+- `pageCache`: `sidebar:` and `page:` keys; suspended during catalog jobs, emptied at the end, on language change and on `catalogChanged()`.
+- `connectivity.js`: offline notice.
 
-## Player su PC (patch 71)
+## Player on PC (patch 71)
 
-Solo in sviluppo: `scripts/dev-media-proxy.js` serve `/__media?u=…` (Range, redirect, playlist HLS riscritte); `createHtml5Engine` sceglie hls.js, mpegts.js o `<video>` nativo da `devStreamKind`. Guardia `__DEV__` → in produzione i demuxer non entrano nel bundle. Limiti: codec non supportati dal browser (HEVC/AC3, MKV) possono non riprodursi; il proxy non gestisce provider con IP/UA vincolati.
+Development only: `scripts/dev-media-proxy.js` serves `/__media?u=…` (Range, redirects, rewritten HLS playlists); `createHtml5Engine` chooses hls.js, mpegts.js or native `<video>` from `devStreamKind`. `__DEV__` guard → in production the demuxers do not enter the bundle. Limits: codecs the browser does not support (HEVC/AC3, MKV) may not play; the proxy does not handle providers bound to IP/UA.
 
-## Allineamento con Trakt (patch 78)
+## Alignment with Trakt (patch 78)
 
-- Chiavi: i titoli con tmdb id usano `movie:t{id}` / `series:t{id}|sXeY`, uguali localmente e su Trakt; gli altri non vengono mai inviati.
-- Invio: coda in `kv` di `{op: add|remove, payload, id}`; `flush()` ritorna gli id accettati; 5xx resta in coda, 4xx scartato. I record inviati con successo hanno `traktSynced: true`.
-- Manuale: `markWatched`/`clearEntry` → una sola chiamata sul titolo (`reportManual`), mai per episodio.
-- Progresso: `reportProgress` (scrobble pause, 1–99 %) a pausa e chiusura; best effort, senza coda.
-- Lettura (`importFromTrakt`): svuota la coda, legge visti film/serie e `/sync/playback`; segna visti, toglie i visti già allineati ma non più su Trakt (`source: 'trakt'` o `traktSynced`), applica il progresso più recente solo con durata locale nota.
+- Keys: titles with a tmdb id use `movie:t{id}` / `series:t{id}|sXeY`, the same locally and on Trakt; the others are never sent.
+- Sending: queue in `kv` of `{op: add|remove, payload, id}`; `flush()` returns the accepted ids; 5xx stays queued, 4xx discarded. Records sent successfully have `traktSynced: true`.
+- Manual: `markWatched`/`clearEntry` → a single call on the title (`reportManual`), never per episode.
+- Progress: `reportProgress` (scrobble pause, 1–99 %) on pause and close; best effort, no queue.
+- Reading (`importFromTrakt`): empties the queue, reads watched movies/series and `/sync/playback`; marks watched, removes watched marks already aligned but no longer on Trakt (`source: 'trakt'` or `traktSynced`), applies the most recent progress only with a known local duration.
 
-Aggiunte (patch 79): `trakt.progress` in `kv` = un avanzamento per titolo (il più recente) non ancora inviato, riprovato da `flush()`; `playbackItems` porta anche titolo, episodio e durata (runtime di Trakt, o 100 / 45 min); `sendHistory` invia in blocco (200 record per chiamata) i visti con `traktSynced` falso, anche all'avvio (`pushUnsent`); da 99 % l'avanzamento non è più uno scrobble ma un titolo visto.
+Additions (patch 79): `trakt.progress` in `kv` = one progress per title (the most recent) not yet sent, retried by `flush()`; `playbackItems` also carries title, episode and duration (Trakt's runtime, or 100 / 45 min); `sendHistory` sends in bulk (200 records per call) the watched titles with `traktSynced` false, also at startup (`pushUnsent`); from 99 % progress is no longer a scrobble but a watched title.
 
-## Immagini e contenitori che scorrono (patch 80)
+## Images and scrolling containers (patch 80)
 
-`lazyImage.js` osserva ogni immagine dal suo contenitore (`.carousel-track` o `.page`) con `root` esplicito: senza, i contenitori `overflow` ritagliano senza margine e `rootMargin` non ha effetto. Gli observer sono uno per contenitore; l'immagine non è ancora nel documento quando la card nasce, quindi la registrazione avviene al frame dopo.
+`lazyImage.js` observes each image from its container (`.carousel-track` or `.page`) with an explicit `root`: without it, `overflow` containers clip without margin and `rootMargin` has no effect. The observers are one per container; the image is not yet in the document when the card is born, so registration happens on the next frame.
 
-## Avvio a coda e dati derivati
-Tutto ciò che deriva dal catalogo (righe di ricerca, sidebar con generi e conteggi) è salvato nel db provider (`meta`, chiavi `derived:*`) con la versione `schema|catalogRev|genresRev|lingua`; la versione si legge prima del calcolo e ogni sync la invalida. Le attività di avvio passano da `backgroundQueue` (una alla volta, per priorità, bloccate durante la sync del catalogo).
+## Queued startup and derived data
+Everything derived from the catalog (search rows, sidebar with genres and counts) is saved in the provider db (`meta`, `derived:*` keys) with the version `schema|catalogRev|genresRev|language`; the version is read before computing and every sync invalidates it. Startup tasks go through `backgroundQueue` (one at a time, by priority, blocked during the catalog sync).
 
-## Generi: TMDB sostituisce il provider
-Per un titolo con generi TMDB (`entry_genre_tmdb`, `|tmdb`) le righe del provider (`entry_genre` e `|info`) sono eliminate in `writeGenres`, e `writeEntries` non riscrive `entry_genre` per quei titoli. `clearTmdb` riscrive la lista del provider dalle voci.
+## Genres: TMDB replaces the provider
+For a title with TMDB genres (`entry_genre_tmdb`, `|tmdb`) the provider rows (`entry_genre` and `|info`) are deleted in `writeGenres`, and `writeEntries` does not rewrite `entry_genre` for those titles. `clearTmdb` rewrites the provider list from the entries.
 
-## Ricostruzioni, sync differenziale, stile (patch 90–93)
-- Ogni ricostruzione dei titoli dai dati salvati passa da `ctx.rebuildCatalog(types)` → `startRebuild()` (`catalogRebuild.js`): op `rebuild` nel worker del catalogo, ripiego sul thread principale, operazione `rebuild` fermabile. Nessuna pagina chiama più `rebuildEntries` direttamente.
-- La sync confronta ogni riga con quella salvata (`snapshot()` + JSON) e scrive solo le differenze; `rewrite` (aggiornamento forzato da Impostazioni) riscrive tutto. `catalogRev` cambia solo se qualcosa è cambiato.
-- Generi dal provider: solo senza chiave TMDB, 1 richiesta/s, 500 al giorno (`genres:daily`). Pulizia dei titoli: preferenza `cleanTitles`.
-- Stile: `src/styles/main.scss` importa i file per parte dell'interfaccia nell'ordine originale; colori solo in `_tokens.scss`; animazioni solo su `transform`/`opacity`; font Inter da `@fontsource/inter` copiato da webpack in `dist/fonts`.
-- Date e orari "automatici" seguono la lingua dell'app (`formatClockTime/formatClockDate(date, format, locale)`).
+## Rebuilds, differential sync, style (patches 90–93)
+- Every rebuild of titles from saved data goes through `ctx.rebuildCatalog(types)` → `startRebuild()` (`catalogRebuild.js`): `rebuild` op in the catalog worker, fallback on the main thread, stoppable `rebuild` operation. No page calls `rebuildEntries` directly any more.
+- The sync compares each row with the saved one (`snapshot()` + JSON) and writes only the differences; `rewrite` (forced update from Settings) rewrites everything. `catalogRev` changes only if something changed.
+- Genres from the provider: only without a TMDB key, 1 request/s, 500 per day (`genres:daily`). Title cleaning: `cleanTitles` preference.
+- Style: `src/styles/main.scss` imports the files per part of the interface in the original order; colors only in `_tokens.scss`; animations only on `transform`/`opacity`; Inter font from `@fontsource/inter` copied by webpack into `dist/fonts`.
+- "Automatic" dates and times follow the app language (`formatClockTime/formatClockDate(date, format, locale)`).

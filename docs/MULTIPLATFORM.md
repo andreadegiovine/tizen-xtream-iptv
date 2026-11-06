@@ -1,206 +1,214 @@
-# Multi-piattaforma: analisi, decisioni e piano
+# Multi-platform: analysis, decisions and plan
 
-Stato: **struttura per piattaforme fatta (patch 104); Tizen, LG webOS (patch 108), desktop (patch 110) e Android TV / Fire TV (patch 111) implementati.** Le prove delle altre piattaforme
-non sono state fatte; i punti segnati "da verificare" sono ipotesi.
+Status: **platform structure done (patch 104); Tizen, LG webOS (patch 108), desktop (patch 110) and Android TV / Fire TV (patch 111) implemented.** The other platforms have not
+been tried; the points marked "to verify" are hypotheses.
 
-## Principi
+How to install each platform: `platforms/<name>/README.md`. How to build and release: [BUILD.md](BUILD.md).
 
-- **Logica e core unici.** Pagine, focus, database, sync, worker, EPG, player controller sono gli stessi per tutte le piattaforme
-  (`src/`). Non c'è codice touch.
-- **Tutto ciò che riguarda una piattaforma sta in `platforms/<nome>/`**: adattatore JS, manifest, elenco delle icone (disegnate da `logo.svg`), certificati, plugin nativi,
-  script di pacchetto.
-- **Release GitHub → un pacchetto per piattaforma**: `.github/workflows/release.yml` ha un job `verify` (tag, lint, test) e un job per
-  piattaforma che fa build, firma e allega il pacchetto alla release.
-- **iOS escluso** per ora.
-- **Android solo per TV**: Fire TV (prima) e Android TV, telecomando e D-pad, niente touch.
-- **Desktop**: Windows, macOS e Linux (stessa interfaccia, tastiera come telecomando).
+## Principles
 
-## Decisioni prese
+- **One logic and one core.** Pages, focus, database, sync, workers, EPG, player controller are the same for all platforms
+  (`src/`). There is no touch code.
+- **Everything about a platform lives in `platforms/<name>/`**: JS adapter, manifest, list of icons (drawn from `logo.svg`), certificates, native plugins,
+  packaging script.
+- **GitHub release → one package per platform**: `.github/workflows/release.yml` has a `verify` job (tag, lint, test) and one job per
+  platform that builds, signs and attaches the package to the release.
+- **iOS excluded** for now.
+- **Android for TV only**: Fire TV (first) and Android TV, remote control and D-pad, no touch.
+- **Desktop**: Windows, macOS and Linux (same interface, keyboard as the remote).
 
-| Tema | Decisione |
+## Decisions taken
+
+| Topic | Decision |
 | --- | --- |
-| Contenitore Android | **Capacitor** |
-| Player Android | **ExoPlayer (Media3) nativo**, pilotato da JS come AVPlay: video sotto, controlli HTML sopra |
-| Distribuzione Android | **solo APK** allegato alla release GitHub (niente store) |
-| Ordine | **webOS, desktop (Windows, macOS, Linux, a costo basso), poi Android (Fire TV)** |
-| Desktop | **Electron**; pacchetti non firmati per ora (anche macOS) |
-| Certificati | restano versionati in `platforms/<nome>/`; senza password non sono utilizzabili e le password sono nei secret GitHub |
-| Trailer | solo Tizen ha un plugin (servizio locale); le altre piattaforme aprono l'app YouTube |
-| APK | due, dallo stesso progetto con due flavor Gradle: `_androidtv.apk` e `_firetv.apk` |
+| Android container | **Capacitor** |
+| Android player | **Native ExoPlayer (Media3)**, driven from JS like AVPlay: video below, HTML controls on top |
+| Android distribution | **APK only**, attached to the GitHub release (no store) |
+| Order | **webOS, desktop (Windows, macOS, Linux, at low cost), then Android (Fire TV)** |
+| Desktop | **Electron**; packages not signed for now (macOS too) |
+| Certificates | stay versioned in `platforms/<name>/`; without the password they are unusable and the passwords are in GitHub secrets |
+| Trailers | only Tizen has a plugin (local service); the other platforms open the YouTube app |
+| APK | two, from the same project with two Gradle flavors: `_androidtv.apk` and `_firetv.apk` |
 
-## Struttura (fatta)
+## Structure (done)
 
 ```
-src/platform/contract.js     il contratto di un adattatore, i valori di default (browser), la verifica usata dai test
-src/platform/index.js        l'adattatore della build (`import adapter from '@platform'`)
+src/platform/contract.js     the contract of an adapter, the defaults (browser), the check used by the tests
+src/platform/index.js        the build's adapter (`import adapter from '@platform'`)
 platforms/tizen/
-  platform.js                adattatore Tizen
-  avplayEngine.js            motore video AVPlay
-  avplaySpike.js             laboratorio player della pagina Diagnostica
-  youtubeEngine.js           trailer (iframe servito dal servizio locale)
-  keys.js                    tasti Samsung (10009, 10252, 427/428) e registrazione dei tasti media
-  systemInfo.js              tizen.systeminfo (pannello, RAM, rete)
-  config.xml                 manifest (l'icona, 117 px, è disegnata in build da logo.svg)
-  youtube/                   pagina del player YouTube e servizio sulla TV
-  tizencert.p12              certificato di firma (password nel secret TIZEN_CERT_PASSWORD)
-  build.js                   cosa webpack copia accanto all'app e opzioni della pagina (webapis.js)
-  package.sh                 firma il .wgt (Tizen Studio CLI), usato dal job `tizen` della release
+  platform.js                Tizen adapter
+  avplayEngine.js            AVPlay video engine
+  avplaySpike.js             player lab of the Diagnostics page
+  youtubeEngine.js           trailers (iframe served by the local service)
+  keys.js                    Samsung keys (10009, 10252, 427/428) and media-key registration
+  systemInfo.js              tizen.systeminfo (panel, RAM, network)
+  config.xml                 manifest (the 117 px icon is drawn at build from logo.svg)
+  youtube/                   YouTube player page and service on the TV
+  tizencert.p12              signing certificate (password in the TIZEN_CERT_PASSWORD secret)
+  build.js                   what webpack copies next to the app and page options (webapis.js)
+  package.sh                 signs the .wgt (Tizen Studio CLI), used by the release `tizen` job
 ```
 
-- La build sceglie la piattaforma con `--env platform=<nome>` (default `tizen`): `npm run build:tizen`; `npm run build` e
-  `npm run dev` usano Tizen. Webpack risolve `@platform` in `platforms/<nome>/platform.js` e aggiunge i file di `build.js`.
-  Nei test Jest `@platform` è l'adattatore Tizen.
-- `dist/` per Tizen è identico a prima della riorganizzazione (stessi file, stesso `config.xml`, stesso servizio).
-- **Icone:** nessuna immagine nelle cartelle delle piattaforme. Il logo è `logo.svg` nella radice del repository (lo usano anche la barra
-  in alto, lo screensaver e la schermata di avvio); `build.js` di ogni piattaforma elenca le icone (`icons: [{ file, size }]`) e la build
-  le disegna in PNG (`scripts/platform-icons.js`, `@resvg/resvg-js`), anche nei job della release.
-- Un test di contratto (`test/platforms/contract.test.js`) controlla che ogni `platforms/*/platform.js` rispetti il contratto.
+- The build chooses the platform with `--env platform=<name>` (default `tizen`): `npm run build:tizen`; `npm run build` and
+  `npm run dev` use Tizen. Webpack resolves `@platform` to `platforms/<name>/platform.js` and adds the files of `build.js`.
+  In the Jest tests `@platform` is the Tizen adapter.
+- The Tizen `dist/` is identical to before the reorganization (same files, same `config.xml`, same service).
+- **Icons:** no images in the platform folders. The logo is `logo.svg` in the repository root (also used by the top bar, the screensaver and
+  the start screen); each platform's `build.js` lists the icons (`icons: [{ file, size }]`) and the build
+  draws them as PNG (`scripts/platform-icons.js`, `@resvg/resvg-js`), also in the release jobs.
+- A contract test (`test/platforms/contract.test.js`) checks that every `platforms/*/platform.js` respects the contract.
 
-### Contratto dell'adattatore (`src/platform/contract.js`)
+### The adapter contract (`src/platform/contract.js`)
 
-Tutte le voci sono facoltative: quelle mancanti prendono il comportamento di un browser.
+All entries are optional: missing ones get the behavior of a browser.
 
-| Voce | Cosa fa | Tizen |
+| Entry | What it does | Tizen |
 | --- | --- | --- |
-| `keyCodes` | tasti del telecomando aggiunti a quelli comuni (frecce, OK, 415/19/413/417/412, Esc/Backspace, PagSu/PagGiù) | 10009 Indietro, 10252 Play/Pausa, 427/428 canali |
-| `registerKeys()` | chiede alla piattaforma i tasti media | `tvinputdevice.registerKey` |
-| `exit()` | chiude l'app | `tizen.application…exit()` |
-| `createEngine()` | motore video (stesso contratto di `createHtml5Engine`) | AVPlay, `<video>` nel browser |
-| `createTrailerEngine()` | motore che riproduce `youtube:<id>` nell'app, o null | iframe + servizio `localhost:8125` |
-| `openTrailer(id)` | apre il trailer fuori dall'app (webOS: app YouTube); senza nessuno dei due, niente bottone trailer | — |
-| `createDiagnosticPlayer()` | laboratorio player della Diagnostica | `avplaySpike` |
-| `runtimeChecks()` | righe in più dei controlli della Diagnostica | tizen, webapis, AVPlay |
-| `display / memory / networkType` | dati di sistema per la tabella Dispositivo | `tizen.systeminfo` |
+| `keyCodes` | remote keys added to the common ones (arrows, OK, 415/19/413/417/412, Esc/Backspace, PageUp/PageDown) | 10009 Back, 10252 Play/Pause, 427/428 channels |
+| `registerKeys()` | asks the platform for the media keys | `tvinputdevice.registerKey` |
+| `exit()` | closes the app | `tizen.application…exit()` |
+| `createEngine()` | video engine (same contract as `createHtml5Engine`) | AVPlay, `<video>` in the browser |
+| `createTrailerEngine()` | engine that plays `youtube:<id>` inside the app, or null | iframe + `localhost:8125` service |
+| `openTrailer(id)` | opens the trailer outside the app (webOS: YouTube app); with neither of the two, no trailer button | — |
+| `createDiagnosticPlayer()` | player lab of Diagnostics | `avplaySpike` |
+| `runtimeChecks()` | extra rows in the Diagnostics checks | tizen, webapis, AVPlay |
+| `display / memory / networkType` | system data for the Device table | `tizen.systeminfo` |
 
-## Release (fatta: Tizen, webOS, desktop, Android)
+## Release (done: Tizen, webOS, desktop, Android)
 
-- `verify`: valida il tag (`v1.2.3`), `npm ci`, lint, test.
-- `tizen`: versione nel `package.json`, `npm run build:tizen`, `platforms/tizen/package.sh <versione> release` (installa Tizen Studio
-  CLI, registra il profilo con il certificato copiato in una cartella temporanea, firma), carica `xtream-iptv-<versione>_tizen.wgt` e `.sha256`.
-- Nome dei pacchetti: `xtream-iptv-<versione>_<piattaforma>.<estensione>` (es. `xtream-iptv-1.0.1_tizen.wgt`).
-- `webos`: versione, `npm run build:webos`, `platforms/webos/package.sh <versione> release`, carica `xtream-iptv-<versione>_webos.ipk` e `.sha256`.
-- Le prossime piattaforme aggiungono un job con la stessa forma (`android`, desktop): ognuno dipende solo da `verify`, quindi una
-  piattaforma che fallisce non blocca le altre.
-- Versioni: Tizen vuole x.y.z; Android vorrà anche un `versionCode` intero, ricavabile dal tag (1.2.3 → 10203).
+- `verify`: validates the tag (`v1.2.3`), `npm ci`, lint, test.
+- `tizen`: version in `package.json`, `npm run build:tizen`, `platforms/tizen/package.sh <version> release` (installs the Tizen Studio
+  CLI, registers the profile with the certificate copied into a temporary folder, signs), uploads `xtream-iptv-<version>_tizen.wgt` and `.sha256`.
+- Package name: `xtream-iptv-<version>_<platform>.<extension>` (e.g. `xtream-iptv-1.0.1_tizen.wgt`).
+- `webos`: version, `npm run build:webos`, `platforms/webos/package.sh <version> release`, uploads `xtream-iptv-<version>_webos.ipk` and `.sha256`.
+- Each new platform adds a job of the same shape (`android`, desktop): each depends only on `verify`, so a
+  platform that fails does not block the others.
+- Versions: Tizen wants x.y.z; Android also needs an integer `versionCode`, derived from the tag (1.2.3 → 10203).
 
-## LG webOS (fatta, patch 108; da provare sulla TV)
+## LG webOS (done, patch 108; to try on the TV)
 
-**Minimo consigliato: webOS 6.0 (LG 2021, Chromium 79).** Il target di build attuale (Chrome 76) funziona senza cambiare Babel, SCSS o polyfill.
+**Recommended minimum: webOS 6.0 (LG 2021, Chromium 79).** The current build target (Chrome 76) works without changing Babel, SCSS or polyfills.
 
-Chromium per versione: webOS 4 (2018-19) 53; webOS 5 (2020) 68; webOS 6 (2021) 79; webOS 22 (2022) 87; 23 → 94; 24 → 108; 25 → 120; 26 → 132.
+Chromium by version: webOS 4 (2018-19) 53; webOS 5 (2020) 68; webOS 6 (2021) 79; webOS 22 (2022) 87; 23 → 94; 24 → 108; 25 → 120; 26 → 132.
 
 ```
 platforms/webos/
-  platform.js       adattatore: tasto Indietro 461, uscita (window.close), motore <video>, trailer nell'app YouTube, pannello UHD
-  luna.js           chiamate ai servizi di sistema (PalmServiceBridge, senza webOSTV.js): avvio di YouTube, informazioni di sistema
-  appinfo.json      id com.xtrmiptv.app, 1920x1080, disableBackHistoryAPI (Indietro arriva alla pagina), requiredACG
-  build.js          icone (icon.png 80 px, largeIcon.png 130 px, disegnate da logo.svg) e appinfo.json con la versione
-  package.sh        ares-package (@webos-tools/cli via npx, --no-minify) → xtream-iptv-<versione>_webos.ipk
+  platform.js       adapter: Back key 461, exit (window.close), <video> engine, trailer in the YouTube app, UHD panel
+  luna.js           calls to system services (PalmServiceBridge, without webOSTV.js): YouTube launch, system information
+  appinfo.json      id com.xtrmiptv.app, 1920x1080, disableBackHistoryAPI (Back reaches the page), requiredACG
+  build.js          icons (icon.png 80 px, largeIcon.png 130 px, drawn from logo.svg) and appinfo.json with the version
+  package.sh        ares-package (@webos-tools/cli via npx, --no-minify) → xtream-iptv-<version>_webos.ipk
 ```
 
-- Build: `npm run build:webos`; `npm run dev:webos` per provarla nel browser. Job `webos` nella release.
-- Installazione: l'`.ipk` non è firmato e si installa su una TV in **modalità sviluppatore** (app "Developer Mode" di LG,
-  poi `ares-setup-device` e `ares-install`). Il LG Content Store ha una sua procedura di pubblicazione.
-- `requiredACG`: `application.launcher` (avvio di YouTube) e `systemconfig.query` (informazioni di sistema). Ignorato fino a webOS 25,
-  applicato da webOS 26, obbligatorio da webOS 27.
-- Telecomando: Indietro = 461; Play/Pausa/Stop/Avanti/Indietro veloce e CH+/CH- usano i codici standard già comuni.
-- Trailer: app YouTube della TV (`youtube.leanback.v4`, `contentTarget` con l'URL del video: da verificare sulla TV).
-- Video: elemento `<video>` della pagina. HLS: versione 7 da webOS 6. Il player nativo non supporta avanti/indietro veloce né
-  velocità diverse da 1.0; il seek funziona. Live: m3u8 (`pickLiveFormat` già lo preferisce).
+- Build: `npm run build:webos`; `npm run dev:webos` to try it in the browser. `webos` job in the release.
+- Installation: the `.ipk` is not signed and installs on a TV in **developer mode** (see `platforms/webos/README.md`).
+  The LG Content Store has its own publishing procedure.
+- `requiredACG`: `application.launcher` (YouTube launch) and `systemconfig.query` (system information). Ignored up to webOS 25,
+  applied from webOS 26, mandatory from webOS 27.
+- Remote: Back = 461; Play/Pause/Stop/Fast-forward/Rewind and CH+/CH- use the standard codes already common.
+- Trailer: the TV's YouTube app (`youtube.leanback.v4`, `contentTarget` with the video URL: to verify on the TV).
+- Video: the page's `<video>` element. HLS: version 7 from webOS 6. The native player does not support fast forward/rewind nor
+  speeds other than 1.0; seek works. Live: m3u8 (`pickLiveFormat` already prefers it).
 
-**Da verificare sulla TV:**
-- chiamate dirette al provider (origine `file://`, CORS) e immagini / flussi http;
-- riproduzione di MPEG-TS, MKV e degli altri flussi dei provider, formato (object-fit), tracce audio e sottotitoli del `<video>`;
-- tasti del Magic Remote e il puntatore (il focus resta a tasti);
-- prestazioni sui modelli 2021.
-- webOS 5 (2020) richiederebbe un target Babel più basso e polyfill; webOS 4 e precedenti non convengono.
+**To verify on the TV:**
+- direct calls to the provider (`file://` origin, CORS) and images / http streams;
+- playback of MPEG-TS, MKV and the other provider streams, aspect ratio (object-fit), audio tracks and subtitles of the `<video>`;
+- Magic Remote keys and the pointer (the focus stays key-driven);
+- performance on the 2021 models.
+- webOS 5 (2020) would require a lower Babel target and polyfills; webOS 4 and earlier are not worth it.
 
-## Desktop: Windows, macOS, Linux (fatta, patch 110; da provare sui sistemi)
+## Desktop: Windows, macOS, Linux (done, patch 110; to try on the systems)
 
 ```
 platforms/desktop/
-  platform.js            adattatore: <video> con hls.js / mpegts.js (HLS e MPEG-TS), Spazio e tasti multimediali, uscita
-                         (window.close), trailer nel browser di sistema, versione di Electron nei controlli della Diagnostica
-  build.js               demux: true (hls.js / mpegts.js nella build), icona 512 px da logo.svg
-  electron/main.js       processo principale di Electron: una finestra a schermo intero, l'app servita come app://xtream/
-                         (origine normale per worker e IndexedDB), interfaccia 1920x1080 scalata alla finestra (zoom),
-                         F11 schermo intero, F12 strumenti di sviluppo, un'istanza sola
-  electron-builder.json  pacchetti: Windows NSIS x64, macOS dmg x64 e arm64, Linux AppImage e deb x64; Electron 44.9.3
-  package.sh             cartella di staging (build + main.js + package.json) ed electron-builder 26.18.0 via npx
+  platform.js            adapter: <video> with hls.js / mpegts.js (HLS and MPEG-TS), Space and media keys, exit
+                         (window.close), trailer in the system browser, Electron version in the Diagnostics checks
+  build.js               demux: true (hls.js / mpegts.js in the build), 512 px icon from logo.svg
+  electron/main.js       Electron main process: a full-screen window, the app served as app://xtream/
+                         (normal origin for workers and IndexedDB), 1920x1080 interface scaled to the window (zoom),
+                         F11 full screen, F12 developer tools, a single instance
+  electron-builder.json  packages: Windows NSIS x64, macOS dmg x64 and arm64, Linux AppImage and deb x64; Electron 44.9.3
+  package.sh             staging folder (build + main.js + package.json) and electron-builder 26.18.0 via npx
 ```
 
-- Build: `npm run build:desktop`; `npm run desktop` la apre in Electron dal repository. Job `desktop` della release, uno per sistema
-  (Linux su ubuntu, Windows su windows, macOS su macos): `xtream-iptv-<versione>_linux-x64.AppImage` / `.deb`,
-  `_windows-x64.exe`, `_macos-x64.dmg`, `_macos-arm64.dmg`, ognuno con il suo `.sha256`.
-- **Rete:** la pagina gira con `webSecurity` disattivato (niente CORS, niente blocco dei contenuti http), come un'app TV. La pagina
-  viene solo dai file dell'app: la navigazione verso altri indirizzi è bloccata e `window.open` va al browser di sistema.
-- **Video:** `<video>` di Chromium con hls.js (HLS) e mpegts.js (MPEG-TS). Le build TV non contengono questi due moduli
-  (`__JS_DEMUX__`). Limiti: MKV e audio AC3/E-AC3 non sono supportati da Chromium (film MKV che non partono, canali senza audio);
-  la soluzione completa è un player nativo (mpv / libVLC) come plugin.
-- **Firma:** nessuna. Windows mostra l'avviso di SmartScreen; su macOS l'app si apre con tasto destro → Apri (Gatekeeper). Per firmare
-  servono un certificato Windows e l'account Apple Developer (notarizzazione).
-- **Comandi:** tastiera (frecce, Invio, Esc / Backspace, PagSu / PagGiù, Spazio, tasti multimediali). Il mouse funziona solo dove
-  l'interfaccia lo prevede già (barra del player).
-- Verificato in Electron 44.9.3 (Linux, con il mock senza header CORS): avvio, configurazione del provider, sync nei worker, home;
-  pacchetti AppImage e deb creati in locale. Windows e macOS: solo nei job della release.
+- Build: `npm run build:desktop`; `npm run desktop` opens it in Electron from the repository. `desktop` job of the release, one per system
+  (Linux on ubuntu, Windows on windows, macOS on macos): `xtream-iptv-<version>_linux-x64.AppImage` / `.deb`,
+  `_windows-x64.exe`, `_macos-x64.dmg`, `_macos-arm64.dmg`, each with its `.sha256`.
+- **Network:** the page runs with `webSecurity` disabled (no CORS, no blocking of http content), like a TV app. The page
+  comes only from the app files: navigation to other addresses is blocked and `window.open` goes to the system browser.
+- **Video:** Chromium's `<video>` with hls.js (HLS) and mpegts.js (MPEG-TS). The TV builds do not contain these two modules
+  (`__JS_DEMUX__`). Limits: MKV and AC3/E-AC3 audio are not supported by Chromium (MKV films that do not start, channels without audio);
+  the full solution is a native player (mpv / libVLC) as a plugin.
+- **Signing:** none. Windows shows the SmartScreen warning; on macOS the app opens with right-click → Open (Gatekeeper). Signing
+  needs a Windows certificate and the Apple Developer account (notarization).
+- **Controls:** keyboard (arrows, Enter, Esc / Backspace, PageUp / PageDown, Space, media keys). The mouse works only where the
+  interface already provides for it (player bar).
+- **Window:** known issue to fix — the app opens full screen; it should be a normal window, with a player button to send the video full screen.
+- Verified in Electron 44.9.3 (Linux, with the mock without CORS headers): startup, provider configuration, sync in the workers, home;
+  AppImage and deb packages created locally. Windows (tried on a PC after patch 110) works; macOS: only in the release jobs.
 
-## Android TV / Fire TV (fatta, patch 111; non compilata in locale, da provare sui dispositivi)
+## Android TV / Fire TV (done, patch 111; not compiled locally, to try on the devices)
 
-Fire OS 7 e 8 sono basati su Android 9 e 11: un solo progetto Capacitor 8.5.3 in `platforms/android/` con due flavor, **androidtv**
-(Leanback richiesto) e **firetv** (Leanback non richiesto); il codice è lo stesso.
+Fire OS 7 and 8 are based on Android 9 and 11: a single Capacitor 8.5.3 project in `platforms/android/` with two flavors, **androidtv**
+(Leanback required) and **firetv** (Leanback not required); the code is the same.
 
 ```
 platforms/android/
-  platform.js            adattatore: ExoPlayer (exoEngine.js), tasti dal'activity, uscita, trailer nell'app YouTube, schermo
-  exoEngine.js           motore video con lo stesso contratto di AVPlay, sopra il plugin ExoPlayer (comandi e eventi)
-  build.js               icone di avvio (mipmap) e banner TV 320x180 disegnati da logo.svg in dist/android-res/
-  package.json           Capacitor (@capacitor/android, cli, core 8.5.3): progetto npm a sé, non tocca l'app web
-  capacitor.config.json  webDir ../../dist, androidScheme http, contenuti misti consentiti
-  package.sh             icone nel progetto, npm ci + cap sync, gradlew assemble<Flavor>Release → xtream-iptv-<v>_androidtv.apk / _firetv.apk
-  android/               progetto Gradle (generato da `cap add android`, poi adattato)
+  platform.js            adapter: ExoPlayer (exoEngine.js), keys from the activity, exit, trailer in the YouTube app, screen
+  exoEngine.js           video engine with the same contract as AVPlay, on top of the ExoPlayer plugin (commands and events)
+  build.js               launcher icons (mipmap) and 320x180 TV banner drawn from logo.svg in dist/android-res/
+  package.json           Capacitor (@capacitor/android, cli, core 8.5.3): a separate npm project, does not touch the web app
+  capacitor.config.json  webDir ../../dist, androidScheme http, mixed content allowed
+  package.sh             icons into the project, npm ci + cap sync, gradlew assemble<Flavor>Release → xtream-iptv-<v>_androidtv.apk / _firetv.apk
+  android/               Gradle project (generated by `cap add android`, then adapted)
     app/src/main/java/com/xtrmiptv/tv/
-      MainActivity.java          viewport a 1920 (useWideViewPort + overview), WebView trasparente, tasti, client di rete
-      ProviderWebViewClient.java ogni GET verso un altro host fatto in modo nativo e restituito con Access-Control-Allow-Origin: *
-      RemoteKeys.java            Indietro, tasti media e canali → keydown 10000 + codice Android
-      ExoPlayerPlugin.java       ExoPlayer (Media3 1.6.1) in un PlayerView sotto la WebView: TS, HLS, MKV, MP4, AC3 del dispositivo,
-                                 tracce audio, sottotitoli disegnati da ExoPlayer, formato (fit / fill / zoom), pausa in background
-      TvHostPlugin.java          uscita, apertura di link (YouTube), informazioni sul dispositivo
-    app/src/androidtv, app/src/firetv   manifest dei due flavor
+      MainActivity.java          viewport at 1920 (useWideViewPort + overview), transparent WebView, keys, network client
+      ProviderWebViewClient.java every GET to another host made natively and returned with Access-Control-Allow-Origin: *
+      RemoteKeys.java            Back, media and channel keys → keydown 10000 + Android code
+      ExoPlayerPlugin.java       ExoPlayer (Media3 1.6.1) in a PlayerView under the WebView: TS, HLS, MKV, MP4, device AC3,
+                                 audio tracks, ExoPlayer-drawn subtitles, aspect ratio (fit / fill / zoom), pause in background
+      TvHostPlugin.java          exit, opening links (YouTube), device information
+    app/src/androidtv, app/src/firetv   manifests of the two flavors
 ```
 
-- **Rete:** non serve CapacitorHttp. `ProviderWebViewClient` intercetta le richieste GET verso host diversi da `localhost` (API del
-  provider, immagini, TMDB) anche dai worker, le fa con `HttpURLConnection` (redirect seguiti, anche da http a https) e le
-  restituisce alla pagina con `Access-Control-Allow-Origin: *`. Le altre richieste (POST di Trakt, che ha CORS) vanno normalmente.
-  Traffico in chiaro consentito (`usesCleartextTraffic`), pagina servita in http (`androidScheme`).
-- **Tasti:** D-pad e OK arrivano come frecce e Invio; Indietro, Play/Pausa, Play, Pausa, Stop, avanti/indietro veloce, traccia
-  successiva/precedente e CH+/CH- li intercetta l'activity e li passa alla pagina (`window.__xtreamKey`).
-- **Video:** `kind: 'exoplayer'`; tempo, durata, buffer e tracce arrivano come eventi ogni 500 ms e sono tenuti in JS per i getter
-  sincroni del contratto. Con l'app in background il video va in pausa.
-- **Firma:** `platforms/android/release.keystore` (da creare con `keytool` e versionare, come il certificato Tizen) e i secret
-  `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (default `xtream`), `ANDROID_KEY_PASSWORD`. Senza, gli APK sono firmati con la
-  chiave di debug della macchina: si installano, ma la versione successiva non li aggiorna (va disinstallata prima).
-- **Versioni:** versionName = tag, versionCode = x*10000 + y*100 + z.
-- **Release:** job `android` (ubuntu, Java 21, Android SDK del runner): `xtream-iptv-<v>_androidtv.apk` e `_firetv.apk` con `.sha256`.
-- **Non verificato:** l'APK non è stato compilato qui (Android SDK e repository Google non raggiungibili da questo ambiente): la prima
-  compilazione sarà quella del job della release. Da provare sui dispositivi: rete dai worker, tasti dei telecomandi Fire e Android TV,
-  ExoPlayer (formati, tracce, sottotitoli), scala dell'interfaccia, prestazioni degli stick.
+- **Network:** CapacitorHttp is not needed. `ProviderWebViewClient` intercepts GET requests to hosts other than `localhost` (provider
+  API, images, TMDB) also from workers, makes them with `HttpURLConnection` (redirects followed, also from http to https) and
+  returns them to the page with `Access-Control-Allow-Origin: *`. Other requests (Trakt POSTs, which has CORS) go normally.
+  Clear-text traffic allowed (`usesCleartextTraffic`), page served over http (`androidScheme`).
+- **Keys:** D-pad and OK arrive as arrows and Enter; Back, Play/Pause, Play, Pause, Stop, fast forward/rewind, next/previous
+  track and CH+/CH- are intercepted by the activity and passed to the page (`window.__xtreamKey`).
+- **Video:** `kind: 'exoplayer'`; time, duration, buffer and tracks arrive as events every 500 ms and are kept in JS for the
+  contract's synchronous getters. With the app in the background the video pauses.
+- **Signing:** `platforms/android/release.keystore` (to be created with `keytool` and versioned, like the Tizen certificate) and the secrets
+  `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (default `xtream`), `ANDROID_KEY_PASSWORD`. Without them the APKs are signed with the
+  machine's debug key: they install, but the next version does not update them (uninstall first).
+- **Versions:** versionName = tag, versionCode = x*10000 + y*100 + z.
+- **Release:** `android` job (ubuntu, Java 21, runner's Android SDK, Node 22): `xtream-iptv-<v>_androidtv.apk` and `_firetv.apk` with `.sha256`.
+- **Not verified:** the APK was not compiled here (Android SDK and Google repositories not reachable from this environment): the first
+  compilation will be that of the release job. To try on the devices: network from workers, Fire and Android TV remote keys,
+  ExoPlayer (formats, tracks, subtitles), interface scale, stick performance.
 
-### Criticità di distribuzione
+### Distribution caveats
 
-- **I nuovi Fire TV Stick (4K Select, nuovo 4K, nuovo HD) usano Vega OS**, non Android: niente APK, niente sideload. Amazon ha
-  confermato che i futuri stick saranno tutti Vega. "Firestick" vuol dire quindi i modelli Fire OS (4K Max, 4K Plus, Cube, TV con
-  Fire TV). Un porting Vega sarebbe un progetto a parte (React Native): fuori perimetro.
-- **Fire OS blocca le app che Amazon giudica d'accesso a contenuti non licenziati** (all'apertura dal 2025, all'installazione dal
-  2026). I criteri non sono pubblici: non si sa se un client Xtream generico possa finirci. Rischio non controllabile.
-- **Google: verifica dello sviluppatore anche per le app fuori dal Play Store** (dal 2026 in alcuni paesi, globale dal 2027); c'è un
-  livello ridotto per hobbisti che limita la distribuzione a pochi dispositivi. Da seguire per l'APK Android TV.
+- **The new Fire TV Sticks (4K Select, new 4K, new HD) use Vega OS**, not Android: no APK, no sideload. Amazon has
+  confirmed that future sticks will all be Vega. "Firestick" therefore means the Fire OS models (4K Max, 4K Plus, Cube, Fire TV
+  TVs). A Vega port would be a separate project (React Native): out of scope.
+- **Fire OS blocks apps that Amazon judges to give access to unlicensed content** (on opening since 2025, on installation since
+  2026). The criteria are not public: it is not known whether a generic Xtream client could end up there. An uncontrollable risk.
+- **Google: developer verification also for apps outside the Play Store** (from 2026 in some countries, global from 2027); there is a reduced
+  tier for hobbyists that limits distribution to a few devices. To follow for the Android TV APK.
 
-## Ordine di lavoro
+## Open issues
 
-1. ~~Interfaccia di piattaforma nel core, Tizen in `platforms/tizen/`~~ (patch 104; da verificare sulla TV Samsung che nulla sia cambiato).
-2. ~~Release multi-pacchetto con il solo Tizen~~ (patch 104).
-3. ~~webOS: `platforms/webos/` (adattatore, `appinfo.json`, icone, `package.sh`), job `webos` nella release~~ (patch 108); prove su TV.
-4. ~~Android / Fire TV: progetto Capacitor in `platforms/android/`, rete nativa, tasti, viewport~~ (patch 111).
-5. ~~Plugin ExoPlayer con le stesse funzioni di AVPlay~~ (patch 111).
-6. Prima compilazione nel job della release, prove sui dispositivi e misure con il mock.
-7. ~~Desktop (Windows, macOS, Linux) con Electron~~ (patch 110); prove sui sistemi, poi eventuale player nativo (mpv / libVLC) per MKV e AC3.
+- **Desktop window (reported on Windows):** the app must open as a normal window, not full screen; the player needs a button to send the video full screen (F11 does it for the whole window today).
+- Tizen aspect ratio ("format"): cause not found; waiting for the TV logs (see patches 106–107 in MILESTONES).
+
+## Order of work
+
+1. ~~Platform interface in the core, Tizen in `platforms/tizen/`~~ (patch 104; to verify on the Samsung TV that nothing changed).
+2. ~~Multi-package release with Tizen only~~ (patch 104).
+3. ~~webOS: `platforms/webos/` (adapter, `appinfo.json`, icons, `package.sh`), `webos` job in the release~~ (patch 108); tests on the TV.
+4. ~~Android / Fire TV: Capacitor project in `platforms/android/`, native network, keys, viewport~~ (patch 111).
+5. ~~ExoPlayer plugin with the same features as AVPlay~~ (patch 111).
+6. First compilation in the release job, tests on the devices and measurements with the mock.
+7. ~~Desktop (Windows, macOS, Linux) with Electron~~ (patch 110); tests on the systems, then possibly a native player (mpv / libVLC) for MKV and AC3.

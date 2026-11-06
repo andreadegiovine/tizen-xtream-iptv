@@ -1,44 +1,44 @@
-# Test con il mock Xtream e misure di prestazioni
+# Testing with the Xtream mock and performance measurements
 
-Strumenti solo di sviluppo in `scripts/mock-xtream/` (non finiscono nella build): un pannello Xtream finto con un catalogo grande e uno script che usa l'app in Chromium headless, solo da tastiera come sulla TV, e misura i tempi.
+Development-only tools in `scripts/mock-xtream/` (they do not end up in the build): a fake Xtream panel with a large catalog and a script that uses the app in headless Chromium, with the keyboard only like on the TV, and measures the timings.
 
-## Server mock
+## Mock server
 
 ```
 npm run build
 npm run mock -- [--port 8090] [--movies 20000] [--series 8000] [--live 3000] [--latency 150] [--img-latency 40] [--kbps 0] [--dist dist]
 ```
 
-- Account: utente `test`, password `test`, URL `http://localhost:8090`.
-- Stessa origine per app (build in `dist`), API (`/player_api.php`, `/xmltv.php`), immagini (`/img/...svg`, in cache del browser) e un TMDB finto (`/tmdb/3/...`, `/tmdbimg/...`): nessun problema di CORS.
-- Catalogo deterministico (stesso seed, stesso catalogo): il 15% dei titoli senza id TMDB, il 30% senza generi, il 7% senza locandina, l'1% per adulti, canali con varianti di qualità (HD, FHD, 4K...) e paese per il raggruppamento; EPG XMLTV di 48 ore (un canale su 25 ha solo programmi "EPG non disponibile", che l'app deve trattare come guida assente).
-- `--latency` è il ritardo di ogni risposta API, `--img-latency` quello delle immagini, `--kbps` limita la banda (0 = nessun limite, risposte gzip).
-- `GET /__stats` dà le richieste ricevute per tipo, `POST /__stats` le azzera.
-- Funziona anche con la build di sviluppo (`/__proxy` e `/__media` sono gestiti).
+- Account: user `test`, password `test`, URL `http://localhost:8090`.
+- Same origin for the app (build in `dist`), API (`/player_api.php`, `/xmltv.php`), images (`/img/...svg`, cached by the browser) and a fake TMDB (`/tmdb/3/...`, `/tmdbimg/...`): no CORS problems.
+- Deterministic catalog (same seed, same catalog): 15% of titles without a TMDB id, 30% without genres, 7% without a poster, 1% adult, channels with quality variants (HD, FHD, 4K...) and country for the grouping; 48-hour XMLTV EPG (one channel in 25 has only "EPG not available" programmes, which the app must treat as no guide).
+- `--latency` is the delay of every API response, `--img-latency` that of images, `--kbps` limits the bandwidth (0 = no limit, gzip responses).
+- `GET /__stats` gives the requests received by type, `POST /__stats` resets them.
+- It also works with the development build (`/__proxy` and `/__media` are handled).
 
-## Misure
+## Measurements
 
-Con il server avviato:
-
-```
-npm run perf -- [--url http://localhost:8090] [--tmdb] [--cpu 4] [--profile] [--out report.json] [--shots cartella]
-```
-
-Percorso: primo avvio (PIN parentale, provider), sync completa del catalogo, home, Film / Serie / Live a freddo, griglia (30 × giù), riavvio a caldo, ricerca, scheda, Impostazioni, 20 s di inattività. Per ogni passo: tempo alle card visibili e alle loro locandine, long task del thread principale (> 50 ms), heap JS, richieste al server.
-
-- `--tmdb` imposta una chiave TMDB (risponde il TMDB finto) per misurare anche quei flussi.
-- `--cpu 4` rallenta la CPU di 4 volte (vale per il thread principale, non per i worker): più vicino a una TV.
-- `--profile` aggiunge a ogni passo le funzioni che hanno occupato di più il thread principale (meglio con una build di sviluppo, nomi leggibili: `npx webpack --mode development --output-path /tmp/distdev` e `--dist /tmp/distdev` al server).
-- I numeri sono di un PC: sulla TV vanno moltiplicati (CPU e IndexedDB più lenti). Servono per confrontare prima/dopo una modifica.
-
-## Confronto prima / dopo
+With the server running:
 
 ```
-npm run perf -- --out riferimento.json        # sulla versione di partenza
-npm run perf -- --out nuovo.json              # dopo la modifica (stesse opzioni)
-npm run perf:compare -- riferimento.json nuovo.json [--threshold 25] [--min-ms 80]
+npm run perf -- [--url http://localhost:8090] [--tmdb] [--cpu 4] [--profile] [--out report.json] [--shots folder]
 ```
 
-Per ogni passo confronta i tempi che si sentono nell'interfaccia (card, locandine, risultati della ricerca, scheda, long task) e le durate delle sync: segna `✗` ciò che è peggiorato più della soglia (25%) e di più di 80 ms, `✓` ciò che è migliorato. Esce con codice 1 se qualcosa è peggiorato: da usare prima di consegnare una modifica. Due giri della stessa versione differiscono di qualche decina di ms: per decidere servono differenze ripetute, non un singolo valore.
+Path: first run (parental PIN, provider), full catalog sync, home, Movies / Series / Live cold, grid (30 × down), warm restart, search, detail page, Settings, 20 s of inactivity. For each step: time to the visible cards and their posters, main-thread long tasks (> 50 ms), JS heap, requests to the server.
 
-L'ultimo passo di `perf.js` simula l'avvio dopo 12 ore con lo stesso catalogo: la sync rilegge le liste e, con la sync differenziale, non riscrive nulla (`changes: 0`).
+- `--tmdb` sets a TMDB key (the fake TMDB answers) to measure those flows too.
+- `--cpu 4` slows the CPU down 4 times (applies to the main thread, not to the workers): closer to a TV.
+- `--profile` adds to each step the functions that kept the main thread busiest (better with a development build, readable names: `npx webpack --mode development --output-path /tmp/distdev` and `--dist /tmp/distdev` for the server).
+- The numbers are from a PC: on the TV they must be multiplied (slower CPU and IndexedDB). They serve to compare before/after a change.
+
+## Before / after comparison
+
+```
+npm run perf -- --out reference.json        # on the starting version
+npm run perf -- --out new.json              # after the change (same options)
+npm run perf:compare -- reference.json new.json [--threshold 25] [--min-ms 80]
+```
+
+For each step it compares the timings felt in the interface (cards, posters, search results, detail page, long tasks) and the sync durations: it marks `✗` what got worse by more than the threshold (25%) and by more than 80 ms, `✓` what improved. It exits with code 1 if something got worse: to be used before delivering a change. Two runs of the same version differ by a few tens of ms: to decide you need repeated differences, not a single value.
+
+The last step of `perf.js` simulates a startup after 12 hours with the same catalog: the sync re-reads the lists and, with the differential sync, writes nothing (`changes: 0`).

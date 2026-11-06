@@ -1,13 +1,28 @@
 # Xtream IPTV
 
-A fast, TV-first **Xtream Codes** client for **Samsung Tizen TVs**. Browse your provider's
-movies, series and live channels with the remote control, pick up where you left off, and watch
-trailers, cast and guides, all in a clean, modern interface designed for a 1920x1080 screen.
+A fast, TV-first **Xtream Codes** client for **Samsung Tizen**, **LG webOS**, **Android TV / Fire TV** and **Windows, macOS and Linux**.
+Browse your provider's movies, series and live channels with the remote control, pick up where you left off, and watch
+trailers, cast and guides, all in a clean, modern interface designed for a 1920x1080 screen. The same app and the same interface run on every platform.
 
 <p align="center"><img src="docs/screenshots/home.jpg" alt="Home screen" width="860"></p>
 
 > This project does not provide, host or link to any content. You need your own Xtream Codes
 > provider account.
+
+## Platforms
+
+Every release on the [Releases](../../releases) page has one package per platform, named `xtream-iptv-<version>_<platform>.<ext>`
+(with a `.sha256` checksum). Each platform folder has its own installation guide.
+
+| Platform | Package | Install guide |
+|---|---|---|
+| Samsung Tizen TV (6.0 or newer) | `_tizen.wgt`, signed | [`platforms/tizen`](platforms/tizen/README.md) |
+| LG webOS TV (6.0 or newer) | `_webos.ipk` | [`platforms/webos`](platforms/webos/README.md) |
+| Android TV / Google TV | `_androidtv.apk` | [`platforms/android`](platforms/android/README.md) |
+| Amazon Fire TV (Fire OS models) | `_firetv.apk` | [`platforms/android`](platforms/android/README.md) |
+| Windows, macOS, Linux | `_windows-x64.exe`, `_macos-x64.dmg`, `_macos-arm64.dmg`, `_linux-x64.AppImage`, `_linux-x64.deb` | [`platforms/desktop`](platforms/desktop/README.md) |
+
+Tizen has been developed and tried on a 2021 QLED; the Windows app is tried as well. webOS, Android TV / Fire TV, macOS and Linux are new and still being tested on real devices.
 
 ## What makes it different
 
@@ -15,18 +30,21 @@ trailers, cast and guides, all in a clean, modern interface designed for a 1920x
   categories). Items that share the provider's TMDB id are merged into a single card, with a
   dropdown to choose the exact version. Nothing is merged unless the provider says it is the same title.
 - **Built for huge catalogs.** Tens of thousands of titles are synced in a background worker,
-  stored locally and shown through virtualized grids, so navigation stays smooth on a TV processor.
+  stored locally and shown through lazily loaded grids, so navigation stays smooth on a TV processor.
   The cached catalog opens instantly and refreshes itself in the background.
-- **Clean titles.** With a TMDB key configured, provider noise such as language prefixes, quality
-  tags and year suffixes is removed from movie and series titles. Without a key, titles are shown exactly as the provider sent them.
+- **Clean titles.** Provider noise such as language prefixes, quality tags and year suffixes is removed from movie and series titles
+  (can be turned off). With a TMDB key configured you also get posters, plots, cast and genres.
 - **Smart filtering.** Genres from the provider and from TMDB are merged into one list, categories
   can be hidden per provider and per type, and every detail page links back to the matching genre or category.
-- **Trailers in the app's own player.** The trailer button plays the YouTube trailer with the same
-  controls as a movie, instead of launching the YouTube app. It works around the embedded-player
-  restriction of Tizen with a small on-TV service.
-- **A real player.** Back / forward 30 s, draggable progress bar, aspect ratio, subtitles, adjustable
-  buffering, resume from where you stopped and autoplay of the next episode.
-- **Live TV with a programme guide.** Now-playing on every channel card and the next 24 hours on the channel page.
+- **Trailers.** The trailer button plays the YouTube trailer in the app's own player on Samsung TVs, with the same controls as a movie;
+  on the other platforms it opens the YouTube app or the browser.
+- **A real player.** Back / forward 30 s, draggable progress bar, aspect ratio, audio tracks, subtitles, adjustable
+  buffering, resume from where you stopped and autoplay of the next episode. The video engine is the one native to each platform
+  (AVPlay on Tizen, the system player on webOS, ExoPlayer on Android).
+- **Live TV with a programme guide.** Now-playing on every channel card, the next 24 hours on the channel page, a full
+  grid guide, and scheduled viewing that opens the channel when a programme starts. Channels with several qualities are grouped
+  into one card, and channels of the same network (Rai, Sky, Dazn...) are collected together.
+- **Collections.** Group movies, series and channels of your own in named collections, with favorites and pins.
 - **Trakt sync with a QR code.** Connect your account by scanning a code with your phone, import your
   history and keep watched titles in sync, or remove everything with one button.
 - **Continue watching, favorites and suggestions.** Resume rows, a favorites page, watched marks and
@@ -36,11 +54,11 @@ trailers, cast and guides, all in a clean, modern interface designed for a 1920x
 - **Pinned categories and genres.** Pin the ones you use most to the sidebar, or add them to the favorites.
 - **Notices.** Errors, warnings and confirmations (finished updates, subscription ending soon) appear in
   one place at the right of the screen, and never cover the video except for playback errors.
-- **Local search.** Search movies, series and channels from the top bar, using the on-screen keyboard of the TV.
+- **Local search.** Search movies, series, channels and collections from the top bar, using the on-screen keyboard of the TV.
 - **Several providers.** Add as many as you like and switch at any time; each has its own database.
 - **Private by design.** No account, no analytics. TMDB and Trakt keys are typed in Settings and
-  stay on the TV; credentials are masked in logs.
-- **English and Italian**, following the TV language or chosen manually.
+  stay on the device; credentials are masked in logs.
+- **English and Italian**, following the device language or chosen manually.
 - **Open and tested.** Plain HTML, JavaScript and SCSS (no UI framework) with an extensive unit test suite.
 
 ## Screenshots
@@ -57,27 +75,13 @@ trailers, cast and guides, all in a clean, modern interface designed for a 1920x
 
 The screenshots use a fictional demo provider.
 
-## Install on your TV
-
-Requirements: a Samsung TV with **Tizen 6.0 or newer** (developed on a 2021 QLED) and an Xtream Codes provider account.
-
-1. Download the signed `xtream-iptv-<version>.wgt` from the [Releases](../../releases) page.
-2. Enable **Developer Mode** on the TV: open *Apps*, press `12345` on the remote, set Developer mode
-   to **On**, enter the IP address of the computer you will install from, and reboot the TV.
-3. Install the package with [**tizen-wgt-installer**](https://github.com/andreadegiovine/tizen-wgt-installer),
-   a one-command tool (it needs Docker on a computer in the same network as the TV). It can re-sign
-   the package with your own Samsung certificate, which recent TVs require; see its page for the exact
-   commands for Linux, macOS, WSL and Windows.
-4. Open **Xtream IPTV** from *Apps → Downloaded* and add your provider.
-
-Prefer to build it yourself? See [Building from source](#building-from-source).
-
 ## First steps
 
-1. **Add a provider**: name, server URL, username and password. The catalog downloads in the background.
-2. *(Optional)* In **Settings** type a **TMDB** key to get posters, plots, cast, genres, trailers and suggestions.
+1. **Install the app** on your device following the guide of your platform (see [Platforms](#platforms)).
+2. **Add a provider**: name, server URL, username and password. The catalog downloads in the background.
+3. *(Optional)* In **Settings** type a **TMDB** key to get posters, plots, cast, genres, trailers and suggestions.
    Use the v4 "API Read Access Token" or the 32-character v3 key.
-3. *(Optional)* In **Settings** type your Trakt **Client ID** and **Client Secret**, then press connect and scan the QR code.
+4. *(Optional)* In **Settings** type your Trakt **Client ID** and **Client Secret**, then press connect and scan the QR code.
 
 Nothing about TMDB or Trakt is compiled into the app: both stay off until you add the keys.
 
@@ -86,78 +90,24 @@ Nothing about TMDB or Trakt is compiled into the app: both stay off until you ad
 | Key | Action |
 |---|---|
 | Arrows | Move the focus |
-| OK / Enter | Select |
+| OK / Enter | Select (hold on a row of the guide for its actions) |
 | Back | Go back / close |
 | Channel up / down | In the player: previous / next channel (live) or episode (series) |
 | Play / pause / rewind / forward | In the player |
 | Left / right in the player | Seek (after OK on the progress bar) |
 
-## Building from source
+On the desktop app the keyboard is the remote: arrows, `Enter`, `Esc` / `Backspace` for Back, `PageUp` / `PageDown` for channel up / down, `Space` for play / pause.
 
-Requirements: Node.js 18 or newer (22 or newer to build the Android packages, as the release workflow does), and for installing, [Tizen Studio](https://developer.tizen.org/development/tizen-studio/download)
-(or its CLI) with a Samsung certificate profile.
+## Documentation
 
-```bash
-npm ci
-npm test            # unit tests
-npm run lint
-npm run dev         # desktop browser on http://localhost:8080
-npm run build       # Tizen widget in dist/
-```
-
-In the desktop browser the remote is emulated with the keyboard: arrows, `Enter`, `Esc` / `Backspace`
-for Back, `PageUp` / `PageDown` for channel up / down. The dev server proxies provider calls
-(`/__proxy`) to avoid CORS problems.
-
-`dist/` is a complete widget. Sign and install it with your own certificate:
-
-```bash
-tizen package -t wgt -s <your-profile> -- dist
-sdb connect <tv-ip>
-tizen install -n dist/XtreamIPTV.wgt -t <tv-name>
-```
-
-### Releases
-
-Publishing a GitHub release runs `.github/workflows/release.yml`: it validates the tag (`v1.2.3`) and runs lint and tests,
-then one job per platform stamps the version, builds and uploads its package, named `xtream-iptv-<version>_<platform>`
-(today the signed Tizen `xtream-iptv-<version>_tizen.wgt` with its checksum, made by `platforms/tizen/package.sh`).
-
-## For developers
-
-```
-src/
-  core/       env, errors, logger (masks credentials), http, idb, input
-  db/         app database and one database per provider
-  services/   Xtream client, sync, grouping, title normalisation, TMDB, Trakt, EPG, player engines
-  ui/         focus manager, router, top bar, pages, components
-  i18n/       en-US and it-IT dictionaries
-  styles/     SCSS
-  platform/   the contract of a platform adapter (contract.js) and the adapter of the build (index.js)
-platforms/
-  tizen/      adapter (AVPlay, remote keys, system info, YouTube trailers), config.xml, YouTube service,
-              signing certificate, build.js (files webpack copies) and package.sh (signed .wgt)
-  webos/      adapter (<video>, Back 461, YouTube app via Luna), appinfo.json, build.js and package.sh (.ipk)
-  desktop/    adapter (<video> + hls.js / mpegts.js, keyboard), Electron main process, electron-builder.json and
-              package.sh (Windows .exe, macOS .dmg, Linux .AppImage / .deb)
-  android/    adapter (ExoPlayer engine, remote keys), Capacitor project (its own package.json) with the Android app
-              (ExoPlayer and TvHost plugins, native network client), package.sh (Android TV and Fire TV .apk)
-logo.svg      the app logo: top bar, start screen, screensaver, and every platform icon (drawn at build time)
-test/         Jest tests
-docs/         design decisions, milestones and screenshots
-```
-
-Design decisions and the development history (with what has and has not been verified on a real
-TV) live in [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/MILESTONES.md`](docs/MILESTONES.md); read them before changing the code.
-
-The TV runs Chromium ~76: the build targets it and ESLint blocks newer APIs (`?.`, `??`,
-`String.replaceAll`, `.at()`, `structuredClone`). CSS must avoid flexbox `gap`, `aspect-ratio` and `inset`.
-
-Package id `XtrmIptv01`, application id `XtrmIptv01.XtreamIPTV` (`platforms/tizen/config.xml`).
-
-The app logic is the same on every platform: what a platform changes (video engine, remote keys, exit, system information, trailers)
-goes through the adapter in `platforms/<name>/platform.js`, picked at build time (`npm run build:tizen` / `build:webos` / `build:desktop` / `build:android`, i.e.
-`webpack --env platform=<name>`; `npm run build` and `npm run dev` use Tizen, `npm run dev:webos` the webOS adapter, `npm run desktop` opens the desktop app in Electron). See [`docs/MULTIPLATFORM.md`](docs/MULTIPLATFORM.md).
+| Document | Content |
+|---|---|
+| [`platforms/<name>/README.md`](platforms) | Installation and notes of each platform: [Tizen](platforms/tizen/README.md), [webOS](platforms/webos/README.md), [Android TV / Fire TV](platforms/android/README.md), [desktop](platforms/desktop/README.md) |
+| [`docs/BUILD.md`](docs/BUILD.md) | Building from source, running in a browser, packaging, tests, releases and signing, project layout |
+| [`docs/MULTIPLATFORM.md`](docs/MULTIPLATFORM.md) | How the platforms share one app: the adapter, decisions, per-platform details and open issues |
+| [`docs/DESIGN.md`](docs/DESIGN.md) | Design decisions; read before changing the code |
+| [`docs/MILESTONES.md`](docs/MILESTONES.md) | Development history, with what has and has not been verified on a real device |
+| [`docs/MOCK-TEST.md`](docs/MOCK-TEST.md) | The fake Xtream server and the performance measurements |
 
 ## License
 
