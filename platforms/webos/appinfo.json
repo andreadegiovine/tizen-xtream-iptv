@@ -1,0 +1,17 @@
+{
+  "id": "com.xtrmiptv.app",
+  "version": "__VERSION__",
+  "vendor": "Xtream IPTV",
+  "type": "web",
+  "main": "index.html",
+  "title": "Xtream IPTV",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "bgColor": "#0c0c12",
+  "iconColor": "#0c0c12",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
+  "handlesRelaunch": false,
+  "requiredMemory": 400,
+  "requiredACG": ["application.launcher", "systemconfig.query"]
+}

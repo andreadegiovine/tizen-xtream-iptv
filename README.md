@@ -137,6 +137,7 @@ src/
 platforms/
   tizen/      adapter (AVPlay, remote keys, system info, YouTube trailers), config.xml, icon, YouTube service,
               signing certificate, build.js (files webpack copies) and package.sh (signed .wgt)
+  webos/      adapter (<video>, Back 461, YouTube app via Luna), appinfo.json, icons, build.js and package.sh (.ipk)
 test/         Jest tests
 docs/         design decisions, milestones and screenshots
 ```
@@ -150,8 +151,8 @@ The TV runs Chromium ~76: the build targets it and ESLint blocks newer APIs (`?.
 Package id `XtrmIptv01`, application id `XtrmIptv01.XtreamIPTV` (`platforms/tizen/config.xml`).
 
 The app logic is the same on every platform: what a platform changes (video engine, remote keys, exit, system information, trailers)
-goes through the adapter in `platforms/<name>/platform.js`, picked at build time (`npm run build:tizen`, i.e.
-`webpack --env platform=tizen`; `npm run build` and `npm run dev` use Tizen). See [`docs/MULTIPLATFORM.md`](docs/MULTIPLATFORM.md).
+goes through the adapter in `platforms/<name>/platform.js`, picked at build time (`npm run build:tizen` / `npm run build:webos`, i.e.
+`webpack --env platform=<name>`; `npm run build` and `npm run dev` use Tizen, `npm run dev:webos` the webOS adapter). See [`docs/MULTIPLATFORM.md`](docs/MULTIPLATFORM.md).
 
 ## License
 

@@ -9,7 +9,8 @@
  *   exit()                    closes the app
  *   createEngine()            the video engine (contract of createHtml5Engine in src/services/playerEngines.js)
  *                             (`aspectModes`: the aspect ratios it can show, when not all of ASPECT_MODES)
- *   createTrailerEngine()     an engine that plays `youtube:<id>` inside the app, or null (then the trailer opens in YouTube)
+ *   createTrailerEngine()     an engine that plays `youtube:<id>` inside the app, or null (then openTrailer is used)
+ *   openTrailer(videoId)      opens the trailer outside the app (the platform's YouTube app); without either, no trailer button
  *   createDiagnosticPlayer()  the player lab of the Diagnostics page ({ play, stop, textTracks, selectText })
  *   runtimeChecks()           extra rows of the Diagnostics checks: [{ id, status: 'ok' | 'warn' | 'fail', detail }]
  *   display(env)              Promise of the panel size { width, height } or null
@@ -22,6 +23,7 @@ export const PLATFORM_API = Object.freeze([
   'exit',
   'createEngine',
   'createTrailerEngine',
+  'openTrailer',
   'createDiagnosticPlayer',
   'runtimeChecks',
   'display',
@@ -58,6 +60,7 @@ export function withDefaults(adapter, { createDefaultEngine } = {}) {
     },
     createEngine: createDefaultEngine || null,
     createTrailerEngine: null,
+    openTrailer: null,
     createDiagnosticPlayer: () => createNoDiagnosticPlayer(),
     runtimeChecks: () => [],
     display: async () => null,

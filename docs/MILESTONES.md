@@ -499,3 +499,9 @@ Richiesta dell'utente (2026-11-03). Stato: `[x]` fatta in sandbox e in Chrome de
 - Griglie: scendendo, le immagini delle righe oltre 3 sopra lo schermo vengono liberate (`card.release()`, resta lo skeleton); risalendo tornano a caricarsi quando sono a 3 righe dallo schermo (`card.restore()`, skeleton fino al caricamento).
 - Release: i pacchetti hanno la piattaforma nel nome, `xtream-iptv-<versione>_tizen.wgt` (e `.sha256`).
 - Formato: con un AVPlay simulato nel browser le build 103 e 106 fanno le stesse chiamate (`setDisplayMethod` FULL_SCREEN / CROPPED_FULL / LETTER_BOX al cambio). Per trovare la differenza sulla TV il log della Diagnostica scrive il motore usato dal player (`Player engine avplay | html5`) e, a ogni cambio di formato, stato di AVPlay e risoluzione del video. Non verificato su TV.
+
+### Patch 108 — LG webOS
+- Nuova piattaforma `platforms/webos/`: adattatore (tasto Indietro 461, uscita con `window.close`, video nel `<video>` della pagina, trailer nell'app YouTube della TV, pannello UHD per la tabella Dispositivo), `luna.js` (servizi di sistema con `PalmServiceBridge`, senza webOSTV.js), `appinfo.json` (id `com.xtrmiptv.app`, 1920x1080, `disableBackHistoryAPI`, `requiredACG`), icone 80 e 130 px dal marchio, `build.js`, `package.sh` (`ares-package` di `@webos-tools/cli`).
+- `npm run build:webos`, `npm run dev:webos`; job `webos` nella release: `xtream-iptv-<versione>_webos.ipk` (+ `.sha256`), da installare su una TV in modalità sviluppatore.
+- Contratto: nuova voce `openTrailer(videoId)`; la scheda mostra il bottone trailer solo se la piattaforma lo può riprodurre (Tizen) o aprire fuori (webOS) e, senza player interno, lo apre fuori.
+- Sul mock la build webOS gira nel browser (griglie, guida, player con il `<video>`). `docs/MULTIPLATFORM.md`: sezione webOS, verifiche da fare sulla TV, desktop (Windows, macOS, Linux) aggiunto al piano. Non verificato su TV.

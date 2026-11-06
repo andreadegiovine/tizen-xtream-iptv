@@ -182,7 +182,14 @@ export function createDetailPage(ctx, params) {
   }
 
   /** The trailer plays in the app's own player (same controls as a film, without aspect ratio and subtitles). */
+  const trailers = ctx.trailers || { inApp: true, available: true, open: () => false };
+
   function playTrailer(videoId) {
+    // Platforms without an in-app trailer player open it outside (webOS: the YouTube app).
+    if (!trailers.inApp) {
+      trailers.open(videoId);
+      return;
+    }
     ctx.router.push('player', { type: 'trailer', trailer: { videoId }, entryKey: entry.key, title: data().title, playlist: [{ id: '', ext: '', title: t('detail.trailer') }], index: 0, section: params.section });
   }
 
@@ -569,7 +576,7 @@ export function createDetailPage(ctx, params) {
     }
     // The provider's trailer first, otherwise the one TMDB lists for the title.
     const trailerId = (info && youtubeId(info.trailer)) || (meta && meta.trailerKey) || '';
-    if (buttons.length && trailerId) buttons.push({ id: 'trailer', icon: 'trailer', label: t('detail.trailer'), run: () => playTrailer(trailerId) });
+    if (buttons.length && trailerId && trailers.available) buttons.push({ id: 'trailer', icon: 'trailer', label: t('detail.trailer'), run: () => playTrailer(trailerId) });
     if (canResume) {
       buttons.push({ id: 'resume', icon: 'resume', label: t('detail.resume'), run: () => (entry.type === 'series' ? play({ list: episodes, startIndex }) : play({})) });
     }

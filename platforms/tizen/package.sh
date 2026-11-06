@@ -9,8 +9,9 @@
 set -euo pipefail
 
 VERSION="${1:?version (x.y.z) required}"
-OUT="${2:-release}"
 ROOT="${GITHUB_WORKSPACE:-$(cd "$(dirname "$0")/../.." && pwd)}"
+OUT="${2:-release}"
+case "$OUT" in /*) ;; *) OUT="${ROOT}/${OUT}" ;; esac # relative to the repository
 TMP="${RUNNER_TEMP:-$(mktemp -d)}"
 TIZEN_STUDIO_VER="${TIZEN_STUDIO_VER:-4.5.1}"
 TIZEN_PROFILE="${TIZEN_PROFILE:-xtream}"
@@ -77,7 +78,7 @@ exit [lindex $result 3]
 EXP
 
 # Sign the production widget
-mkdir -p "${ROOT}/${OUT}"
+mkdir -p "$OUT"
 NAME="xtream-iptv-${VERSION}_tizen" # the platform after the version: one file per platform in the release
 WGT_DIR="${TMP}/wgt-${NAME}"
 mkdir -p "$WGT_DIR"
@@ -88,6 +89,6 @@ if [ -z "$WGT" ]; then
   echo "::error::No .wgt produced"
   exit 1
 fi
-mv "$WGT" "${ROOT}/${OUT}/${NAME}.wgt"
-(cd "${ROOT}/${OUT}" && sha256sum "${NAME}.wgt" > "${NAME}.wgt.sha256")
+mv "$WGT" "${OUT}/${NAME}.wgt"
+(cd "$OUT" && sha256sum "${NAME}.wgt" > "${NAME}.wgt.sha256")
 echo "Signed ${OUT}/${NAME}.wgt"

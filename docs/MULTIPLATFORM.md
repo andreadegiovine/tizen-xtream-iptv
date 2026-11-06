@@ -1,7 +1,7 @@
 # Multi-piattaforma: analisi, decisioni e piano
 
-Stato: **struttura per piattaforme fatta (patch 104), solo Tizen implementato.** Le prove su TV delle altre piattaforme non sono state fatte;
-i punti segnati "da verificare" sono ipotesi.
+Stato: **struttura per piattaforme fatta (patch 104); Tizen e LG webOS (patch 108) implementati.** Le prove su TV delle altre piattaforme
+non sono state fatte; i punti segnati "da verificare" sono ipotesi.
 
 ## Principi
 
@@ -13,6 +13,7 @@ i punti segnati "da verificare" sono ipotesi.
   piattaforma che fa build, firma e allega il pacchetto alla release.
 - **iOS escluso** per ora.
 - **Android solo per TV**: Fire TV (prima) e Android TV, telecomando e D-pad, niente touch.
+- **Desktop**: Windows, macOS e Linux, dopo le TV (stessa interfaccia, tastiera come telecomando).
 
 ## Decisioni prese
 
@@ -21,7 +22,7 @@ i punti segnati "da verificare" sono ipotesi.
 | Contenitore Android | **Capacitor** |
 | Player Android | **ExoPlayer (Media3) nativo**, pilotato da JS come AVPlay: video sotto, controlli HTML sopra |
 | Distribuzione Android | **solo APK** allegato alla release GitHub (niente store) |
-| Ordine | **webOS prima di Android** |
+| Ordine | **webOS, poi Android (Fire TV), poi desktop (Windows, macOS, Linux)** |
 | Certificati | restano versionati in `platforms/<nome>/`; senza password non sono utilizzabili e le password sono nei secret GitHub |
 | Trailer | solo Tizen ha un plugin (servizio locale); le altre piattaforme aprono l'app YouTube |
 | APK | per ora uno solo, per Fire TV; se servirà, due (Android TV e Fire TV) con due flavor Gradle dello stesso progetto |
@@ -61,37 +62,55 @@ Tutte le voci sono facoltative: quelle mancanti prendono il comportamento di un 
 | `registerKeys()` | chiede alla piattaforma i tasti media | `tvinputdevice.registerKey` |
 | `exit()` | chiude l'app | `tizen.application…exit()` |
 | `createEngine()` | motore video (stesso contratto di `createHtml5Engine`) | AVPlay, `<video>` nel browser |
-| `createTrailerEngine()` | motore che riproduce `youtube:<id>` nell'app, o null (si apre YouTube) | iframe + servizio `localhost:8125` |
+| `createTrailerEngine()` | motore che riproduce `youtube:<id>` nell'app, o null | iframe + servizio `localhost:8125` |
+| `openTrailer(id)` | apre il trailer fuori dall'app (webOS: app YouTube); senza nessuno dei due, niente bottone trailer | — |
 | `createDiagnosticPlayer()` | laboratorio player della Diagnostica | `avplaySpike` |
 | `runtimeChecks()` | righe in più dei controlli della Diagnostica | tizen, webapis, AVPlay |
 | `display / memory / networkType` | dati di sistema per la tabella Dispositivo | `tizen.systeminfo` |
 
-## Release (fatta, solo Tizen)
+## Release (fatta: Tizen e webOS)
 
 - `verify`: valida il tag (`v1.2.3`), `npm ci`, lint, test.
 - `tizen`: versione nel `package.json`, `npm run build:tizen`, `platforms/tizen/package.sh <versione> release` (installa Tizen Studio
   CLI, registra il profilo con il certificato copiato in una cartella temporanea, firma), carica `xtream-iptv-<versione>_tizen.wgt` e `.sha256`.
 - Nome dei pacchetti: `xtream-iptv-<versione>_<piattaforma>.<estensione>` (es. `xtream-iptv-1.0.1_tizen.wgt`).
-- Le prossime piattaforme aggiungono un job con la stessa forma (`webos`, `android`): ognuno dipende solo da `verify`, quindi una
+- `webos`: versione, `npm run build:webos`, `platforms/webos/package.sh <versione> release`, carica `xtream-iptv-<versione>_webos.ipk` e `.sha256`.
+- Le prossime piattaforme aggiungono un job con la stessa forma (`android`, desktop): ognuno dipende solo da `verify`, quindi una
   piattaforma che fallisce non blocca le altre.
 - Versioni: Tizen vuole x.y.z; Android vorrà anche un `versionCode` intero, ricavabile dal tag (1.2.3 → 10203).
 
-## LG webOS (prossima)
+## LG webOS (fatta, patch 108; da provare sulla TV)
 
 **Minimo consigliato: webOS 6.0 (LG 2021, Chromium 79).** Il target di build attuale (Chrome 76) funziona senza cambiare Babel, SCSS o polyfill.
 
 Chromium per versione: webOS 4 (2018-19) 53; webOS 5 (2020) 68; webOS 6 (2021) 79; webOS 22 (2022) 87; 23 → 94; 24 → 108; 25 → 120; 26 → 132.
 
-- webOS 5 (2020) è fattibile ma richiede un target Babel più basso e polyfill (`Object.fromEntries`, `flat`, `globalThis`, `matchAll`, `allSettled`) e una verifica del CSS.
-- webOS 4 e precedenti: non convengono (niente CSS grid, `async` richiede regenerator).
-- HLS: versione 3 (webOS 1-3.5), 5 (4.0/4.5), 7 (6.0 e successivi). HTTP/2 da webOS 5; MSE/EME da 5.0.
-- Il player nativo non supporta avanti/indietro veloce né velocità diverse da 1.0; il seek funziona.
-- Live: m3u8 (`pickLiveFormat` già lo preferisce). MPEG-TS/MKV e altri flussi dei provider: da verificare modello per modello.
-- App packaged: origine `file://`, nessun cookie. Chiamate dirette al provider (CORS): da verificare sulla TV.
-- Telecomando: Indietro = 461 (`keyCodes` dell'adattatore); Play/Pausa/Stop/Avanti/Indietro veloce seguono i codici standard già comuni.
-- Trailer: apertura dell'app YouTube (nessun plugin).
-- Pacchetto: `platforms/webos/` con `appinfo.json`, icone, `platform.js`, `build.js`, `package.sh` (`ares-package` di
-  `@webos-tools/cli`, gira su Linux). In modalità sviluppatore l'`.ipk` si installa senza firma.
+```
+platforms/webos/
+  platform.js       adattatore: tasto Indietro 461, uscita (window.close), motore <video>, trailer nell'app YouTube, pannello UHD
+  luna.js           chiamate ai servizi di sistema (PalmServiceBridge, senza webOSTV.js): avvio di YouTube, informazioni di sistema
+  appinfo.json      id com.xtrmiptv.app, 1920x1080, disableBackHistoryAPI (Indietro arriva alla pagina), requiredACG
+  icon.png          80x80;  largeIcon.png 130x130 (dal marchio dell'app)
+  build.js          copia appinfo.json (con la versione) e le icone accanto all'app
+  package.sh        ares-package (@webos-tools/cli via npx, --no-minify) → xtream-iptv-<versione>_webos.ipk
+```
+
+- Build: `npm run build:webos`; `npm run dev:webos` per provarla nel browser. Job `webos` nella release.
+- Installazione: l'`.ipk` non è firmato e si installa su una TV in **modalità sviluppatore** (app "Developer Mode" di LG,
+  poi `ares-setup-device` e `ares-install`). Il LG Content Store ha una sua procedura di pubblicazione.
+- `requiredACG`: `application.launcher` (avvio di YouTube) e `systemconfig.query` (informazioni di sistema). Ignorato fino a webOS 25,
+  applicato da webOS 26, obbligatorio da webOS 27.
+- Telecomando: Indietro = 461; Play/Pausa/Stop/Avanti/Indietro veloce e CH+/CH- usano i codici standard già comuni.
+- Trailer: app YouTube della TV (`youtube.leanback.v4`, `contentTarget` con l'URL del video: da verificare sulla TV).
+- Video: elemento `<video>` della pagina. HLS: versione 7 da webOS 6. Il player nativo non supporta avanti/indietro veloce né
+  velocità diverse da 1.0; il seek funziona. Live: m3u8 (`pickLiveFormat` già lo preferisce).
+
+**Da verificare sulla TV:**
+- chiamate dirette al provider (origine `file://`, CORS) e immagini / flussi http;
+- riproduzione di MPEG-TS, MKV e degli altri flussi dei provider, formato (object-fit), tracce audio e sottotitoli del `<video>`;
+- tasti del Magic Remote e il puntatore (il focus resta a tasti);
+- prestazioni sui modelli 2021.
+- webOS 5 (2020) richiederebbe un target Babel più basso e polyfill; webOS 4 e precedenti non convengono.
 
 ## Android TV / Fire TV (dopo webOS)
 
@@ -131,8 +150,12 @@ banner, touch non richiesto). Per ora un APK per Fire TV.
 
 1. ~~Interfaccia di piattaforma nel core, Tizen in `platforms/tizen/`~~ (patch 104; da verificare sulla TV Samsung che nulla sia cambiato).
 2. ~~Release multi-pacchetto con il solo Tizen~~ (patch 104).
-3. webOS: `platforms/webos/` (adattatore, `appinfo.json`, icone, `package.sh`), job `webos` nella release, prove su TV.
+3. ~~webOS: `platforms/webos/` (adattatore, `appinfo.json`, icone, `package.sh`), job `webos` nella release~~ (patch 108); prove su TV.
 4. Android / Fire TV: progetto Capacitor in `platforms/android/` (WebView, viewport, tasti, uscita, CapacitorHttp), all'inizio con il
    motore `<video>` per vedere l'interfaccia; job `android` con keystore nei secret.
 5. Plugin ExoPlayer con le stesse funzioni di AVPlay.
 6. Prove sui dispositivi e misure con il mock; poi l'APK nella release.
+7. Desktop (Windows, macOS, Linux): da analizzare. Probabile contenitore Electron (`platforms/desktop/`): Chromium recente, nessun CORS
+   con le richieste fatte dal processo principale, video con il `<video>` più hls.js / mpegts.js (come la build di sviluppo) o un
+   player nativo (mpv / libVLC) per TS e MKV; pacchetti `.exe`, `.dmg`, `.AppImage` / `.deb` dai job della release (firma per
+   Windows e macOS da valutare).

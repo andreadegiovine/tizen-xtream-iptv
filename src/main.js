@@ -104,6 +104,12 @@ async function boot() {
     search: createSearchService({ active, createWorker: createSearchWorker }),
     createEngine: () => platform.createEngine(),
     createTrailerEngine: () => (platform.createTrailerEngine ? platform.createTrailerEngine() : null),
+    // Trailers: in the app's player (Tizen) or opened outside it (webOS: the YouTube app); none when the platform has neither.
+    trailers: {
+      inApp: Boolean(platform.createTrailerEngine),
+      available: Boolean(platform.createTrailerEngine || platform.openTrailer),
+      open: (videoId) => (platform.openTrailer ? platform.openTrailer(videoId) : false),
+    },
     openEntry: null,
     enrich: null,
     meta: null,
