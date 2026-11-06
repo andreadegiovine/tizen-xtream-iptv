@@ -43,7 +43,7 @@ export default [
     },
   },
   {
-    files: ['test/setup.js', 'platforms/*/build.js', 'webpack.config.js', 'babel.config.js', 'postcss.config.js', 'scripts/**/*.js'],
+    files: ['test/setup.js', 'test/svgTransform.js', 'platforms/*/build.js', 'webpack.config.js', 'babel.config.js', 'postcss.config.js', 'scripts/**/*.js'],
     languageOptions: { sourceType: 'commonjs', globals: { ...globals.node, ...globals.browser } },
   },
 ];

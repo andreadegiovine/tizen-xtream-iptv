@@ -67,7 +67,7 @@ export function createHomePage(ctx) {
           previous.delete(d.id);
           return kept;
         }
-        const carousel = createCarousel({ ...d, revealTop: index === 0, onOpen: (item) => ctx.openEntry(item.entry, d.id === 'homeContinue' ? { section: 'home', resume: true } : { section: 'home' }) });
+        const carousel = createCarousel({ ...d, revealTop: index === 0, onOpen: (item) => ctx.openEntry(item.entry, { section: 'home' }) });
         return Object.assign(carousel, { id: d.id, sig, first: index === 0, fresh: true });
       });
     previous.forEach((c) => {

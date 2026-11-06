@@ -555,7 +555,9 @@ export function createDetailPage(ctx, params) {
       next.push({ id: 'detailVersion', zone: select.zone });
     }
 
-    // Icon-only buttons: play, trailer, resume, watched, favourite.
+    // Icon-only buttons. Films and series: Play (from the point reached, if any), Restart (only then: from the start), Watched, Trailer,
+    // Favourite, Add to a collection. Channels: Play, Favourite, Add to a collection, then their own (network, merge / group / ungroup).
+    // A button whose action is done shows the opposite one in the same place (Not watched, Remove from favourites).
     const buttons = [];
     let note = '';
     let canResume = false;
@@ -566,24 +568,24 @@ export function createDetailPage(ctx, params) {
         startIndex = episodes.indexOf(pick.episode);
         canResume = Boolean(pick.record && shouldResume(pick.record.position, pick.record.duration));
         note = `S${pick.episode.season}E${pick.episode.number}${canResume ? ` · ${formatClock(pick.record.position)}` : ''}`;
-        buttons.push({ id: 'play', icon: 'play', label: t('detail.play'), run: () => play({ list: episodes, startIndex, restart: true }) });
+        buttons.push({ id: 'play', icon: 'play', label: t('detail.play'), run: () => play({ list: episodes, startIndex }) });
       }
     } else {
       const record = records[0];
       canResume = Boolean(record && shouldResume(record.position, record.duration));
       if (canResume) note = formatClock(record.position);
-      buttons.push({ id: 'play', icon: 'play', label: t('detail.play'), run: () => play({ restart: true }) });
+      buttons.push({ id: 'play', icon: 'play', label: t('detail.play'), run: () => play(entry.type === 'live' ? { restart: true } : {}) });
     }
-    // The provider's trailer first, otherwise the one TMDB lists for the title.
-    const trailerId = (info && youtubeId(info.trailer)) || (meta && meta.trailerKey) || '';
-    if (buttons.length && trailerId && trailers.available) buttons.push({ id: 'trailer', icon: 'trailer', label: t('detail.trailer'), run: () => playTrailer(trailerId) });
     if (canResume) {
-      buttons.push({ id: 'resume', icon: 'resume', label: t('detail.resume'), run: () => (entry.type === 'series' ? play({ list: episodes, startIndex }) : play({})) });
+      buttons.push({ id: 'restart', icon: 'resume', label: t('detail.restart'), run: () => (entry.type === 'series' ? play({ list: episodes, startIndex, restart: true }) : play({ restart: true })) });
     }
     const watched = isEntryWatched(episodes);
     if (buttons.length && entry.type !== 'live') {
       buttons.push({ id: 'watched', icon: 'check', active: watched, label: watched ? t('detail.unwatched') : t('detail.watched'), run: () => toggleWatched(episodes, watched) });
     }
+    // The provider's trailer first, otherwise the one TMDB lists for the title.
+    const trailerId = (info && youtubeId(info.trailer)) || (meta && meta.trailerKey) || '';
+    if (buttons.length && trailerId && trailers.available) buttons.push({ id: 'trailer', icon: 'trailer', label: t('detail.trailer'), run: () => playTrailer(trailerId) });
     if (buttons.length) {
       buttons.push({ id: 'favorite', icon: 'heart', active: favorite, label: favorite ? t('detail.unfavorite') : t('detail.favorite'), run: toggleFavorite });
     }
@@ -606,9 +608,7 @@ export function createDetailPage(ctx, params) {
       buttons.push({ id: 'ungroup', icon: 'remove', label: t('merge.remove'), run: ungroupChannel });
     }
     buttons.note = note;
-    // Opened from "Continue watching": the focus starts on Resume, so OK continues from the point reached instead of starting over.
-    const resumeAt = params.resume && canResume ? buttons.findIndex((b) => b.id === 'resume') : -1;
-    if (buttons.length) next.push({ id: 'detailActions', zone: createActions(buttons, Math.max(0, resumeAt)) });
+    if (buttons.length) next.push({ id: 'detailActions', zone: createActions(buttons, 0) });
     else clear(actionsEl);
 
     renderCategories(next);

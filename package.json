@@ -35,6 +35,10 @@
       "__APP_VERSION__": "test",
       "__PLATFORM__": "tizen"
     },
+    "transform": {
+      "\\.js$": "babel-jest",
+      "\\.svg$": "<rootDir>/test/svgTransform.js"
+    },
     "moduleNameMapper": {
       "^@platform$": "<rootDir>/platforms/tizen/platform.js"
     },
@@ -47,6 +51,7 @@
     "@babel/preset-env": "^7.25.0",
     "@eslint/js": "^9.0.0",
     "@fontsource/inter": "^5.3.0",
+    "@resvg/resvg-js": "^2.6.2",
     "autoprefixer": "^10.4.20",
     "babel-jest": "^29.7.0",
     "babel-loader": "^9.2.1",

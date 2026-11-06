@@ -135,9 +135,10 @@ src/
   styles/     SCSS
   platform/   the contract of a platform adapter (contract.js) and the adapter of the build (index.js)
 platforms/
-  tizen/      adapter (AVPlay, remote keys, system info, YouTube trailers), config.xml, icon, YouTube service,
+  tizen/      adapter (AVPlay, remote keys, system info, YouTube trailers), config.xml, YouTube service,
               signing certificate, build.js (files webpack copies) and package.sh (signed .wgt)
-  webos/      adapter (<video>, Back 461, YouTube app via Luna), appinfo.json, icons, build.js and package.sh (.ipk)
+  webos/      adapter (<video>, Back 461, YouTube app via Luna), appinfo.json, build.js and package.sh (.ipk)
+logo.svg      the app logo: top bar, start screen, screensaver, and every platform icon (drawn at build time)
 test/         Jest tests
 docs/         design decisions, milestones and screenshots
 ```

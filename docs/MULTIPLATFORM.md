@@ -7,7 +7,7 @@ non sono state fatte; i punti segnati "da verificare" sono ipotesi.
 
 - **Logica e core unici.** Pagine, focus, database, sync, worker, EPG, player controller sono gli stessi per tutte le piattaforme
   (`src/`). Non c'è codice touch.
-- **Tutto ciò che riguarda una piattaforma sta in `platforms/<nome>/`**: adattatore JS, manifest, icone, certificati, plugin nativi,
+- **Tutto ciò che riguarda una piattaforma sta in `platforms/<nome>/`**: adattatore JS, manifest, elenco delle icone (disegnate da `logo.svg`), certificati, plugin nativi,
   script di pacchetto.
 - **Release GitHub → un pacchetto per piattaforma**: `.github/workflows/release.yml` ha un job `verify` (tag, lint, test) e un job per
   piattaforma che fa build, firma e allega il pacchetto alla release.
@@ -39,7 +39,7 @@ platforms/tizen/
   youtubeEngine.js           trailer (iframe servito dal servizio locale)
   keys.js                    tasti Samsung (10009, 10252, 427/428) e registrazione dei tasti media
   systemInfo.js              tizen.systeminfo (pannello, RAM, rete)
-  config.xml, icon.png       manifest e icona
+  config.xml                 manifest (l'icona, 117 px, è disegnata in build da logo.svg)
   youtube/                   pagina del player YouTube e servizio sulla TV
   tizencert.p12              certificato di firma (password nel secret TIZEN_CERT_PASSWORD)
   build.js                   cosa webpack copia accanto all'app e opzioni della pagina (webapis.js)
@@ -50,6 +50,9 @@ platforms/tizen/
   `npm run dev` usano Tizen. Webpack risolve `@platform` in `platforms/<nome>/platform.js` e aggiunge i file di `build.js`.
   Nei test Jest `@platform` è l'adattatore Tizen.
 - `dist/` per Tizen è identico a prima della riorganizzazione (stessi file, stesso `config.xml`, stesso servizio).
+- **Icone:** nessuna immagine nelle cartelle delle piattaforme. Il logo è `logo.svg` nella radice del repository (lo usano anche la barra
+  in alto, lo screensaver e la schermata di avvio); `build.js` di ogni piattaforma elenca le icone (`icons: [{ file, size }]`) e la build
+  le disegna in PNG (`scripts/platform-icons.js`, `@resvg/resvg-js`), anche nei job della release.
 - Un test di contratto (`test/platforms/contract.test.js`) controlla che ogni `platforms/*/platform.js` rispetti il contratto.
 
 ### Contratto dell'adattatore (`src/platform/contract.js`)
@@ -90,8 +93,7 @@ platforms/webos/
   platform.js       adattatore: tasto Indietro 461, uscita (window.close), motore <video>, trailer nell'app YouTube, pannello UHD
   luna.js           chiamate ai servizi di sistema (PalmServiceBridge, senza webOSTV.js): avvio di YouTube, informazioni di sistema
   appinfo.json      id com.xtrmiptv.app, 1920x1080, disableBackHistoryAPI (Indietro arriva alla pagina), requiredACG
-  icon.png          80x80;  largeIcon.png 130x130 (dal marchio dell'app)
-  build.js          copia appinfo.json (con la versione) e le icone accanto all'app
+  build.js          icone (icon.png 80 px, largeIcon.png 130 px, disegnate da logo.svg) e appinfo.json con la versione
   package.sh        ares-package (@webos-tools/cli via npx, --no-minify) → xtream-iptv-<versione>_webos.ipk
 ```
 

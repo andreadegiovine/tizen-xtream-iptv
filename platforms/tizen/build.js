@@ -7,10 +7,11 @@ const YOUTUBE_SERVICE_PORT = 8125; // keep in sync with platforms/tizen/youtubeE
 const here = (file) => path.resolve(__dirname, file);
 
 module.exports = {
+  // Drawn from logo.svg at build time (scripts/platform-icons.js).
+  icons: [{ file: 'icon.png', size: 117 }],
   html: ({ isProd }) => ({ includeWebapis: isProd }),
   copy: ({ version }) => [
     { from: here('config.xml'), to: 'config.xml', transform: (content) => content.toString().replace(/__VERSION__/g, version) },
-    { from: here('icon.png'), to: 'icon.png' },
     // YouTube player page: served by the on-TV service (service/service.js) and, for development, by the dev server.
     { from: here('youtube/player.html'), to: 'yt-player.html' },
     {

@@ -714,7 +714,7 @@ export function createBrowsePage(ctx, params = {}) {
         return;
       }
       const item = items[selected];
-      ctx.openEntry(entries[i], { section: params.section, ...(item && item.kind === 'continue' ? { resume: true } : {}), live: { categoryId: item && item.kind === 'all' ? allCategory() : item && item.kind === 'category' ? item.id : null, offset: i } });
+      ctx.openEntry(entries[i], { section: params.section, live: { categoryId: item && item.kind === 'all' ? allCategory() : item && item.kind === 'category' ? item.id : null, offset: i } });
     },
   });
 

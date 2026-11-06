@@ -7,6 +7,7 @@ const CopyPlugin = require('copy-webpack-plugin');
 const pkg = require('./package.json');
 const devProxy = require('./scripts/dev-proxy');
 const devMediaProxy = require('./scripts/dev-media-proxy');
+const { PlatformIconsPlugin, LOGO } = require('./scripts/platform-icons');
 
 /**
  * One build per platform: `--env platform=<name>` (default tizen) picks platforms/<name>/: its adapter (imported by the app as `@platform`,
@@ -40,6 +41,8 @@ module.exports = (env = {}, argv = {}) => {
     module: {
       rules: [
         { test: /\.js$/, exclude: /node_modules/, use: 'babel-loader' },
+        // logo.svg is imported as text (the top bar and the screensaver put it in the page).
+        { test: /\.svg$/, type: 'asset/source' },
         {
           test: /\.scss$/,
           use: [
@@ -65,6 +68,7 @@ module.exports = (env = {}, argv = {}) => {
         scriptLoading: 'blocking',
         // Options of the page template given by the platform (Tizen: webapis.js, which only exists inside a packaged app).
         includeWebapis: false,
+        logoSvg: fs.readFileSync(LOGO, 'utf8'), // the start screen shows the logo while the app loads
         ...(target.build.html ? target.build.html(buildOptions) : {}),
       }),
       new CopyPlugin({
@@ -78,6 +82,8 @@ module.exports = (env = {}, argv = {}) => {
           ...(target.build.copy ? target.build.copy(buildOptions) : []),
         ],
       }),
+      // The platform's icons, drawn from logo.svg (no pictures kept in platforms/).
+      new PlatformIconsPlugin(target.build.icons),
       new MiniCssExtractPlugin({ filename: 'css/[name].css' }),
     ],
     // The TV runs Chromium ~76: the minifier must not write `??` / `?.` (it rewrites `x == null ? a : x` into `x ?? a` by default).
