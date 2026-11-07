@@ -77,7 +77,8 @@ export function createGrowingGridModel({ columns, getCount, hasMore, more }) {
 /**
  * Sidebar entries. Movies and series: show all, continue watching, favourites, suggestions, a "Genres"
  * entry (open by default) with the genres, then a "Categories" entry that expands into the provider categories. Channels: show all, favourites, pinned categories,
- * the "Genres" entry of the guide's categories (open, only when the guide has them), the "Networks" entry (open) and the categories (closed).
+ * the "Genres" entry of the guide's categories (open, only when the guide has them), the "Networks" entry (open, closed when the guide genres
+ * are there) and the categories (closed).
  */
 export function sidebarItems({ type, genres = [], epgGenres = [], epgGenresExpanded = true, categories = [], pinned = [], networks = [], networksExpanded = true, expanded = false, genresExpanded = true, genresLoading = false, scheduled = false, labels }) {
   // Live TV opens on the programme guide; "show all" follows it.
@@ -157,7 +158,7 @@ export function createBrowsePage(ctx, params = {}) {
   let categories = []; // visible provider categories [{ id, name }]
   let expanded = false; // categories group
   let networks = []; // Live TV networks [{ key, name, memberKeys }]
-  let networksExpanded = true; // networks group: open by default
+  let networksExpanded = true; // networks group: open by default, closed when the guide genres are listed
   let epgGenres = []; // Live TV: genres of the guide [{ key, name }], with at least one channel
   let epgGenreKeys = new Map(); // genre key → the keys of its rows (groups and channels in no group)
   let epgGenresExpanded = true; // guide genres group: open by default
@@ -249,7 +250,7 @@ export function createBrowsePage(ctx, params = {}) {
   /** Favourites of this type that this provider can show (shared ones it does not carry are not counted). */
   async function favoriteCount() {
     const saved = (await ctx.favorites.list(providerId)).filter((f) => f.type === type);
-    const filters = await favoriteFilterEntries(saved, () => Promise.resolve(categories));
+    const filters = await favoriteFilterEntries(saved, () => Promise.resolve(categories), epgGenreSet);
     const titles = await byKeys(saved.filter((f) => !f.kind).map((f) => f.entryKey));
     return filters.length + titles.length;
   }
@@ -315,6 +316,11 @@ export function createBrowsePage(ctx, params = {}) {
           return found ? { ...p, id: String(found.id), name: found.name } : null;
         }
         if (p.kind === 'network') return networks.some((n) => n.key === p.id) ? p : null;
+        // A genre of the guide: shown while the current guide has it (it comes back with a later guide that has it again).
+        if (p.kind === 'epgGenre') {
+          const found = epgGenres.find((g) => g.key === p.id);
+          return found ? { ...p, name: found.name } : null;
+        }
         if (p.kind === 'genre' && !genresLoading && type !== 'live') return genres.some((g) => g.key === p.id) ? p : null;
         return p;
       })
@@ -365,7 +371,7 @@ export function createBrowsePage(ctx, params = {}) {
   async function syncFavorite() {
     if (destroyed || !providerId) return;
     const item = items[selected];
-    if (!item || (item.kind !== 'category' && item.kind !== 'genre' && item.kind !== 'network')) {
+    if (!item || (item.kind !== 'category' && item.kind !== 'genre' && item.kind !== 'network' && item.kind !== 'epgGenre')) {
       favState = null;
       renderHead();
       return;
@@ -424,7 +430,7 @@ export function createBrowsePage(ctx, params = {}) {
     if (item.kind === 'favorites') {
       const saved = (await ctx.favorites.list(providerId)).filter((f) => f.type === type);
       // Favourite categories and genres come first, as cards that open their own grid.
-      const filters = await favoriteFilterEntries(saved, () => Promise.resolve(categories));
+      const filters = await favoriteFilterEntries(saved, () => Promise.resolve(categories), epgGenreSet);
       return filters.concat(await byKeys(saved.filter((f) => !f.kind).map((f) => f.entryKey)));
     }
     if (item.kind === 'suggestions') {
@@ -571,23 +577,19 @@ export function createBrowsePage(ctx, params = {}) {
       return applyGuideLayout(rows, await ctx.guideLayout.read(providerId, db));
     })());
 
+  /** The keys of the guide genres listed now (favourite guide genres the guide no longer has are hidden). */
+  const epgGenreSet = async () => new Set(epgGenres.map((g) => g.key));
+
   /**
    * The genres of the guide (XMLTV categories) and their rows: a channel counts once, as its group when it has one. Nothing when the guide
    * has no categories or expired.
    */
   async function loadEpgGenres() {
-    if (type !== 'live' || !ctx.epg || !ctx.epg.genres) return;
-    const [found, rows] = await Promise.all([ctx.epg.genres(), readGuideIndex(db)]);
-    const keys = new Map();
-    rows.forEach((row) => {
-      (found.byChannel.get(row.epgChannelId) || []).forEach((g) => {
-        if (!keys.has(g)) keys.set(g, []);
-        keys.get(g).push(row.key);
-      });
-    });
-    epgGenres = found.genres.filter((g) => keys.has(g.key));
-    epgGenreKeys = keys;
-    epgGenres.forEach((g) => counts.set(`epgGenre:${g.key}`, keys.get(g.key).length));
+    if (type !== 'live' || !ctx.epg || !ctx.epg.genreRows) return;
+    const found = await ctx.epg.genreRows();
+    epgGenres = found.genres;
+    epgGenreKeys = found.rows;
+    epgGenres.forEach((g) => counts.set(`epgGenre:${g.key}`, found.rows.get(g.key).length));
   }
 
   /** The scheduled programmes of this provider, and the rows of their channels (the "scheduled" view). */
@@ -836,6 +838,8 @@ export function createBrowsePage(ctx, params = {}) {
     expanded = Boolean(filter && filter.kind === 'category');
     networks = cachedSidebar ? cachedSidebar.networks : type === 'live' ? await listNetworks(db).catch(() => []) : [];
     await loadEpgGenres().catch((err) => log.warn('Guide genres failed', err && err.message));
+    // With the guide genres in the sidebar, Networks starts closed (open when a network is what the page opens on).
+    if (!back) networksExpanded = !epgGenres.length || Boolean(filter && filter.kind === 'network');
     if (stale) listCategories(db, type).then((found) => { if (!destroyed) { categories = found.filter((c) => !excluded.has(String(c.id))).map((c) => ({ id: c.id, name: c.name })); rebuildSidebar(); } }).catch(() => undefined);
     if (stale && type === 'live') listNetworks(db).then((found) => { if (!destroyed) { networks = found; rebuildSidebar(); } }).catch(() => undefined);
     items = sidebarItems({ type, genres, epgGenres, epgGenresExpanded, categories, pinned: pinnedView(), networks, networksExpanded, expanded, genresExpanded, genresLoading, scheduled: scheduledCount > 0, labels: labels() });

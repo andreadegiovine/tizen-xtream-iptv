@@ -8,11 +8,18 @@ const SECTION_OF_TYPE = { movie: 'movies', series: 'series', live: 'live' };
  * Saved filter records → pseudo entries (`filterKind` set) for the cards, newest first, ahead of the titles.
  * Favourite categories are saved by their folded name (shared by all providers); a category this provider does not list is skipped (not
  * deleted) and the others open by this provider's own id. `categoriesOf(type)` → [{ id, name }].
+ * A favourite genre of the TV guide (`epgGenre`) is shown only while the current guide has it (`epgGenresOf()` → Set of keys): it is kept
+ * and comes back with a later guide that has it again.
  */
-export async function favoriteFilterEntries(saved, categoriesOf) {
+export async function favoriteFilterEntries(saved, categoriesOf, epgGenresOf = async () => new Set()) {
   const known = new Map();
   const out = [];
+  let guideGenres = null;
   for (const item of saved.filter((f) => f.kind)) {
+    if (item.kind === 'epgGenre') {
+      if (!guideGenres) guideGenres = await epgGenresOf().catch(() => new Set());
+      if (!guideGenres.has(String(item.refId))) continue;
+    }
     if (item.kind === 'category') {
       if (!known.has(item.type)) known.set(item.type, new Map((await categoriesOf(item.type).catch(() => [])).map((c) => [foldName(c.name), String(c.id)])));
       const own = known.get(item.type).get(String(item.refId));

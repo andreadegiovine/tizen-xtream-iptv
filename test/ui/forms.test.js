@@ -64,6 +64,17 @@ test('field: label above the input, Done saves, Cancel restores, keys never reac
   expect(createField({ label: 'x' }).root.classList.contains('field')).toBe(true);
 });
 
+test('field x: empties the field, or puts back its default value', () => {
+  const plain = createField({ label: 'Key' });
+  plain.setValue('abc');
+  plain.clear();
+  expect(plain.getValue()).toBe('');
+  const withDefault = createField({ label: 'Similarity', defaultValue: '80' });
+  withDefault.setValue('55');
+  withDefault.clearEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  expect(withDefault.getValue()).toBe('80');
+});
+
 test('framedPage: centred container for title and content', () => {
   const page = framedPage(document.createElement('h1'), document.createElement('div'));
   expect(page.className).toBe('page framed');

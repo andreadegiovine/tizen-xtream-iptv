@@ -249,9 +249,10 @@ async function boot() {
     entries.forEach((entry, i) => {
       if (!entry.filterKind || !cards[i]) return;
       cards[i].update({ countLoading: true });
-      const job = entry.filterKind === 'genre'
-        ? filterTotals(entry.type).then((map) => map.get(String(entry.filterId)) || 0)
-        : active.get().then((current) => (current ? countEntries(current.db, { type: entry.type, categoryId: entry.filterId }) : 0));
+      let job;
+      if (entry.filterKind === 'genre') job = filterTotals(entry.type).then((map) => map.get(String(entry.filterId)) || 0);
+      else if (entry.filterKind === 'epgGenre') job = epg.genreRows().then((found) => (found.rows.get(String(entry.filterId)) || []).length);
+      else job = active.get().then((current) => (current ? countEntries(current.db, { type: entry.type, categoryId: entry.filterId }) : 0));
       job.then((n) => cards[i].update({ count: n })).catch(() => cards[i].update({ count: null }));
     });
     filterTotals.cache = {}; // fresh numbers at the next page

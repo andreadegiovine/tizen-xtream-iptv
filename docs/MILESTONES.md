@@ -582,3 +582,9 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - Live TV → Programme: the list of rows is a small record written with the Live TV catalog, and the channels with a guide come from a per-channel summary written at the guide download, so opening the page no longer reads every live entry and walks every programme; only the entries of the rows on screen are read.
 - When the guide gives categories (XMLTV `<category>`), each channel gets its genres (those of at least 30 % of its programmes), kept until the guide expires. Live TV sidebar: "Genres" entry (open) before Networks, with the genres and the number of channels; selecting one shows its channels.
 - Mock server: programmes with categories. Checked in Chromium with the mock (guide drawn ~0.5 s after opening Live TV, Genres entry and grid, Settings row). Tests: parser categories, channel summary, guide index, sidebar, Settings row, EPG service, episode buttons. Applies after patch 120. Not verified on the TV.
+
+### Patch 122 — Preferences fields, dialog scrollbars, guide genres as favourites and pins
+- Settings → Preferences: the text fields no longer have a reset button; the "x" of a field with a default value (network similarity, network difference) puts the default back instead of emptying it. The custom EPG placeholder no longer says "; empty = the provider's".
+- Dialogs no longer show scrollbars (vertical or horizontal), also on older Chromium.
+- Live TV: a genre of the guide can be added to favourites or pinned to the sidebar. It is hidden while the current guide does not have it and shows again when a later guide has it. With the guide genres in the sidebar, "Networks" starts closed.
+- Checked in Chromium with the mock (sidebar, pin and heart on a guide genre, Favorites card, Settings fields; a long dialog list without scrollbars). Tests: x with a default value, favourite guide genre shown / hidden. Applies after patch 121. Not verified on the TV.

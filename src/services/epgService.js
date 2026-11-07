@@ -4,6 +4,7 @@ import { requestToPromise, dbGet } from '../core/idb.js';
 import { log } from '../core/logger.js';
 import { isPlaceholderTitle } from './xmltv.js';
 import { EPG_CHANNELS_KEY, summaryValid, channelsBetween } from './epgChannels.js';
+import { readGuideIndex } from './guideIndex.js';
 
 const MAX = Number.MAX_SAFE_INTEGER;
 
@@ -184,6 +185,23 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
         .map((key) => ({ key, name: known.genres[key] }))
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
       return { genres, byChannel };
+    },
+    /**
+     * The genres of the guide that some Live TV row has, with those rows (groups and channels in no group, by name):
+     * `{ genres: [{ key, name }], rows: Map(genre key → [entry key]) }`. Empty when the guide has no categories or expired.
+     */
+    async genreRows() {
+      const current = await active.get();
+      const rows = new Map();
+      if (!current) return { genres: [], rows };
+      const [found, index] = await Promise.all([this.genres(), readGuideIndex(current.db)]);
+      index.forEach((row) => {
+        (found.byChannel.get(row.epgChannelId) || []).forEach((g) => {
+          if (!rows.has(g)) rows.set(g, []);
+          rows.get(g).push(row.key);
+        });
+      });
+      return { genres: found.genres.filter((g) => rows.has(g.key)), rows };
     },
     channelsWithGuide,
     upcoming,

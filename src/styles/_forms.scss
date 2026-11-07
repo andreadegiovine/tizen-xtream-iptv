@@ -142,7 +142,7 @@
   }
 }
 
-// A field with a button at its right (Settings: restore the default).
+// A field with a button at its right.
 .field-line {
   display: flex;
   align-items: stretch;
@@ -150,13 +150,6 @@
   .field {
     flex: 1;
     min-width: 0;
-  }
-
-  .btn.row-reset {
-    flex: none;
-    width: 72px;
-    margin: 0 0 16px 12px;
-    padding: 0;
   }
 }
 

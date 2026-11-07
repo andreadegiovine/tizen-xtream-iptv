@@ -22,7 +22,6 @@ import { probeGuide } from '../../services/epgSync.js';
 import { rebuildLive } from '../../services/rebuildLive.js';
 import { parseTerms, termsText } from '../../services/liveGrouping.js';
 import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from '../../services/liveNetworks.js';
-import { icon } from '../icons.js';
 import { createField } from '../components/field.js';
 import { framedPage } from '../components/formPage.js';
 
@@ -394,28 +393,16 @@ export function createSettingsPage(ctx) {
     }
   }
 
-  // Words removed from channel names: the field shows the defaults as its placeholder, the button at its right brings them back.
-  const patternsReset = h('button', { class: 'btn danger icon-only row-reset', type: 'button', 'aria-label': t('settings.liveGroupReset'), title: t('settings.liveGroupReset') }, icon('remove'));
+  // Words removed from channel names (added to the built-in ones): the x empties the field, which means only the built-in words.
   const showPatterns = () => ctx.settings.get().then((s) => { patternsField.setValue(s.liveGroupPatterns); });
   const patternsField = createField({
     label: t('settings.liveGroupPatterns'),
     placeholder: t('settings.liveGroupPlaceholder'),
-    trailing: patternsReset,
     onSubmit: (value) => ctx.settings.update({ liveGroupPatterns: termsText(parseTerms(value)) }).then(showPatterns).then(regroup),
     onCancel: showPatterns,
   });
   const patternsRow = { el: patternsField.el, root: patternsField.root, refresh: showPatterns, activate: async () => patternsField.focus() };
   const patternsClearRow = clearRowOf(patternsField);
-  const patternsResetRow = {
-    secondary: 'right',
-    el: patternsReset,
-    refresh: async () => undefined,
-    async activate() {
-      await ctx.settings.update({ liveGroupPatterns: '' });
-      await showPatterns();
-      await regroup();
-    },
-  };
 
   // Custom EPG: saved only when it is an http(s) address that answers with an XMLTV guide; empty goes back to the provider's guide.
   const showEpg = () => ctx.settings.get().then((st) => { epgField.setValue(st.customEpgUrl); });
@@ -439,35 +426,24 @@ export function createSettingsPage(ctx) {
   const epgRow = { el: epgField.el, root: epgField.root, refresh: showEpg, activate: async () => epgField.focus() };
   const epgClearRow = clearRowOf(epgField);
 
-  /** A number field (with its reset button, a second row like the one of the words) for a network setting; Enter saves and rebuilds Live TV. */
-  function numberRows({ key, labelKey, resetKey, fallback }) {
-    const reset = h('button', { class: 'btn danger icon-only row-reset', type: 'button', 'aria-label': t(resetKey), title: t(resetKey) }, icon('remove'));
+  /** A number field for a network setting; Enter saves and rebuilds Live TV. Its x puts the default value back (to confirm with Done). */
+  function numberRows({ key, labelKey, fallback }) {
     const show = () => ctx.settings.get().then((s) => { field.setValue(s[key]); });
     const field = createField({
       label: t(labelKey),
       placeholder: String(fallback),
       inputmode: 'numeric',
-      trailing: reset,
+      defaultValue: String(fallback),
       onSubmit: (value) => ctx.settings.update({ [key]: value.trim() }).then(show).then(regroup),
       onCancel: show,
     });
     return [
       { el: field.el, root: field.root, refresh: show, activate: async () => field.focus() },
       clearRowOf(field),
-      {
-        secondary: 'right',
-        el: reset,
-        refresh: async () => undefined,
-        async activate() {
-          await ctx.settings.update({ [key]: fallback });
-          await show();
-          await regroup();
-        },
-      },
     ];
   }
-  const [similarityRow, similarityClearRow, similarityResetRow] = numberRows({ key: 'liveNetworkSimilarity', labelKey: 'settings.liveNetworkSimilarity', resetKey: 'settings.liveNetworkReset', fallback: DEFAULT_SIMILARITY });
-  const [maxDiffRow, maxDiffClearRow, maxDiffResetRow] = numberRows({ key: 'liveNetworkMaxDiff', labelKey: 'settings.liveNetworkMaxDiff', resetKey: 'settings.liveNetworkReset', fallback: DEFAULT_MAX_DIFF });
+  const [similarityRow, similarityClearRow] = numberRows({ key: 'liveNetworkSimilarity', labelKey: 'settings.liveNetworkSimilarity', fallback: DEFAULT_SIMILARITY });
+  const [maxDiffRow, maxDiffClearRow] = numberRows({ key: 'liveNetworkMaxDiff', labelKey: 'settings.liveNetworkMaxDiff', fallback: DEFAULT_MAX_DIFF });
 
   const resetAll = actionRow({
     ctx,
@@ -498,7 +474,7 @@ export function createSettingsPage(ctx) {
     {
       titleKey: 'settings.section.live',
       // The toggle for the numbers sits right under the maximum difference, the setting it goes with.
-      parts: [{ list: [liveGrouping, liveNetworks] }, { fields: [similarityRow, similarityClearRow, similarityResetRow, maxDiffRow, maxDiffClearRow, maxDiffResetRow] }, { list: [ignoreNumbersRow] }, { fields: [patternsRow, patternsClearRow, patternsResetRow] }, { fields: [epgRow, epgClearRow] }],
+      parts: [{ list: [liveGrouping, liveNetworks] }, { fields: [similarityRow, similarityClearRow, maxDiffRow, maxDiffClearRow] }, { list: [ignoreNumbersRow] }, { fields: [patternsRow, patternsClearRow] }, { fields: [epgRow, epgClearRow] }],
     },
     {
       titleKey: 'settings.section.content',

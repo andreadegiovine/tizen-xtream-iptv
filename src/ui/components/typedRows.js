@@ -11,7 +11,8 @@ const LABEL = { collection: 'nav.collections', movie: 'nav.movies', series: 'nav
  * The card carries an icon instead of a poster and the kind ("Category", "Genre") as its subtitle.
  */
 export const isFilterEntry = (entry) => Boolean(entry && entry.filterKind);
-export const filterCardMeta = (entry) => ({ placeholder: entry.filterKind === 'genre' ? 'genres' : 'categories', subtitle: t(entry.filterKind === 'genre' ? 'favorites.genre' : 'favorites.category') });
+const isGenreFilter = (entry) => entry.filterKind === 'genre' || entry.filterKind === 'epgGenre';
+export const filterCardMeta = (entry) => ({ placeholder: isGenreFilter(entry) ? 'genres' : 'categories', subtitle: t(isGenreFilter(entry) ? 'favorites.genre' : 'favorites.category') });
 
 /** Splits entries by type (collections first), keeping the order and at most `limit` per type. */
 export function groupByType(entries, limit = 20) {

@@ -15,12 +15,13 @@ export const IME_CANCEL = 65385;
  * reachable with Right, and `clear()` (OK on it, or a click) empties the field and opens the keyboard.
  * Returns { el (gets the `focused` class), root, input, clearEl, focus, clear, getValue, setValue }.
  */
-export function createField({ label, type = 'text', placeholder = '', inputmode = '', onSubmit = null, onCancel = null, trailing = null, clearable = true }) {
+export function createField({ label, type = 'text', placeholder = '', inputmode = '', onSubmit = null, onCancel = null, trailing = null, clearable = true, defaultValue = '' }) {
   const input = h('input', { type, autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: placeholder || null, inputmode: inputmode || null });
   const clearEl = clearable ? h('span', { class: 'field-clear', 'aria-label': t('field.clear') }, icon('close')) : null;
   const el = h('label', { class: clearable ? 'field clearable' : 'field' }, h('span', { class: 'field-label', text: label }), input, clearEl);
+  // A field with a default value gets it back from the x instead of being emptied.
   const clear = () => {
-    input.value = '';
+    input.value = defaultValue === null || defaultValue === undefined ? '' : String(defaultValue);
     input.focus(); // opens the on-screen keyboard
   };
   if (clearEl) {

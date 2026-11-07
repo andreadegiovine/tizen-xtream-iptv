@@ -122,3 +122,11 @@ test('tags come from TMDB genres first, split into separate items', () => {
   expect(tagsFrom(null, { genre: 'Action / Thriller | Action' })).toEqual(['Action', 'Thriller']);
   expect(tagsFrom(null, null)).toEqual([]);
 });
+
+test('a favourite genre of the TV guide shows only while the current guide has it, and comes back with it', async () => {
+  const { favoriteFilterEntries } = await import('../../src/services/favoriteFilters.js');
+  const saved = [{ entryKey: 'epgGenre:live:sport', kind: 'epgGenre', type: 'live', refId: 'sport', name: 'Sport' }];
+  expect(await favoriteFilterEntries(saved, async () => [], async () => new Set(['news']))).toEqual([]);
+  expect(await favoriteFilterEntries(saved, async () => [], async () => new Set(['sport']))).toEqual([{ key: 'epgGenre:live:sport', type: 'live', name: 'Sport', icon: '', filterKind: 'epgGenre', filterId: 'sport' }]);
+  expect(await favoriteFilterEntries(saved, async () => [])).toEqual([]); // no guide: hidden, not deleted
+});

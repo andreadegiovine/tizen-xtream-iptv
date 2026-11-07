@@ -88,6 +88,11 @@
   padding: 40px 48px;
   border-radius: 8px;
   background: $bg-raised;
+  overflow: hidden; // no scrollbars in dialogs: lists scroll with the focus
+
+  ::-webkit-scrollbar {
+    display: none;
+  }
 
   h2 {
     margin-top: 0;
