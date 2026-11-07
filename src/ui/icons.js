@@ -20,6 +20,7 @@ import { faBackward } from '@fortawesome/free-solid-svg-icons/faBackward';
 import { faForward } from '@fortawesome/free-solid-svg-icons/faForward';
 import { faBackwardStep } from '@fortawesome/free-solid-svg-icons/faBackwardStep';
 import { faForwardStep } from '@fortawesome/free-solid-svg-icons/faForwardStep';
+import { faFlagCheckered } from '@fortawesome/free-solid-svg-icons/faFlagCheckered';
 import { faExpand } from '@fortawesome/free-solid-svg-icons/faExpand';
 import { faMaximize } from '@fortawesome/free-solid-svg-icons/faMaximize';
 import { faMinimize } from '@fortawesome/free-solid-svg-icons/faMinimize';
@@ -74,6 +75,7 @@ const ICONS = {
   forward: faForward,
   previous: faBackwardStep,
   next: faForwardStep,
+  credits: faFlagCheckered, // the start of the end credits (series)
   aspect: faExpand,
   fullscreen: faMaximize,
   fullscreenExit: faMinimize,

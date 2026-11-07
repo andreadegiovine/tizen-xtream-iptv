@@ -127,6 +127,16 @@
   }
 
   // Drawn at its focused size and scaled down at rest: growing it is a transform (no layout), 34 → 22 px.
+  // The end credits of a series (set by the user): the rest of the bar, darker.
+  .player-credits {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 0 5px 5px 0;
+    background: rgba($black, 0.6);
+  }
+
   .player-knob {
     position: absolute;
     top: 50%;
@@ -185,6 +195,18 @@
 
     &.focused .player-btn-tip:not(:empty) {
       opacity: 1;
+    }
+
+    // The end credits start is set for this series.
+    &.active {
+      color: $accent;
+    }
+
+    // The last button on the right: its tooltip ends at the button, so it stays on screen.
+    &:last-child .player-btn-tip {
+      left: auto;
+      right: 0;
+      transform: none;
     }
   }
 

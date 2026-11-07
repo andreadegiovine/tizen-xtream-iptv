@@ -38,7 +38,7 @@ test('a platform with a window gets a full-screen button in the player; it follo
   const button = Array.from(page.el.querySelectorAll('.player-btn')).find((b) => b.getAttribute('aria-label') === 'Full screen');
   expect(button).toBeTruthy();
   page.onAction(Action.DOWN); // focus on the controls: play / pause
-  [Action.RIGHT, Action.RIGHT, Action.RIGHT, Action.RIGHT].forEach((a) => page.onAction(a)); // forward, aspect ratio, subtitles, full screen
+  [Action.RIGHT, Action.RIGHT, Action.RIGHT].forEach((a) => page.onAction(a)); // aspect ratio, subtitles, full screen
   expect(button.classList.contains('focused')).toBe(true);
   page.onAction(Action.ENTER);
   await wait();

@@ -38,7 +38,7 @@ Tizen has been developed and tried on a 2021 QLED; the Windows app is tried as w
   can be hidden per provider and per type, and every detail page links back to the matching genre or category.
 - **Trailers.** The trailer button plays the YouTube trailer in the app's own player on Samsung TVs, with the same controls as a movie;
   on the other platforms it opens the YouTube app or the browser.
-- **A real player.** Back / forward 30 s, draggable progress bar, aspect ratio, audio tracks, subtitles, adjustable
+- **A real player.** Draggable progress bar, previous / next episode, an end-credits point you set once per series (the next episode is offered from there), aspect ratio, audio tracks, subtitles, adjustable
   buffering, resume from where you stopped and autoplay of the next episode. The video engine is the one native to each platform
   (AVPlay on Tizen, the system player on webOS, ExoPlayer on Android).
 - **Live TV with a programme guide.** Now-playing on every channel card, the next 24 hours on the channel page, a full

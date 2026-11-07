@@ -64,7 +64,7 @@ test('no subtitles in the file: downloaded from OpenSubtitles with a notice, off
   });
   const subtitles = Array.from(s.page.el.querySelectorAll('.player-btn')).find((b) => b.getAttribute('aria-label') === 'Subtitles');
   s.page.onAction(Action.DOWN); // focus on the controls: play / pause
-  [Action.RIGHT, Action.RIGHT, Action.RIGHT].forEach((a) => s.page.onAction(a)); // forward, aspect ratio, subtitles
+  [Action.RIGHT, Action.RIGHT].forEach((a) => s.page.onAction(a)); // aspect ratio, subtitles
   expect(subtitles.classList.contains('focused')).toBe(true);
   s.page.onAction(Action.ENTER);
   await wait(300);

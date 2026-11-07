@@ -79,6 +79,8 @@ export function createPlayerPage(ctx, params) {
   let programmeTimer = null;
   let sequence = null; // Promise of the keys previous / next channel walk
   const neighborNames = new Map(); // key → name, for the tooltip of previous / next
+  let creditsOffset = null; // series: the end credits start this many seconds before the end (set by the user), otherwise null
+  let creditsKey = null; // Promise of the series key the credits point is saved under (the shared one when known)
 
   const titleEl = h('div', { class: 'player-title' });
   const statusEl = h('div', { class: 'player-status' });
@@ -86,17 +88,19 @@ export function createPlayerPage(ctx, params) {
   const timeEl = h('span', { class: 'player-time' });
   const buffer = h('div', { class: 'player-buffer' });
   const fill = h('div', { class: 'player-fill' });
+  const creditsZone = h('div', { class: 'player-credits' }); // the end credits: the part of the bar after their start, darker
   const knob = h('div', { class: 'player-knob' });
   const tip = h('div', { class: 'player-tip' });
-  const bar = h('div', { class: 'player-bar' }, buffer, fill, knob, tip);
+  const bar = h('div', { class: 'player-bar' }, buffer, fill, creditsZone, knob, tip);
   const seek = h('div', { class: 'player-seek' }, bar);
   const subtitleEl = h('div', { class: 'player-subtitle' });
 
   // Control buttons: transport at the bottom left (not for live), aspect ratio + subtitles at the bottom right.
   const buttonDefs = [
-    { id: 'back', icon: 'backward', label: () => t('player.back'), vodOnly: true, group: 'start', run: () => controller.seekBy(-SEEK_LONG) },
     { id: 'toggle', icon: 'pause', label: () => t('player.pause'), vodOnly: true, group: 'start', run: () => controller.togglePause() },
-    { id: 'forward', icon: 'forward', label: () => t('player.forward'), vodOnly: true, group: 'start', run: () => controller.seekBy(SEEK_LONG) },
+    // Series: previous / next episode, shown only when there is one (the position is moved with the progress pointer).
+    { id: 'prevEpisode', icon: 'previous', label: () => t('player.prevEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(-1) },
+    { id: 'nextEpisode', icon: 'next', label: () => t('player.nextEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(1) },
     { id: 'versions', icon: 'group', label: () => t('player.versions'), liveOnly: true, hidden: true, run: () => openVersions() }, // a group with several versions
     { id: 'network', icon: 'network', label: () => t('networks.open'), liveOnly: true, hidden: true, run: () => openNetwork() }, // a channel of a network
     { id: 'prevChannel', icon: 'previous', label: () => t('player.prevChannel'), liveOnly: true, tip: true, run: () => stepChannel(-1) },
@@ -105,7 +109,11 @@ export function createPlayerPage(ctx, params) {
     { id: 'subtitles', icon: 'subtitles', label: () => t('player.subtitles'), group: 'end', run: () => openSubtitles() },
     { id: 'audio', icon: 'audio', label: () => t('player.audio'), group: 'end', hidden: true, run: () => openAudio() }, // shown once the file has several audio tracks
     { id: 'fullscreen', icon: 'fullscreen', label: () => t('player.fullscreen'), group: 'end', run: () => toggleFullscreen() }, // desktop only: the window is not always full screen
-  ].filter((def) => def.id !== 'fullscreen' || platform.toggleFullscreen).filter((def) => !(isLive && def.vodOnly) && !(!isLive && def.liveOnly) && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles' || def.id === 'audio')));
+    // Series with "play the next episode" on: the end credits start here (the pointer's position), for every episode; again = removed.
+    { id: 'credits', icon: 'credits', label: () => t(creditsOffset ? 'player.credits.remove' : 'player.credits'), seriesOnly: true, hidden: true, tip: true, group: 'end', run: () => toggleCredits() },
+  ]
+    .filter((def) => def.id !== 'fullscreen' || platform.toggleFullscreen)
+    .filter((def) => !(isLive && def.vodOnly) && !(!isLive && def.liveOnly) && !(def.seriesOnly && params.type !== 'series') && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles' || def.id === 'audio')));
   buttonDefs.forEach((def) => {
     // Previous / next channel: the name of the channel they go to shows above them while focused.
     if (def.tip) def.tipEl = h('span', { class: 'player-btn-tip' });
@@ -116,7 +124,7 @@ export function createPlayerPage(ctx, params) {
   });
   const buttonEl = (id) => (buttonDefs.find((d) => d.id === id) || {}).el;
   // Full-width progress bar, then one row: back, play/pause, forward and the time on the left, aspect ratio and subtitles on the right.
-  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('back'), buttonEl('toggle'), buttonEl('forward'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen')));
+  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('toggle'), buttonEl('prevEpisode'), buttonEl('nextEpisode'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
   const top = h('div', { class: 'player-top' }, titleEl, nowEl);
   const controls = h('div', { class: 'player-controls' }, ...(isLive ? [] : [seek]), row);
   const el = h('section', { class: 'player' }, top, controls, statusEl, subtitleEl);
@@ -196,6 +204,9 @@ export function createPlayerPage(ctx, params) {
     knob.style.left = `${pct}%`;
     tip.style.left = `${pct}%`;
     tip.textContent = formatClock(position);
+    const creditsAt = creditsStart(duration);
+    creditsZone.style.display = creditsAt === null ? 'none' : '';
+    if (creditsAt !== null) creditsZone.style.left = `${(creditsAt / duration) * 100}%`;
     timeEl.textContent = isLive ? `${t('player.live')}${liveEndText()}` : `${formatClock(position)} / ${formatClock(duration)}${endsAtText(position, duration)}`;
   }
 
@@ -278,8 +289,12 @@ export function createPlayerPage(ctx, params) {
     seek.classList.toggle('focused', focusMode && barFocus);
   }
 
-  /** The tooltip of previous / next channel: the name of the channel it goes to. */
+  /** The tooltip of previous / next channel: the name of the channel it goes to (the credits button: what it does). */
   async function fillTip(def) {
+    if (def.id === 'credits') {
+      def.tipEl.textContent = def.label();
+      return;
+    }
     const key = await neighbor(def.id === 'prevChannel' ? -1 : 1);
     if (destroyed || !key) return;
     if (!neighborNames.has(key)) {
@@ -561,8 +576,9 @@ export function createPlayerPage(ctx, params) {
         if (record && !params.restart && shouldResume(record.position, record.duration)) startAt = record.position;
       }
       if (destroyed || token !== loadToken) return;
-      const { bufferSeconds, timeFormat: clockFormat } = await ctx.settings.get();
+      const { bufferSeconds, timeFormat: clockFormat, autoplayNext } = await ctx.settings.get();
       timeFormat = clockFormat || 'auto';
+      updateSeriesButtons(autoplayNext).catch(() => undefined);
       controller.load(client.streamUrl(params.type, current().id, current().ext), { startAt, bufferSeconds, onSubtitle: showSubtitle });
       if (isLive && ctx.epg) ctx.epg.maybeSync().catch(() => {});
       if (isLive) loadProgramme(token);
@@ -603,7 +619,9 @@ export function createPlayerPage(ctx, params) {
   /** About two minutes before the end of an episode the next one is offered: OK plays it now (during the end credits). */
   function offerNext(state) {
     if (isLive || isTrailer || nextOffered || state.status !== 'playing' || !(state.duration > NEXT_MIN_DURATION_S)) return;
-    if (state.duration - state.position > NEXT_OFFER_S) return;
+    // From the start of the end credits when the user set it for the series, otherwise about two minutes before the end.
+    const creditsAt = creditsStart(state.duration);
+    if (creditsAt !== null ? state.position < creditsAt : state.duration - state.position > NEXT_OFFER_S) return;
     const next = neighborEpisode(playlist, index, 1);
     if (!next) return;
     nextOffered = true;
@@ -709,6 +727,64 @@ export function createPlayerPage(ctx, params) {
     if (!entry || destroyed) return;
     live.offset = Math.max(0, live.offset + delta);
     switchTo(entry);
+  }
+
+  /** Start of the end credits in an episode of `duration` seconds, or null (not set, or the episode is shorter than that). */
+  function creditsStart(duration) {
+    if (!creditsOffset || !(duration > creditsOffset)) return null;
+    return duration - creditsOffset;
+  }
+
+  /** The key of the series for the credits point: the one shared between providers when the provider row has a TMDB id. */
+  function seriesKey() {
+    if (!creditsKey) {
+      creditsKey = ctx.active
+        .get()
+        .then((current) => (current ? portableKeyFor(current.db, params.entryKey) : null))
+        .then((key) => key || params.entryKey)
+        .catch(() => params.entryKey);
+    }
+    return creditsKey;
+  }
+
+  /** Series buttons for the episode playing: previous / next when they exist; the credits button with "play the next episode" on. */
+  async function updateSeriesButtons(autoplayNext) {
+    if (params.type !== 'series' || isTrailer) return;
+    setVisible('prevEpisode', Boolean(neighborEpisode(playlist, index, -1)));
+    setVisible('nextEpisode', Boolean(neighborEpisode(playlist, index, 1)));
+    if (ctx.credits && providerId && creditsOffset === null) creditsOffset = await ctx.credits.get(providerId, await seriesKey()).catch(() => null);
+    setVisible('credits', Boolean(autoplayNext && ctx.credits));
+    paintCredits();
+  }
+
+  function paintCredits() {
+    const def = buttonDefs.find((d) => d.id === 'credits');
+    if (def) {
+      def.el.setAttribute('aria-label', def.label());
+      def.el.classList.toggle('active', Boolean(creditsOffset));
+      if (def.tipEl && def.el.classList.contains('focused')) def.tipEl.textContent = def.label();
+    }
+    drawProgress(scrub === null ? lastState.position : scrub, lastState.duration, lastState.bufferedEnd);
+  }
+
+  /** Sets the start of the end credits at the pointer's position (for every episode of the series), or removes it. */
+  async function toggleCredits() {
+    if (!ctx.credits || !providerId) return;
+    const key = await seriesKey();
+    if (creditsOffset) {
+      creditsOffset = null;
+      await ctx.credits.remove(providerId, key).catch((err) => log.warn('Credits point not removed', err && err.message));
+      ctx.notices.info(t('player.credits.removed'), { scope: 'playback', key: 'credits' });
+    } else {
+      const { duration } = lastState;
+      const position = scrub === null ? lastState.position : scrub;
+      if (!(duration > 0) || !(duration - position >= 1)) return;
+      creditsOffset = Math.round(duration - position);
+      await ctx.credits.set(providerId, key, creditsOffset).catch((err) => log.warn('Credits point not saved', err && err.message));
+      ctx.notices.success(t('player.credits.set', { time: formatClock(creditsOffset) }), { scope: 'playback', key: 'credits' });
+    }
+    nextOffered = false; // the next episode is offered again from the new point
+    paintCredits();
   }
 
   function stepEpisode(delta) {

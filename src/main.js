@@ -56,6 +56,7 @@ import { createCollectionsPage } from './ui/pages/collectionsPage.js';
 import { createCollectionPage } from './ui/pages/collectionPage.js';
 import { createNetworkPage } from './ui/pages/networkPage.js';
 import { createPinsService } from './services/pins.js';
+import { createCreditsStore } from './services/creditsStore.js';
 import { createGuideLayoutStore } from './services/guideLayout.js';
 import { portableKeyFor } from './services/shareKeys.js';
 import { createSearchPage } from './ui/pages/searchPage.js';
@@ -120,6 +121,7 @@ async function boot() {
   ctx.favorites = createFavoritesService({ db });
   ctx.collections = createCollectionsService({ db });
   ctx.pins = createPinsService({ db });
+  ctx.credits = createCreditsStore({ db });
   ctx.guideLayout = createGuideLayoutStore({ db });
   // Favourites and collections are shared by all providers under keys that mean the same everywhere (the TMDB id). A title saved under its
   // provider's own key moves to the shared one as soon as the catalog gives it a TMDB id (after a sync, or at start).
