@@ -105,15 +105,15 @@ What you get: what you watch is saved on your Trakt account and read back, so *w
 2. Open [trakt.tv/oauth/applications](https://trakt.tv/oauth/applications) and press **New Application**. Choose any name, put `urn:ietf:wg:oauth:2.0:oob` as *Redirect uri* and leave the rest empty, then save.
 3. Copy the **Client ID** and **Client Secret** of the application into *Settings → Trakt*, press connect and scan the QR code (or open the address shown and type the code).
 
-### OpenSubtitles: subtitles for titles that have none
+### OpenSubtitles: subtitles downloaded on request
 
-What you get: when a movie or an episode starts without subtitles of its own, and its TMDB id is known (from TMDB or from the provider), the app looks for subtitles on OpenSubtitles in your language (then English) while it plays. A notice says *Downloading subtitles*; when they are found they appear in the player's **Subtitles** list as "<language> (OpenSubtitles)". They are not saved: they stay in memory until the app is closed (and in the browser cache).
+What you get: when you press **Subtitles** in the player on a movie or an episode whose TMDB id is known (from TMDB or from the provider), the app first looks for subtitles on OpenSubtitles in your language (then English), also when the file has subtitles of its own. A notice says *Downloading subtitles*; then the list opens, with the found ones as "<language> (OpenSubtitles)" next to the file's tracks. They are not saved: they stay in memory until the app is closed (and in the browser cache).
 
 1. Create a free account on [opensubtitles.com](https://www.opensubtitles.com).
 2. Open the API consumers page of your profile ([opensubtitles.com/consumers](https://www.opensubtitles.com/en/consumers)) and create a consumer (any name): it gives an **API key**.
 3. Type the key in *Settings → OpenSubtitles*.
 
-OpenSubtitles limits downloads without logging in to a few a day (5 at the time of writing); every title started without subtitles uses one, the same title again in the same session does not.
+OpenSubtitles limits downloads without logging in to a few a day (5 at the time of writing); every title whose Subtitles button you press uses one, the same title again in the same session does not.
 
 The keys stay on your device (they are not part of the app and never sent anywhere but to TMDB / Trakt).
 

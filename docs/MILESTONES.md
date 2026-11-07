@@ -567,3 +567,7 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 ### Patch 119 — "x" to empty the text fields
 - Every text field of Settings (TMDB / Trakt / OpenSubtitles keys, network similarity and difference, group words, custom EPG) and of the provider form (add / edit) has an "x" inside the box at the right edge, shown only while the field has the focus. Right from the field reaches it (before OK opens the keyboard), Left goes back; OK (or a click) empties the field and opens the keyboard. Where the field has a reset button, the order is field → x → reset.
 - Checked in Chromium on the provider form (focus, x, Right / OK). Applies after patch 118. Not verified on the TV.
+
+### Patch 120 — OpenSubtitles on the Subtitles press
+- With an OpenSubtitles key, nothing is downloaded when a title starts any more: pressing **Subtitles** in the player downloads them first (notice "Downloading subtitles", then the list opens), also for titles whose file has subtitles of its own; the found ones are listed after the file's tracks. Once per title in the session (a second press opens the list straight away; a failure is tried again on the next press). Live channels and trailers unchanged.
+- Tests: no download at the start, download on the press, file with its own tracks. Applies after patch 119. Not verified on the TV.

@@ -46,41 +46,59 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-test('no subtitles in the file: downloaded from OpenSubtitles with a notice, offered in the list, drawn with the position', async () => {
-  let release;
-  const s = setup({ fetch: () => new Promise((resolve) => (release = resolve)) });
-  await wait();
-  s.start();
-  await wait(1900);
-  expect(s.ctx.openSubtitles.fetch).toHaveBeenCalledWith({ tmdbId: 603, languages: expect.any(Array) });
-  expect(noticeTexts()).toContain('Downloading subtitles');
-  release({ language: 'it', cues: [{ start: 1000, end: 3000, text: 'Ciao' }] });
-  await wait();
-  expect(noticeTexts()).not.toContain('Downloading subtitles');
-  expect(noticeTexts()).toContain('Subtitles downloaded: Italiano');
-  s.ctx.dialogs.choose.mockImplementation(async ({ options }) => {
-    expect(options.map((o) => o.label)).toEqual(['Off', 'Italiano (OpenSubtitles)']);
-    return options[1].value;
-  });
+function pressSubtitles(s) {
   const subtitles = Array.from(s.page.el.querySelectorAll('.player-btn')).find((b) => b.getAttribute('aria-label') === 'Subtitles');
   s.page.onAction(Action.DOWN); // focus on the controls: play / pause
   [Action.RIGHT, Action.RIGHT].forEach((a) => s.page.onAction(a)); // aspect ratio, subtitles
   expect(subtitles.classList.contains('focused')).toBe(true);
   s.page.onAction(Action.ENTER);
+}
+
+test('nothing is downloaded at the start: the Subtitles press downloads, then lists them and they follow the position', async () => {
+  let release;
+  const s = setup({ fetch: () => new Promise((resolve) => (release = resolve)) });
+  await wait();
+  s.start();
+  await wait(1900);
+  expect(s.ctx.openSubtitles.fetch).not.toHaveBeenCalled();
+  s.ctx.dialogs.choose.mockImplementation(async ({ options }) => {
+    expect(options.map((o) => o.label)).toEqual(['Off', 'Italiano (OpenSubtitles)']);
+    return options[1].value;
+  });
+  pressSubtitles(s);
+  await wait();
+  expect(s.ctx.openSubtitles.fetch).toHaveBeenCalledWith({ tmdbId: 603, languages: expect.any(Array) });
+  expect(noticeTexts()).toContain('Downloading subtitles');
+  expect(s.ctx.dialogs.choose).not.toHaveBeenCalled();
+  release({ language: 'it', cues: [{ start: 1000, end: 3000, text: 'Ciao' }] });
+  await wait();
+  expect(noticeTexts()).not.toContain('Downloading subtitles');
+  expect(noticeTexts()).toContain('Subtitles downloaded: Italiano');
   await wait(300);
   expect(s.ctx.dialogs.choose).toHaveBeenCalled();
   s.setTime(1500);
   await wait(300);
   expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Ciao');
+  s.page.onAction(Action.ENTER); // second press: no new download
+  await wait();
+  expect(s.ctx.openSubtitles.fetch).toHaveBeenCalledTimes(1);
   s.page.destroy();
 }, 10000);
 
-test('the file has its own subtitles: nothing is downloaded', async () => {
-  const s = setup({ tracks: [{ index: 2, language: 'ita' }], fetch: async () => null });
+test('the file has its own subtitles: the press downloads too, and both are listed', async () => {
+  const s = setup({ tracks: [{ index: 2, language: 'ita' }], fetch: async () => ({ language: 'en', cues: [] }) });
   await wait();
   s.start();
-  await wait(1900);
-  expect(s.ctx.openSubtitles.fetch).not.toHaveBeenCalled();
-  expect(noticeTexts()).not.toContain('Downloading subtitles');
+  await wait(300);
+  let labels = null;
+  s.ctx.dialogs.choose.mockImplementation(async ({ options }) => {
+    labels = options.map((o) => o.label);
+    return null;
+  });
+  pressSubtitles(s);
+  await wait(100);
+  expect(s.ctx.openSubtitles.fetch).toHaveBeenCalledTimes(1);
+  expect(labels).toHaveLength(3);
+  expect(labels[2]).toContain('(OpenSubtitles)');
   s.page.destroy();
 }, 10000);

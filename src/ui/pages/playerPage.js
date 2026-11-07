@@ -24,7 +24,6 @@ const SEEK_LONG = 30;
 const SCRUB_STEP = 30;
 const SCRUB_CONFIRM_MS = 2000; // the moved position is applied after this long without a key
 const SUBTITLE_FALLBACK_MS = 5000;
-const ONLINE_CHECK_MS = 1500; // after the start, when the file's own tracks are known on every engine
 const ONLINE_TICK_MS = 200;
 const ONLINE = 'online'; // value of the downloaded track in the subtitle list
 
@@ -60,7 +59,7 @@ export function createPlayerPage(ctx, params) {
   let online = null; // { language, cues } downloaded from OpenSubtitles for what is playing
   let onlineTimer = null; // draws the downloaded cues while they are chosen
   let onlineCue = null;
-  let onlineCheck = null;
+  let onlinePending = null; // the download running for what is playing, shared by repeated presses
   let audioTrack = null; // null = the file's default
   let appliedFor = 0; // load token the aspect mode was last applied to
   let focusMode = false; // the D-pad moves over the controls (progress pointer + buttons) instead of seeking
@@ -355,6 +354,15 @@ export function createPlayerPage(ctx, params) {
   }
 
   async function openSubtitles() {
+    // With OpenSubtitles set up, the press downloads them first (once per title), also when the file has tracks of its own.
+    if (!online) {
+      const token = loadToken;
+      if (!onlinePending) onlinePending = fetchOnline(token).catch(() => undefined);
+      const pending = onlinePending;
+      await pending;
+      if (onlinePending === pending) onlinePending = null;
+      if (token !== loadToken || destroyed) return;
+    }
     const tracks = engine.getSubtitleTracks ? engine.getSubtitleTracks() : [];
     if (!tracks.length && !online) {
       ctx.notices.warning(t('player.subtitles.none'), { scope: 'playback', key: 'track' });
@@ -430,13 +438,12 @@ export function createPlayerPage(ctx, params) {
   }
 
   /**
-   * A title that starts without subtitles of its own: when OpenSubtitles is set up and the title has a TMDB id, its subtitles are
-   * downloaded (kept in memory for this session only) and added to the list.
+   * Pressing Subtitles: when OpenSubtitles is set up and the title has a TMDB id, its subtitles are downloaded (kept in memory for
+   * this session only) and added to the list, next to the file's own tracks.
    */
   async function fetchOnline(token) {
     const service = ctx.openSubtitles;
     if (isLive || isTrailer || !service || !service.enabled || token !== loadToken || destroyed) return;
-    if (engine.getSubtitleTracks && engine.getSubtitleTracks().length) return;
     const query = await tmdbQuery().catch(() => null);
     if (!query || token !== loadToken || destroyed) return;
     onlineNotice = ctx.notices.info(t('player.subtitles.downloading'), { scope: 'playback', key: 'subs-online', permanent: true });
@@ -506,9 +513,6 @@ export function createPlayerPage(ctx, params) {
       appliedFor = loadToken;
       if (engine.setAspect && aspect !== 'fit') engine.setAspect(aspect);
       if (engine.getAudioTracks) setAudioVisible(engine.getAudioTracks().length > 1);
-      const token = loadToken;
-      clearTimeout(onlineCheck);
-      onlineCheck = setTimeout(() => fetchOnline(token).catch(() => undefined), ONLINE_CHECK_MS);
     }
     if ((state.status === 'paused' || state.status === 'error' || state.status === 'recovering') && state.status !== lastStatus) showControls();
     if (state.status === 'error' && lastStatus !== 'error') showPlayerError(`${t('error.PLAYER')} ${state.error || ''}`.trim());
@@ -554,7 +558,7 @@ export function createPlayerPage(ctx, params) {
     online = null;
     closeOnlineNotice();
     stopOnline();
-    clearTimeout(onlineCheck);
+    onlinePending = null;
     audioTrack = null;
     setAudioVisible(false);
     showSubtitle('');
@@ -893,7 +897,6 @@ export function createPlayerPage(ctx, params) {
       clearTimeout(hideTimer);
       clearTimeout(scrubTimer);
       clearTimeout(subtitleTimer);
-      clearTimeout(onlineCheck);
       closeOnlineNotice();
       stopOnline();
       clearTimeout(programmeTimer);
