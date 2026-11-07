@@ -169,3 +169,41 @@ describe('search page and top bar', () => {
     bar.closeSearch({ notify: false });
   });
 });
+
+test('formModel with the x of the fields: Right from a field to its x, Left back, Up / Down as from the field', () => {
+  const model = formModel({ fieldCount: 3, actionCount: 2, clearable: true });
+  expect(model.getCount()).toBe(8);
+  expect(model.navigate(Dir.RIGHT, 1)).toEqual({ type: 'move', index: 6 }); // x of field 1
+  expect(model.navigate(Dir.LEFT, 6)).toEqual({ type: 'move', index: 1 });
+  expect(model.navigate(Dir.RIGHT, 6).type).toBe('exit');
+  expect(model.navigate(Dir.DOWN, 6)).toEqual({ type: 'move', index: 2 });
+  expect(model.navigate(Dir.UP, 6)).toEqual({ type: 'move', index: 0 });
+  expect(model.navigate(Dir.DOWN, 7)).toEqual({ type: 'move', index: 3 }); // x of the last field: down to Confirm
+  expect(model.navigate(Dir.RIGHT, 3)).toEqual({ type: 'move', index: 4 }); // actions unchanged
+});
+
+test('the x of a field: inside the box, shown with the focus, OK empties the field and opens the keyboard', async () => {
+  const focus = new FocusManager();
+  const form = createForm({ id: 'g', focus, fields: [{ label: 'URL' }, { label: 'User' }], actions: [{ label: 'Ok', run: () => undefined }] });
+  focus.register(form.zone);
+  document.body.appendChild(form.el);
+  const [url] = form.fields;
+  expect(url.el.contains(url.clearEl)).toBe(true);
+  url.setValue('http://old');
+  focus.focus('g', 0);
+  focus.handle(Action.RIGHT);
+  expect(url.clearEl.classList.contains('focused')).toBe(true);
+  await Promise.resolve();
+  expect(url.el.classList.contains('clearing')).toBe(true); // the box stays highlighted
+  focus.handle(Action.ENTER);
+  expect(url.getValue()).toBe('');
+  expect(document.activeElement).toBe(url.input); // keyboard
+  url.input.blur();
+  focus.handle(Action.LEFT);
+  expect(url.el.classList.contains('focused')).toBe(true);
+  url.setValue('x');
+  url.clearEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  expect(url.getValue()).toBe('');
+  expect(createField({ label: 'n', clearable: false }).clearEl).toBeNull();
+  form.el.remove();
+});

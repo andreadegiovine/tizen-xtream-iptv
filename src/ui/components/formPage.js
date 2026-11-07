@@ -12,14 +12,22 @@ export function framedPage(...children) {
 /**
  * Navigation of a form: the fields one under the other, then the actions on ONE line. Down from the last field lands on the first
  * action ("Confirm"); Left / Right move between the actions; Up from an action goes back to the last field.
+ * `clearable`: each field also has its "x" (index `fieldCount + actionCount + field`), reached with Right from the field, Left goes back.
  */
-export function formModel({ fieldCount, actionCount }) {
+export function formModel({ fieldCount, actionCount, clearable = false }) {
   const total = fieldCount + actionCount;
   const move = (index) => ({ type: 'move', index });
   const exit = (dir) => ({ type: 'exit', dir });
   return {
-    getCount: () => total,
-    navigate(dir, index) {
+    getCount: () => total + (clearable ? fieldCount : 0),
+    navigate(dir, at) {
+      let index = at;
+      if (index >= total) {
+        // On the x of a field: Left back to the field, Up / Down as from the field.
+        index -= total;
+        if (dir === Dir.LEFT) return move(index);
+        if (dir === Dir.RIGHT) return exit(dir);
+      } else if (clearable && index < fieldCount && dir === Dir.RIGHT) return move(total + index);
       const inActions = index >= fieldCount;
       if (dir === Dir.UP) {
         if (!inActions) return index > 0 ? move(index - 1) : exit(dir);
@@ -48,11 +56,11 @@ export function createForm({ id, focus, fields: specs, actions }) {
   const actionButtons = actions.map((a) => h('button', { class: `btn${a.primary ? ' primary' : ''}`, type: 'button', text: a.label }));
   const total = specs.length + actions.length;
   const fields = specs.map((spec, i) => createField({ ...spec, onSubmit: () => focus.focus(id, Math.min(i + 1, total - 1)) }));
-  const nodes = fields.map((f) => f.el).concat(actionButtons);
+  const nodes = fields.map((f) => f.el).concat(actionButtons, fields.map((f) => f.clearEl));
   const el = h('div', { class: 'form' }, fields.map((f) => f.root), status, h('div', { class: 'form-actions' }, actionButtons));
   const zone = new FocusZone({
     id,
-    model: formModel({ fieldCount: fields.length, actionCount: actions.length }),
+    model: formModel({ fieldCount: fields.length, actionCount: actions.length, clearable: true }),
     onFocus: (i) => {
       nodes[i].classList.add('focused');
       ensureVisible(nodes[i], { first: i === 0 });
@@ -60,7 +68,8 @@ export function createForm({ id, focus, fields: specs, actions }) {
     onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
     onActivate: (i) => {
       if (i < fields.length) fields[i].focus();
-      else actions[i - fields.length].run();
+      else if (i < total) actions[i - fields.length].run();
+      else fields[i - total].clear();
     },
   });
   return { el, zone, status, fields, actionButtons };

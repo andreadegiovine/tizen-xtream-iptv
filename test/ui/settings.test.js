@@ -1,5 +1,5 @@
 import { toggleId, flipRange } from '../../src/ui/pages/categoriesPage.js';
-import { optionRow } from '../../src/ui/pages/settingsPage.js';
+import { optionRow, textRow } from '../../src/ui/pages/settingsPage.js';
 
 test('toggleId does not mutate and flips membership', () => {
   const a = new Set(['1']);
@@ -45,4 +45,19 @@ test('h(): nested arrays of nodes are appended as elements, never printed as "[o
   expect(el.children).toHaveLength(3);
   expect(el.textContent).toBe('abc');
   expect(el.textContent).not.toContain('object');
+});
+
+test('text row: its x is a row at its right; OK on it empties the field and opens the keyboard', async () => {
+  const ctx = { apiKeys: { getStored: () => 'secret-key', set: jest.fn(async () => undefined) }, notices: { success() {} }, router: { reload() {} } };
+  const row = textRow({ ctx, label: 'TMDB', field: 'tmdbKey' });
+  await row.refresh();
+  document.body.appendChild(row.root);
+  const input = row.root.querySelector('input');
+  expect(input.value).toBe('secret-key');
+  expect(row.clearRow.secondary).toBe('right');
+  expect(row.root.contains(row.clearRow.el)).toBe(true);
+  await row.clearRow.activate();
+  expect(input.value).toBe('');
+  expect(document.activeElement).toBe(input);
+  row.root.remove();
 });

@@ -81,10 +81,50 @@
     font: inherit;
   }
 
-  &.focused {
+  &.focused,
+  &.clearing {
     border-color: $text;
     background: $bg-focus;
     transform: scale(1.02);
+  }
+
+  // The "x" that empties the field: at the right edge of the box, only while the field (or the x itself) has the focus.
+  &.clearable {
+    position: relative;
+    padding-right: 84px;
+  }
+
+  .field-clear {
+    position: absolute;
+    top: 50%;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    margin-top: -26px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    color: $text-muted;
+    opacity: 0;
+    transition: opacity 0.12s;
+
+    .icon {
+      width: 24px;
+      height: 24px;
+    }
+
+    &.focused {
+      border-color: $text;
+      background: $text;
+      color: $bg-raised;
+    }
+  }
+
+  &.focused .field-clear,
+  &.clearing .field-clear {
+    opacity: 1;
   }
 }
 

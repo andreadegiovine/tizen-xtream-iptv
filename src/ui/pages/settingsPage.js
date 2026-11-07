@@ -50,7 +50,14 @@ export function textRow({ label, field, secret = false, ctx }) {
     });
   };
   input = createField({ label, type: secret ? 'password' : 'text', placeholder: '—', onSubmit: save, onCancel: show });
-  return { el: input.el, root: input.root, refresh: async () => show(), activate: async () => input.focus() };
+  const row = { el: input.el, root: input.root, refresh: async () => show(), activate: async () => input.focus() };
+  row.clearRow = clearRowOf(input);
+  return row;
+}
+
+/** The "x" of a text field as a row at its right (Right from the field): OK empties the field and opens the keyboard. */
+export function clearRowOf(field) {
+  return { secondary: 'right', el: field.clearEl, refresh: async () => undefined, activate: async () => field.clear() };
 }
 
 /** A row that runs an action (optionally after a confirmation). */
@@ -384,6 +391,7 @@ export function createSettingsPage(ctx) {
     onCancel: showPatterns,
   });
   const patternsRow = { el: patternsField.el, root: patternsField.root, refresh: showPatterns, activate: async () => patternsField.focus() };
+  const patternsClearRow = clearRowOf(patternsField);
   const patternsResetRow = {
     secondary: 'right',
     el: patternsReset,
@@ -415,6 +423,7 @@ export function createSettingsPage(ctx) {
     },
   });
   const epgRow = { el: epgField.el, root: epgField.root, refresh: showEpg, activate: async () => epgField.focus() };
+  const epgClearRow = clearRowOf(epgField);
 
   /** A number field (with its reset button, a second row like the one of the words) for a network setting; Enter saves and rebuilds Live TV. */
   function numberRows({ key, labelKey, resetKey, fallback }) {
@@ -430,6 +439,7 @@ export function createSettingsPage(ctx) {
     });
     return [
       { el: field.el, root: field.root, refresh: show, activate: async () => field.focus() },
+      clearRowOf(field),
       {
         secondary: 'right',
         el: reset,
@@ -442,8 +452,8 @@ export function createSettingsPage(ctx) {
       },
     ];
   }
-  const [similarityRow, similarityResetRow] = numberRows({ key: 'liveNetworkSimilarity', labelKey: 'settings.liveNetworkSimilarity', resetKey: 'settings.liveNetworkReset', fallback: DEFAULT_SIMILARITY });
-  const [maxDiffRow, maxDiffResetRow] = numberRows({ key: 'liveNetworkMaxDiff', labelKey: 'settings.liveNetworkMaxDiff', resetKey: 'settings.liveNetworkReset', fallback: DEFAULT_MAX_DIFF });
+  const [similarityRow, similarityClearRow, similarityResetRow] = numberRows({ key: 'liveNetworkSimilarity', labelKey: 'settings.liveNetworkSimilarity', resetKey: 'settings.liveNetworkReset', fallback: DEFAULT_SIMILARITY });
+  const [maxDiffRow, maxDiffClearRow, maxDiffResetRow] = numberRows({ key: 'liveNetworkMaxDiff', labelKey: 'settings.liveNetworkMaxDiff', resetKey: 'settings.liveNetworkReset', fallback: DEFAULT_MAX_DIFF });
 
   const resetAll = actionRow({
     ctx,
@@ -474,7 +484,7 @@ export function createSettingsPage(ctx) {
     {
       titleKey: 'settings.section.live',
       // The toggle for the numbers sits right under the maximum difference, the setting it goes with.
-      parts: [{ list: [liveGrouping, liveNetworks] }, { fields: [similarityRow, similarityResetRow, maxDiffRow, maxDiffResetRow] }, { list: [ignoreNumbersRow] }, { fields: [patternsRow, patternsResetRow] }, { fields: [epgRow] }],
+      parts: [{ list: [liveGrouping, liveNetworks] }, { fields: [similarityRow, similarityClearRow, similarityResetRow, maxDiffRow, maxDiffClearRow, maxDiffResetRow] }, { list: [ignoreNumbersRow] }, { fields: [patternsRow, patternsClearRow, patternsResetRow] }, { fields: [epgRow, epgClearRow] }],
     },
     {
       titleKey: 'settings.section.content',
@@ -493,7 +503,7 @@ export function createSettingsPage(ctx) {
     ]),
   ]);
   // Focus order follows the page: catalog, TMDB, Trakt, preferences.
-  const rows = [...catalogRows, ...tmdbRows, tmdbTokenRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktSecretRow, openSubtitlesRow, dbUpdateRow, dbRemoveRow, ...prefs];
+  const rows = [...catalogRows, ...tmdbRows, tmdbTokenRow, tmdbTokenRow.clearRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktIdRow.clearRow, traktSecretRow, traktSecretRow.clearRow, openSubtitlesRow, openSubtitlesRow.clearRow, dbUpdateRow, dbRemoveRow, ...prefs];
   // The Trakt sync / remove buttons exist only while an account is connected.
   const visibleRows = () => rows.filter((row) => row.el.style.display !== 'none');
   rows.forEach((row) => row.refresh());

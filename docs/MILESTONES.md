@@ -563,3 +563,7 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - Series: previous / next episode buttons after play / pause (same icons as the channel ones, no tooltip), shown only when there is an episode before / after; CH+ / CH- still change episode.
 - Series with "play the next episode" on: an **End credits start** button, last on the right, with that tooltip. Pressed, it saves the start of the end credits at the current position as seconds before the end, for the whole series (shared key when the series has a TMDB id); the rest of the progress bar is drawn darker in every episode, and the "next episode" countdown starts from that point. Pressed again (it is then highlighted, "Remove end credits start") it removes it. Without a point set, the notice works as before (the last two minutes).
 - Tests: player buttons, credits set / used by other episodes / removed, store. Not verified on the TV.
+
+### Patch 119 — "x" to empty the text fields
+- Every text field of Settings (TMDB / Trakt / OpenSubtitles keys, network similarity and difference, group words, custom EPG) and of the provider form (add / edit) has an "x" inside the box at the right edge, shown only while the field has the focus. Right from the field reaches it (before OK opens the keyboard), Left goes back; OK (or a click) empties the field and opens the keyboard. Where the field has a reset button, the order is field → x → reset.
+- Checked in Chromium on the provider form (focus, x, Right / OK). Applies after patch 118. Not verified on the TV.
