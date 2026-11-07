@@ -36,6 +36,18 @@ export function describeType(state, meta, locale) {
   });
 }
 
+/** The guide row: "18 250 programmes · 412 channels · 14 genres · valid until … · updated …" (or in progress / never). */
+export function describeEpg(meta, running, locale) {
+  if (running) return running.queued ? t('common.queued') : t('meta.running', { time: formatDateTime(running.startedAt, locale) });
+  if (!meta || meta.skipped) return t('common.never');
+  const parts = [t('epg.status.programmes', { count: formatNumber(meta.programmes || 0, locale) })];
+  if (meta.guided !== undefined) parts.push(t('epg.status.channels', { count: formatNumber(meta.guided, locale) }));
+  if (meta.genres) parts.push(t('epg.status.genres', { count: formatNumber(meta.genres, locale) }));
+  if (meta.until) parts.push(t('epg.status.until', { time: formatDateTime(meta.until, locale) }));
+  parts.push(t('home.updatedAt', { time: formatDateTime(meta.lastSync, locale) }));
+  return parts.join(' · ');
+}
+
 /** The remove + refresh buttons at the end of a table row (labels are the aria-labels). */
 function rowButtons(removeLabel, refreshLabel) {
   const remove = h('button', { class: 'btn danger icon-only panel-button', type: 'button', 'aria-label': removeLabel, title: removeLabel }, icon('remove'));
@@ -53,13 +65,31 @@ export function createSyncPanel(ctx) {
     const buttons = rowButtons(t('settings.typeRemove', { type: t(LABEL_KEY[type]) }), t('settings.typeUpdate', { type: t(LABEL_KEY[type]) }));
     return { type, status, buttons, el: h('div', { class: 'sync-row with-buttons' }, h('span', { class: 'sync-name', text: t(LABEL_KEY[type]) }), status, buttons.el) };
   });
+  // The programme guide of the provider: what the last download holds, with its own update / remove buttons.
+  const epgStatus = h('span', { class: 'sync-status' });
+  const epgButtons = rowButtons(t('settings.epgRemove'), t('settings.epgUpdate'));
+  const epgRow = h('div', { class: 'sync-row with-buttons' }, h('span', { class: 'sync-name', text: t('operations.epg') }), epgStatus, epgButtons.el);
+  let epgMeta = null;
+  const epgRunning = () => (ctx.operations ? ctx.operations.list().find((op) => op.id === 'epg') || null : null);
+  const renderEpg = () => {
+    epgStatus.textContent = describeEpg(epgMeta, epgRunning(), i18n.getLocale());
+  };
+  const refreshEpg = () =>
+    ctx.epg && ctx.epg.status
+      ? ctx.epg.status().then((meta) => {
+          epgMeta = meta;
+          renderEpg();
+        })
+      : Promise.resolve();
+  let wasEpgRunning = false;
+  let stopEpg = null;
   const engineStatus = h('span', { class: 'sync-status' });
   const timingStatus = h('span', { class: 'sync-status' });
   const engineRow = h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t('home.engine') }), engineStatus);
   const timingRow = h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t('home.syncTiming') }), timingStatus);
   const info = h('p', { class: 'muted sync-info' });
   const providerName = h('span', { class: 'panel-provider' });
-  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('home.catalog') }, providerName)), h('div', { class: 'sync' }, rows.map((r) => r.el), engineRow, timingRow), info);
+  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('home.catalog') }, providerName)), h('div', { class: 'sync' }, rows.map((r) => r.el), epgRow, engineRow, timingRow), info);
   let persisted = {};
   let providerId = null;
   let wasRunning = false;
@@ -94,6 +124,9 @@ export function createSyncPanel(ctx) {
     el,
     /** Per media type: { type, remove, refresh } (the buttons at the end of its row). */
     rowButtons: rows.map((row) => ({ type: row.type, remove: row.buttons.remove, refresh: row.buttons.refresh })),
+    /** The guide row's buttons: { remove, refresh }. */
+    epgButtons: { remove: epgButtons.remove, refresh: epgButtons.refresh },
+    refreshEpg: () => refreshEpg(),
     /** Nickname of the active provider, next to the title. */
     setProviderName(name) {
       providerName.textContent = name ? ` · ${name}` : '';
@@ -108,9 +141,20 @@ export function createSyncPanel(ctx) {
       providerId = id;
       persisted = {};
       render();
+      epgMeta = null;
+      renderEpg();
+      refreshEpg().catch(() => undefined);
       return refreshPersisted();
     },
     mount() {
+      // The guide row follows its download: "in progress" while it runs, the new numbers when it ends.
+      if (ctx.operations)
+        stopEpg = ctx.operations.onChange(() => {
+          const running = Boolean(epgRunning());
+          renderEpg();
+          if (wasEpgRunning && !running) refreshEpg().catch(() => undefined);
+          wasEpgRunning = running;
+        });
       wasRunning = ctx.catalog.getState().running;
       unsubscribe = ctx.catalog.onChange((state) => {
         render();
@@ -121,6 +165,7 @@ export function createSyncPanel(ctx) {
     },
     destroy() {
       if (unsubscribe) unsubscribe();
+      if (stopEpg) stopEpg();
     },
   };
 }

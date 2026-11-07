@@ -52,6 +52,17 @@ describe('sidebar', () => {
     expect(indexOfFilter(sidebarItems({ type: 'live', categories: cats, labels }), null)).toBe(0);
   });
 
+  test('live: the guide genres (open) come before the networks, only when the guide has some', () => {
+    const genres = [{ key: 'sport', name: 'Sport' }, { key: 'news', name: 'News' }];
+    const networks = [{ key: 'live:n1', name: 'Rai' }];
+    const items = sidebarItems({ type: 'live', epgGenres: genres, networks, categories: cats, labels: { ...labels, networks: 'Reti' } });
+    expect(items.map((i) => i.kind)).toEqual(['guide', 'all', 'favorites', 'epgGenresToggle', 'epgGenre', 'epgGenre', 'networksToggle', 'network', 'toggle']);
+    expect(items[3].name).toBe('Generi');
+    expect(items[4]).toMatchObject({ id: 'sport', name: 'Sport', depth: 1 });
+    expect(sidebarItems({ type: 'live', epgGenres: genres, epgGenresExpanded: false, categories: cats, labels }).map((i) => i.kind)).toEqual(['guide', 'all', 'favorites', 'epgGenresToggle', 'toggle']);
+    expect(sidebarItems({ type: 'live', epgGenres: [], categories: cats, labels }).some((i) => i.kind === 'epgGenresToggle')).toBe(false);
+  });
+
   test('filter lookup falls back to "show all"', () => {
     const items = sidebarItems({ type: 'movie', genres: [{ key: 'animation', name: 'X' }], categories: [], labels });
     expect(indexOfFilter(items, { kind: 'genre', id: 'animation' })).toBe(5);

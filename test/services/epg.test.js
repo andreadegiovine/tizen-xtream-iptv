@@ -60,6 +60,24 @@ describe('syncEpg', () => {
     expect((await dbGetAll(db, 'epg')).map((r) => r.title).sort()).toEqual(['Next', 'Now']);
   });
 
+  test('the download stores the channel summary: the service reads channels and genres from it, and clear() deletes everything', async () => {
+    const db = await makeDb();
+    const tagged = `<tv><programme start="20261102110000 +0000" stop="20261102130000 +0000" channel="a"><title>Derby</title><category>Sport</category></programme><programme start="20261102130000 +0000" stop="20261102140000 +0000" channel="a"><title>Gol</title><category>sport</category></programme></tv>`;
+    const meta = await syncEpg({ db, url: 'x', now: NOW, fetchImpl: guideFetch(tagged) });
+    expect(meta).toMatchObject({ programmes: 2, guided: 1, genres: 1, until: NOW + 2 * 3600000 });
+    const svc = createEpgService({ active: { get: async () => ({ db }) }, providers: {}, createWorker: () => { throw new Error('none'); }, now: () => NOW });
+    expect(Array.from(await svc.channelsWithGuide(NOW, NOW + 3600000))).toEqual(['a']);
+    expect(Array.from(await svc.channelsWithGuide(NOW + 3 * 3600000, NOW + 4 * 3600000))).toEqual([]);
+    const { genres, byChannel } = await svc.genres();
+    expect(genres).toEqual([{ key: 'sport', name: 'Sport' }]);
+    expect(byChannel.get('a')).toEqual(['sport']);
+    expect((await svc.status()).programmes).toBe(2);
+    await svc.clear();
+    expect(await dbGetAll(db, 'epg')).toEqual([]);
+    expect(await svc.status()).toBeUndefined();
+    expect((await svc.genres()).genres).toEqual([]);
+  });
+
   test('an empty/invalid guide fails and keeps what was stored', async () => {
     const db = await makeDb();
     await dbPutMany(db, 'epg', [{ channelId: 'a', start: NOW, stop: NOW + 1000, title: 'Keep' }]);

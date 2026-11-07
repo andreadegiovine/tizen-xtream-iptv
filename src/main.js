@@ -231,6 +231,17 @@ async function boot() {
   ctx.meta = { forEntry: (entry) => tmdb.forEntry(entry) };
   const epg = createEpgService({ active, providers, createWorker: createEpgWorker, operations: ctx.operations, customUrl: () => ctx.settings.get().then((s) => s.customEpgUrl) });
   ctx.epg = epg;
+  // The guide is the last start-up task (after the catalog, metadata, Trakt and the search index), at most once a day: `maybeSync`
+  // downloads only when the last download is a day old. While the app stays open it is checked again every hour.
+  // The task only starts the download (in its worker): tasks added meanwhile (Trakt every 15 minutes, genres) do not wait for it.
+  const queueEpg = () =>
+    queue.add({
+      name: 'epg',
+      priority: Priority.EPG,
+      run: () => {
+        epg.maybeSync().catch(() => undefined);
+      },
+    });
   // Favourite categories and genres show how many titles they hold; a grey sweep stands in until it is known.
   const filterTotals = (type) => (filterTotals.cache[type] = filterTotals.cache[type] || ctx.genres.counts(type).catch(() => new Map()));
   filterTotals.cache = {};
@@ -398,6 +409,7 @@ async function boot() {
       ctx.refreshAdult();
       queue.add({ name: 'share-keys', priority: Priority.METADATA, run: () => ctx.shareKeys().catch(() => undefined) });
       queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) }); // the genre worker finds genres the lists did not carry
+      queueEpg(); // a provider added or changed: its guide after the rest
     }
     wasSyncing = state.running;
   });
@@ -518,8 +530,10 @@ async function boot() {
         if (router.current && router.current.name === 'home') router.reload();
       },
     });
-    // The search index is the last start-up task; the search icon moves it to the front.
+    // The search index comes next (the search icon moves it to the front), then the programme guide.
     queueSearchWarm();
+    queueEpg();
+    setInterval(queueEpg, 60 * 60 * 1000);
   } else {
     router.reset('providerSetup', { firstRun: true });
   }

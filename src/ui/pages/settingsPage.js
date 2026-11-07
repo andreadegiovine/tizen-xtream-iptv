@@ -236,6 +236,20 @@ export function createSettingsPage(ctx) {
     rowOf(b.refresh, async () => queueJob(`catalog:${b.type}`, `${t('operations.catalog')} · ${typeName(b.type)}`, () => ctx.catalog.start({ force: true, types: [b.type], rewrite: true }))),
     rowOf(b.remove, () => removeType(b.type), 'left'),
   ]);
+  // Guide row: download again now (it is otherwise downloaded once a day, after the other start-up work), or delete it.
+  async function removeEpg() {
+    if (!(await confirmRemove(t('settings.epgRemove'), t('settings.epgRemoveConfirm')))) return;
+    await ctx.epg.clear();
+    ctx.notices.success(t('notice.removed'));
+    panel.refreshEpg().catch(() => undefined);
+    devicePanel.refresh().catch(() => undefined);
+  }
+  if (ctx.epg) {
+    catalogRows.push(
+      rowOf(panel.epgButtons.refresh, async () => ctx.epg.maybeSync({ force: true }).catch(() => undefined)),
+      rowOf(panel.epgButtons.remove, () => removeEpg(), 'left'),
+    );
+  }
 
   // TMDB table: metadata download and genre search.
   async function removeMetadata() {

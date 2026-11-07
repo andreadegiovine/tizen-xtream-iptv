@@ -1,6 +1,7 @@
-import { dbPutMany, dbGetAllKeys, dbDeleteMany, dbGet, dbPut } from '../core/idb.js';
+import { dbPutMany, dbGetAllKeys, dbDeleteMany, dbGet, dbPut, dbClear, dbDelete } from '../core/idb.js';
 import { openProviderDb } from '../db/providerDb.js';
 import { createXmltvParser } from './xmltv.js';
+import { createChannelSummary, EPG_CHANNELS_KEY } from './epgChannels.js';
 import { wrapApiUrl } from '../core/env.js';
 import { toAppError, AppError, ErrorCode } from '../core/errors.js';
 
@@ -31,6 +32,13 @@ export function liveChannelIds(db) {
 }
 
 export const shouldSyncEpg = (meta, now = Date.now()) => !meta || now - meta.lastSync >= EPG_TTL_MS;
+
+/** Deletes the downloaded guide (programmes, channel summary, last download): the next start downloads it again. */
+export async function clearEpg(db) {
+  await dbClear(db, 'epg');
+  await dbDelete(db, 'meta', EPG_CHANNELS_KEY);
+  await dbDelete(db, 'meta', META_KEY);
+}
 
 export async function getEpgMeta(db) {
   return dbGet(db, 'meta', META_KEY);
@@ -72,10 +80,12 @@ export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => 
     writes = writes.then(() => dbPutMany(db, 'epg', batch));
     writes.catch(() => undefined); // a failed write is thrown where `writes` is awaited, not as an unhandled rejection meanwhile
   };
+  const summary = createChannelSummary(); // span and genres of every channel, for the guide page and the Live TV sidebar
   const parser = createXmltvParser({
     now,
     channels: wanted,
     onProgramme: (p) => {
+      summary.add(p);
       buffer.push(p);
       if (buffer.length >= EPG_BATCH) flush();
     },
@@ -90,7 +100,19 @@ export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => 
   const total = written;
   const stale = await dbGetAllKeys(db, 'epg', { index: 'byStop', range: IDBKeyRange.upperBound(now) });
   await dbDeleteMany(db, 'epg', stale);
-  const meta = { key: META_KEY, lastSync: now, programmes: total, channels: wanted.size, totalInFile: parser.stats().total, durationMs: Date.now() - t0 };
+  const perChannel = summary.result();
+  await dbPut(db, 'meta', perChannel);
+  const meta = {
+    key: META_KEY,
+    lastSync: now,
+    programmes: total,
+    channels: wanted.size,
+    guided: Object.keys(perChannel.channels).length,
+    genres: Object.keys(perChannel.genres).length,
+    until: perChannel.until,
+    totalInFile: parser.stats().total,
+    durationMs: Date.now() - t0,
+  };
   await dbPut(db, 'meta', meta);
   return meta;
 }

@@ -8,6 +8,10 @@ verified what was not verified (say where it was verified: sandbox, desktop brow
 
 Legend: `[x]` done · `[~]` partial · `[ ]` to do
 
+## Open points (to discuss)
+
+- **Catch-up (TV archive).** Analysed, no code. Xtream marks the channels with an archive (`tv_archive`, `tv_archive_duration` in days, today dropped by `projectItem`) and plays a past programme from a `/timeshift/{user}/{pass}/{minutes}/{YYYY-MM-DD:HH-MM}/{stream_id}.ts` address (some panels use `streaming/timeshift.php`), with the time in the provider's time zone (the main risk). Missing pieces: the archive days in the catalog, `timeshiftUrl()` with the time-zone offset, past programmes in the EPG (today the parser and the clean-up keep only `stop > now`, the guide has `PAST_MS = 0`), a catch-up mode of the player (duration of the programme, no progress / Trakt). Entry points by value: "From the start" in the live player, past programmes in the guide, "Previous programmes" of a channel. Proposed patches: data → EPG past window (only archive channels, 3 days by default) → player → guide and channel page → optional "back N minutes". Needs a provider account with archive to verify the address and the time zone.
+
 ## 0. TV spike
 CORS in dev and build, webapis in the remote shell, workers in the widget, AVPlay on a stream, IndexedDB quota.
 
@@ -571,3 +575,10 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 ### Patch 120 — OpenSubtitles on the Subtitles press
 - With an OpenSubtitles key, nothing is downloaded when a title starts any more: pressing **Subtitles** in the player downloads them first (notice "Downloading subtitles", then the list opens), also for titles whose file has subtitles of its own; the found ones are listed after the file's tracks. Once per title in the session (a second press opens the list straight away; a failure is tried again on the next press). Live channels and trailers unchanged.
 - Tests: no download at the start, download on the press, file with its own tracks. Applies after patch 119. Not verified on the TV.
+
+### Patch 121 — guide after the start-up work, lighter guide page, guide genres, episode buttons
+- Player of a series: play / pause sits between previous and next episode; it still gets the focus when OK or Down opens the controls.
+- The TV guide is no longer downloaded when Live TV (or a live channel) is opened: it is the last start-up task, after the catalog, metadata, Trakt and the search index (also after a catalog sync and checked every hour while the app is open), at most once a day. Settings → Catalog: new "TV guide (EPG)" row with programmes, channels with a guide, genres, validity and last update, plus update / remove buttons.
+- Live TV → Programme: the list of rows is a small record written with the Live TV catalog, and the channels with a guide come from a per-channel summary written at the guide download, so opening the page no longer reads every live entry and walks every programme; only the entries of the rows on screen are read.
+- When the guide gives categories (XMLTV `<category>`), each channel gets its genres (those of at least 30 % of its programmes), kept until the guide expires. Live TV sidebar: "Genres" entry (open) before Networks, with the genres and the number of channels; selecting one shows its channels.
+- Mock server: programmes with categories. Checked in Chromium with the mock (guide drawn ~0.5 s after opening Live TV, Genres entry and grid, Settings row). Tests: parser categories, channel summary, guide index, sidebar, Settings row, EPG service, episode buttons. Applies after patch 120. Not verified on the TV.

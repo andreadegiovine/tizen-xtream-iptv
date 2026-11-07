@@ -91,6 +91,8 @@ function shortEpg(streamId) {
   return { epg_listings: Array.from({ length: 6 }, (_, i) => ({ id: `${streamId}-${i}`, title: b64(`Programma ${i + 1}`), description: b64('Descrizione del programma.'), start_timestamp: String(start + i * 1800), stop_timestamp: String(start + (i + 1) * 1800) })) };
 }
 
+const GENRES = ['Sport', 'Notizie', 'Film', 'Bambini', 'Documentari', 'Musica', 'Serie TV'];
+
 function xmltv() {
   const ids = Array.from(new Set(catalog.live.map((c) => c.epg_channel_id).filter(Boolean)));
   const now = Math.floor(Date.now() / 1000);
@@ -103,7 +105,10 @@ function xmltv() {
     const placeholder = n % 25 === 24;
     for (let i = 0; i < 48; i += 1) {
       const title = placeholder ? 'EPG non disponibile' : `Programma ${i}`;
-      parts.push(`<programme start="${stamp(day + i * 3600)}" stop="${stamp(day + (i + 1) * 3600)}" channel="${id}"><title>${title}</title><desc>Descrizione ${i} di ${id}.</desc></programme>\n`);
+      // Categories as many guides give them: one genre per channel (a third of the channels have none), sometimes a second one.
+      const genre = n % 3 === 2 ? '' : GENRES[n % GENRES.length];
+      const category = genre ? `<category lang="it">${genre}</category>${i % 4 === 0 ? '<category lang="it">Intrattenimento</category>' : ''}` : '';
+      parts.push(`<programme start="${stamp(day + i * 3600)}" stop="${stamp(day + (i + 1) * 3600)}" channel="${id}"><title>${title}</title><desc>Descrizione ${i} di ${id}.</desc>${category}</programme>\n`);
     }
   });
   parts.push('</tv>\n');

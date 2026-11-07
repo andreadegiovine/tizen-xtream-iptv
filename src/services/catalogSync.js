@@ -11,6 +11,7 @@ import {
 import { openProviderDb } from '../db/providerDb.js';
 import { bumpCatalogRev } from './derivedStore.js';
 import { unavailableKeys } from './unavailable.js';
+import { buildGuideIndex, writeGuideIndex, GUIDE_INDEX_KEY } from './guideIndex.js';
 import { AppError, ErrorCode, Severity, toAppError } from '../core/errors.js';
 import { MediaType } from './mediaType.js';
 import { XtreamClient } from './xtreamClient.js';
@@ -196,6 +197,7 @@ export async function writeEntries(db, type, all, { onBatch, groups = [], networ
     // Live TV "show all": the groups plus the channels that are in none (they live in a pseudo category).
     liveAllRows = buildLiveAllRows(entries, groups, networks);
     changes += await replaceRows(db, 'groups', type, groups.concat(networks), { full }); // networks sit in the same store, keys `live:n…`
+    await writeGuideIndex(db, buildGuideIndex(entries, groups)); // the rows of the programme guide, read by the guide page without the entries
   }
   changes += await replaceRowsChunked(db, 'entry_cat', type, entries, buildEntryCategoryRows, { extra: liveAllRows, full });
   // The provider's genres are not written for titles that already have TMDB's (they replace them).
@@ -220,6 +222,7 @@ export async function removeCatalogType(db, type) {
     await dbDeleteMany(db, store, await dbGetAllKeys(db, store, ranges[store](type)));
   }
   await dbDelete(db, 'meta', metaKey(type));
+  if (type === MediaType.LIVE) await dbDelete(db, 'meta', GUIDE_INDEX_KEY);
   await bumpCatalogRev(db);
 }
 

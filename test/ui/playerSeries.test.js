@@ -156,3 +156,15 @@ test('a point set earlier is used by every episode; without one the notice keeps
   expect(notices()).toContain('Next episode in 10 seconds');
   plain.page.destroy();
 }, 10000);
+
+test('play / pause sits between previous and next episode and keeps the focus when the controls open', async () => {
+  const s = setup({ index: 1 });
+  await wait();
+  const order = Array.from(s.page.el.querySelectorAll('.player-btn')).map((b) => b.getAttribute('aria-label'));
+  expect(order.slice(0, 3)).toEqual(['Previous episode', 'Pause', 'Next episode']);
+  s.page.onAction(Action.DOWN);
+  expect(s.button('Pause').classList.contains('focused')).toBe(true);
+  s.page.onAction(Action.LEFT);
+  expect(s.button('Previous episode').classList.contains('focused')).toBe(true);
+  s.page.destroy();
+});

@@ -1,8 +1,9 @@
-import { runEpgForProvider, getEpgMeta, shouldSyncEpg } from './epgSync.js';
+import { runEpgForProvider, getEpgMeta, shouldSyncEpg, clearEpg } from './epgSync.js';
 import { openProviderDb } from '../db/providerDb.js';
-import { requestToPromise } from '../core/idb.js';
+import { requestToPromise, dbGet } from '../core/idb.js';
 import { log } from '../core/logger.js';
 import { isPlaceholderTitle } from './xmltv.js';
+import { EPG_CHANNELS_KEY, summaryValid, channelsBetween } from './epgChannels.js';
 
 const MAX = Number.MAX_SAFE_INTEGER;
 
@@ -20,6 +21,16 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
   let running = false;
   let cancelJob = null;
   const updated = new Set();
+  let summaryJob = null; // { db, promise }: the channel summary of the active provider's database, read once per guide download
+
+  /** The stored channel summary (spans and genres) while the guide is valid, or null. */
+  async function summary() {
+    const current = await active.get();
+    if (!current) return null;
+    if (!summaryJob || summaryJob.db !== current.db) summaryJob = { db: current.db, promise: dbGet(current.db, 'meta', EPG_CHANNELS_KEY).catch(() => null) };
+    const found = await summaryJob.promise;
+    return summaryValid(found, now()) ? found : null;
+  }
 
   async function nowNext(channelId) {
     if (!channelId) return { now: null, next: null };
@@ -63,6 +74,9 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
    * whose guide only says "not available"): one pass over the store, jumping from channel to channel.
    */
   async function channelsWithGuide(from, to) {
+    // Read from the summary of the last download; a guide downloaded before it existed is walked as before.
+    const known = await summary();
+    if (known) return channelsBetween(known, from, to);
     const out = new Set();
     const current = await active.get();
     if (!current) return out;
@@ -139,8 +153,38 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
       updated.add(handler);
       return () => updated.delete(handler);
     },
+    /** The last download of the active provider's guide (`meta` record `epg`), or null. */
+    async status() {
+      const current = await active.get();
+      return current ? getEpgMeta(current.db).catch(() => null) : null;
+    },
+    /** Deletes the active provider's guide (the next start, or the update button, downloads it again). */
+    async clear() {
+      if (cancelJob) cancelJob();
+      const current = await active.get();
+      if (!current) return;
+      await clearEpg(current.db);
+      summaryJob = null;
+      updated.forEach((handler) => handler());
+    },
     nowNext,
     programmesBetween,
+    /**
+     * Genres of the guide (XMLTV categories): `{ genres: [{ key, name }] by name, byChannel: Map(epgChannelId → [key]) }`, empty when the
+     * guide has none or expired.
+     */
+    async genres() {
+      const known = await summary();
+      const byChannel = new Map();
+      if (!known) return { genres: [], byChannel };
+      Object.keys(known.channels).forEach((id) => {
+        if (known.channels[id].genres) byChannel.set(id, known.channels[id].genres);
+      });
+      const genres = Object.keys(known.genres)
+        .map((key) => ({ key, name: known.genres[key] }))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+      return { genres, byChannel };
+    },
     channelsWithGuide,
     upcoming,
     /** Fills channel cards with "now playing" as the answers arrive. */
@@ -173,6 +217,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
         if (outcome.error) log.warn('EPG sync failed', outcome.error.code);
         else {
           log.info(`EPG sync done in ${now() - startedAt} ms`);
+          summaryJob = null; // read again: the download wrote a new one
           if (!outcome.cancelled) updated.forEach((handler) => handler());
         }
         return outcome;

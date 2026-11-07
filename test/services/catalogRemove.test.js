@@ -35,3 +35,17 @@ test('a copy built on an older version is still readable, marked as not fresh', 
   await bumpCatalogRev(db);
   expect(await readDerivedAny(db, 'x', await derivedVersion(db, { genres: true }))).toEqual({ value: { a: 1 }, fresh: false });
 });
+
+test('Live TV entries write the guide index (read without the entries); removing Live TV deletes it', async () => {
+  const { readGuideIndex, GUIDE_INDEX_KEY } = await import('../../src/services/guideIndex.js');
+  const { dbGet } = await import('../../src/core/idb.js');
+  const db = await openProviderDb('guide-index-test');
+  const entries = [
+    { key: 'live:1', type: 'live', name: 'Zeta', added: 1, epgChannelId: 'z', categoryIds: ['1'], genres: [] },
+    { key: 'live:2', type: 'live', name: 'Rai 1 HD', added: 2, epgChannelId: 'r1', groupKey: 'live:g1', categoryIds: ['1'], genres: [] },
+  ];
+  await writeEntries(db, 'live', entries, { groups: [{ key: 'live:g1', type: 'live', name: 'Rai 1', epgChannelId: 'r1', memberKeys: ['live:2'], memberIds: [2] }] });
+  expect(await readGuideIndex(db)).toEqual([{ key: 'live:g1', epgChannelId: 'r1' }, { key: 'live:1', epgChannelId: 'z' }]);
+  await removeCatalogType(db, 'live');
+  expect(await dbGet(db, 'meta', GUIDE_INDEX_KEY)).toBeUndefined();
+});

@@ -62,7 +62,7 @@ Decisions agreed during the design phase. Update this file when a decision chang
 - Deleting a provider keeps tmdb-based watch history.
 - One `AppError` type (code, severity, retryable, i18n key). Credentials are masked in all logs.
 - EPG: now-playing on the card, next 24 h on the channel page; downloaded in the background at most
-  once a day when the app is opened; only programs ending in the future and starting within 48 h are kept.
+  once a day, as the last start-up task (see patch 121); only programs ending in the future and starting within 48 h are kept.
 - Suggestions: TMDB recommendations seeded from watch history (trending as fallback), intersected with
   the provider catalog by tmdb id. Trakt follows in a second phase behind the watch-state adapter.
 
@@ -90,7 +90,7 @@ Decisions agreed during the design phase. Update this file when a decision chang
 - Watch state in the app DB, key `movie:t<tmdb>` (shared across providers) or `<provider>:movie:i<id>`; series per episode. Trakt is an adapter over the local store, which remains the source for resuming.
 - `activeProvider` is the single shared handle on the active provider's DB and client.
 - TMDB/Trakt keys are not in the repository nor in the build: they are typed in Settings.
-- EPG: XMLTV filtered for the channels present, read in blocks in a worker, once a day after the catalog sync.
+- EPG: XMLTV filtered for the channels present, read in blocks in a worker, once a day after every other start-up task.
 - Suggestions: TMDB recommendations from the history, intersected by tmdb id with the catalog.
 
 ## Favorites of categories and genres, light TMDB records (2026-11-03)
@@ -208,3 +208,10 @@ For a title with TMDB genres (`entry_genre_tmdb`, `|tmdb`) the provider rows (`e
 ## Clear button of the text fields (patch 119)
 - Every text field (`createField`, `clearable` by default) has an "x" at the right edge inside its box (`.field-clear`), visible only while the field or the x has the focus (the box stays highlighted on the x: `.clearing`). Right from the field (before OK opens the keyboard) moves to the x, Left goes back; OK or a click on it empties the field and opens the keyboard (Done saves as usual, Cancel restores).
 - Settings: the x is a `secondary: 'right'` row of the field (`clearRowOf`), before the reset button where there is one (so Right: field → x → reset). Provider form: `formModel({ clearable: true })` adds one index per field after the actions (`fieldCount + actionCount + i`).
+
+## Guide download, guide rows and guide genres (patch 121)
+- Download: the background queue has a last priority `EPG` (after the search index). The `epg` task is added at start-up, after every catalog sync and every hour while the app is open; it only calls `epg.maybeSync()` (the download runs in its worker, the task does not wait for it) and `maybeSync` downloads only when the last download is 24 h old. Opening Live TV or a live channel no longer starts it. Settings → Catalog has a "TV guide (EPG)" row (programmes · channels with a guide · genres · valid until · updated, or "in progress" while the `epg` operation runs) with update (forced download) and remove (`clearEpg`: programmes, summary and last-download record) buttons.
+- Channel summary (`epgChannels.js`, `meta` record `epg:channels`), written by `syncEpg` from the programmes it stores: per channel the span (`from` / `to`) and the genres. The XMLTV parser keeps up to four `<category>` per programme (`categories`). Genres are folded (`genreKey`: case, accents, spacing); a channel has the genres carried by at least 30 % of its programmes with categories (the most frequent always). The record is valid until its last programme ends (`until`); the next download replaces it.
+- Guide rows (`guideIndex.js`, `meta` record `guide:rows`): `[key, epgChannelId]` of the groups and the ungrouped channels with a guide id, by name, written with the Live TV entries (`writeEntries`, sync and rebuild) and deleted with them; a catalog stored before it existed builds it once. The guide page filters it with the summary (`channelsWithGuide`, without walking the programmes; the old walk stays for a guide downloaded before the summary existed), applies the layout and reads the entries only for the rows it draws (`loadRows` → `getEntry`).
+- Live TV sidebar: when the summary has genres, a "Genres" entry (`epgGenresToggle`, open by default, before Networks) lists them (`epgGenre`) with the number of rows (groups and ungrouped channels) that have them; the grid shows those rows. Not pinnable or favourite (they change with the guide).
+- Player of a series: previous episode, play / pause, next episode (play / pause keeps the focus when the controls open).

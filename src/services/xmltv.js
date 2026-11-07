@@ -28,6 +28,19 @@ function attributes(text) {
   return out;
 }
 
+/** Every `<tag>` text of a block (XMLTV programmes may have several `<category>`), empty ones left out. */
+function allTags(block, tag) {
+  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, 'g');
+  const out = [];
+  let m = re.exec(block);
+  while (m) {
+    const text = decodeEntities(m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')).trim();
+    if (text) out.push(text);
+    m = re.exec(block);
+  }
+  return out;
+}
+
 function firstTag(block, tag) {
   const m = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`).exec(block);
   return m ? decodeEntities(m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')).trim() : '';
@@ -78,7 +91,8 @@ export function createXmltvParser({ now, horizonMs = 48 * 3600 * 1000, channels 
         const title = firstTag(body, 'title');
         if (!isPlaceholderTitle(title)) {
           kept += 1;
-          onProgramme({ channelId: attrs.channel, start, stop, title, desc: firstTag(body, 'desc').slice(0, 400) });
+          const categories = allTags(body, 'category').slice(0, 4);
+          onProgramme({ channelId: attrs.channel, start, stop, title, desc: firstTag(body, 'desc').slice(0, 400), ...(categories.length ? { categories } : {}) });
         }
       }
       match = re.exec(buffer);

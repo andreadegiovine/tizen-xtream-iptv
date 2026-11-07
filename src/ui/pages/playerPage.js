@@ -96,9 +96,9 @@ export function createPlayerPage(ctx, params) {
 
   // Control buttons: transport at the bottom left (not for live), aspect ratio + subtitles at the bottom right.
   const buttonDefs = [
-    { id: 'toggle', icon: 'pause', label: () => t('player.pause'), vodOnly: true, group: 'start', run: () => controller.togglePause() },
-    // Series: previous / next episode, shown only when there is one (the position is moved with the progress pointer).
+    // Series: previous / next episode on both sides of play / pause, shown only when there is one (the position is moved with the progress pointer).
     { id: 'prevEpisode', icon: 'previous', label: () => t('player.prevEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(-1) },
+    { id: 'toggle', icon: 'pause', label: () => t('player.pause'), vodOnly: true, group: 'start', run: () => controller.togglePause() },
     { id: 'nextEpisode', icon: 'next', label: () => t('player.nextEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(1) },
     { id: 'versions', icon: 'group', label: () => t('player.versions'), liveOnly: true, hidden: true, run: () => openVersions() }, // a group with several versions
     { id: 'network', icon: 'network', label: () => t('networks.open'), liveOnly: true, hidden: true, run: () => openNetwork() }, // a channel of a network
@@ -123,7 +123,7 @@ export function createPlayerPage(ctx, params) {
   });
   const buttonEl = (id) => (buttonDefs.find((d) => d.id === id) || {}).el;
   // Full-width progress bar, then one row: back, play/pause, forward and the time on the left, aspect ratio and subtitles on the right.
-  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('toggle'), buttonEl('prevEpisode'), buttonEl('nextEpisode'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
+  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('prevEpisode'), buttonEl('toggle'), buttonEl('nextEpisode'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
   const top = h('div', { class: 'player-top' }, titleEl, nowEl);
   const controls = h('div', { class: 'player-controls' }, ...(isLive ? [] : [seek]), row);
   const el = h('section', { class: 'player' }, top, controls, statusEl, subtitleEl);
@@ -584,7 +584,6 @@ export function createPlayerPage(ctx, params) {
       timeFormat = clockFormat || 'auto';
       updateSeriesButtons(autoplayNext).catch(() => undefined);
       controller.load(client.streamUrl(params.type, current().id, current().ext), { startAt, bufferSeconds, onSubtitle: showSubtitle });
-      if (isLive && ctx.epg) ctx.epg.maybeSync().catch(() => {});
       if (isLive) loadProgramme(token);
     } catch (err) {
       log.warn('Player start failed', err && err.message);

@@ -4,7 +4,7 @@
  * `block()` / `unblock()` hold the queue (a catalog sync running wins over everything); `promote(name)` runs a waiting task next
  * (the search icon was clicked). Tasks never overlap and a failing task does not stop the queue.
  */
-export const Priority = { VISIBLE: 0, SIDEBAR: 1, METADATA: 2, TRAKT: 3, SEARCH: 4 };
+export const Priority = { VISIBLE: 0, SIDEBAR: 1, METADATA: 2, TRAKT: 3, SEARCH: 4, EPG: 5 };
 
 export function createBackgroundQueue({ onError = () => {}, onTask = () => {}, now = Date.now } = {}) {
   let waiting = [];
