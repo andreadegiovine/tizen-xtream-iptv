@@ -611,3 +611,6 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 
 ### Patch 127 — README comparison table
 - The comparison table no longer has prices and lists the app's own features: channel grouping, TV networks, guide genres, scheduled viewing, programme search, clean titles, favourite / pinned filters, collections, data shared between providers, end-credits point. Documentation only. Not verified on the TV.
+
+### Patch 128 — AVPlay: no reopening for subtitles
+- TV log: after reopening, the text track was accepted while playing (`state PLAYING`) but no `onsubtitlechange` event arrived; the tracks report `subtitle_type: -1` and no language, likely a format the firmware does not turn into text (to be confirmed with the codec of the tracks). Reopening only cost a rebuffer, so it is removed: the track is chosen while playing (`setSilentSubtitle(false)`, `setSelectTrack('TEXT', i)`), off only stops drawing. Not verified on the TV.

@@ -52,13 +52,9 @@ export function createAvPlayEngine() {
   let subtitlesOn = false; // a track is selected: its lines (onsubtitlechange) are drawn by the page
   let eventsLogged = 0;
   let textEvents = 0; // subtitle lines with text received since the track was chosen (Diagnostics)
-  let session = null; // { url, bufferSeconds, handlers }: what is playing, to open it again with a subtitle track
 
-  /**
-   * Opens `url` in AVPlay. `reopen` = { atMs, textTrack }: the same video opened again to choose a subtitle track in the READY state
-   * (between prepare and play), where every firmware accepts it; it resumes at `atMs` without telling the page it started again.
-   */
-  function open(api, { url, bufferSeconds, handlers }, reopen = null) {
+  /** Opens `url` in AVPlay with the listener of the page's handlers. */
+  function open(api, { url, bufferSeconds, handlers }) {
     api.open(url);
     api.setDisplayRect(0, 0, 1920, 1080);
     api.setListener({
@@ -87,34 +83,9 @@ export function createAvPlayEngine() {
     document.body.classList.add('video-active');
     api.prepareAsync(
       () => {
-        if (!reopen) {
-          // Lines AVPlay sends before the user picks a track are ignored (subtitlesOn); silent mode is never used, since some
-          // firmwares send no more lines once it was on.
-          handlers.onPrepared();
-          return;
-        }
-        // READY refuses the text track (InvalidStateError on a 2021 QLED): it is chosen once playing, again a second later if refused.
-        const select = (attempt) => {
-          try {
-            api.setSelectTrack('TEXT', reopen.textTrack);
-            api.setSilentSubtitle(false);
-            log.info('AVPlay subtitle track selected while playing', reopen.textTrack, 'state', api.getState());
-          } catch (err) {
-            log.warn('avplay subtitle selection failed', attempt, err && (err.name || ''), err && err.message, 'state', api.getState());
-            if (attempt < 3) setTimeout(() => select(attempt + 1), 1000);
-          }
-        };
-        const play = () => {
-          try {
-            api.play();
-          } catch (err) {
-            handlers.onError(`play after subtitle change failed: ${err && err.message}`);
-            return;
-          }
-          select(1);
-        };
-        if (reopen.atMs > 0) api.seekTo(reopen.atMs, play, play);
-        else play();
+        // Lines AVPlay sends before the user picks a track are ignored (subtitlesOn); silent mode is never used, since some
+        // firmwares send no more lines once it was on.
+        handlers.onPrepared();
       },
       (error) => handlers.onError(`prepare failed: ${error}`)
     );
@@ -135,8 +106,7 @@ export function createAvPlayEngine() {
       if (!api) throw new Error('AVPlay is not available');
       this.stop();
       makeElement();
-      session = { url, bufferSeconds, handlers };
-      open(api, session);
+      open(api, { url, bufferSeconds, handlers });
     },
     play: () => av().play(),
     pause: () => av().pause(),
@@ -191,43 +161,31 @@ export function createAvPlayEngine() {
     },
     /**
      * index = track to show, null = subtitles off. AVPlay does not draw subtitles: it sends each line in `onsubtitlechange` and the
-     * page draws it. Choosing a track while playing is ignored by several firmwares (no lines arrive), so the video is opened again
-     * with the track chosen before play, at the same position (a short rebuffer). Off only stops drawing the lines.
+     * page draws it. The track is chosen while the video plays (READY refuses it; reopening the video only cost a rebuffer). Off only
+     * stops drawing the lines.
      */
     setSubtitleTrack(index) {
       eventsLogged = 0;
       textEvents = 0;
       const api = av();
-      if (!api || !session) return;
+      if (!api) return;
       if (index === null) {
         subtitlesOn = false;
         log.info('AVPlay subtitles off');
         return;
       }
-      let atMs = 0;
-      try {
-        atMs = Number(api.getCurrentTime()) || 0;
-      } catch {
-        /* position unknown: from the start */
-      }
       subtitlesOn = true;
-      log.info('AVPlay reopening for subtitle track', index, 'at', atMs);
       try {
-        api.stop();
-        api.close();
-      } catch {
-        /* already stopped */
-      }
-      try {
-        open(api, session, { atMs, textTrack: index });
+        api.setSilentSubtitle(false);
+        api.setSelectTrack('TEXT', index);
+        log.info('AVPlay subtitle track selected', index, 'state', api.getState());
       } catch (err) {
-        session.handlers.onError(`reopen for subtitles failed: ${err && err.message}`);
+        log.warn('avplay subtitle selection failed', err && (err.name || ''), err && err.message);
       }
     },
     stop() {
       subtitlesOn = false;
       eventsLogged = 0;
-      session = null;
       const api = av();
       try {
         if (api) {
