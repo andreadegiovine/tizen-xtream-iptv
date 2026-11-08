@@ -62,21 +62,30 @@ still being tested on real devices.
 
 ## Compared with popular players
 
-A quick look at three widely used IPTV players, from their public descriptions (November 2026; features and prices change, check
-the official store listings). "Not advertised" means we found no mention of it, not that it is missing.
+A quick look at three widely used IPTV players, from their public descriptions (November 2026; features change, check the official
+store listings). "Not advertised" means we found no mention of it, not that it is missing.
 
 | | **Xtream IPTV** | [TiviMate](https://tivimate.com) | [IPTV Smarters Pro](https://www.iptvsmarters.com) | IBO Player |
 |---|---|---|---|---|
 | Platforms | Tizen, webOS, Android TV / Fire TV, Windows, macOS, Linux | Android TV / Fire TV | Android, Fire TV, Samsung, LG, iOS and others | Android TV / Fire TV, Samsung, LG |
-| Price | Free | Free, premium a few € a year or lifetime | Free on most stores | Free trial, then a paid activation per device |
-| Xtream Codes login | Yes | Yes | Yes | Yes |
-| Programme guide (EPG grid) | Yes, with guide genres and custom XMLTV | Yes (its strong point) | Yes | Yes |
+| Xtream Codes login, several providers | Yes | Yes | Yes | Yes |
+| Programme guide (EPG grid) | Yes, with a custom XMLTV guide | Yes (its strong point) | Yes | Yes |
 | Catch-up / recording | No (catch-up planned) | Catch-up; recording with premium | Catch-up | Not advertised |
-| Duplicates merged into one card | Yes (by TMDB id) | No | No | No |
-| TMDB posters, plots, cast, trailers | Yes (own free key) | Not advertised | Partly (trailers, info) | Not advertised |
-| Trakt history sync | Yes | No | Not advertised | Not advertised |
-| Subtitles from OpenSubtitles | Yes, by file hash, with timing | Not advertised | Not advertised | Not advertised |
 | Programmes in the search | Yes | Yes | Not advertised | Not advertised |
+| Scheduled viewing (opens the channel when it starts) | Yes | Not advertised | Not advertised | Not advertised |
+| Genres from the guide's categories | Yes | Not advertised | Not advertised | Not advertised |
+| Quality variants of a channel grouped into one card | Yes, automatic, with manual links | Not advertised | Not advertised | Not advertised |
+| TV networks (channels of the same broadcaster collected) | Yes, automatic, with manual links | Not advertised | Not advertised | Not advertised |
+| Duplicate movies and series merged into one card | Yes (by TMDB id) | No | No | No |
+| Clean titles (no language prefixes, quality tags) | Yes | Not advertised | Not advertised | Not advertised |
+| Favourite and pinned categories, genres, networks | Yes | Favourite channels | Favourites | Favourites |
+| Collections of movies, series and channels | Yes | Not advertised | Not advertised | Not advertised |
+| Favourites, collections and pins shared between providers | Yes (by TMDB id) | Not advertised | Not advertised | Not advertised |
+| End-credits point per series (next episode from there) | Yes | Not advertised | Not advertised | Not advertised |
+| TMDB posters, plots, cast, trailers | Yes (own free key) | Not advertised | Partly (trailers, info) | Not advertised |
+| Trakt history and progress sync | Yes | No | Not advertised | Not advertised |
+| Subtitles from OpenSubtitles | Yes, by file hash, with timing | Not advertised | Not advertised | Not advertised |
+| Parental control | Yes (PIN) | Yes | Yes | Not advertised |
 | Open source, no account, no analytics | Yes | No | No | No |
 
 ## Screenshots

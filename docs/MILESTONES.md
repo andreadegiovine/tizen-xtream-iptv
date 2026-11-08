@@ -608,3 +608,6 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - TV log (2021 QLED, MKV with three text tracks): choosing the track in the READY state fails with `InvalidStateError PLAYER_ERROR_INVALID_STATE`. After reopening, the track is now chosen once playing (tried again after 1 s, up to three times), logging the player state; the subtitle events log their fourth argument (attributes), and a line made of a NUL character only (sent at the start: `"text":"\u0000"`) is dropped.
 - OpenSubtitles timing: up to 5 minutes either way (half seconds up to 10 s, seconds up to 1 minute, 5 s up to 5 minutes); a minute or more is shown as "1:05 min". On the TV the downloaded subtitles were about one minute early.
 - Tests: track chosen after play, timing list. Applies after patch 125. Not verified on the TV.
+
+### Patch 127 — README comparison table
+- The comparison table no longer has prices and lists the app's own features: channel grouping, TV networks, guide genres, scheduled viewing, programme search, clean titles, favourite / pinned filters, collections, data shared between providers, end-credits point. Documentation only. Not verified on the TV.
