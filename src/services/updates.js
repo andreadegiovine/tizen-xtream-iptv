@@ -9,6 +9,17 @@
  */
 export const UPDATE_URL = 'https://andreadegiovine.github.io/tizen-xtream-iptv/version.json';
 export const BUNDLE_KEY = 'xi.bundle';
+export const LAST_CHECK_KEY = 'xi.lastCheck';
+
+/** When version.json last answered (ms), or null. */
+export function lastCheck(storage = typeof window !== 'undefined' ? window.localStorage : null) {
+  try {
+    const value = Number(storage && storage.getItem(LAST_CHECK_KEY));
+    return value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 /** -1, 0, 1 comparing "1.2.10" with "1.2.9" (missing parts are 0; anything else than digits counts as 0). */
 export function compareVersions(a, b) {
@@ -42,6 +53,13 @@ export async function checkForUpdate({ platform, running, shell, fetchImpl = (..
   try {
     const request = fetchImpl(`${url}?t=${Date.now()}`, { cache: 'no-store' }).then((res) => (res.ok ? res.json() : null));
     const manifest = await Promise.race([request, timeout]);
+    if (manifest) {
+      try {
+        window.localStorage.setItem(LAST_CHECK_KEY, String(Date.now()));
+      } catch {
+        /* storage not available */
+      }
+    }
     return manifest ? pickUpdate(manifest, { platform, running, shell, url }) : null;
   } finally {
     clearTimeout(timer);

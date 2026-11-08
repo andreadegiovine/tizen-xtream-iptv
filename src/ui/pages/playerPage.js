@@ -28,6 +28,7 @@ const SCRUB_CONFIRM_MS = 2000; // the moved position is applied after this long 
 const SUBTITLE_FALLBACK_MS = 5000;
 const ONLINE_TICK_MS = 200;
 const ONLINE = 'online'; // value of the downloaded track in the subtitle list
+const DOWNLOAD = 'download'; // value of the "Download from OpenSubtitles" entry of the subtitle list
 const SYNC = 'sync'; // value of the "timing" entry of the subtitle list (downloaded subtitles only)
 const EMBEDDED = 'emb:'; // + track number: a text track of the MKV read by the app (see mkvSubtitles.js)
 const ENSURE_EVERY_MS = 2000; // how often the reader of an embedded track checks what is coming
@@ -193,7 +194,9 @@ export function createPlayerPage(ctx, params) {
   /** " · termina alle 23:34": when it would end if it keeps playing from `position` (the clock format of the top bar). */
   function endsAtText(position, duration) {
     if (!(duration > 0)) return '';
-    const end = new Date(Date.now() + Math.max(0, duration - position) * 1000);
+    // A series with its end credits point: the episode "ends" where the credits start (the next one is offered from there).
+    const credits = params.type === 'series' ? creditsStart(duration) : null;
+    const end = new Date(Date.now() + Math.max(0, (credits !== null && position < credits ? credits : duration) - position) * 1000);
     return ` · ${t('player.endsAt', { time: formatClockTime(end, timeFormat, i18n.getLocale()) })}`;
   }
 
@@ -380,16 +383,24 @@ export function createPlayerPage(ctx, params) {
     else ctx.notices.info(text, { scope: 'playback', key: 'aspect' });
   }
 
+  /** OpenSubtitles can be asked for this title (a key is set; not live channels or trailers; nothing downloaded yet). */
+  const canDownload = () => Boolean(!online && !isLive && !isTrailer && ctx.openSubtitles && ctx.openSubtitles.enabled);
+
+  /** "Download from OpenSubtitles": the download, then the list again with the downloaded subtitles (and their timing) in it. */
+  async function downloadOnline() {
+    const token = loadToken;
+    if (!onlinePending) onlinePending = fetchOnline(token).catch(() => undefined);
+    const pending = onlinePending;
+    await pending;
+    if (onlinePending === pending) onlinePending = null;
+    if (token !== loadToken || destroyed || !online) return;
+    await openSubtitles();
+  }
+
   async function openSubtitles() {
-    // With OpenSubtitles set up, the press downloads them first (once per title), also when the file has tracks of its own; the text tracks
-    // of an MKV are read at the same time (once per title).
+    // The text tracks of an MKV / MP4 are read at the first press (once per title); OpenSubtitles only when its entry is chosen.
     const token = loadToken;
     const jobs = [];
-    if (!online) {
-      if (!onlinePending) onlinePending = fetchOnline(token).catch(() => undefined);
-      const pending = onlinePending;
-      jobs.push(pending.then(() => { if (onlinePending === pending) onlinePending = null; }));
-    }
     if (embedded === null) {
       if (!embeddedPending) embeddedPending = readEmbedded(token).catch(() => undefined);
       jobs.push(embeddedPending);
@@ -401,7 +412,7 @@ export function createPlayerPage(ctx, params) {
     // The tracks the app reads replace the player's (which list them without sending their lines).
     const own = embedded ? embedded.tracks : [];
     const tracks = own.length ? [] : engine.getSubtitleTracks ? engine.getSubtitleTracks() : [];
-    if (!tracks.length && !own.length && !online) {
+    if (!tracks.length && !own.length && !online && !canDownload()) {
       ctx.notices.warning(t('player.subtitles.none'), { scope: 'playback', key: 'track' });
       return;
     }
@@ -410,11 +421,16 @@ export function createPlayerPage(ctx, params) {
       ...tracks.map((track, i) => ({ label: subtitleLabel(track, i + 1, t('player.track')), value: track.index })),
       ...own.map((track, i) => ({ label: embeddedLabel(track, i + 1), value: `${EMBEDDED}${track.number}` })),
       ...(online ? [{ label: onlineLabel(), value: ONLINE }, { label: syncLabel(), value: SYNC }] : []),
+      ...(canDownload() ? [{ label: t('player.subtitles.download'), value: DOWNLOAD }] : []),
     ];
     const value = await ctx.dialogs.choose({ title: t('player.subtitles'), options, selected: subtitle });
     if (value === null || destroyed) return;
     if (value === SYNC) {
       await chooseDelay();
+      return;
+    }
+    if (value === DOWNLOAD) {
+      await downloadOnline();
       return;
     }
     subtitle = value;

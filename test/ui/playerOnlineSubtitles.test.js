@@ -55,38 +55,35 @@ function pressSubtitles(s) {
   s.page.onAction(Action.ENTER);
 }
 
-test('nothing is downloaded at the start: the Subtitles press downloads, then lists them and they follow the position', async () => {
+test('nothing is downloaded by itself: the list offers "Download from OpenSubtitles", then shows the downloaded subtitles in its place', async () => {
   let release;
   const s = setup({ fetch: () => new Promise((resolve) => (release = resolve)) });
   await wait();
   s.start();
-  await wait(1900);
-  expect(s.ctx.openSubtitles.fetch).not.toHaveBeenCalled();
+  await wait(300);
+  const lists = [];
+  const answers = [(options) => options.find((o) => o.label === 'Download from OpenSubtitles').value, (options) => options[1].value];
   s.ctx.dialogs.choose.mockImplementation(async ({ options }) => {
-    expect(options.map((o) => o.label)).toEqual(['Off', 'Italiano (OpenSubtitles)', 'OpenSubtitles timing: 0.0 s']);
-    return options[1].value;
+    lists.push(options.map((o) => o.label));
+    return answers.shift()(options);
   });
   pressSubtitles(s);
   await wait();
+  expect(lists[0]).toEqual(['Off', 'Download from OpenSubtitles']);
   expect(s.ctx.openSubtitles.fetch).toHaveBeenCalledWith({ tmdbId: 603, languages: expect.any(Array) }, { url: 'http://h/movie/1.mp4' });
   expect(noticeTexts()).toContain('Downloading subtitles');
-  expect(s.ctx.dialogs.choose).not.toHaveBeenCalled();
   release({ language: 'it', cues: [{ start: 1000, end: 3000, text: 'Ciao' }] });
-  await wait();
-  expect(noticeTexts()).not.toContain('Downloading subtitles');
-  expect(noticeTexts()).toContain('Subtitles downloaded: Italiano');
   await wait(300);
-  expect(s.ctx.dialogs.choose).toHaveBeenCalled();
+  expect(noticeTexts()).toContain('Subtitles downloaded: Italiano');
+  expect(lists[1]).toEqual(['Off', 'OpenSubtitles: Italiano', 'OpenSubtitles sync: 0.0 s']); // the download entry is gone
   s.setTime(1500);
   await wait(300);
   expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Ciao');
-  s.page.onAction(Action.ENTER); // second press: no new download
-  await wait();
   expect(s.ctx.openSubtitles.fetch).toHaveBeenCalledTimes(1);
   s.page.destroy();
 }, 10000);
 
-test('the file has its own subtitles: the press downloads too, and both are listed', async () => {
+test('the file has its own subtitles: they are listed with the download entry, nothing is downloaded until it is chosen', async () => {
   const s = setup({ tracks: [{ index: 2, language: 'ita' }], fetch: async () => ({ language: 'en', cues: [] }) });
   await wait();
   s.start();
@@ -98,10 +95,8 @@ test('the file has its own subtitles: the press downloads too, and both are list
   });
   pressSubtitles(s);
   await wait(100);
-  expect(s.ctx.openSubtitles.fetch).toHaveBeenCalledTimes(1);
-  expect(labels).toHaveLength(4);
-  expect(labels[2]).toContain('(OpenSubtitles)');
-  expect(labels[3]).toBe('OpenSubtitles timing: 0.0 s');
+  expect(s.ctx.openSubtitles.fetch).not.toHaveBeenCalled();
+  expect(labels).toEqual(['Off', 'Italiano', 'Download from OpenSubtitles']);
   s.page.destroy();
 }, 10000);
 
@@ -110,8 +105,8 @@ test('timing of the downloaded subtitles: +2 s shows each line two seconds later
   await wait();
   s.start();
   await wait(100);
-  const answers = [(options) => {
-    expect(options.map((o) => o.label)).toEqual(['Off', 'Italiano (OpenSubtitles, for this file)', 'OpenSubtitles timing: 0.0 s']);
+  const answers = [(options) => 'download', (options) => {
+    expect(options.map((o) => o.label)).toEqual(['Off', 'OpenSubtitles: Italiano (for this file)', 'OpenSubtitles sync: 0.0 s']);
     return 'sync';
   }, (options) => {
     expect(options[0].label).toBe('−5:00 min');
@@ -168,7 +163,7 @@ test('an MKV whose player sends no lines: the app reads its text tracks and draw
   });
   pressSubtitles(s);
   await wait(400);
-  expect(labels).toEqual(['Off', 'Italiano', 'English · forced']); // the player's own (silent) tracks are not listed
+  expect(labels).toEqual(['Off', 'Italiano', 'English · forced', 'Download from OpenSubtitles']); // the player's own (silent) tracks are not listed
   s.setTime(1500);
   await wait(500);
   expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Prima riga');
@@ -216,7 +211,7 @@ test('an MP4 with tx3g tracks: the app reads them and draws the chosen one', asy
   });
   pressSubtitles(s);
   await wait(400);
-  expect(labels).toEqual(['Off', 'Italiano', 'English']);
+  expect(labels).toEqual(['Off', 'Italiano', 'English', 'Download from OpenSubtitles']);
   s.setTime(3500);
   await wait(500);
   expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Hello\nworld, again');

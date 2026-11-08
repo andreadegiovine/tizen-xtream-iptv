@@ -24,6 +24,9 @@ import { parseTerms, termsText } from '../../services/liveGrouping.js';
 import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from '../../services/liveNetworks.js';
 import { createField } from '../components/field.js';
 import { framedPage } from '../components/formPage.js';
+import { runningVersions, lastCheck } from '../../services/updates.js';
+import { APP_VERSION } from '../../core/env.js';
+import { formatDateTime } from '../../core/format.js';
 
 const ZONE_ID = 'settings';
 
@@ -553,8 +556,14 @@ export function createSettingsPage(ctx) {
     ctx.focus.focus(ZONE_ID, same >= 0 ? same : Math.min(opsPanel.rows.length, rowsNow.length - 1));
   };
 
+  // After the title: " • version 1.2.0 - last check 11/08, 23:15" (the build running, and when version.json last answered).
+  const versions = runningVersions();
+  const checked = lastCheck();
+  const version = versions.bundle || APP_VERSION;
+  const versionEl = h('span', { class: 'settings-version', text: ` • ${checked ? t('settings.versionLine', { version, time: formatDateTime(checked, i18n.getLocale()) }) : t('settings.versionNever', { version })}` });
+
   return {
-    el: framedPage(h('h1', { text: t('nav.settings') }), opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), h('h2', { class: 'prefs-title', text: 'OpenSubtitles' }), h('div', { class: 'fields' }, openSubtitlesRow.root), devicePanel.el, prefsBlocks),
+    el: framedPage(h('h1', {}, t('nav.settings'), versionEl), opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), h('h2', { class: 'prefs-title', text: 'OpenSubtitles' }), h('div', { class: 'fields' }, openSubtitlesRow.root), devicePanel.el, prefsBlocks),
     mount() {
       opsPanel.mount();
       tmdbPanel.mount();

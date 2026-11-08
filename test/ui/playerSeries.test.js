@@ -168,3 +168,14 @@ test('play / pause sits between previous and next episode and keeps the focus wh
   expect(s.button('Previous episode').classList.contains('focused')).toBe(true);
   s.page.destroy();
 });
+
+test('"ends at" of an episode counts to the start of the end credits when the series has one', async () => {
+  jest.useFakeTimers({ now: new Date(2026, 10, 8, 20, 0, 0) });
+  const s = setup({ stored: { 'p|series:t1396': 200 } }); // 10 minutes, credits 200 s before the end: at 6:40
+  await jest.advanceTimersByTimeAsync(50);
+  s.start();
+  await jest.advanceTimersByTimeAsync(1100);
+  expect(s.page.el.textContent).toContain('ends at 20:06'); // 6:40 from now, not 10:00
+  s.page.destroy();
+  jest.useRealTimers();
+});

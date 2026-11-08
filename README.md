@@ -135,10 +135,10 @@ titles are aligned.
 
 ### OpenSubtitles: subtitles for any title
 
-Pressing **Subtitles** in the player on a movie or episode with a TMDB id downloads subtitles in your language (then English), also
-when the file has its own; they appear in the list next to the file's tracks and stay in memory until the app is closed. The app sends
-the video's OpenSubtitles hash (it reads the first and last 64 KB), so subtitles made for that very file come first ("for this file");
-others can be moved with **OpenSubtitles timing** in the same list (up to 5 minutes either way, + = later).
+On a movie or episode with a TMDB id, the player's **Subtitles** list has a **Download from OpenSubtitles** entry: it downloads subtitles
+in your language (then English), also when the file has its own, and the list then shows them as "OpenSubtitles: <language>" with an
+**OpenSubtitles sync** entry (up to 5 minutes either way, + = later). They stay in memory until the app is closed. The app sends the
+video's OpenSubtitles hash (it reads the first and last 64 KB), so subtitles made for that very file come first ("for this file").
 
 1. Create a free account on [opensubtitles.com](https://www.opensubtitles.com).
 2. Create a consumer on [opensubtitles.com/consumers](https://www.opensubtitles.com/en/consumers) (any name): it gives an **API key**.

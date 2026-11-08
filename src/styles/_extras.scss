@@ -110,3 +110,10 @@
   font-size: 6rem;
   opacity: 0.4;
 }
+
+// Settings title: " • version 1.2.0 - last check …" in a lighter, smaller line.
+.settings-version {
+  font-size: 0.55em;
+  font-weight: 400;
+  opacity: 0.7;
+}
