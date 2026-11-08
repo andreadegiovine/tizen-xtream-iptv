@@ -12,17 +12,19 @@ export const IME_CANCEL = 65385;
  * Cancel blurs it and calls `onCancel()`. The field owns its keys: they never reach the global input handler.
  * `trailing` (a button, say) is placed at the right of the box; `root` is then the node to insert in the page, otherwise it is `el`.
  * `clearable`: an "x" at the right edge inside the box (`clearEl`), shown while the field (or the x) has the focus; the page makes it
- * reachable with Right, and `clear()` (OK on it, or a click) empties the field and opens the keyboard.
+ * reachable with Right, and `clear()` (OK on it, or a click) empties the field (or puts its default back) and saves it, without the keyboard.
  * Returns { el (gets the `focused` class), root, input, clearEl, focus, clear, getValue, setValue }.
  */
-export function createField({ label, type = 'text', placeholder = '', inputmode = '', onSubmit = null, onCancel = null, trailing = null, clearable = true, defaultValue = '' }) {
+export function createField({ label, type = 'text', placeholder = '', inputmode = '', onSubmit = null, onCancel = null, trailing = null, clearable = true, defaultValue = '', onClear = null }) {
   const input = h('input', { type, autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: placeholder || null, inputmode: inputmode || null });
   const clearEl = clearable ? h('span', { class: 'field-clear', 'aria-label': t('field.clear') }, icon('close')) : null;
   const el = h('label', { class: clearable ? 'field clearable' : 'field' }, h('span', { class: 'field-label', text: label }), input, clearEl);
-  // A field with a default value gets it back from the x instead of being emptied.
+  // The x empties the field (or puts its default value back) and saves it at once, without the keyboard: `onClear(value)` when
+  // given (a form that only empties it), otherwise the same `onSubmit` as Done.
   const clear = () => {
     input.value = defaultValue === null || defaultValue === undefined ? '' : String(defaultValue);
-    input.focus(); // opens the on-screen keyboard
+    if (onClear) onClear(input.value);
+    else if (onSubmit) onSubmit(input.value, null);
   };
   if (clearEl) {
     clearEl.addEventListener('click', (event) => {

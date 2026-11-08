@@ -10,11 +10,11 @@ export async function loadSearchRows(db, types) {
     const all = await requestToPromise(tx.objectStore('entries').index('byTypeAdded').getAll(IDBKeyRange.bound([type, 0], [type, Number.MAX_SAFE_INTEGER])));
     for (const entry of all) {
       if (entry.groupKey) continue; // a channel in a group is found through the group
-      rows.push({ key: entry.key, type, name: entry.name, year: entry.year, icon: entry.icon, rating: entry.rating, tmdbId: entry.tmdbId, defaultId: entry.defaultId, members: entry.members, categoryIds: entry.categoryIds, adult: entry.adult, keys: entry.searchKeys || [makeSearchKey(entry.name)], added: entry.added, groupKey: entry.groupKey || null });
+      rows.push({ key: entry.key, type, name: entry.name, year: entry.year, icon: entry.icon, rating: entry.rating, tmdbId: entry.tmdbId, defaultId: entry.defaultId, members: entry.members, categoryIds: entry.categoryIds, adult: entry.adult, keys: entry.searchKeys || [makeSearchKey(entry.name)], added: entry.added, groupKey: entry.groupKey || null, ...(entry.epgChannelId ? { epgChannelId: entry.epgChannelId } : {}) });
     }
     if (type === 'live') {
       const groups = await requestToPromise(db.transaction('groups', 'readonly').objectStore('groups').getAll());
-      groups.forEach((group) => rows.push({ key: group.key, type, name: group.name, year: null, icon: group.icon, rating: null, tmdbId: null, defaultId: group.defaultId, members: group.members, categoryIds: group.categoryIds, adult: group.adult, keys: group.searchKeys, added: group.added, isGroup: !group.isNetwork, group: !group.isNetwork, isNetwork: Boolean(group.isNetwork), memberKeys: group.memberKeys }));
+      groups.forEach((group) => rows.push({ key: group.key, type, name: group.name, year: null, icon: group.icon, rating: null, tmdbId: null, defaultId: group.defaultId, members: group.members, categoryIds: group.categoryIds, adult: group.adult, keys: group.searchKeys, added: group.added, isGroup: !group.isNetwork, group: !group.isNetwork, isNetwork: Boolean(group.isNetwork), memberKeys: group.memberKeys, ...(group.epgChannelId && !group.isNetwork ? { epgChannelId: group.epgChannelId } : {}) }));
     }
   }
   return rows;

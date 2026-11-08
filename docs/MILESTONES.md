@@ -594,3 +594,9 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - OpenSubtitles: the app sends the file's hash (two 64 KB range reads of the video), so subtitles made for that file come first ("for this file" in the list). New "OpenSubtitles timing" entry in the Subtitles list: −15 s to +15 s in half seconds.
 - Player: while the progress bar and the buttons are shown, the subtitle line moves above them.
 - Checked off the TV: the hash against a reference on a real MKV with ten subtitle tracks served with HTTP ranges (`ietf-wg-cellar/matroska-test-files` test5.mkv). The Tizen emulator / AVPlay cannot run in this environment, and OpenSubtitles is not reachable from it. Tests: AVPlay reopen, hash, range reads, timing, line position. Applies after patch 122. Not verified on the TV.
+
+### Patch 124 — x saves without the keyboard, now playing in the search, programmes in the search
+- Text fields: the "x" saves the empty value (or the default where there is one) at once and no longer opens the keyboard. In the provider form it only empties the field.
+- Live TV cards show the programme on air in the subtitle everywhere, now also in the search results (the search rows did not carry the guide id).
+- Search: programmes of the guide (next 24 hours) whose title matches, in an "On TV" row after Live TV: the channel / group picture, a clock badge, start and end time; OK opens the channel / group page with the focus on that programme.
+- Checked in Chromium with the mock (programme search and landing, channels with the programme on air, x). Tests: x saves, programme search. Applies after patch 123. Not verified on the TV.

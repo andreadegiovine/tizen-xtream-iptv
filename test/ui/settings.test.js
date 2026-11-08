@@ -47,7 +47,7 @@ test('h(): nested arrays of nodes are appended as elements, never printed as "[o
   expect(el.textContent).not.toContain('object');
 });
 
-test('text row: its x is a row at its right; OK on it empties the field and opens the keyboard', async () => {
+test('text row: its x is a row at its right; OK on it empties the field and saves it, without the keyboard', async () => {
   const ctx = { apiKeys: { getStored: () => 'secret-key', set: jest.fn(async () => undefined) }, notices: { success() {} }, router: { reload() {} } };
   const row = textRow({ ctx, label: 'TMDB', field: 'tmdbKey' });
   await row.refresh();
@@ -58,6 +58,7 @@ test('text row: its x is a row at its right; OK on it empties the field and open
   expect(row.root.contains(row.clearRow.el)).toBe(true);
   await row.clearRow.activate();
   expect(input.value).toBe('');
-  expect(document.activeElement).toBe(input);
+  expect(document.activeElement).not.toBe(input);
+  expect(ctx.apiKeys.set).toHaveBeenCalledWith({ tmdbKey: '' });
   row.root.remove();
 });

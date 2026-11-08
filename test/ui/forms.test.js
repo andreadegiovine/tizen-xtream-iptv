@@ -64,15 +64,18 @@ test('field: label above the input, Done saves, Cancel restores, keys never reac
   expect(createField({ label: 'x' }).root.classList.contains('field')).toBe(true);
 });
 
-test('field x: empties the field, or puts back its default value', () => {
-  const plain = createField({ label: 'Key' });
+test('field x: empties the field, or puts back its default value, and saves it', () => {
+  const onSubmit = jest.fn();
+  const plain = createField({ label: 'Key', onSubmit });
   plain.setValue('abc');
   plain.clear();
   expect(plain.getValue()).toBe('');
-  const withDefault = createField({ label: 'Similarity', defaultValue: '80' });
+  expect(onSubmit).toHaveBeenCalledWith('', null);
+  const withDefault = createField({ label: 'Similarity', defaultValue: '80', onSubmit });
   withDefault.setValue('55');
   withDefault.clearEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
   expect(withDefault.getValue()).toBe('80');
+  expect(onSubmit).toHaveBeenLastCalledWith('80', null);
 });
 
 test('framedPage: centred container for title and content', () => {
@@ -193,7 +196,7 @@ test('formModel with the x of the fields: Right from a field to its x, Left back
   expect(model.navigate(Dir.RIGHT, 3)).toEqual({ type: 'move', index: 4 }); // actions unchanged
 });
 
-test('the x of a field: inside the box, shown with the focus, OK empties the field and opens the keyboard', async () => {
+test('the x of a field: inside the box, shown with the focus, OK empties the field without the keyboard', async () => {
   const focus = new FocusManager();
   const form = createForm({ id: 'g', focus, fields: [{ label: 'URL' }, { label: 'User' }], actions: [{ label: 'Ok', run: () => undefined }] });
   focus.register(form.zone);
@@ -208,8 +211,8 @@ test('the x of a field: inside the box, shown with the focus, OK empties the fie
   expect(url.el.classList.contains('clearing')).toBe(true); // the box stays highlighted
   focus.handle(Action.ENTER);
   expect(url.getValue()).toBe('');
-  expect(document.activeElement).toBe(url.input); // keyboard
-  url.input.blur();
+  expect(document.activeElement).not.toBe(url.input); // no keyboard
+  expect(url.clearEl.classList.contains('focused')).toBe(true); // the form does not move on
   focus.handle(Action.LEFT);
   expect(url.el.classList.contains('focused')).toBe(true);
   url.setValue('x');

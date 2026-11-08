@@ -3,8 +3,8 @@ import { t } from '../../i18n/index.js';
 import { TOPBAR_ZONE } from './topbar.js';
 import { createCarousel } from './carousel.js';
 
-const ORDER = ['collection', 'movie', 'series', 'live'];
-const LABEL = { collection: 'nav.collections', movie: 'nav.movies', series: 'nav.series', live: 'nav.live' };
+const ORDER = ['collection', 'movie', 'series', 'live', 'programme'];
+const LABEL = { collection: 'nav.collections', movie: 'nav.movies', series: 'nav.series', live: 'nav.live', programme: 'search.programmes' };
 
 /**
  * A favourite category or genre shown as a card: `{ type, key, name, filterKind: 'category' | 'genre', filterId }`.
@@ -44,6 +44,7 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 20, hideFavorite 
           title: t(LABEL[group.type]),
           items: group.entries.map((entry) => {
             if (entry.type === 'collection') return { entry, type: 'movie', meta: { placeholder: 'folder', subtitle: entry.subtitle } }; // cards of a collection look like titles
+            if (entry.type === 'programme') return { entry, type: 'live', meta: { subtitle: entry.subtitle } }; // a guide programme: the channel's picture, its hours
             return isFilterEntry(entry) ? { entry, type: group.type, meta: filterCardMeta(entry) } : { entry, type: group.type };
           }),
           onOpen: (item) => onOpen(item.entry),
@@ -57,7 +58,7 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 20, hideFavorite 
         ctx.focus.register(carousel.zone);
         ctx.focus.link(carousel.zone.id, 'up', i === 0 ? TOPBAR_ZONE : carousels[i - 1].zone.id);
         if (i < carousels.length - 1) ctx.focus.link(carousel.zone.id, 'down', carousels[i + 1].zone.id);
-        if (ctx.enrich && carousel.type !== 'collection') ctx.enrich(carousel.items.map((item) => item.entry), carousel.cards, carousel.type, i > 0, { hideFavorite });
+        if (ctx.enrich && carousel.type !== 'collection' && carousel.type !== 'programme') ctx.enrich(carousel.items.map((item) => item.entry), carousel.cards, carousel.type, i > 0, { hideFavorite });
       });
       if (carousels.length) ctx.focus.link(TOPBAR_ZONE, 'down', carousels[0].zone.id);
       if (ctx.syncSearchLinks) ctx.syncSearchLinks();

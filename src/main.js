@@ -316,6 +316,7 @@ async function boot() {
     onOpen: () => {
       // The search icon shows the search page at once, with the last searches, and loads the index now instead of last.
       ctx.search.warm().catch(() => undefined);
+      epg.warmSearch().catch(() => undefined); // the programme titles too
       if (!(router.current && router.current.name === 'search')) router.push('search', { query: '', section: 'search' });
     },
     onCleared: () => {

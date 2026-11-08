@@ -174,3 +174,32 @@ describe('custom guide', () => {
     expect((await dbGetAll(db2, 'epg')).map((r) => r.title)).toEqual(['Provider']);
   });
 });
+
+describe('programme search', () => {
+  const NOW = Date.UTC(2026, 10, 2, 12, 0, 0);
+  const H = 3600000;
+  test('titles of the next 24 hours, best match first, on air first, one per channel and title, with the Live TV row', async () => {
+    const db = await openProviderDb('epg-search-test');
+    await dbPutMany(db, 'entries', [
+      { key: 'live:i1', type: 'live', added: 1, name: 'Uno', epgChannelId: 'a' },
+      { key: 'live:i2', type: 'live', added: 2, name: 'Due', epgChannelId: 'b' },
+    ]);
+    await dbPutMany(db, 'epg', [
+      { channelId: 'a', start: NOW + H, stop: NOW + 2 * H, title: 'Il Commissario Montalbano' },
+      { channelId: 'a', start: NOW + 5 * H, stop: NOW + 6 * H, title: 'Il Commissario Montalbano' }, // a later airing: left out
+      { channelId: 'b', start: NOW - H, stop: NOW + H, title: 'Montalbano' }, // whole title, on air
+      { channelId: 'b', start: NOW - 3 * H, stop: NOW - 2 * H, title: 'Montalbano' }, // ended
+      { channelId: 'b', start: NOW + 30 * H, stop: NOW + 31 * H, title: 'Montalbano speciale' }, // after 24 h
+      { channelId: 'z', start: NOW, stop: NOW + H, title: 'Montalbano' }, // no Live TV row
+      { channelId: 'a', start: NOW + 3 * H, stop: NOW + 4 * H, title: 'EPG non disponibile' },
+    ]);
+    const svc = createEpgService({ active: { get: async () => ({ db }) }, providers: {}, createWorker: () => { throw new Error('none'); }, now: () => NOW });
+    const found = await svc.searchProgrammes('montàlbano');
+    expect(found.map((p) => [p.title, p.rowKey, p.start])).toEqual([
+      ['Montalbano', 'live:i2', NOW - H],
+      ['Il Commissario Montalbano', 'live:i1', NOW + H],
+    ]);
+    expect(await svc.searchProgrammes('m')).toEqual([]);
+    expect(await svc.searchProgrammes('disponibile')).toEqual([]);
+  });
+});

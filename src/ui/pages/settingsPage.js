@@ -54,7 +54,7 @@ export function textRow({ label, field, secret = false, ctx }) {
   return row;
 }
 
-/** The "x" of a text field as a row at its right (Right from the field): OK empties the field and opens the keyboard. */
+/** The "x" of a text field as a row at its right (Right from the field): OK empties the field (or puts its default back) and saves it. */
 export function clearRowOf(field) {
   return { secondary: 'right', el: field.clearEl, refresh: async () => undefined, activate: async () => field.clear() };
 }

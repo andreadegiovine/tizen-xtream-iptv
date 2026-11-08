@@ -1,10 +1,11 @@
 import { h } from '../dom.js';
-import { t } from '../../i18n/index.js';
+import { t, i18n } from '../../i18n/index.js';
 import { createTypedRows } from '../components/typedRows.js';
 import { createSkeletonCard } from '../components/card.js';
 import { collectionEntry } from '../../services/collections.js';
 import { getEntry } from '../../services/catalogQuery.js';
 import { log } from '../../core/logger.js';
+import { formatClockTime } from '../../core/clock.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
@@ -19,7 +20,40 @@ const RECENT_ZONE = 'searchRecent';
  */
 export function createSearchPage(ctx, params = {}) {
   const status = h('p', { class: 'muted search-status' });
-  const rows = createTypedRows(ctx, { prefix: 'search', limit: PER_TYPE, onOpen: (entry) => remember() || (entry.collectionId ? ctx.router.push('collection', { id: entry.collectionId, section: 'search' }) : ctx.openEntry(entry, { section: 'search' })) });
+  const rows = createTypedRows(ctx, { prefix: 'search', limit: PER_TYPE, onOpen: (entry) => remember() || open(entry) });
+
+  /** A collection opens its page; a programme opens its channel / group with the focus on it; the rest opens its detail page. */
+  function open(entry) {
+    if (entry.collectionId) return ctx.router.push('collection', { id: entry.collectionId, section: 'search' });
+    if (entry.isProgramme) return ctx.openEntry(entry.row, { section: 'search', programme: entry.start });
+    return ctx.openEntry(entry, { section: 'search' });
+  }
+
+  /** Programmes of the guide whose title matches, as cards: the picture of their channel / group, "21:00 – 22:30" under the title. */
+  async function matchingProgrammes(text) {
+    if (!ctx.epg || !ctx.epg.searchProgrammes) return [];
+    const current = await ctx.active.get();
+    if (!current) return [];
+    const [found, prefs] = await Promise.all([ctx.epg.searchProgrammes(text, { limit: PER_TYPE }), ctx.settings.get()]);
+    const format = (ms) => formatClockTime(new Date(ms), prefs.timeFormat || 'auto', i18n.getLocale());
+    const out = [];
+    for (const p of found) {
+      const row = await getEntry(current.db, p.rowKey).catch(() => null);
+      if (!row) continue;
+      out.push({
+        key: `programme:${p.channelId}:${p.start}`,
+        type: 'programme',
+        isProgramme: true,
+        name: p.title,
+        icon: row.icon,
+        adult: row.adult,
+        subtitle: `${format(p.start)} – ${format(p.stop)}`,
+        start: p.start,
+        row,
+      });
+    }
+    return out;
+  }
   const skeleton = h('div', { class: 'search-skeleton' }, h('div', { class: 'skeleton-line title' }), h('div', { class: 'skeleton-row' }, [0, 1, 2, 3, 4, 5].map(() => createSkeletonCard())));
   skeleton.style.display = 'none';
   const recentList = h('div', { class: 'list search-recent-list' });
@@ -109,6 +143,7 @@ export function createSearchPage(ctx, params = {}) {
     try {
       const found = query.length < 2 ? [] : await ctx.search.search(query, { limit: PER_TYPE * 6 });
       if (query.length >= 2 && ctx.collections) found.push(...(await matchingCollections(query)));
+      if (query.length >= 2) found.push(...(await matchingProgrammes(query).catch(() => [])));
       if (destroyed || mine !== token) return;
       rows.set(found);
       skeleton.style.display = 'none';

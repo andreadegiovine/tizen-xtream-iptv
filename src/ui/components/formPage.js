@@ -55,7 +55,7 @@ export function createForm({ id, focus, fields: specs, actions }) {
   const status = h('div', { class: 'status', role: 'status' });
   const actionButtons = actions.map((a) => h('button', { class: `btn${a.primary ? ' primary' : ''}`, type: 'button', text: a.label }));
   const total = specs.length + actions.length;
-  const fields = specs.map((spec, i) => createField({ ...spec, onSubmit: () => focus.focus(id, Math.min(i + 1, total - 1)) }));
+  const fields = specs.map((spec, i) => createField({ ...spec, onSubmit: () => focus.focus(id, Math.min(i + 1, total - 1)), onClear: () => undefined }));
   const nodes = fields.map((f) => f.el).concat(actionButtons, fields.map((f) => f.clearEl));
   const el = h('div', { class: 'form' }, fields.map((f) => f.root), status, h('div', { class: 'form-actions' }, actionButtons));
   const zone = new FocusZone({
