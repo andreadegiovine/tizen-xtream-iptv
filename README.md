@@ -40,7 +40,7 @@ still being tested on real devices.
 
 **Player**
 - Draggable progress bar, previous / next episode, an end-credits point set once per series (the next episode is offered from
-  there), aspect ratio, audio tracks, subtitles (embedded or from OpenSubtitles, with timing adjustment), adjustable buffering,
+  there), aspect ratio, audio tracks, subtitles (embedded, read by the app from MKV files when the TV does not show them, or from OpenSubtitles with timing adjustment), adjustable buffering,
   resume and autoplay of the next episode.
 - The native engine of each platform: AVPlay on Tizen, the system player on webOS, ExoPlayer on Android.
 - Trailers from YouTube: in the app's own player on Samsung TVs, in the YouTube app or the browser elsewhere.

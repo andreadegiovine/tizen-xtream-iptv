@@ -140,6 +140,7 @@
   "player.subtitles.downloaded": "Subtitles downloaded: {language}",
   "player.subtitles.notFound": "No subtitles found online",
   "player.subtitles.online": "{language} (OpenSubtitles)",
+  "player.subtitles.forced": "forced",
   "player.subtitles.sync": "OpenSubtitles timing: {delay}",
   "player.subtitles.syncTitle": "Subtitle delay (+ = later)",
   "player.subtitles.matched": "{language} (OpenSubtitles, for this file)",

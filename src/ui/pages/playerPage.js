@@ -13,6 +13,7 @@ import { pageEntries, getEntry, liveSequence, neighborKey } from '../../services
 import { streamLabel } from './detailPage.js';
 import { portableKeyFor } from '../../services/shareKeys.js';
 import { cueAt, subtitleLanguages } from '../../services/openSubtitles.js';
+import { createRangeReader, probeMkv, createTrackLoader } from '../../services/mkvSubtitles.js';
 
 const CONTROLS_MS = 4000;
 const SAVE_EVERY_MS = 10000;
@@ -27,6 +28,8 @@ const SUBTITLE_FALLBACK_MS = 5000;
 const ONLINE_TICK_MS = 200;
 const ONLINE = 'online'; // value of the downloaded track in the subtitle list
 const SYNC = 'sync'; // value of the "timing" entry of the subtitle list (downloaded subtitles only)
+const EMBEDDED = 'emb:'; // + track number: a text track of the MKV read by the app (see mkvSubtitles.js)
+const ENSURE_EVERY_MS = 2000; // how often the reader of an embedded track checks what is coming
 /** Delays offered for the downloaded subtitles: half seconds up to 10 s, seconds up to 1 minute, 5 s up to 5 minutes (each side). */
 export function syncSteps() {
   const side = [];
@@ -71,6 +74,9 @@ export function createPlayerPage(ctx, params) {
   let onlineTimer = null; // draws the downloaded cues while they are chosen
   let onlineCue = null;
   let onlinePending = null; // the download running for what is playing, shared by repeated presses
+  // Text tracks of the MKV read by the app ({ tracks, reader, loaders }), null when not read yet, false when the file has none it can read.
+  let embedded = null;
+  let embeddedPending = null;
   let audioTrack = null; // null = the file's default
   let appliedFor = 0; // load token the aspect mode was last applied to
   let focusMode = false; // the D-pad moves over the controls (progress pointer + buttons) instead of seeking
@@ -374,23 +380,34 @@ export function createPlayerPage(ctx, params) {
   }
 
   async function openSubtitles() {
-    // With OpenSubtitles set up, the press downloads them first (once per title), also when the file has tracks of its own.
+    // With OpenSubtitles set up, the press downloads them first (once per title), also when the file has tracks of its own; the text tracks
+    // of an MKV are read at the same time (once per title).
+    const token = loadToken;
+    const jobs = [];
     if (!online) {
-      const token = loadToken;
       if (!onlinePending) onlinePending = fetchOnline(token).catch(() => undefined);
       const pending = onlinePending;
-      await pending;
-      if (onlinePending === pending) onlinePending = null;
+      jobs.push(pending.then(() => { if (onlinePending === pending) onlinePending = null; }));
+    }
+    if (embedded === null) {
+      if (!embeddedPending) embeddedPending = readEmbedded(token).catch(() => undefined);
+      jobs.push(embeddedPending);
+    }
+    if (jobs.length) {
+      await Promise.all(jobs);
       if (token !== loadToken || destroyed) return;
     }
-    const tracks = engine.getSubtitleTracks ? engine.getSubtitleTracks() : [];
-    if (!tracks.length && !online) {
+    // The tracks the app reads replace the player's (which list them without sending their lines).
+    const own = embedded ? embedded.tracks : [];
+    const tracks = own.length ? [] : engine.getSubtitleTracks ? engine.getSubtitleTracks() : [];
+    if (!tracks.length && !own.length && !online) {
       ctx.notices.warning(t('player.subtitles.none'), { scope: 'playback', key: 'track' });
       return;
     }
     const options = [
       { label: t('player.subtitles.off'), value: -1 },
       ...tracks.map((track, i) => ({ label: subtitleLabel(track, i + 1, t('player.track')), value: track.index })),
+      ...own.map((track, i) => ({ label: embeddedLabel(track, i + 1), value: `${EMBEDDED}${track.number}` })),
       ...(online ? [{ label: onlineLabel(), value: ONLINE }, { label: syncLabel(), value: SYNC }] : []),
     ];
     const value = await ctx.dialogs.choose({ title: t('player.subtitles'), options, selected: subtitle });
@@ -408,9 +425,12 @@ export function createPlayerPage(ctx, params) {
     stopOnline();
     setTimeout(() => {
       if (destroyed) return;
-      if (value === ONLINE) {
-        if (engine.setSubtitleTrack && tracks.length) engine.setSubtitleTrack(null);
-        startOnline();
+      const ownTrack = typeof value === 'string' && value.indexOf(EMBEDDED) === 0;
+      if (value === ONLINE || ownTrack) {
+        // The player's own track goes off (also when the list shows the tracks the app reads instead of the player's).
+        if (engine.setSubtitleTrack && (tracks.length || own.length)) engine.setSubtitleTrack(null);
+        if (ownTrack) startEmbedded(Number(value.slice(EMBEDDED.length)));
+        else startOnline();
       } else if (engine.setSubtitleTrack) engine.setSubtitleTrack(value < 0 ? null : value);
     }, 150);
   }
@@ -471,6 +491,64 @@ export function createPlayerPage(ctx, params) {
     clearInterval(onlineTimer);
     onlineTimer = null;
     onlineCue = null;
+  }
+
+  /** "Italiano · Forced", or "Track 2": the language (or name) of a track the app reads from the file. */
+  function embeddedLabel(track, position) {
+    const base = track.language ? subtitleLabel({ language: track.language }, position, t('player.track')) : track.name || `${t('player.track')} ${position}`;
+    return track.forced ? `${base} · ${t('player.subtitles.forced')}` : base;
+  }
+
+  /**
+   * Reads the text tracks of the file when it is an MKV that the server serves in ranges and whose cue index lists the subtitles
+   * (live channels, trailers and ExoPlayer, which shows them itself, are left out). `embedded` becomes false when there is nothing to read.
+   */
+  async function readEmbedded(token) {
+    if (isLive || isTrailer || engine.kind === 'exoplayer' || !streamUrl) {
+      embedded = false;
+      return;
+    }
+    const reader = createRangeReader(streamUrl, ctx.fetch || ((...args) => fetch(...args)));
+    let found = null;
+    try {
+      found = await probeMkv(reader);
+    } catch (err) {
+      log.info('Embedded subtitles not readable', err && err.message);
+    }
+    if (token !== loadToken || destroyed) return;
+    embedded = found ? { ...found, reader, loaders: new Map() } : false;
+    if (found) log.info('Embedded subtitles read by the app', found.tracks.map((tr) => `${tr.number}:${tr.codec}:${tr.language || '?'}:${tr.cues.length}`).join(', '), `${reader.requests} requests`);
+  }
+
+  /** Draws a track read from the file: its lines are read a few minutes ahead of the position, again after a seek. */
+  function startEmbedded(number) {
+    stopOnline();
+    if (!embedded) return;
+    const track = embedded.tracks.find((tr) => tr.number === number);
+    if (!track) return;
+    let loader = embedded.loaders.get(number);
+    if (!loader) {
+      loader = createTrackLoader(embedded.reader, track, { scaleMs: embedded.scaleMs });
+      embedded.loaders.set(number, loader);
+    }
+    let lastEnsure = -Infinity;
+    onlineTimer = setInterval(() => {
+      let ms = 0;
+      try {
+        ms = Number(engine.getTime()) || 0;
+      } catch {
+        return;
+      }
+      const now = Date.now();
+      if (now - lastEnsure >= ENSURE_EVERY_MS) {
+        lastEnsure = now;
+        loader.ensure(ms);
+      }
+      const cue = cueAt(loader.cues, ms);
+      if (cue === onlineCue) return;
+      onlineCue = cue;
+      showSubtitle(cue ? cue.text : '', cue ? cue.end - ms : 0);
+    }, ONLINE_TICK_MS);
   }
 
   /** TMDB id (and episode) of what is playing: from the key, or from the provider's list row when it has one. */
@@ -611,6 +689,8 @@ export function createPlayerPage(ctx, params) {
     closeOnlineNotice();
     stopOnline();
     onlinePending = null;
+    embedded = null;
+    embeddedPending = null;
     audioTrack = null;
     setAudioVisible(false);
     showSubtitle('');

@@ -614,3 +614,9 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 
 ### Patch 128 — AVPlay: no reopening for subtitles
 - TV log: after reopening, the text track was accepted while playing (`state PLAYING`) but no `onsubtitlechange` event arrived; the tracks report `subtitle_type: -1` and no language, likely a format the firmware does not turn into text (to be confirmed with the codec of the tracks). Reopening only cost a rebuffer, so it is removed: the track is chosen while playing (`setSilentSubtitle(false)`, `setSelectTrack('TEXT', i)`), off only stops drawing. Not verified on the TV.
+
+### Patch 129 — embedded MKV subtitles read by the app
+- The TV accepts the embedded text tracks but sends none of their lines, so the app now reads them itself from the file with HTTP range requests: the header, the track list and the cue index (a few requests), then, while the video plays, only the subtitle blocks of the chosen track a few minutes ahead of the position. The lines are drawn like the OpenSubtitles ones. Text formats only (SRT, ASS / SSA as plain text, WebVTT); image subtitles (PGS, VobSub) are not read.
+- In the Subtitles list the tracks read by the app replace the player's ones, with their language (and "forced"); when the file cannot be read (not an MKV, no ranges, no subtitle entries in its index) the list is the same as before.
+- Live channels, trailers and Android (ExoPlayer shows embedded subtitles itself) are left out. The extra requests run next to the video: a provider that allows only one connection may refuse them (then nothing changes).
+- Checked off the TV on a real MKV served with ranges (same lines and times as ffmpeg) and on a small fixture; tests: EBML reading, tracks and cues, windows, ASS text, no ranges, player list and drawing. Applies after patch 128. Not verified on the TV.

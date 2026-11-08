@@ -4,7 +4,7 @@ import { createNoticeService } from '../../src/ui/components/notice.js';
 
 const wait = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function setup({ tracks = [], fetch }) {
+function setup({ tracks = [], fetch, fileFetch = async () => ({ status: 404, headers: { get: () => null } }), url = 'http://h/movie/1.mp4' }) {
   let handlers = null;
   let now = 0;
   const engine = {
@@ -21,7 +21,7 @@ function setup({ tracks = [], fetch }) {
     getSubtitleTracks: () => tracks,
     setSubtitleTrack: jest.fn(),
   };
-  const client = { streamUrl: () => 'http://h/movie/1.mp4' };
+  const client = { streamUrl: () => url };
   const notices = createNoticeService({ root: document.body });
   const ctx = {
     createEngine: () => engine,
@@ -33,6 +33,7 @@ function setup({ tracks = [], fetch }) {
     dialogs: { isOpen: () => false, choose: jest.fn() },
     router: { back: jest.fn() },
     openSubtitles: { enabled: true, fetch: jest.fn(fetch) },
+    fetch: fileFetch,
   };
   const page = createPlayerPage(ctx, { type: 'movie', entryKey: 'movie:t603', title: 'Matrix', playlist: [{ id: 1, ext: 'mp4', title: '' }], index: 0 });
   document.body.appendChild(page.el);
@@ -144,3 +145,33 @@ test('the subtitle line moves above the progress bar while the controls are show
   s.page.destroy();
   jest.useRealTimers();
 });
+
+test('an MKV whose player sends no lines: the app reads its text tracks and draws the chosen one', async () => {
+  const fs = require('fs');
+  const path = require('path');
+  if (typeof global.TextDecoder === 'undefined') global.TextDecoder = require('util').TextDecoder;
+  const file = fs.readFileSync(path.join(__dirname, '../fixtures/subs.mkv'));
+  const fileFetch = async (u, init) => {
+    const [from, to] = /bytes=(\d+)-(\d+)/.exec(init.headers.Range).slice(1).map(Number);
+    const end = Math.min(to, file.length - 1);
+    const slice = file.subarray(from, end + 1);
+    return { status: 206, headers: { get: () => `bytes ${from}-${end}/${file.length}` }, arrayBuffer: async () => slice.buffer.slice(slice.byteOffset, slice.byteOffset + slice.length) };
+  };
+  const s = setup({ tracks: [{ index: 2, language: '' }, { index: 3, language: '' }], fetch: async () => null, fileFetch, url: 'http://h/movie/1.mkv' });
+  await wait();
+  s.start();
+  await wait(100);
+  let labels = null;
+  s.ctx.dialogs.choose.mockImplementation(async ({ options }) => {
+    labels = options.map((o) => o.label);
+    return options[1].value;
+  });
+  pressSubtitles(s);
+  await wait(400);
+  expect(labels).toEqual(['Off', 'Italiano', 'English · forced']); // the player's own (silent) tracks are not listed
+  s.setTime(1500);
+  await wait(500);
+  expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Prima riga');
+  expect(s.engine.setSubtitleTrack).toHaveBeenCalledWith(null);
+  s.page.destroy();
+}, 10000);
