@@ -1,5 +1,22 @@
 {
-  "version": "0.0.0",
-  "date": null,
-  "platforms": {}
+  "version": "1.2.7",
+  "date": "2026-11-08T23:27:56.785Z",
+  "platforms": {
+    "tizen": {
+      "base": "bundles/1.2.7/tizen/",
+      "minShell": "0.0.0"
+    },
+    "webos": {
+      "base": "bundles/1.2.7/webos/",
+      "minShell": "0.0.0"
+    },
+    "desktop": {
+      "base": "bundles/1.2.7/desktop/",
+      "minShell": "0.0.0"
+    },
+    "android": {
+      "base": "bundles/1.2.7/android/",
+      "minShell": "0.0.0"
+    }
+  }
 }
