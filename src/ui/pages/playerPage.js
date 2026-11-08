@@ -26,6 +26,9 @@ const SCRUB_CONFIRM_MS = 2000; // the moved position is applied after this long 
 const SUBTITLE_FALLBACK_MS = 5000;
 const ONLINE_TICK_MS = 200;
 const ONLINE = 'online'; // value of the downloaded track in the subtitle list
+const SYNC = 'sync'; // value of the "timing" entry of the subtitle list (downloaded subtitles only)
+const SYNC_STEP_MS = 500;
+const SYNC_MAX_MS = 15000;
 
 /**
  * Full-screen player. All controls are HTML on top of the video plane; keys arrive through
@@ -56,7 +59,9 @@ export function createPlayerPage(ctx, params) {
   let providerId = null; // known once playback started, so saving on exit needs no await
   let aspect = 'fit';
   let subtitle = -1; // -1 = off, ONLINE = the downloaded subtitles, otherwise the engine's track
-  let online = null; // { language, cues } downloaded from OpenSubtitles for what is playing
+  let online = null; // { language, matched, cues } downloaded from OpenSubtitles for what is playing
+  let onlineDelay = 0; // ms the downloaded subtitles are moved by (later when positive), set from the subtitle list
+  let streamUrl = ''; // the address being played (its hash finds the subtitles made for that file)
   let onlineTimer = null; // draws the downloaded cues while they are chosen
   let onlineCue = null;
   let onlinePending = null; // the download running for what is playing, shared by repeated presses
@@ -147,10 +152,18 @@ export function createPlayerPage(ctx, params) {
     paintFullscreen(Boolean(await platform.toggleFullscreen()));
   }
 
+  /** The subtitle line sits above the progress bar and the buttons while they are shown, back at the bottom when they fade out. */
+  const CONTROLS_PAD_TOP = 96; // the shaded space above the bar (`.player-controls` padding)
+  function placeSubtitle() {
+    const shown = controls.classList.contains('visible');
+    subtitleEl.style.bottom = shown ? `${Math.max(0, controls.offsetHeight - CONTROLS_PAD_TOP) + 24}px` : '';
+  }
+
   function showControls() {
     if (!controls.classList.contains('visible')) syncFullscreen();
     controls.classList.add('visible');
     top.classList.add('visible');
+    placeSubtitle();
     clearTimeout(hideTimer);
     // Without a key press for a few seconds everything fades out, the button focus included.
     hideTimer = setTimeout(() => {
@@ -160,6 +173,7 @@ export function createPlayerPage(ctx, params) {
       paintFocus();
       controls.classList.remove('visible');
       top.classList.remove('visible');
+      placeSubtitle();
     }, CONTROLS_MS);
   }
 
@@ -371,10 +385,14 @@ export function createPlayerPage(ctx, params) {
     const options = [
       { label: t('player.subtitles.off'), value: -1 },
       ...tracks.map((track, i) => ({ label: subtitleLabel(track, i + 1, t('player.track')), value: track.index })),
-      ...(online ? [{ label: onlineLabel(), value: ONLINE }] : []),
+      ...(online ? [{ label: onlineLabel(), value: ONLINE }, { label: syncLabel(), value: SYNC }] : []),
     ];
     const value = await ctx.dialogs.choose({ title: t('player.subtitles'), options, selected: subtitle });
     if (value === null || destroyed) return;
+    if (value === SYNC) {
+      await chooseDelay();
+      return;
+    }
     subtitle = value;
     showSubtitle('');
     showControls();
@@ -392,7 +410,29 @@ export function createPlayerPage(ctx, params) {
   }
 
   const onlineLanguage = () => subtitleLabel({ language: online.language }, 1, t('player.track'));
-  const onlineLabel = () => t('player.subtitles.online', { language: onlineLanguage() });
+  // "for this file" when OpenSubtitles found them by the file's hash (made for this very version: in time with it).
+  const onlineLabel = () => t(online.matched ? 'player.subtitles.matched' : 'player.subtitles.online', { language: onlineLanguage() });
+  const delayText = (ms) => `${ms > 0 ? '+' : ms < 0 ? '−' : ''}${(Math.abs(ms) / 1000).toLocaleString(i18n.getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
+  const syncLabel = () => t('player.subtitles.sync', { delay: delayText(onlineDelay) });
+
+  /**
+   * Timing of the downloaded subtitles: from −15 s to +15 s in half seconds (+ = later, for lines that come before the voice). Choosing
+   * a value also switches them on.
+   */
+  async function chooseDelay() {
+    const options = [];
+    for (let ms = -SYNC_MAX_MS; ms <= SYNC_MAX_MS; ms += SYNC_STEP_MS) options.push({ label: delayText(ms), value: ms });
+    const value = await ctx.dialogs.choose({ title: t('player.subtitles.syncTitle'), options, selected: onlineDelay });
+    if (value === null || destroyed) return;
+    onlineDelay = value;
+    ctx.notices.info(syncLabel(), { scope: 'playback', key: 'track' });
+    if (subtitle !== ONLINE) {
+      subtitle = ONLINE;
+      if (engine.setSubtitleTrack && engine.getSubtitleTracks && engine.getSubtitleTracks().length) engine.setSubtitleTrack(null);
+    }
+    showSubtitle('');
+    startOnline();
+  }
   let onlineNotice = null; // the "downloading" notice, closed if the player changes title or closes first
   function closeOnlineNotice() {
     if (onlineNotice !== null) ctx.notices.close(onlineNotice);
@@ -410,10 +450,10 @@ export function createPlayerPage(ctx, params) {
       } catch {
         return;
       }
-      const cue = cueAt(online.cues, ms);
+      const cue = cueAt(online.cues, ms - onlineDelay);
       if (cue === onlineCue) return;
       onlineCue = cue;
-      showSubtitle(cue ? cue.text : '', cue ? cue.end - ms : 0);
+      showSubtitle(cue ? cue.text : '', cue ? cue.end + onlineDelay - ms : 0);
     }, ONLINE_TICK_MS);
   }
   function stopOnline() {
@@ -450,7 +490,7 @@ export function createPlayerPage(ctx, params) {
     let found = null;
     let failed = false;
     try {
-      found = await service.fetch(query);
+      found = await service.fetch(query, { url: streamUrl });
     } catch (err) {
       failed = true;
       log.warn('OpenSubtitles download failed', err && err.message, err && err.details ? JSON.stringify(err.details) : '');
@@ -556,6 +596,7 @@ export function createPlayerPage(ctx, params) {
     nextOffered = false;
     subtitle = -1;
     online = null;
+    onlineDelay = 0;
     closeOnlineNotice();
     stopOnline();
     onlinePending = null;
@@ -583,7 +624,8 @@ export function createPlayerPage(ctx, params) {
       const { bufferSeconds, timeFormat: clockFormat, autoplayNext } = await ctx.settings.get();
       timeFormat = clockFormat || 'auto';
       updateSeriesButtons(autoplayNext).catch(() => undefined);
-      controller.load(client.streamUrl(params.type, current().id, current().ext), { startAt, bufferSeconds, onSubtitle: showSubtitle });
+      streamUrl = client.streamUrl(params.type, current().id, current().ext);
+      controller.load(streamUrl, { startAt, bufferSeconds, onSubtitle: showSubtitle });
       if (isLive) loadProgramme(token);
     } catch (err) {
       log.warn('Player start failed', err && err.message);

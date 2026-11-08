@@ -109,6 +109,8 @@ What you get: what you watch is saved on your Trakt account and read back, so *w
 
 What you get: when you press **Subtitles** in the player on a movie or an episode whose TMDB id is known (from TMDB or from the provider), the app first looks for subtitles on OpenSubtitles in your language (then English), also when the file has subtitles of its own. A notice says *Downloading subtitles*; then the list opens, with the found ones as "<language> (OpenSubtitles)" next to the file's tracks. They are not saved: they stay in memory until the app is closed (and in the browser cache).
 
+Timing: the app reads the first and last 64 KB of the video to compute its OpenSubtitles hash, so subtitles made for that very file come first; they are listed as "<language> (OpenSubtitles, for this file)". Others may be off by a few seconds (another cut or frame rate): the **OpenSubtitles timing** entry of the same list moves them from −15 s to +15 s in half seconds (+ = later).
+
 1. Create a free account on [opensubtitles.com](https://www.opensubtitles.com).
 2. Open the API consumers page of your profile ([opensubtitles.com/consumers](https://www.opensubtitles.com/en/consumers)) and create a consumer (any name): it gives an **API key**.
 3. Type the key in *Settings → OpenSubtitles*.

@@ -51,18 +51,43 @@ export function cueAt(cues, ms) {
   return null;
 }
 
+/**
+ * OpenSubtitles hash of a video file: its size plus the 64-bit little-endian words of its first and last 64 KB, modulo 2^64, as 16 hex
+ * digits. It finds the subtitles made for that very file (in time with it). Done on 32-bit halves: no BigInt on the TVs.
+ */
+export const HASH_CHUNK = 65536;
+export function movieHash(size, head, tail) {
+  let lo = size % 4294967296;
+  let hi = Math.floor(size / 4294967296);
+  [head, tail].forEach((buffer) => {
+    const view = new DataView(buffer);
+    for (let i = 0; i + 8 <= view.byteLength; i += 8) {
+      lo += view.getUint32(i, true);
+      hi += view.getUint32(i + 4, true) + Math.floor(lo / 4294967296);
+      lo %= 4294967296;
+      hi %= 4294967296;
+    }
+  });
+  const hex = (n) => `00000000${n.toString(16)}`.slice(-8);
+  return hex(hi) + hex(lo);
+}
+
 /** Query string with the parameters in alphabetical order and lowercase values (what the API asks, to avoid a redirect). */
-export function searchQuery({ tmdbId, season = null, episode = null, languages }) {
+export function searchQuery({ tmdbId, season = null, episode = null, languages, moviehash = '' }) {
   const params = season !== null && episode !== null
     ? { episode_number: episode, languages: languages.join(','), parent_tmdb_id: tmdbId, season_number: season }
     : { languages: languages.join(','), tmdb_id: tmdbId };
+  if (moviehash) params.moviehash = moviehash;
   return Object.keys(params)
     .sort()
     .map((k) => `${k}=${encodeURIComponent(String(params[k]).toLowerCase())}`)
     .join('&');
 }
 
-/** The best file of a search: language in the order asked, then not machine / AI translated, then the most downloaded. */
+/**
+ * The best file of a search: language in the order asked, then made for this very file (`moviehash_match`, in time with it), then not
+ * machine / AI translated, then the most downloaded.
+ */
 export function pickSubtitle(data, languages) {
   const rank = (lang) => {
     const i = languages.indexOf(String(lang || '').toLowerCase());
@@ -74,11 +99,12 @@ export function pickSubtitle(data, languages) {
   list.sort(
     (a, b) =>
       rank(a.language) - rank(b.language) ||
+      Number(!a.moviehash_match) - Number(!b.moviehash_match) ||
       Number(Boolean(a.machine_translated || a.ai_translated)) - Number(Boolean(b.machine_translated || b.ai_translated)) ||
       (b.download_count || 0) - (a.download_count || 0),
   );
   const best = list[0];
-  return best ? { fileId: best.files[0].file_id, language: String(best.language || '').toLowerCase() } : null;
+  return best ? { fileId: best.files[0].file_id, language: String(best.language || '').toLowerCase(), matched: Boolean(best.moviehash_match) } : null;
 }
 
 /** Languages to ask for: the app's language, then English. */
@@ -123,7 +149,31 @@ export function createOpenSubtitles({ getKey = () => '', doFetch = (...args) => 
     }
     if (!res.ok) throw new AppError(ErrorCode.HTTP, `Subtitle file HTTP ${res.status}`);
     const cues = parseSubtitles(await res.text());
-    return cues.length ? { language: best.language, cues } : null;
+    return cues.length ? { language: best.language, matched: best.matched, cues } : null;
+  }
+
+  /** Bytes `from`-`to` of the video: { buffer, size } (size from Content-Range), null when the server does not serve ranges. */
+  async function range(url, from, to) {
+    const res = await doFetch(url, { headers: { Range: `bytes=${from}-${to}` } });
+    if (res.status !== 206) {
+      if (res.body && res.body.cancel) res.body.cancel().catch(() => undefined); // the whole file is not read
+      return null;
+    }
+    const total = /\/(\d+)\s*$/.exec(res.headers.get('Content-Range') || '');
+    return { buffer: await res.arrayBuffer(), size: total ? Number(total[1]) : NaN };
+  }
+
+  /** The OpenSubtitles hash of the file at `url` (two 64 KB reads), or '' when it cannot be read. */
+  async function hashOf(url) {
+    try {
+      const head = await range(url, 0, HASH_CHUNK - 1);
+      if (!head || !(head.size >= HASH_CHUNK * 2) || head.buffer.byteLength !== HASH_CHUNK) return '';
+      const tail = await range(url, head.size - HASH_CHUNK, head.size - 1);
+      if (!tail || tail.buffer.byteLength !== HASH_CHUNK) return '';
+      return movieHash(head.size, head.buffer, tail.buffer);
+    } catch {
+      return '';
+    }
   }
 
   return {
@@ -132,16 +182,18 @@ export function createOpenSubtitles({ getKey = () => '', doFetch = (...args) => 
     },
     /**
      * Subtitles of a movie ({ tmdbId, languages }) or of an episode ({ tmdbId of the series, season, episode, languages }):
-     * { language, cues } or null when OpenSubtitles has none. A failure is not remembered (it is tried again next time).
+     * { language, matched, cues } or null when OpenSubtitles has none. With the video's `url` the file's hash is sent too, so the
+     * subtitles made for that file (`matched`, in time with it) come first. A failure is not remembered (it is tried again next time).
      */
-    fetch(query) {
+    fetch(query, { url = '' } = {}) {
       const key = searchQuery(query);
       if (!memo.has(key)) {
-        const job = find(query);
+        const job = (url ? hashOf(url) : Promise.resolve('')).then((moviehash) => find(moviehash ? { ...query, moviehash } : query));
         memo.set(key, job);
         job.catch(() => memo.delete(key));
       }
       return memo.get(key);
     },
+    hashOf,
   };
 }

@@ -1,4 +1,4 @@
-import { parseSubtitles, parseTime, cueAt, searchQuery, pickSubtitle, subtitleLanguages, createOpenSubtitles } from '../../src/services/openSubtitles.js';
+import { parseSubtitles, parseTime, cueAt, searchQuery, pickSubtitle, subtitleLanguages, createOpenSubtitles, movieHash, HASH_CHUNK } from '../../src/services/openSubtitles.js';
 
 const SRT = '﻿1\r\n00:00:01,000 --> 00:00:02,500\r\nCiao\r\n\r\n2\r\n00:00:03,000 --> 00:00:04,000\r\n<i>Due</i>\r\nrighe\r\n\r\nbroken\r\n';
 const VTT = 'WEBVTT\n\n00:01.000 --> 00:02.000 align:start\nUno\n\nnote\n01:00:00.000 --> 01:00:01.000\nOra';
@@ -33,7 +33,10 @@ test('query sorted, lowercase; languages; best file', () => {
   expect(subtitleLanguages('en-US')).toEqual(['en']);
   const item = (language, fileId, extra = {}) => ({ attributes: { language, download_count: 1, files: [{ file_id: fileId }], ...extra } });
   const data = [item('en', 1, { download_count: 999 }), item('it', 2, { machine_translated: true, download_count: 999 }), item('it', 3, { download_count: 5 }), item('it', 4, { download_count: 50 }), { attributes: { language: 'it', files: [] } }];
-  expect(pickSubtitle(data, ['it', 'en'])).toEqual({ fileId: 4, language: 'it' });
+  expect(pickSubtitle(data, ['it', 'en'])).toEqual({ fileId: 4, language: 'it', matched: false });
+  // made for this very file (hash match): first among the same language, even with fewer downloads
+  expect(pickSubtitle(data.concat([item('it', 9, { moviehash_match: true })]), ['it', 'en'])).toEqual({ fileId: 9, language: 'it', matched: true });
+  expect(searchQuery({ tmdbId: 603, languages: ['it'], moviehash: '8e245d9679d31e12' })).toBe('languages=it&moviehash=8e245d9679d31e12&tmdb_id=603');
   expect(pickSubtitle([], ['it'])).toBeNull();
 });
 
@@ -74,4 +77,36 @@ test('search, download link, file; kept in memory for the session; a failure is 
 test('nothing found: null', async () => {
   const os = createOpenSubtitles({ getKey: () => 'K', doFetch: async () => ({ ok: true, json: async () => ({ data: [] }) }) });
   expect(await os.fetch({ tmdbId: 1, languages: ['it'] })).toBeNull();
+});
+
+test('file hash: size plus the 64-bit words of the first and last 64 KB (carry across the halves)', () => {
+  const head = new ArrayBuffer(HASH_CHUNK);
+  const tail = new ArrayBuffer(HASH_CHUNK);
+  expect(movieHash(HASH_CHUNK * 2, head, tail)).toBe('0000000000020000');
+  const v = new DataView(head);
+  v.setUint32(0, 0xffffffff, true); // low half overflows into the high half
+  v.setUint32(8, 1, true);
+  v.setUint32(4, 0xffffffff, true); // high half wraps (modulo 2^64)
+  expect(movieHash(0, head, tail)).toBe('0000000000000000');
+});
+
+test('with the video address, the hash is read with two range requests and sent; servers without ranges: no hash', async () => {
+  const size = HASH_CHUNK * 3;
+  const urls = [];
+  const doFetch = async (url, init = {}) => {
+    if (url === 'http://h/movie/1.mkv') {
+      const [from, to] = /bytes=(\d+)-(\d+)/.exec(init.headers.Range).slice(1).map(Number);
+      urls.push(`range ${from}-${to}`);
+      return { status: 206, headers: { get: () => `bytes ${from}-${to}/${size}` }, arrayBuffer: async () => new ArrayBuffer(to - from + 1) };
+    }
+    if (url === 'http://h/movie/2.mkv') return { status: 200, headers: { get: () => null }, body: { cancel: async () => urls.push('cancelled') } };
+    urls.push(url.replace('https://api.opensubtitles.com/api/v1', ''));
+    return { ok: true, json: async () => ({ data: [] }) };
+  };
+  const os = createOpenSubtitles({ getKey: () => 'K', doFetch });
+  await os.fetch({ tmdbId: 1, languages: ['it'] }, { url: 'http://h/movie/1.mkv' });
+  expect(urls).toEqual([`range 0-${HASH_CHUNK - 1}`, `range ${size - HASH_CHUNK}-${size - 1}`, `/subtitles?languages=it&moviehash=${movieHash(size, new ArrayBuffer(HASH_CHUNK), new ArrayBuffer(HASH_CHUNK))}&tmdb_id=1`]);
+  urls.length = 0;
+  await os.fetch({ tmdbId: 2, languages: ['it'] }, { url: 'http://h/movie/2.mkv' });
+  expect(urls).toEqual(['cancelled', '/subtitles?languages=it&tmdb_id=2']);
 });

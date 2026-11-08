@@ -588,3 +588,9 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - Dialogs no longer show scrollbars (vertical or horizontal), also on older Chromium.
 - Live TV: a genre of the guide can be added to favourites or pinned to the sidebar. It is hidden while the current guide does not have it and shows again when a later guide has it. With the guide genres in the sidebar, "Networks" starts closed.
 - Checked in Chromium with the mock (sidebar, pin and heart on a guide genre, Favorites card, Settings fields; a long dialog list without scrollbars). Tests: x with a default value, favourite guide genre shown / hidden. Applies after patch 121. Not verified on the TV.
+
+### Patch 123 — subtitles: AVPlay track choice, OpenSubtitles in time, line above the controls
+- Tizen: choosing an embedded subtitle track opens the video again with the track chosen before play, at the same position (a short rebuffer); silent mode is no longer used. Diagnostics logs the subtitle lines received. Embedded subtitles still need checking on the TV: if they do not show, the log lines `AVPlay tracks`, `AVPlay reopening for subtitle track`, `AVPlay subtitle track selected before play` and `AVPlay subtitle event` say where it stops.
+- OpenSubtitles: the app sends the file's hash (two 64 KB range reads of the video), so subtitles made for that file come first ("for this file" in the list). New "OpenSubtitles timing" entry in the Subtitles list: −15 s to +15 s in half seconds.
+- Player: while the progress bar and the buttons are shown, the subtitle line moves above them.
+- Checked off the TV: the hash against a reference on a real MKV with ten subtitle tracks served with HTTP ranges (`ietf-wg-cellar/matroska-test-files` test5.mkv). The Tizen emulator / AVPlay cannot run in this environment, and OpenSubtitles is not reachable from it. Tests: AVPlay reopen, hash, range reads, timing, line position. Applies after patch 122. Not verified on the TV.

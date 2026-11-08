@@ -62,12 +62,12 @@ test('nothing is downloaded at the start: the Subtitles press downloads, then li
   await wait(1900);
   expect(s.ctx.openSubtitles.fetch).not.toHaveBeenCalled();
   s.ctx.dialogs.choose.mockImplementation(async ({ options }) => {
-    expect(options.map((o) => o.label)).toEqual(['Off', 'Italiano (OpenSubtitles)']);
+    expect(options.map((o) => o.label)).toEqual(['Off', 'Italiano (OpenSubtitles)', 'OpenSubtitles timing: 0.0 s']);
     return options[1].value;
   });
   pressSubtitles(s);
   await wait();
-  expect(s.ctx.openSubtitles.fetch).toHaveBeenCalledWith({ tmdbId: 603, languages: expect.any(Array) });
+  expect(s.ctx.openSubtitles.fetch).toHaveBeenCalledWith({ tmdbId: 603, languages: expect.any(Array) }, { url: 'http://h/movie/1.mp4' });
   expect(noticeTexts()).toContain('Downloading subtitles');
   expect(s.ctx.dialogs.choose).not.toHaveBeenCalled();
   release({ language: 'it', cues: [{ start: 1000, end: 3000, text: 'Ciao' }] });
@@ -98,7 +98,48 @@ test('the file has its own subtitles: the press downloads too, and both are list
   pressSubtitles(s);
   await wait(100);
   expect(s.ctx.openSubtitles.fetch).toHaveBeenCalledTimes(1);
-  expect(labels).toHaveLength(3);
+  expect(labels).toHaveLength(4);
   expect(labels[2]).toContain('(OpenSubtitles)');
+  expect(labels[3]).toBe('OpenSubtitles timing: 0.0 s');
   s.page.destroy();
 }, 10000);
+
+test('timing of the downloaded subtitles: +2 s shows each line two seconds later', async () => {
+  const s = setup({ fetch: async () => ({ language: 'it', matched: true, cues: [{ start: 1000, end: 3000, text: 'Ciao' }] }) });
+  await wait();
+  s.start();
+  await wait(100);
+  const answers = [(options) => {
+    expect(options.map((o) => o.label)).toEqual(['Off', 'Italiano (OpenSubtitles, for this file)', 'OpenSubtitles timing: 0.0 s']);
+    return 'sync';
+  }, (options) => {
+    expect(options[0].label).toBe('−15.0 s');
+    return options.find((o) => o.label === '+2.0 s').value;
+  }];
+  s.ctx.dialogs.choose.mockImplementation(async ({ options }) => answers.shift()(options));
+  pressSubtitles(s);
+  await wait(300);
+  s.setTime(1500); // the line starts at 3 s now
+  await wait(300);
+  expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('');
+  s.setTime(3500);
+  await wait(300);
+  expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Ciao');
+  s.page.destroy();
+}, 10000);
+
+test('the subtitle line moves above the progress bar while the controls are shown, and back when they fade', async () => {
+  jest.useFakeTimers();
+  const s = setup({ fetch: async () => null });
+  const line = s.page.el.querySelector('.player-subtitle');
+  const controls = s.page.el.querySelector('.player-controls');
+  Object.defineProperty(controls, 'offsetHeight', { configurable: true, value: 260 });
+  jest.advanceTimersByTime(10000); // the controls shown at the start fade out
+  expect(line.style.bottom).toBe('');
+  s.page.onAction(Action.DOWN);
+  expect(line.style.bottom).toBe('188px'); // 260 - 96 (shade above the bar) + 24
+  jest.advanceTimersByTime(10000);
+  expect(line.style.bottom).toBe('');
+  s.page.destroy();
+  jest.useRealTimers();
+});
