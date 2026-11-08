@@ -600,3 +600,6 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - Live TV cards show the programme on air in the subtitle everywhere, now also in the search results (the search rows did not carry the guide id).
 - Search: programmes of the guide (next 24 hours) whose title matches, in an "On TV" row after Live TV: the channel / group picture, a clock badge, start and end time; OK opens the channel / group page with the focus on that programme.
 - Checked in Chromium with the mock (programme search and landing, channels with the programme on air, x). Tests: x saves, programme search. Applies after patch 123. Not verified on the TV.
+
+### Patch 125 — README
+- README rewritten shorter: features grouped (catalog, player, Live TV, yours), the guide genres and the programme search added, one "Optional services" section for TMDB, Trakt and OpenSubtitles with the advice to set all three up, a comparison table with TiviMate, IPTV Smarters Pro and IBO Player (from their public descriptions, November 2026), and a last line saying the repository, its commits and its releases are managed by Claude. Documentation only. Not verified on the TV.

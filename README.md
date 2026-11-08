@@ -1,18 +1,20 @@
 # Xtream IPTV
 
 A fast, TV-first **Xtream Codes** client for **Samsung Tizen**, **LG webOS**, **Android TV / Fire TV** and **Windows, macOS and Linux**.
-Browse your provider's movies, series and live channels with the remote control, pick up where you left off, and watch
-trailers, cast and guides, all in a clean, modern interface designed for a 1920x1080 screen. The same app and the same interface run on every platform.
+Browse your provider's movies, series and live channels with the remote control, pick up where you left off, and watch trailers,
+cast and guides in a clean interface designed for a 1920x1080 screen. One app, the same on every platform.
 
 <p align="center"><img src="docs/screenshots/home.jpg" alt="Home screen" width="860"></p>
 
-> This project does not provide, host or link to any content. You need your own Xtream Codes
-> provider account.
+> This project does not provide, host or link to any content. You need your own Xtream Codes provider account.
+
+> **For the best experience, set up TMDB, Trakt and OpenSubtitles** (all free, see [Optional services](#optional-services)): posters,
+> plots, cast and trailers, watch history on every device, and subtitles for any title.
 
 ## Platforms
 
 Every release on the [Releases](../../releases) page has one package per platform, named `xtream-iptv-<version>_<platform>.<ext>`
-(with a `.sha256` checksum). Each platform folder has its own installation guide.
+(with a `.sha256` checksum).
 
 | Platform | Package | Install guide |
 |---|---|---|
@@ -22,44 +24,60 @@ Every release on the [Releases](../../releases) page has one package per platfor
 | Amazon Fire TV (Fire OS models) | `_firetv.apk` | [`platforms/android`](platforms/android/README.md) |
 | Windows, macOS, Linux | `_windows-x64.exe`, `_macos-x64.dmg`, `_macos-arm64.dmg`, `_linux-x64.AppImage`, `_linux-x64.deb` | [`platforms/desktop`](platforms/desktop/README.md) |
 
-Tizen has been developed and tried on a 2021 QLED; the Windows app is tried as well. webOS, Android TV / Fire TV, macOS and Linux are new and still being tested on real devices.
+Tizen is developed and tried on a 2021 QLED and the Windows app is tried as well; webOS, Android TV / Fire TV, macOS and Linux are
+still being tested on real devices.
 
-## What makes it different
+## Features
 
-- **One title, one card.** Provider catalogs are full of duplicates (4K, HD, dubbed, different
-  categories). Items that share the provider's TMDB id are merged into a single card, with a
-  dropdown to choose the exact version. Nothing is merged unless the provider says it is the same title.
-- **Built for huge catalogs.** Tens of thousands of titles are synced in a background worker,
-  stored locally and shown through lazily loaded grids, so navigation stays smooth on a TV processor.
-  The cached catalog opens instantly and refreshes itself in the background.
-- **Clean titles.** Provider noise such as language prefixes, quality tags and year suffixes is removed from movie and series titles
-  (can be turned off). With a TMDB key configured you also get posters, plots, cast and genres.
-- **Smart filtering.** Genres from the provider and from TMDB are merged into one list, categories
-  can be hidden per provider and per type, and every detail page links back to the matching genre or category.
-- **Trailers.** The trailer button plays the YouTube trailer in the app's own player on Samsung TVs, with the same controls as a movie;
-  on the other platforms it opens the YouTube app or the browser.
-- **A real player.** Draggable progress bar, previous / next episode, an end-credits point you set once per series (the next episode is offered from there), aspect ratio, audio tracks, subtitles, adjustable
-  buffering, resume from where you stopped and autoplay of the next episode. The video engine is the one native to each platform
-  (AVPlay on Tizen, the system player on webOS, ExoPlayer on Android).
-- **Live TV with a programme guide.** Now-playing on every channel card, the next 24 hours on the channel page, a full
-  grid guide, and scheduled viewing that opens the channel when a programme starts. Channels with several qualities are grouped
-  into one card, and channels of the same network (Rai, Sky, Dazn...) are collected together.
-- **Collections.** Group movies, series and channels of your own in named collections, with favorites and pins.
-- **Trakt sync with a QR code.** Connect your account by scanning a code with your phone, import your
-  history and keep watched titles in sync, or remove everything with one button.
-- **Continue watching, favorites and suggestions.** Resume rows, a favorites page, watched marks and
-  recommendations based on what you watch (TMDB or Trakt).
-- **Parental control.** A PIN set on the first start hides the posters of adult categories and asks for
-  the PIN before opening them; change it in Settings > Preferences.
-- **Pinned categories and genres.** Pin the ones you use most to the sidebar, or add them to the favorites.
-- **Notices.** Errors, warnings and confirmations (finished updates, subscription ending soon) appear in
-  one place at the right of the screen, and never cover the video except for playback errors.
-- **Local search.** Search movies, series, channels and collections from the top bar, using the on-screen keyboard of the TV.
-- **Several providers.** Add as many as you like and switch at any time; each has its own database.
-- **Private by design.** No account, no analytics. TMDB and Trakt keys are typed in Settings and
-  stay on the device; credentials are masked in logs.
+**Catalog**
+- **One title, one card.** Duplicates (4K, HD, dubbed, other categories) that share the provider's TMDB id are merged into one card,
+  with a dropdown to choose the version. Nothing is merged unless the provider says it is the same title.
+- **Built for huge catalogs.** Tens of thousands of titles are synced in a background worker, stored locally and shown in lazily
+  loaded grids. The cached catalog opens instantly and refreshes itself in the background.
+- **Clean titles and smart filters.** Language prefixes, quality tags and year suffixes are removed (optional). Provider and TMDB
+  genres are merged, categories can be hidden per provider, and genres and categories can be pinned to the sidebar or added to the favorites.
+- **Search everything** from the top bar: movies, series, channels, collections and the programmes on TV in the next 24 hours.
+
+**Player**
+- Draggable progress bar, previous / next episode, an end-credits point set once per series (the next episode is offered from
+  there), aspect ratio, audio tracks, subtitles (embedded or from OpenSubtitles, with timing adjustment), adjustable buffering,
+  resume and autoplay of the next episode.
+- The native engine of each platform: AVPlay on Tizen, the system player on webOS, ExoPlayer on Android.
+- Trailers from YouTube: in the app's own player on Samsung TVs, in the YouTube app or the browser elsewhere.
+
+**Live TV**
+- The programme on air on every channel card, the next 24 hours on the channel page, a full grid guide and scheduled viewing that
+  opens the channel when a programme starts.
+- Channels in several qualities grouped into one card, channels of the same network (Rai, Sky, Dazn...) collected together.
+- Genres from the guide's categories (Sport, News, Movies...) in the sidebar, which can be pinned or added to the favorites.
+- The guide is downloaded once a day after the rest of the start-up work; a custom XMLTV guide can replace the provider's.
+
+**Yours**
+- **Continue watching, favorites, collections and suggestions** (based on what you watch, from TMDB or Trakt).
+- **Trakt sync with a QR code**: history and progress shared with your other devices.
+- **Several providers**, each with its own database; favorites, collections and pins follow you between them.
+- **Parental control**: a PIN set on the first start hides adult categories.
+- **Private by design**: no account, no analytics; keys stay on the device and credentials are masked in the logs.
 - **English and Italian**, following the device language or chosen manually.
-- **Open and tested.** Plain HTML, JavaScript and SCSS (no UI framework) with an extensive unit test suite.
+
+## Compared with popular players
+
+A quick look at three widely used IPTV players, from their public descriptions (November 2026; features and prices change, check
+the official store listings). "Not advertised" means we found no mention of it, not that it is missing.
+
+| | **Xtream IPTV** | [TiviMate](https://tivimate.com) | [IPTV Smarters Pro](https://www.iptvsmarters.com) | IBO Player |
+|---|---|---|---|---|
+| Platforms | Tizen, webOS, Android TV / Fire TV, Windows, macOS, Linux | Android TV / Fire TV | Android, Fire TV, Samsung, LG, iOS and others | Android TV / Fire TV, Samsung, LG |
+| Price | Free | Free, premium a few € a year or lifetime | Free on most stores | Free trial, then a paid activation per device |
+| Xtream Codes login | Yes | Yes | Yes | Yes |
+| Programme guide (EPG grid) | Yes, with guide genres and custom XMLTV | Yes (its strong point) | Yes | Yes |
+| Catch-up / recording | No (catch-up planned) | Catch-up; recording with premium | Catch-up | Not advertised |
+| Duplicates merged into one card | Yes (by TMDB id) | No | No | No |
+| TMDB posters, plots, cast, trailers | Yes (own free key) | Not advertised | Partly (trailers, info) | Not advertised |
+| Trakt history sync | Yes | No | Not advertised | Not advertised |
+| Subtitles from OpenSubtitles | Yes, by file hash, with timing | Not advertised | Not advertised | Not advertised |
+| Programmes in the search | Yes | Yes | Not advertised | Not advertised |
+| Open source, no account, no analytics | Yes | No | No | No |
 
 ## Screenshots
 
@@ -77,51 +95,55 @@ The screenshots use a fictional demo provider.
 
 ## First steps
 
-1. **Install the app** on your device following the guide of your platform (see [Platforms](#platforms)).
+1. **Install the app** with the guide of your platform (see [Platforms](#platforms)).
 2. **Add a provider**: name, server URL, username and password. The catalog downloads in the background.
-3. *(Optional)* In **Settings** type a **TMDB** key to get posters, plots, cast, genres, trailers and suggestions.
-   Use the v4 "API Read Access Token" or the 32-character v3 key.
-4. *(Optional)* In **Settings** type your Trakt **Client ID** and **Client Secret**, then press connect and scan the QR code.
+3. **Recommended:** type the TMDB, Trakt and OpenSubtitles keys in **Settings** (see below).
 
-Nothing about TMDB or Trakt is compiled into the app: both stay off until you add the keys.
+## Optional services
 
-## TMDB and Trakt keys
-
-Both services are free for personal use. The app works without them, but with them it is much better. You type the keys in **Settings** (with a remote, the on-screen keyboard works; on a phone it is easier to copy them into a note first).
+All three are free for personal use. The app works without them, but it is much better with them. Nothing is compiled into the
+app: each service stays off until its key is typed in **Settings** (with a remote the on-screen keyboard works; on a phone it is
+easier to copy the keys into a note first). The keys stay on the device and are sent only to their own service.
 
 ### TMDB: posters, plots, cast, trailers
 
-What you get: posters and backdrops, plots in your language, cast, genres, ratings, trailers, recommendations, and the TMDB id that merges the same title coming from different categories or providers and lets your favorites, collections and pins follow you from one provider to another.
+Posters and backdrops, plots in your language, cast, genres, ratings, trailers and recommendations. The TMDB id also merges the same
+title across categories and providers, so favorites, collections and pins follow you from one provider to another.
 
 1. Create a free account on [themoviedb.org](https://www.themoviedb.org) and confirm the email.
-2. Open *Profile → Settings → API* ([direct link](https://www.themoviedb.org/settings/api)) and request an API key (type *Developer*; any short description of a personal use is fine).
-3. Copy the **API Read Access Token** (the long one, v4) or the 32-character **API Key** (v3) into *Settings → TMDB*.
+2. Open *Profile → Settings → API* ([direct link](https://www.themoviedb.org/settings/api)) and request an API key (type *Developer*; a short description of a personal use is fine).
+3. Copy the **API Read Access Token** (v4, the long one) or the 32-character **API Key** (v3) into *Settings → TMDB*.
 
 ### Trakt: watch history and progress on every device
 
-What you get: what you watch is saved on your Trakt account and read back, so *watched* marks and *continue watching* follow you between the TV, the PC and the phone (and any other app that uses Trakt). Movies and episodes you finish are sent to Trakt, the ones you already watched there appear as watched here, and the point reached in a title is shared. Suggestions can also be based on your Trakt history. *Settings → Trakt* shows how many watched titles and "continue watching" titles are aligned. Trakt keeps the history; TMDB does not, which is why the two are used together.
+What you watch is saved on your Trakt account and read back: *watched* marks and *continue watching* follow you between the TV, the
+PC and the phone (and any other app that uses Trakt), and suggestions can be based on your history. *Settings → Trakt* shows how many
+titles are aligned.
 
 1. Create a free account on [trakt.tv](https://trakt.tv).
-2. Open [trakt.tv/oauth/applications](https://trakt.tv/oauth/applications) and press **New Application**. Choose any name, put `urn:ietf:wg:oauth:2.0:oob` as *Redirect uri* and leave the rest empty, then save.
-3. Copy the **Client ID** and **Client Secret** of the application into *Settings → Trakt*, press connect and scan the QR code (or open the address shown and type the code).
+2. Open [trakt.tv/oauth/applications](https://trakt.tv/oauth/applications) and press **New Application**: any name, `urn:ietf:wg:oauth:2.0:oob` as *Redirect uri*, the rest empty.
+3. Copy the **Client ID** and **Client Secret** into *Settings → Trakt*, press connect and scan the QR code (or open the address shown and type the code).
 
-### OpenSubtitles: subtitles downloaded on request
+### OpenSubtitles: subtitles for any title
 
-What you get: when you press **Subtitles** in the player on a movie or an episode whose TMDB id is known (from TMDB or from the provider), the app first looks for subtitles on OpenSubtitles in your language (then English), also when the file has subtitles of its own. A notice says *Downloading subtitles*; then the list opens, with the found ones as "<language> (OpenSubtitles)" next to the file's tracks. They are not saved: they stay in memory until the app is closed (and in the browser cache).
-
-Timing: the app reads the first and last 64 KB of the video to compute its OpenSubtitles hash, so subtitles made for that very file come first; they are listed as "<language> (OpenSubtitles, for this file)". Others may be off by a few seconds (another cut or frame rate): the **OpenSubtitles timing** entry of the same list moves them from −15 s to +15 s in half seconds (+ = later).
+Pressing **Subtitles** in the player on a movie or episode with a TMDB id downloads subtitles in your language (then English), also
+when the file has its own; they appear in the list next to the file's tracks and stay in memory until the app is closed. The app sends
+the video's OpenSubtitles hash (it reads the first and last 64 KB), so subtitles made for that very file come first ("for this file");
+others can be moved with **OpenSubtitles timing** in the same list (−15 s to +15 s, + = later).
 
 1. Create a free account on [opensubtitles.com](https://www.opensubtitles.com).
-2. Open the API consumers page of your profile ([opensubtitles.com/consumers](https://www.opensubtitles.com/en/consumers)) and create a consumer (any name): it gives an **API key**.
+2. Create a consumer on [opensubtitles.com/consumers](https://www.opensubtitles.com/en/consumers) (any name): it gives an **API key**.
 3. Type the key in *Settings → OpenSubtitles*.
 
-OpenSubtitles limits downloads without logging in to a few a day (5 at the time of writing); every title whose Subtitles button you press uses one, the same title again in the same session does not.
-
-The keys stay on your device (they are not part of the app and never sent anywhere but to TMDB / Trakt).
+Without logging in, OpenSubtitles allows a few downloads a day (5 at the time of writing): each new title uses one, the same title
+again in the same session does not.
 
 ## Custom EPG
 
-If your provider's guide is missing or poor, *Settings → Preferences → Live TV → Custom EPG* accepts the address of an XMLTV guide (`http://` or `https://`). It is saved only if the address answers with a valid XMLTV file; when it is set, it replaces the provider's guide (if it stops working the provider's is used again). The channels are matched by the `epg_channel_id` of the provider, so the guide must use the same ids. Empty the field to go back to the provider's guide.
+If your provider's guide is missing or poor, *Settings → Preferences → Live TV → Custom EPG* accepts the address of an XMLTV guide
+(`http://` or `https://`). It is saved only if it answers with a valid XMLTV file and replaces the provider's guide (which is used
+again if it stops working). Channels are matched by the provider's `epg_channel_id`, so the guide must use the same ids. The field's
+"x" goes back to the provider's guide.
 
 ## Remote control
 
@@ -134,19 +156,26 @@ If your provider's guide is missing or poor, *Settings → Preferences → Live 
 | Play / pause / rewind / forward | In the player |
 | Left / right in the player | Seek (after OK on the progress bar) |
 
-On the desktop app, which opens as a normal window (the player has a full-screen button), the keyboard is the remote: arrows, `Enter`, `Esc` / `Backspace` for Back, `PageUp` / `PageDown` for channel up / down, `Space` for play / pause.
+The desktop app opens as a normal window (the player has a full-screen button) and the keyboard is the remote: arrows, `Enter`,
+`Esc` / `Backspace` for Back, `PageUp` / `PageDown` for channel up / down, `Space` for play / pause.
 
 ## Documentation
 
 | Document | Content |
 |---|---|
-| [`platforms/<name>/README.md`](platforms) | Installation and notes of each platform: [Tizen](platforms/tizen/README.md), [webOS](platforms/webos/README.md), [Android TV / Fire TV](platforms/android/README.md), [desktop](platforms/desktop/README.md) |
+| [`platforms/<name>/README.md`](platforms) | Installation and notes per platform: [Tizen](platforms/tizen/README.md), [webOS](platforms/webos/README.md), [Android TV / Fire TV](platforms/android/README.md), [desktop](platforms/desktop/README.md) |
 | [`docs/BUILD.md`](docs/BUILD.md) | Building from source, running in a browser, packaging, tests, releases and signing, project layout |
 | [`docs/MULTIPLATFORM.md`](docs/MULTIPLATFORM.md) | How the platforms share one app: the adapter, decisions, per-platform details and open issues |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Design decisions; read before changing the code |
 | [`docs/MILESTONES.md`](docs/MILESTONES.md) | Development history, with what has and has not been verified on a real device |
 | [`docs/MOCK-TEST.md`](docs/MOCK-TEST.md) | The fake Xtream server and the performance measurements |
 
+Plain HTML, JavaScript and SCSS (no UI framework), with an extensive unit test suite.
+
 ## License
 
 No license has been chosen yet.
+
+---
+
+This repository, its commits and its releases are entirely managed by [Claude](https://claude.ai) (Anthropic).
