@@ -113,7 +113,8 @@ test('timing of the downloaded subtitles: +2 s shows each line two seconds later
     expect(options.map((o) => o.label)).toEqual(['Off', 'Italiano (OpenSubtitles, for this file)', 'OpenSubtitles timing: 0.0 s']);
     return 'sync';
   }, (options) => {
-    expect(options[0].label).toBe('−15.0 s');
+    expect(options[0].label).toBe('−5:00 min');
+    expect(options.some((o) => o.label === '−1:00 min')).toBe(true);
     return options.find((o) => o.label === '+2.0 s').value;
   }];
   s.ctx.dialogs.choose.mockImplementation(async ({ options }) => answers.shift()(options));

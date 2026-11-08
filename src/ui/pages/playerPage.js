@@ -27,8 +27,14 @@ const SUBTITLE_FALLBACK_MS = 5000;
 const ONLINE_TICK_MS = 200;
 const ONLINE = 'online'; // value of the downloaded track in the subtitle list
 const SYNC = 'sync'; // value of the "timing" entry of the subtitle list (downloaded subtitles only)
-const SYNC_STEP_MS = 500;
-const SYNC_MAX_MS = 15000;
+/** Delays offered for the downloaded subtitles: half seconds up to 10 s, seconds up to 1 minute, 5 s up to 5 minutes (each side). */
+export function syncSteps() {
+  const side = [];
+  for (let ms = 500; ms <= 10000; ms += 500) side.push(ms);
+  for (let ms = 11000; ms <= 60000; ms += 1000) side.push(ms);
+  for (let ms = 65000; ms <= 300000; ms += 5000) side.push(ms);
+  return side.slice().reverse().map((ms) => -ms).concat([0], side);
+}
 
 /**
  * Full-screen player. All controls are HTML on top of the video plane; keys arrive through
@@ -412,16 +418,21 @@ export function createPlayerPage(ctx, params) {
   const onlineLanguage = () => subtitleLabel({ language: online.language }, 1, t('player.track'));
   // "for this file" when OpenSubtitles found them by the file's hash (made for this very version: in time with it).
   const onlineLabel = () => t(online.matched ? 'player.subtitles.matched' : 'player.subtitles.online', { language: onlineLanguage() });
-  const delayText = (ms) => `${ms > 0 ? '+' : ms < 0 ? '−' : ''}${(Math.abs(ms) / 1000).toLocaleString(i18n.getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
+  // "+2.5 s", "−1:05" (a minute or more as minutes:seconds).
+  const delayText = (ms) => {
+    const sign = ms > 0 ? '+' : ms < 0 ? '−' : '';
+    const abs = Math.abs(ms);
+    if (abs >= 60000) return `${sign}${Math.floor(abs / 60000)}:${`0${Math.round((abs % 60000) / 1000)}`.slice(-2)} min`;
+    return `${sign}${(abs / 1000).toLocaleString(i18n.getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
+  };
   const syncLabel = () => t('player.subtitles.sync', { delay: delayText(onlineDelay) });
 
   /**
-   * Timing of the downloaded subtitles: from −15 s to +15 s in half seconds (+ = later, for lines that come before the voice). Choosing
+   * Timing of the downloaded subtitles, from −5 to +5 minutes (+ = later, for lines that come before the voice; see syncSteps). Choosing
    * a value also switches them on.
    */
   async function chooseDelay() {
-    const options = [];
-    for (let ms = -SYNC_MAX_MS; ms <= SYNC_MAX_MS; ms += SYNC_STEP_MS) options.push({ label: delayText(ms), value: ms });
+    const options = syncSteps().map((ms) => ({ label: delayText(ms), value: ms }));
     const value = await ctx.dialogs.choose({ title: t('player.subtitles.syncTitle'), options, selected: onlineDelay });
     if (value === null || destroyed) return;
     onlineDelay = value;

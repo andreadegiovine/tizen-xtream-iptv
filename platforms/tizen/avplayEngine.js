@@ -69,13 +69,14 @@ export function createAvPlayEngine() {
       onerror: (error) => handlers.onError(error),
       // Embedded subtitles arrive as events (text in HTML, duration in ms); the page draws them (see setSubtitleTrack).
       // Callback arguments: (duration, subtitles, type, attributes). An empty text clears the line.
-      onsubtitlechange: (duration, text, type) => {
-        if (text) textEvents += 1;
-        if (eventsLogged < 5) {
+      onsubtitlechange: (duration, text, type, attributes) => {
+        if (text && text !== '\u0000') textEvents += 1;
+        if (eventsLogged < 8) {
           eventsLogged += 1;
-          log.info('AVPlay subtitle event', JSON.stringify({ duration, type, text: String(text || '').slice(0, 60), on: subtitlesOn, lines: textEvents }));
+          log.info('AVPlay subtitle event', JSON.stringify({ duration, type, text: String(text || '').slice(0, 60), attributes, on: subtitlesOn, lines: textEvents }));
         }
-        if (subtitlesOn && handlers.onSubtitle) handlers.onSubtitle(String(text || ''), Number(duration) || 0);
+        // A NUL character alone (sent by some firmwares at the start) is no line.
+        if (subtitlesOn && handlers.onSubtitle) handlers.onSubtitle(String(text || '').split('\u0000').join(''), Number(duration) || 0);
       },
     });
     try {
@@ -92,19 +93,25 @@ export function createAvPlayEngine() {
           handlers.onPrepared();
           return;
         }
-        try {
-          api.setSelectTrack('TEXT', reopen.textTrack);
-          api.setSilentSubtitle(false);
-          log.info('AVPlay subtitle track selected before play', reopen.textTrack);
-        } catch (err) {
-          log.warn('avplay subtitle selection failed', err && (err.name || ''), err && err.message);
-        }
+        // READY refuses the text track (InvalidStateError on a 2021 QLED): it is chosen once playing, again a second later if refused.
+        const select = (attempt) => {
+          try {
+            api.setSelectTrack('TEXT', reopen.textTrack);
+            api.setSilentSubtitle(false);
+            log.info('AVPlay subtitle track selected while playing', reopen.textTrack, 'state', api.getState());
+          } catch (err) {
+            log.warn('avplay subtitle selection failed', attempt, err && (err.name || ''), err && err.message, 'state', api.getState());
+            if (attempt < 3) setTimeout(() => select(attempt + 1), 1000);
+          }
+        };
         const play = () => {
           try {
             api.play();
           } catch (err) {
             handlers.onError(`play after subtitle change failed: ${err && err.message}`);
+            return;
           }
+          select(1);
         };
         if (reopen.atMs > 0) api.seekTo(reopen.atMs, play, play);
         else play();

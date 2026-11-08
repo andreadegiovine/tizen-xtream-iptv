@@ -30,7 +30,7 @@ test('aspect ratio: letterbox, full screen, cropped; only setDisplayMethod; fals
   expect(engine.setAspect('zoom')).toBe(false);
 });
 
-test('subtitles: choosing a track opens the video again with it chosen before play, at the same position; off only stops drawing', () => {
+test('subtitles: choosing a track opens the video again and chooses it once playing, at the same position; off only stops drawing', () => {
   const calls = [];
   let listener = null;
   global.webapis = {
@@ -48,6 +48,7 @@ test('subtitles: choosing a track opens the video again with it chosen before pl
         ok();
       },
       play: () => calls.push('play'),
+      getState: () => 'PLAYING',
       setSilentSubtitle: (v) => calls.push(`silent ${v}`),
       setSelectTrack: (type, i) => calls.push(`select ${type} ${i}`),
       stop: () => calls.push('stop'),
@@ -64,7 +65,7 @@ test('subtitles: choosing a track opens the video again with it chosen before pl
   expect(lines).toEqual([]); // no lines drawn before a track is chosen
   calls.length = 0;
   engine.setSubtitleTrack(3);
-  expect(calls).toEqual(['stop', 'close', 'open http://x/movie.mkv', 'select TEXT 3', 'silent false', 'seek 61000', 'play']);
+  expect(calls).toEqual(['stop', 'close', 'open http://x/movie.mkv', 'seek 61000', 'play', 'select TEXT 3', 'silent false']); // READY refuses the track: chosen once playing
   expect(prepared).toHaveBeenCalledTimes(1); // the page is not told the video started again
   listener.onsubtitlechange('2500', 'Ciao<br>mondo', 'text');
   expect(lines).toEqual([['Ciao<br>mondo', 2500]]);
