@@ -105,7 +105,7 @@ test('timing of the downloaded subtitles: +2 s shows each line two seconds later
   await wait();
   s.start();
   await wait(100);
-  const answers = [(options) => 'download', (options) => {
+  const answers = [() => 'download', (options) => {
     expect(options.map((o) => o.label)).toEqual(['Off', 'OpenSubtitles: Italiano (for this file)', 'OpenSubtitles sync: 0.0 s']);
     return 'sync';
   }, (options) => {
