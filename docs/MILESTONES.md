@@ -641,3 +641,6 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - Settings title: " • version X - last check <date>" (the build running, and when version.json last answered; "never" before the first answer).
 - Series with an end-credits point: "ends at" counts to the credits start.
 - Tests: list with the download entry, labels, sync, end time. Applies after patch 132. Not verified on the TV.
+
+### Patch 134 — update message in a notice
+- "Updating to version X…" is a notice (info, permanent, closed if the download fails) instead of a line under the logo: the notice service is created before the update check. Checked in Chromium (notice over the start screen, then the app starts again with the new build). Not verified on the TV.

@@ -32,17 +32,9 @@
 // Shown from the first paint until the first page replaces it (the router empties #content).
 .boot-splash {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
-
-  // "Updating to version 1.2.0…" under the logo while an update is installed.
-  .boot-message {
-    margin: 40px 0 0;
-    font-size: 2rem;
-    opacity: 0.85;
-  }
 
   svg {
     width: 160px;

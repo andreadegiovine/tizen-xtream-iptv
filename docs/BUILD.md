@@ -151,7 +151,7 @@ Installed apps update their web code (JavaScript, styles, fonts) by themselves, 
   branch (`scripts/publish-updates.js`, last three versions kept). GitHub Pages must serve that branch (Settings → Pages → Deploy from a
   branch → `gh-pages`, `/ (root)`); the app reads `https://andreadegiovine.github.io/tizen-xtream-iptv/version.json`.
 - At start-up the check is the first thing the app does (5 s at most): a newer build that the installed package can run is downloaded
-  ("Updating to version X…" on the start screen), the app starts again with it and only then runs its usual start-up work. The loader in
+  ("Updating to version X…" in a notice over the start screen), the app starts again with it and only then runs its usual start-up work. The loader in
   `src/index.html` picks the newer of the package's own copy and the installed build at every start, and falls back to the package's copy when
   the online build cannot be loaded (offline); a build that fails to start is forgotten.
 - Native parts are not updated this way (Tizen `config.xml` privileges and the YouTube service, webOS `appinfo.json`, Android plugins, Electron):

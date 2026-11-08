@@ -81,24 +81,11 @@ window.addEventListener('unhandledrejection', (event) => log.error('Unhandled re
 window.addEventListener('error', (event) => log.error('Uncaught error', event.message));
 
 
-/** The splash shows what the start is doing (an update being installed). */
-function splashMessage(text) {
-  const splash = document.querySelector('.boot-splash');
-  if (!splash) return;
-  let line = splash.querySelector('.boot-message');
-  if (!line) {
-    line = document.createElement('p');
-    line.className = 'boot-message';
-    splash.appendChild(line);
-  }
-  line.textContent = text;
-}
-
 /**
  * Checks version.json (a few seconds at most). A newer build this package can run: downloaded, then the app starts again ('restarting').
  * A newer version that needs a new package: its number, for a notice once the app is up. Otherwise (or offline, or in development): null.
  */
-async function updateFirst() {
+async function updateFirst(notices) {
   const versions = runningVersions();
   log.info(`App ${versions.bundle || APP_VERSION} (package ${versions.shell || APP_VERSION})`);
   if (IS_DEV || !versions.shell || typeof __PLATFORM__ === 'undefined') return null;
@@ -114,7 +101,8 @@ async function updateFirst() {
     log.info(`Version ${update.version} needs a new package`);
     return update.version;
   }
-  splashMessage(t('update.installing', { version: update.version }));
+  // A notice over the start screen while the update is downloaded (the app then starts again).
+  const notice = notices.show({ type: 'info', message: t('update.installing', { version: update.version }), permanent: true, key: 'update' });
   try {
     await installUpdate(update);
     log.info(`Update ${update.version} installed: starting again`);
@@ -122,7 +110,7 @@ async function updateFirst() {
     return 'restarting';
   } catch (err) {
     log.warn('Update failed', err && err.message);
-    splashMessage('');
+    notices.close(notice);
     return null;
   }
 }
@@ -137,7 +125,9 @@ async function boot() {
   i18n.setLocale(prefs.language === 'auto' ? detectLocale(navigator.language) : prefs.language);
   document.documentElement.lang = i18n.getLocale(); // the page says which language it speaks (voices, hyphenation)
   // The first thing the app does: a newer build online is installed before anything else starts, then the app starts again with it.
-  const pendingPackage = await updateFirst();
+  // Notices exist from here: the update check uses them before the rest of the app is set up.
+  const notices = createNoticeService();
+  const pendingPackage = await updateFirst(notices);
   if (pendingPackage === 'restarting') return;
 
   const focus = new FocusManager();
@@ -490,7 +480,6 @@ async function boot() {
 
   const dialogs = createDialogService({ focus });
   ctx.dialogs = dialogs;
-  const notices = createNoticeService();
   ctx.notices = notices;
   // Offline: a notice that stays until the connection is back (it is also shown over a video: playback needs the network).
   let offlineNotice = null;
