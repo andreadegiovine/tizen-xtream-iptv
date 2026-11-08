@@ -11,5 +11,59 @@
   <body>
     <div id="topbar"></div>
     <main id="content"><div class="boot-splash"><%= htmlWebpackPlugin.options.logoSvg.trim().replace(/logo-cb/g, 'splash-cb') %></div></main> <!-- the first page replaces the splash -->
+    <script>
+      // Loader: the app's own copy, or a newer build published online (see src/services/updates.js) when one was installed and is newer
+      // than this package. A build that does not load falls back to the package's copy.
+      (function () {
+        var SHELL = '<%= htmlWebpackPlugin.options.appVersion %>';
+        var JS = <%= JSON.stringify(htmlWebpackPlugin.files.js) %>;
+        var CSS = <%= JSON.stringify(htmlWebpackPlugin.files.css) %>;
+        function newer(a, b) {
+          var x = String(a).split('.');
+          var y = String(b).split('.');
+          for (var i = 0; i < Math.max(x.length, y.length); i += 1) {
+            var d = (Number(x[i]) || 0) - (Number(y[i]) || 0);
+            if (d) return d > 0;
+          }
+          return false;
+        }
+        var bundle = null;
+        try {
+          bundle = JSON.parse(window.localStorage.getItem('xi.bundle') || 'null');
+          if (bundle && !(bundle.base && newer(bundle.version, SHELL))) {
+            window.localStorage.removeItem('xi.bundle'); // the package is as new: its own copy
+            bundle = null;
+          }
+        } catch (e) {
+          bundle = null;
+        }
+        window.__XI_SHELL__ = SHELL;
+        function load(base, fallback) {
+          window.__XI_BASE__ = base;
+          window.__XI_BUNDLE__ = base ? bundle.version : '';
+          CSS.forEach(function (file) {
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = base + file;
+            document.head.appendChild(link);
+          });
+          JS.forEach(function (file) {
+            var script = document.createElement('script');
+            script.src = base + file;
+            script.async = false;
+            if (fallback) script.onerror = fallback;
+            document.body.appendChild(script);
+          });
+        }
+        if (bundle) {
+          load(bundle.base, function () {
+            // Offline, or the build is gone: the package's copy, this time.
+            var links = document.querySelectorAll('link[rel=stylesheet]');
+            for (var i = 0; i < links.length; i += 1) links[i].parentNode.removeChild(links[i]);
+            load('', null);
+          });
+        } else load('', null);
+      })();
+    </script>
   </body>
 </html>

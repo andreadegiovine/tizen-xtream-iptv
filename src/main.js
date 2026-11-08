@@ -3,6 +3,8 @@ import { i18n, t, detectLocale } from './i18n/index.js';
 import { openAppDb } from './db/appDb.js';
 import { InputService, Action } from './core/input.js';
 import { log } from './core/logger.js';
+import { checkForUpdate, installUpdate, forgetUpdate, runningVersions } from './services/updates.js';
+import { APP_VERSION, IS_DEV } from './core/env.js';
 import { FocusManager } from './ui/focus/FocusManager.js';
 import { Router } from './ui/router.js';
 import { createBackgroundQueue, Priority } from './services/backgroundQueue.js';
@@ -79,6 +81,52 @@ window.addEventListener('unhandledrejection', (event) => log.error('Unhandled re
 window.addEventListener('error', (event) => log.error('Uncaught error', event.message));
 
 
+/** The splash shows what the start is doing (an update being installed). */
+function splashMessage(text) {
+  const splash = document.querySelector('.boot-splash');
+  if (!splash) return;
+  let line = splash.querySelector('.boot-message');
+  if (!line) {
+    line = document.createElement('p');
+    line.className = 'boot-message';
+    splash.appendChild(line);
+  }
+  line.textContent = text;
+}
+
+/**
+ * Checks version.json (a few seconds at most). A newer build this package can run: downloaded, then the app starts again ('restarting').
+ * A newer version that needs a new package: its number, for a notice once the app is up. Otherwise (or offline, or in development): null.
+ */
+async function updateFirst() {
+  const versions = runningVersions();
+  log.info(`App ${versions.bundle || APP_VERSION} (package ${versions.shell || APP_VERSION})`);
+  if (IS_DEV || !versions.shell || typeof __PLATFORM__ === 'undefined') return null;
+  let update = null;
+  try {
+    update = await checkForUpdate({ platform: __PLATFORM__, running: versions.bundle || APP_VERSION, shell: versions.shell });
+  } catch (err) {
+    log.warn('Update check failed', err && err.message);
+    return null;
+  }
+  if (!update) return null;
+  if (update.needsPackage) {
+    log.info(`Version ${update.version} needs a new package`);
+    return update.version;
+  }
+  splashMessage(t('update.installing', { version: update.version }));
+  try {
+    await installUpdate(update);
+    log.info(`Update ${update.version} installed: starting again`);
+    window.location.reload();
+    return 'restarting';
+  } catch (err) {
+    log.warn('Update failed', err && err.message);
+    splashMessage('');
+    return null;
+  }
+}
+
 async function boot() {
   const db = await openAppDb();
   const settings = new SettingsService(db);
@@ -88,6 +136,9 @@ async function boot() {
   applyTextSize(prefs.textSize);
   i18n.setLocale(prefs.language === 'auto' ? detectLocale(navigator.language) : prefs.language);
   document.documentElement.lang = i18n.getLocale(); // the page says which language it speaks (voices, hyphenation)
+  // The first thing the app does: a newer build online is installed before anything else starts, then the app starts again with it.
+  const pendingPackage = await updateFirst();
+  if (pendingPackage === 'restarting') return;
 
   const focus = new FocusManager();
   const liveGrouping = createLiveGroupingService({ db, settings });
@@ -507,6 +558,7 @@ async function boot() {
   if (hasProvider) {
     router.reset('home', { section: 'home' });
     showSubscriptionNotice(notices, hasProvider);
+    if (pendingPackage) notices.show({ type: 'info', message: t('update.needsPackage', { version: pendingPackage }), permanent: true, key: 'update' });
     // Stale-while-revalidate: the cached catalog is usable at once, lists older than 12 h refresh in background.
     catalog.start();
     queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) });
@@ -562,5 +614,7 @@ function showSubscriptionNotice(notices, provider) {
 
 boot().catch((err) => {
   log.error('Fatal startup error', err);
+  // A build installed online that does not start: back to the package's copy at the next start.
+  if (runningVersions().bundle) forgetUpdate();
   document.getElementById('content').textContent = 'Startup failed. Please restart the app.';
 });

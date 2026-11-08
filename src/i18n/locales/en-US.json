@@ -270,6 +270,8 @@
   "notice.subscriptionExpired": "Your subscription ended on {date}",
   "browse.pin": "Pin to the sidebar",
   "browse.unpin": "Remove from the sidebar",
+  "update.installing": "Updating to version {version}…",
+  "update.needsPackage": "Version {version} is available: it needs the new package from the releases page.",
   "notice.offline": "No internet connection",
   "notice.online": "Connection restored",
   "notice.saved": "Updated",

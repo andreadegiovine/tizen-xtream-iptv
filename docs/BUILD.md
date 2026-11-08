@@ -143,6 +143,22 @@ TMDB and Trakt keys are not part of any build: they are typed in the app Setting
 
 To try a release without publishing a real one, create a pre-release with a tag like `v0.0.1`, then check the jobs and delete the release and the tag.
 
+## Online updates
+
+Installed apps update their web code (JavaScript, styles, fonts) by themselves, without the store or the system (`src/services/updates.js`):
+
+- The release workflow's `pages` job builds every platform and writes `bundles/<version>/<platform>/` and `version.json` on the `gh-pages`
+  branch (`scripts/publish-updates.js`, last three versions kept). GitHub Pages must serve that branch (Settings → Pages → Deploy from a
+  branch → `gh-pages`, `/ (root)`); the app reads `https://andreadegiovine.github.io/tizen-xtream-iptv/version.json`.
+- At start-up the check is the first thing the app does (5 s at most): a newer build that the installed package can run is downloaded
+  ("Updating to version X…" on the start screen), the app starts again with it and only then runs its usual start-up work. The loader in
+  `src/index.html` picks the newer of the package's own copy and the installed build at every start, and falls back to the package's copy when
+  the online build cannot be loaded (offline); a build that fails to start is forgotten.
+- Native parts are not updated this way (Tizen `config.xml` privileges and the YouTube service, webOS `appinfo.json`, Android plugins, Electron):
+  when a release changes them, raise `updates.minShell` in `package.json` to that version; older packages then show a notice asking to install
+  the new package instead of loading the build.
+- Not used in development builds. The web code is checked by HTTPS only (no signature yet).
+
 ## Project layout
 
 ```

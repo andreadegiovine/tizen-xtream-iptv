@@ -28,7 +28,7 @@ module.exports = (env = {}, argv = {}) => {
 
   return {
     mode: isProd ? 'production' : 'development',
-    entry: './src/main.js',
+    entry: ['./src/boot/publicPath.js', './src/main.js'],
     output: {
       path: path.resolve(__dirname, 'dist'),
       filename: 'js/[name].js',
@@ -66,10 +66,11 @@ module.exports = (env = {}, argv = {}) => {
       }),
       new HtmlWebpackPlugin({
         template: 'src/index.html',
-        inject: 'body',
+        inject: false, // the loader at the end of the page adds the script and the stylesheet (the package's, or a newer build's)
         scriptLoading: 'blocking',
         // Options of the page template given by the platform (Tizen: webapis.js, which only exists inside a packaged app).
         includeWebapis: false,
+        appVersion: pkg.version,
         logoSvg: fs.readFileSync(LOGO, 'utf8'), // the start screen shows the logo while the app loads
         ...(target.build.html ? target.build.html(buildOptions) : {}),
       }),

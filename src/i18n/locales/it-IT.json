@@ -270,6 +270,8 @@
   "notice.subscriptionExpired": "L'abbonamento è scaduto il {date}",
   "browse.pin": "Fissa nella barra laterale",
   "browse.unpin": "Rimuovi dalla barra laterale",
+  "update.installing": "Aggiornamento alla versione {version} in corso…",
+  "update.needsPackage": "È disponibile la versione {version}: per installarla serve il nuovo pacchetto dalla pagina delle release.",
   "notice.offline": "Nessuna connessione a internet",
   "notice.online": "Connessione ripristinata",
   "notice.saved": "Aggiornato",

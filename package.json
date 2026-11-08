@@ -89,5 +89,8 @@
   "dependencies": {
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "qrcode-generator": "^1.4.4"
+  },
+  "updates": {
+    "minShell": "0.0.0"
   }
 }

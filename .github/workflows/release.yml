@@ -195,3 +195,45 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$TAG" release/* --clobber
+
+  # Updates from the app itself (src/services/updates.js): the web code of every platform's build goes to the gh-pages branch, served by
+  # GitHub Pages, with version.json pointing at it. Installed apps find it at their next start. Raise `updates.minShell` in package.json
+  # when a release changes the native parts (config.xml privileges, Android plugins, Electron): older packages are then asked to reinstall.
+  pages:
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Stamp version
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Build the web code of every platform
+        run: |
+          for platform in tizen webos desktop android; do
+            npx webpack --mode production --env platform=$platform --output-path "builds/$platform"
+          done
+
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: pages
+
+      - name: Publish the builds and version.json
+        run: |
+          node scripts/publish-updates.js pages "$VERSION" tizen=builds/tizen webos=builds/webos desktop=builds/desktop android=builds/android
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Online update $VERSION"
+          git push
