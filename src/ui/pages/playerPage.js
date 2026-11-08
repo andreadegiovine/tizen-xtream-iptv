@@ -14,6 +14,7 @@ import { streamLabel } from './detailPage.js';
 import { portableKeyFor } from '../../services/shareKeys.js';
 import { cueAt, subtitleLanguages } from '../../services/openSubtitles.js';
 import { createRangeReader, probeMkv, createTrackLoader } from '../../services/mkvSubtitles.js';
+import { probeMp4 } from '../../services/mp4Subtitles.js';
 
 const CONTROLS_MS = 4000;
 const SAVE_EVERY_MS = 10000;
@@ -513,7 +514,15 @@ export function createPlayerPage(ctx, params) {
     let found = null;
     log.info('Embedded subtitles: reading the file', (/\.([a-z0-9]+)(?:\?|$)/i.exec(streamUrl) || [])[1] || '?');
     try {
-      found = await probeMkv(reader, (why) => log.info('Embedded subtitles not readable', why));
+      // MKV first; a file that is not one may be an MP4 (tx3g / WebVTT tracks).
+      let why = '';
+      found = await probeMkv(reader, (reason) => {
+        why = reason;
+      });
+      if (!found && why === 'not an MKV') found = await probeMp4(reader, (reason) => {
+        why = reason;
+      });
+      if (!found) log.info('Embedded subtitles not readable', why);
     } catch (err) {
       log.info('Embedded subtitles not readable', err && err.message);
     }

@@ -324,7 +324,8 @@ export function createTrackLoader(reader, track, { scaleMs = 1, behindMs = 15000
           const i = want[next];
           next += 1;
           try {
-            const cue = await readCue(reader, { ...track, scaleMs }, entries[i], entries[i + 1], cache);
+            // An MP4 track brings its own reader of one entry (see mp4Subtitles.js); MKV blocks are read here.
+            const cue = track.readEntry ? await track.readEntry(reader, entries[i], entries[i + 1]) : await readCue(reader, { ...track, scaleMs }, entries[i], entries[i + 1], cache);
             if (cue) insert(loader.cues, cue);
             state[i] = 2;
           } catch {

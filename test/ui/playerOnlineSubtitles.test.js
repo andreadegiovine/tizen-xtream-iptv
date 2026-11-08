@@ -193,3 +193,32 @@ test('another app in front: the video stops; back in the app it starts again', a
   s.page.destroy();
   delete document.hidden;
 });
+
+test('an MP4 with tx3g tracks: the app reads them and draws the chosen one', async () => {
+  const fs = require('fs');
+  const path = require('path');
+  if (typeof global.TextDecoder === 'undefined') global.TextDecoder = require('util').TextDecoder;
+  const file = fs.readFileSync(path.join(__dirname, '../fixtures/subs.mp4'));
+  const fileFetch = async (u, init) => {
+    const [from, to] = /bytes=(\d+)-(\d+)/.exec(init.headers.Range).slice(1).map(Number);
+    const end = Math.min(to, file.length - 1);
+    const slice = file.subarray(from, end + 1);
+    return { status: 206, headers: { get: () => `bytes ${from}-${end}/${file.length}` }, arrayBuffer: async () => slice.buffer.slice(slice.byteOffset, slice.byteOffset + slice.length) };
+  };
+  const s = setup({ tracks: [{ index: 3, language: '' }], fetch: async () => null, fileFetch });
+  await wait();
+  s.start();
+  await wait(100);
+  let labels = null;
+  s.ctx.dialogs.choose.mockImplementation(async ({ options }) => {
+    labels = options.map((o) => o.label);
+    return options[2].value;
+  });
+  pressSubtitles(s);
+  await wait(400);
+  expect(labels).toEqual(['Off', 'Italiano', 'English']);
+  s.setTime(3500);
+  await wait(500);
+  expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Hello\nworld, again');
+  s.page.destroy();
+}, 10000);
