@@ -175,3 +175,21 @@ test('an MKV whose player sends no lines: the app reads its text tracks and draw
   expect(s.engine.setSubtitleTrack).toHaveBeenCalledWith(null);
   s.page.destroy();
 }, 10000);
+
+test('another app in front: the video stops; back in the app it starts again', async () => {
+  const s = setup({ fetch: async () => null });
+  await wait();
+  s.start();
+  await wait(50);
+  expect(s.engine.start).toHaveBeenCalledTimes(1);
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+  document.dispatchEvent(new Event('visibilitychange'));
+  await wait(50);
+  expect(s.engine.stop).toHaveBeenCalled();
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+  document.dispatchEvent(new Event('visibilitychange'));
+  await wait(50);
+  expect(s.engine.start).toHaveBeenCalledTimes(2);
+  s.page.destroy();
+  delete document.hidden;
+});

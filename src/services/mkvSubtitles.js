@@ -160,12 +160,18 @@ async function readElement(reader, pos, guess = 4096) {
  * text track has cue entries. `{ tracks: [{ number, codec, language, name, default, forced, cues: [{ time, cluster, relative, duration }] }],
  * segmentStart, scaleMs }` (times in ms; positions absolute in the file).
  */
-export async function probeMkv(reader) {
+export async function probeMkv(reader, report = () => undefined) {
   const head = await reader.read(0, HEAD_BYTES - 1);
   const top = elements(head, 0, head.byteLength);
-  if (!top.length || top[0].id !== ID.EBML) return null;
+  if (!top.length || top[0].id !== ID.EBML) {
+    report('not an MKV');
+    return null;
+  }
   const segment = top.find((el) => el.id === ID.SEGMENT);
-  if (!segment) return null;
+  if (!segment) {
+    report('no segment');
+    return null;
+  }
   const segmentStart = segment.start;
   const level1 = elements(head, segment.start, head.byteLength);
   const at = (id) => level1.find((el) => el.id === id && el.end <= head.byteLength) || null;
@@ -190,8 +196,11 @@ export async function probeMkv(reader) {
   const scaleEl = info && child(info.view, info.el, ID.TIMESTAMP_SCALE);
   const scaleMs = (scaleEl ? uint(info.view, scaleEl) : 1000000) / 1000000;
   const tracksEl = await load(ID.TRACKS);
-  if (!tracksEl) return null;
-  const tracks = children(tracksEl.view, tracksEl.el)
+  if (!tracksEl) {
+    report('no track list');
+    return null;
+  }
+  const all = children(tracksEl.view, tracksEl.el)
     .filter((el) => el.id === ID.TRACK_ENTRY)
     .map((entry) => {
       const get = (id) => child(tracksEl.view, entry, id);
@@ -207,11 +216,18 @@ export async function probeMkv(reader) {
         forced: num(ID.FLAG_FORCED, 0) === 1,
         cues: [],
       };
-    })
-    .filter((track) => track.type === SUBTITLE_TYPE && TEXT_CODECS.indexOf(track.codec) >= 0);
-  if (!tracks.length) return null;
+    });
+  const tracks = all.filter((track) => track.type === SUBTITLE_TYPE && TEXT_CODECS.indexOf(track.codec) >= 0);
+  if (!tracks.length) {
+    const codecs = all.filter((track) => track.type === SUBTITLE_TYPE).map((track) => track.codec);
+    report(codecs.length ? `no text subtitles (${codecs.join(', ')})` : 'no subtitle tracks');
+    return null;
+  }
   const cuesEl = await load(ID.CUES);
-  if (!cuesEl) return null;
+  if (!cuesEl) {
+    report('no cue index');
+    return null;
+  }
   const byNumber = new Map(tracks.map((track) => [track.number, track]));
   children(cuesEl.view, cuesEl.el)
     .filter((el) => el.id === ID.CUE_POINT)
@@ -236,6 +252,7 @@ export async function probeMkv(reader) {
     });
   const usable = tracks.filter((track) => track.cues.length);
   usable.forEach((track) => track.cues.sort((a, b) => a.time - b.time));
+  if (!usable.length) report(`the cue index does not list the subtitles (${tracks.map((track) => track.codec).join(', ')})`);
   return usable.length ? { tracks: usable, segmentStart, scaleMs } : null;
 }
 

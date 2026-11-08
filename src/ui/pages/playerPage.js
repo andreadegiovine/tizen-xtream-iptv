@@ -506,12 +506,14 @@ export function createPlayerPage(ctx, params) {
   async function readEmbedded(token) {
     if (isLive || isTrailer || engine.kind === 'exoplayer' || !streamUrl) {
       embedded = false;
+      log.info('Embedded subtitles not read here', isLive ? 'live' : isTrailer ? 'trailer' : engine.kind === 'exoplayer' ? 'ExoPlayer' : 'no address');
       return;
     }
     const reader = createRangeReader(streamUrl, ctx.fetch || ((...args) => fetch(...args)));
     let found = null;
+    log.info('Embedded subtitles: reading the file', (/\.([a-z0-9]+)(?:\?|$)/i.exec(streamUrl) || [])[1] || '?');
     try {
-      found = await probeMkv(reader);
+      found = await probeMkv(reader, (why) => log.info('Embedded subtitles not readable', why));
     } catch (err) {
       log.info('Embedded subtitles not readable', err && err.message);
     }
@@ -676,6 +678,28 @@ export function createPlayerPage(ctx, params) {
     } catch (err) {
       log.warn('Saving progress failed', err && err.message);
     }
+  }
+
+  /**
+   * Another app in front (or the TV's home): the video stops and its position is saved; back in the app it starts again, a movie or an
+   * episode from where it was, a live channel live. The TV's player does not resume by itself after the app was hidden.
+   */
+  let hiddenAt = null;
+  function onVisibility() {
+    if (destroyed || isTrailer) return;
+    if (document.hidden) {
+      if (hiddenAt !== null) return;
+      hiddenAt = Date.now();
+      log.info('App hidden: playback stopped');
+      saveProgress(true).finally(() => {
+        if (hiddenAt !== null && !destroyed) controller.stop();
+      });
+      return;
+    }
+    if (hiddenAt === null) return;
+    log.info(`App visible again after ${Math.round((Date.now() - hiddenAt) / 1000)} s: playback started again`);
+    hiddenAt = null;
+    play(index);
   }
 
   async function play(nextIndex = index) {
@@ -1006,6 +1030,7 @@ export function createPlayerPage(ctx, params) {
     },
     mount() {
       ctx.catalog.pause();
+      document.addEventListener('visibilitychange', onVisibility);
       controller.onChange(render);
       saveTimer = setInterval(() => saveProgress(), SAVE_EVERY_MS);
       play(index);
@@ -1023,6 +1048,7 @@ export function createPlayerPage(ctx, params) {
     },
     destroy() {
       destroyed = true;
+      document.removeEventListener('visibilitychange', onVisibility);
       closePlayerError();
       closeRecovery();
       closeNextNotice();

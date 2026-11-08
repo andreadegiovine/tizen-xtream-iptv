@@ -620,3 +620,8 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - In the Subtitles list the tracks read by the app replace the player's ones, with their language (and "forced"); when the file cannot be read (not an MKV, no ranges, no subtitle entries in its index) the list is the same as before.
 - Live channels, trailers and Android (ExoPlayer shows embedded subtitles itself) are left out. The extra requests run next to the video: a provider that allows only one connection may refuse them (then nothing changes).
 - Checked off the TV on a real MKV served with ranges (same lines and times as ffmpeg) and on a small fixture; tests: EBML reading, tracks and cues, windows, ASS text, no ranges, player list and drawing. Applies after patch 128. Not verified on the TV.
+
+### Patch 130 — playback after another app, log of the embedded subtitles
+- Player: when the app is hidden (another app, the TV's home) the position is saved and the video stopped; when the app is visible again it starts again: a movie or an episode from where it was, a live channel live (the TV's player did not resume by itself; seen on a live channel).
+- Embedded MKV subtitles: every outcome is now logged (`Embedded subtitles: reading the file <ext>`, `not readable` with the reason: not an MKV, no text subtitles with their codecs, no cue index, the index does not list the subtitles, no ranges; `not read here` for live / trailer / ExoPlayer).
+- Tests: stop and start again with the visibility. Applies after patch 129. Not verified on the TV.
