@@ -649,3 +649,7 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - The XMLTV `<category>` belongs to the programme, not to the channel: a channel is now listed under every category one of its programmes has (no more "30 % of the programmes" rule).
 - Live TV → Genres → a genre: instead of a grid of channels, the programme guide with only the rows (groups and channels in no group) that have programmes of that category in the hours shown, and on each row only those programmes; the focus moves only between them, across and down (like "Scheduled"). The rows follow the guide arrangement; a new guide download reads them again.
 - Checked in Chromium with the mock (a category on one programme in four: only those programmes shown, Right jumps from one to the next, Down to the next row). Tests: channel summary. Applies after patch 134. Not verified on the TV.
+
+### Patch 136 — guide genre counts as in their view
+- The channel summary keeps, per channel and category, when its programmes are on (`genreSpans`: start / stop pairs). The Live TV sidebar counts, for each genre, only the rows with a programme of that category in the hours the guide shows (the same rows as the genre view); a genre with none there is not listed. Favourite guide genres follow the same rule (shown and counted on the same hours). A guide downloaded before this patch counts as before until the next download.
+- Tests: spans, counts in a window. Applies after patch 135. Not verified on the TV.

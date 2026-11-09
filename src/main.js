@@ -292,7 +292,7 @@ async function boot() {
       cards[i].update({ countLoading: true });
       let job;
       if (entry.filterKind === 'genre') job = filterTotals(entry.type).then((map) => map.get(String(entry.filterId)) || 0);
-      else if (entry.filterKind === 'epgGenre') job = epg.genreRows().then((found) => (found.rows.get(String(entry.filterId)) || []).length);
+      else if (entry.filterKind === 'epgGenre') job = epg.genreRows({ shown: true }).then((found) => (found.rows.get(String(entry.filterId)) || []).length);
       else job = active.get().then((current) => (current ? countEntries(current.db, { type: entry.type, categoryId: entry.filterId }) : 0));
       job.then((n) => cards[i].update({ count: n })).catch(() => cards[i].update({ count: null }));
     });

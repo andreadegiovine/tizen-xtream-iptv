@@ -3,7 +3,7 @@ import { openProviderDb } from '../db/providerDb.js';
 import { requestToPromise, dbGet } from '../core/idb.js';
 import { log } from '../core/logger.js';
 import { isPlaceholderTitle } from './xmltv.js';
-import { EPG_CHANNELS_KEY, summaryValid, channelsBetween } from './epgChannels.js';
+import { EPG_CHANNELS_KEY, summaryValid, channelsBetween, spansOverlap } from './epgChannels.js';
 import { readGuideIndex } from './guideIndex.js';
 import { makeSearchKey } from './titleNormalizer.js';
 
@@ -194,14 +194,16 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
     async genres() {
       const known = await summary();
       const byChannel = new Map();
-      if (!known) return { genres: [], byChannel };
+      const spans = new Map(); // channel → { genre key → [start, stop, ...] } (guides downloaded before it existed: none)
+      if (!known) return { genres: [], byChannel, spans };
       Object.keys(known.channels).forEach((id) => {
         if (known.channels[id].genres) byChannel.set(id, known.channels[id].genres);
+        if (known.channels[id].genreSpans) spans.set(id, known.channels[id].genreSpans);
       });
       const genres = Object.keys(known.genres)
         .map((key) => ({ key, name: known.genres[key] }))
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
-      return { genres, byChannel };
+      return { genres, byChannel, spans };
     },
     /** Reads the programme titles ahead of the first search (the search page opening). */
     warmSearch: () => programmeTitles().then(() => undefined),
@@ -239,16 +241,23 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
       return out;
     },
     /**
-     * The genres of the guide that some Live TV row has, with those rows (groups and channels in no group, by name):
+     * The genres of the guide that some Live TV row has (between `from` and `to` when given), with those rows (groups and channels in no
+     * group, by name):
      * `{ genres: [{ key, name }], rows: Map(genre key → [entry key]) }`. Empty when the guide has no categories or expired.
      */
-    async genreRows() {
+    async genreRows({ from: since = null, to: until = null, shown = false } = {}) {
+      // `shown`: the hours the programme guide shows (from the current half hour, 24 hours).
+      const from = shown ? Math.floor(now() / 1800000) * 1800000 : since;
+      const to = shown ? from + DAY : until;
       const current = await active.get();
       const rows = new Map();
       if (!current) return { genres: [], rows };
       const [found, index] = await Promise.all([this.genres(), readGuideIndex(current.db)]);
       index.forEach((row) => {
+        const spans = found.spans.get(row.epgChannelId);
         (found.byChannel.get(row.epgChannelId) || []).forEach((g) => {
+          // With a window (the hours the guide shows): only the rows with a programme of that category in it.
+          if (from !== null && spans && spans[g] && !spansOverlap(spans[g], from, to)) return;
           if (!rows.has(g)) rows.set(g, []);
           rows.get(g).push(row.key);
         });

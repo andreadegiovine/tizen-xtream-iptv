@@ -24,7 +24,7 @@ export function createFavoritesPage(ctx) {
     const current = await ctx.active.get();
     if (!current || destroyed) return;
     const saved = await ctx.favorites.list(current.provider.id);
-    const guideGenres = async () => (ctx.epg && ctx.epg.genreRows ? new Set((await ctx.epg.genreRows()).genres.map((g) => g.key)) : new Set());
+    const guideGenres = async () => (ctx.epg && ctx.epg.genreRows ? new Set((await ctx.epg.genreRows({ shown: true })).genres.map((g) => g.key)) : new Set());
     const entries = await favoriteFilterEntries(saved, (type) => listCategories(current.db, type), guideGenres);
     for (const item of saved) {
       if (item.kind) continue;

@@ -1,4 +1,4 @@
-import { createChannelSummary, genreKey, summaryValid, channelsBetween } from '../../src/services/epgChannels.js';
+import { createChannelSummary, genreKey, summaryValid, channelsBetween, spansOverlap } from '../../src/services/epgChannels.js';
 import { createXmltvParser } from '../../src/services/xmltv.js';
 import { buildGuideIndex } from '../../src/services/guideIndex.js';
 import { describeEpg } from '../../src/ui/components/syncPanel.js';
@@ -26,7 +26,10 @@ test('channel summary: span, every category of its programmes (most frequent fir
   add('b', 0, ['Notìzie']);
   add('c', 10);
   const r = s.result();
-  expect(r.channels.a).toEqual({ from: 1 * H, to: 7 * H, genres: ['sport', 'calcio', 'news'] });
+  expect(r.channels.a).toMatchObject({ from: 1 * H, to: 7 * H, genres: ['sport', 'calcio', 'news'] });
+  expect(r.channels.a.genreSpans.news).toEqual([5 * H, 6 * H]); // when the programmes of each category are on
+  expect(spansOverlap(r.channels.a.genreSpans.news, 5.5 * H, 9 * H)).toBe(true);
+  expect(spansOverlap(r.channels.a.genreSpans.news, 6 * H, 9 * H)).toBe(false);
   expect(r.channels.b.genres).toEqual(['notizie']);
   expect(r.channels.c).toEqual({ from: 10 * H, to: 11 * H });
   expect(r.genres).toEqual({ sport: 'Sport', calcio: 'Calcio', news: 'News', notizie: 'Notìzie' });

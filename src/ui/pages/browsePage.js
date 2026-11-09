@@ -586,7 +586,9 @@ export function createBrowsePage(ctx, params = {}) {
    */
   async function loadEpgGenres() {
     if (type !== 'live' || !ctx.epg || !ctx.epg.genreRows) return;
-    const found = await ctx.epg.genreRows();
+    // Counted like the genre view: rows with a programme of the category in the hours the guide shows.
+    const from = floorHalfHour(Date.now()) - PAST_MS;
+    const found = await ctx.epg.genreRows({ from, to: from + PAST_MS + SPAN_MS });
     epgGenres = found.genres;
     epgGenreKeys = found.rows;
     epgGenres.forEach((g) => counts.set(`epgGenre:${g.key}`, found.rows.get(g.key).length));

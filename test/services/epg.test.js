@@ -71,6 +71,10 @@ describe('syncEpg', () => {
     const { genres, byChannel } = await svc.genres();
     expect(genres).toEqual([{ key: 'sport', name: 'Sport' }]);
     expect(byChannel.get('a')).toEqual(['sport']);
+    // Counted in a window: the sport programmes run 11:00-14:00, so a window from 15:00 has none.
+    expect((await svc.genreRows({ from: NOW, to: NOW + 3600000 })).rows.get('sport')).toEqual(['live:i1']);
+    expect((await svc.genreRows({ from: NOW + 3 * 3600000, to: NOW + 4 * 3600000 })).genres).toEqual([]);
+    expect((await svc.genreRows({ shown: true })).genres.map((g) => g.key)).toEqual(['sport']);
     expect((await svc.status()).programmes).toBe(2);
     await svc.clear();
     expect(await dbGetAll(db, 'epg')).toEqual([]);

@@ -30,7 +30,7 @@ export function createChannelSummary() {
     add(p) {
       let c = channels.get(p.channelId);
       if (!c) {
-        c = { from: p.start, to: p.stop, tagged: 0, counts: new Map() };
+        c = { from: p.start, to: p.stop, tagged: 0, counts: new Map(), spans: new Map() };
         channels.set(p.channelId, c);
       }
       if (p.start < c.from) c.from = p.start;
@@ -44,9 +44,17 @@ export function createChannelSummary() {
       });
       if (!keys.size) return;
       c.tagged += 1;
-      keys.forEach((key) => c.counts.set(key, (c.counts.get(key) || 0) + 1));
+      keys.forEach((key) => {
+        c.counts.set(key, (c.counts.get(key) || 0) + 1);
+        // When the programmes of each category are on (start, stop pairs): the guide genres count only what the guide shows.
+        if (!c.spans.has(key)) c.spans.set(key, []);
+        c.spans.get(key).push(p.start, p.stop);
+      });
     },
-    /** `{ key, until, channels: { id: { from, to, genres?: [key] } }, genres: { key: name } }` (only the genres some channel has). */
+    /**
+     * `{ key, until, channels: { id: { from, to, genres?: [key], genreSpans?: { key: [start, stop, ...] } } }, genres: { key: name } }`
+     * (only the genres some channel has).
+     */
     result() {
       const out = {};
       const used = {};
@@ -62,6 +70,10 @@ export function createChannelSummary() {
             used[key] = names.get(key);
           });
           row.genres = genres;
+          row.genreSpans = {};
+          genres.forEach((key) => {
+            row.genreSpans[key] = c.spans.get(key);
+          });
         }
         out[id] = row;
       });
@@ -81,4 +93,10 @@ export function channelsBetween(summary, from, to) {
     if (c.from < to && c.to > from) out.add(id);
   });
   return out;
+}
+
+/** True when one of the [start, stop, ...] pairs is on between `from` and `to`. */
+export function spansOverlap(spans, from, to) {
+  for (let i = 0; i + 1 < spans.length; i += 2) if (spans[i] < to && spans[i + 1] > from) return true;
+  return false;
 }
