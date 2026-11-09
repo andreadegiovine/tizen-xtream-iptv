@@ -14,22 +14,22 @@ test('XMLTV programmes carry their categories (several, decoded, empty ones left
   expect(out[1].categories).toBeUndefined();
 });
 
-test('channel summary: span, genres with at least 30% of the tagged programmes (the first always), names folded', () => {
+test('channel summary: span, every category of its programmes (most frequent first), names folded', () => {
   const s = createChannelSummary();
   const add = (channelId, start, categories) => s.add({ channelId, start: start * H, stop: (start + 1) * H, categories });
   add('a', 1, ['Sport']);
   add('a', 2, ['sport ', 'Calcio']);
   add('a', 3, ['SPORT']);
   add('a', 4, ['Calcio']);
-  add('a', 5, ['News']); // 1 of 5: below 30%
+  add('a', 5, ['News']); // one programme is enough: the category belongs to the programme
   add('a', 6, []);
   add('b', 0, ['Notìzie']);
   add('c', 10);
   const r = s.result();
-  expect(r.channels.a).toEqual({ from: 1 * H, to: 7 * H, genres: ['sport', 'calcio'] });
+  expect(r.channels.a).toEqual({ from: 1 * H, to: 7 * H, genres: ['sport', 'calcio', 'news'] });
   expect(r.channels.b.genres).toEqual(['notizie']);
   expect(r.channels.c).toEqual({ from: 10 * H, to: 11 * H });
-  expect(r.genres).toEqual({ sport: 'Sport', calcio: 'Calcio', notizie: 'Notìzie' });
+  expect(r.genres).toEqual({ sport: 'Sport', calcio: 'Calcio', news: 'News', notizie: 'Notìzie' });
   expect(r.until).toBe(11 * H);
   expect(genreKey(' Notìzie  ')).toBe('notizie');
   expect(summaryValid(r, 10 * H)).toBe(true);

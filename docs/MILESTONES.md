@@ -644,3 +644,8 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 
 ### Patch 134 — update message in a notice
 - "Updating to version X…" is a notice (info, permanent, closed if the download fails) instead of a line under the logo: the notice service is created before the update check. Checked in Chromium (notice over the start screen, then the app starts again with the new build). Not verified on the TV.
+
+### Patch 135 — guide genres as a filtered programme guide
+- The XMLTV `<category>` belongs to the programme, not to the channel: a channel is now listed under every category one of its programmes has (no more "30 % of the programmes" rule).
+- Live TV → Genres → a genre: instead of a grid of channels, the programme guide with only the rows (groups and channels in no group) that have programmes of that category in the hours shown, and on each row only those programmes; the focus moves only between them, across and down (like "Scheduled"). The rows follow the guide arrangement; a new guide download reads them again.
+- Checked in Chromium with the mock (a category on one programme in four: only those programmes shown, Right jumps from one to the next, Down to the next row). Tests: channel summary. Applies after patch 134. Not verified on the TV.

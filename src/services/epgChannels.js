@@ -5,9 +5,6 @@
  */
 export const EPG_CHANNELS_KEY = 'epg:channels';
 
-/** A channel has a genre when at least this share of its programmes with categories carries it (the most frequent one always counts). */
-export const GENRE_SHARE = 0.3;
-
 /** Same genre whatever the case, accents or spacing ("Sport", "SPORT ", "Spòrt"). */
 export function genreKey(name) {
   return String(name || '')
@@ -58,8 +55,9 @@ export function createChannelSummary() {
         const row = { from: c.from, to: c.to };
         if (c.to > until) until = c.to;
         if (c.tagged) {
+          // The category belongs to the programme: a channel is listed under every category one of its programmes has (most frequent first).
           const sorted = Array.from(c.counts.entries()).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
-          const genres = sorted.filter(([, n], i) => i === 0 || n >= c.tagged * GENRE_SHARE).map(([key]) => key);
+          const genres = sorted.map(([key]) => key);
           genres.forEach((key) => {
             used[key] = names.get(key);
           });
