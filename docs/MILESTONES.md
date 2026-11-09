@@ -653,3 +653,6 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 ### Patch 136 — guide genre counts as in their view
 - The channel summary keeps, per channel and category, when its programmes are on (`genreSpans`: start / stop pairs). The Live TV sidebar counts, for each genre, only the rows with a programme of that category in the hours the guide shows (the same rows as the genre view); a genre with none there is not listed. Favourite guide genres follow the same rule (shown and counted on the same hours). A guide downloaded before this patch counts as before until the next download.
 - Tests: spans, counts in a window. Applies after patch 135. Not verified on the TV.
+
+### Patch 137 — repository renamed
+- The repository is now `andreadegiovine/xtream-iptv-client`: the online updates read `https://andreadegiovine.github.io/xtream-iptv-client/version.json` (GitHub Pages follows the repository name; the old address no longer answers). The gh-pages page links to the new repository. Applies after patch 136.

@@ -7,7 +7,7 @@
  * version.json: { version, date, platforms: { <platform>: { base: "bundles/<version>/<platform>/", minShell } } }. `minShell` is the oldest
  * installed package that can run the build (a build that needs new native parts asks for a new package instead).
  */
-export const UPDATE_URL = 'https://andreadegiovine.github.io/tizen-xtream-iptv/version.json';
+export const UPDATE_URL = 'https://andreadegiovine.github.io/xtream-iptv-client/version.json';
 export const BUNDLE_KEY = 'xi.bundle';
 export const LAST_CHECK_KEY = 'xi.lastCheck';
 
