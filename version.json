@@ -1,21 +1,21 @@
 {
-  "version": "1.2.8",
-  "date": "2026-11-08T23:43:47.582Z",
+  "version": "1.3.0",
+  "date": "2026-11-09T09:38:21.291Z",
   "platforms": {
     "tizen": {
-      "base": "bundles/1.2.8/tizen/",
+      "base": "bundles/1.3.0/tizen/",
       "minShell": "0.0.0"
     },
     "webos": {
-      "base": "bundles/1.2.8/webos/",
+      "base": "bundles/1.3.0/webos/",
       "minShell": "0.0.0"
     },
     "desktop": {
-      "base": "bundles/1.2.8/desktop/",
+      "base": "bundles/1.3.0/desktop/",
       "minShell": "0.0.0"
     },
     "android": {
-      "base": "bundles/1.2.8/android/",
+      "base": "bundles/1.3.0/android/",
       "minShell": "0.0.0"
     }
   }
