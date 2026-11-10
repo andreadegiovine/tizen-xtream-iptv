@@ -132,11 +132,13 @@ test('the subtitle line moves above the progress bar while the controls are show
   const controls = s.page.el.querySelector('.player-controls');
   Object.defineProperty(controls, 'offsetHeight', { configurable: true, value: 260 });
   jest.advanceTimersByTime(10000); // the controls shown at the start fade out
-  expect(line.style.bottom).toBe('');
+  expect(line.style.transform).toBe('');
   s.page.onAction(Action.DOWN);
-  expect(line.style.bottom).toBe('188px'); // 260 - 96 (shade above the bar) + 24
-  jest.advanceTimersByTime(10000);
+  // 188 px from the bottom (260 - 96 of shade above the bar + 24) instead of the 56 of the stylesheet: moved with a transform.
+  expect(line.style.transform).toBe('translateY(-132px)');
   expect(line.style.bottom).toBe('');
+  jest.advanceTimersByTime(10000);
+  expect(line.style.transform).toBe('');
   s.page.destroy();
   jest.useRealTimers();
 });

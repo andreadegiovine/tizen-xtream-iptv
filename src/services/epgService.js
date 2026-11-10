@@ -6,6 +6,7 @@ import { isPlaceholderTitle } from './xmltv.js';
 import { EPG_CHANNELS_KEY, summaryValid, channelsBetween, spansOverlap } from './epgChannels.js';
 import { readGuideIndex } from './guideIndex.js';
 import { makeSearchKey } from './titleNormalizer.js';
+import { loadProgrammeRows, searchProgrammeRows } from './programmeSearch.js';
 
 const MAX = Number.MAX_SAFE_INTEGER;
 const DAY = 24 * 3600 * 1000;
@@ -20,24 +21,29 @@ async function programmesFor(db, channelId, now) {
   return all.filter((p) => p.stop > now && isReal(p)).sort((a, b) => a.start - b.start);
 }
 
-export function createEpgService({ active, providers, createWorker, runLocal = runEpgForProvider, now = Date.now, readyTimeoutMs = 4000, operations = null, customUrl = () => Promise.resolve('') }) {
+export function createEpgService({ active, providers, createWorker, runLocal = runEpgForProvider, now = Date.now, readyTimeoutMs = 4000, operations = null, customUrl = () => Promise.resolve(''), programmeSearch = null }) {
   let running = false;
   let cancelJob = null;
   const updated = new Set();
   let titlesJob = null; // { db, promise: [{ key, title, start, stop, channelId }] }: programme titles for the search, read once per guide
   let summaryJob = null; // { db, promise }: the channel summary of the active provider's database, read once per guide download
 
-  /** The titles of the stored programmes with their search key (one read of the guide, kept until the next download). */
-  async function programmeTitles() {
-    const current = await active.get();
-    if (!current) return [];
-    if (!titlesJob || titlesJob.db !== current.db) {
-      const read = requestToPromise(current.db.transaction('epg', 'readonly').objectStore('epg').getAll()).then((all) =>
-        all.filter(isReal).map((p) => ({ key: makeSearchKey(p.title), title: p.title, start: p.start, stop: p.stop, channelId: p.channelId })),
-      );
-      titlesJob = { db: current.db, promise: read.catch(() => []) };
-    }
-    return titlesJob.promise;
+  /**
+   * The programme titles the search looks in. With `programmeSearch` (the search worker) they are read and scanned there; otherwise (tests,
+   * no worker) read once per guide in the page.
+   */
+  function programmeRows() {
+    return active.get().then((current) => {
+      if (!current) return null;
+      if (!titlesJob || titlesJob.db !== current.db) titlesJob = { db: current.db, promise: loadProgrammeRows(current.db, now()).catch(() => null) };
+      return titlesJob.promise;
+    });
+  }
+
+  /** The guide changed (downloaded again or deleted): the titles are read again at the next search. */
+  function forgetTitles() {
+    titlesJob = null;
+    if (programmeSearch && programmeSearch.invalidate) programmeSearch.invalidate();
   }
 
   /** The stored channel summary (spans and genres) while the guide is valid, or null. */
@@ -182,7 +188,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
       if (!current) return;
       await clearEpg(current.db);
       summaryJob = null;
-      titlesJob = null;
+      forgetTitles();
       updated.forEach((handler) => handler());
     },
     nowNext,
@@ -205,40 +211,20 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
       return { genres, byChannel, spans };
     },
-    /** Reads the programme titles ahead of the first search (the search page opening). */
-    warmSearch: () => programmeTitles().then(() => undefined),
+    /** Reads the programme titles ahead of the first search (the search page opening), in the search worker when there is one. */
+    warmSearch: () => (programmeSearch ? programmeSearch.warm() : programmeRows().then(() => undefined)),
     /**
      * Programmes of the next 24 hours (what the channel page lists) whose title has every word of `query` (folded like the catalog search): `[{ title, start, stop, channelId,
      * rowKey }]`, the Live TV row (group or channel in no group) that shows the channel. Whole title first, then titles starting with the
      * query, then the rest; inside a rank on air first, then by start. One per channel and title (the next airing).
      */
     async searchProgrammes(query, { limit = 20 } = {}) {
-      const normalized = makeSearchKey(query);
-      if (normalized.length < 2) return [];
-      const current = await active.get();
-      if (!current) return [];
-      const words = normalized.split(' ');
-      const t = now();
-      const [titles, index] = await Promise.all([programmeTitles(), readGuideIndex(current.db)]);
-      const rowOf = new Map();
-      index.forEach((row) => {
-        if (!rowOf.has(row.epgChannelId)) rowOf.set(row.epgChannelId, row.key);
-      });
-      const rank = (key) => (key === normalized ? 3 : key.indexOf(normalized) === 0 ? 2 : 1);
-      const found = titles
-        .filter((p) => p.stop > t && p.start < t + DAY && rowOf.has(p.channelId) && words.every((w) => p.key.indexOf(w) >= 0))
-        .map((p) => ({ p, rank: rank(p.key), live: p.start <= t }))
-        .sort((a, b) => b.rank - a.rank || Number(b.live) - Number(a.live) || a.p.start - b.p.start);
-      const seen = new Set();
-      const out = [];
-      for (const { p } of found) {
-        const id = `${p.channelId}|${p.key}`;
-        if (seen.has(id)) continue;
-        seen.add(id);
-        out.push({ title: p.title, start: p.start, stop: p.stop, channelId: p.channelId, rowKey: rowOf.get(p.channelId) });
-        if (out.length >= limit) break;
+      if (makeSearchKey(query).length < 2) return [];
+      if (programmeSearch) {
+        const found = await programmeSearch.search(query, { limit, now: now() }).catch(() => null);
+        if (found) return found;
       }
-      return out;
+      return searchProgrammeRows(await programmeRows(), query, { limit, now: now() });
     },
     /**
      * The genres of the guide that some Live TV row has (between `from` and `to` when given), with those rows (groups and channels in no
@@ -297,7 +283,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
         else {
           log.info(`EPG sync done in ${now() - startedAt} ms`);
           summaryJob = null; // read again: the download wrote a new one
-          titlesJob = null;
+          forgetTitles();
           if (!outcome.cancelled) updated.forEach((handler) => handler());
         }
         return outcome;

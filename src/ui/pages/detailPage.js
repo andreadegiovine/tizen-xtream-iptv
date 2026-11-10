@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { streamLabel } from '../streamLabel.js';
 import { cssUrl } from '../cssUrl.js';
 import { isEmptySeries, markUnavailable } from '../../services/unavailable.js';
 import { scheduleId, LEAD_MS } from '../../services/scheduledViewing.js';
@@ -22,7 +23,6 @@ import { addToCollection } from '../components/collectionFlows.js';
 import { log } from '../../core/logger.js';
 
 /** Label of one stream choice: the channel's own name for grouped channels, otherwise "#123 · mkv". */
-export const streamLabel = (member) => member.name || `#${member.id}${member.ext ? ` · ${member.ext}` : ''}`;
 
 /** Flat, ordered episode list across seasons. */
 export function flattenEpisodes(seasons) {
@@ -221,7 +221,7 @@ export function createDetailPage(ctx, params) {
 
   /** Merges this channel with another one (or with a group) chosen in a search box; the link is kept across syncs. */
   async function mergeChannel() {
-    const picked = await ctx.dialogs.search({ title: t('merge.title'), placeholder: t('search.placeholder'), emptyLabel: t('common.empty'), minLength: 0, autoFocus: false, run: createMergeSearch(db, entry.defaultId) });
+    const picked = await ctx.dialogs.search({ title: t('merge.title'), placeholder: t('search.placeholder'), emptyLabel: t('common.empty'), minLength: 0, autoFocus: false, run: createMergeSearch(db, entry.defaultId, ctx.search && ctx.search.mergeCandidates ? (query, limit) => ctx.search.mergeCandidates(query, { limit, skipId: entry.defaultId }) : null) });
     if (!picked || destroyed) return;
     try {
       await ctx.liveGrouping.link(providerId, entry.defaultId, picked.memberId, picked.group);

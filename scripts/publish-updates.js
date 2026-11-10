@@ -45,6 +45,9 @@ function main() {
       if (fs.existsSync(path.join(dir, sub))) copyDir(path.join(dir, sub), path.join(target, sub));
     });
     if (!fs.existsSync(path.join(target, 'js', 'main.js'))) throw new Error(`${name}: no js/main.js in ${dir}`);
+    // The scripts and stylesheets of the build (pages and workers are files of their own): the app downloads them all when it installs it.
+    const files = ['js', 'css'].flatMap((sub) => (fs.existsSync(path.join(target, sub)) ? fs.readdirSync(path.join(target, sub)).map((f) => `${sub}/${f}`) : []));
+    fs.writeFileSync(path.join(target, 'files.json'), `${JSON.stringify({ files: files.sort() })}\n`);
     platforms[name] = { base: `bundles/${version}/${name}/`, minShell };
   });
   fs.writeFileSync(path.join(pagesDir, 'version.json'), `${JSON.stringify({ version, date: new Date().toISOString(), platforms }, null, 2)}\n`);

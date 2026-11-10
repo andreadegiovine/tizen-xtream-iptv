@@ -37,10 +37,30 @@ test('installing downloads the script and the stylesheet, then tells the loader;
     return { ok: true, text: async () => 'x' };
   };
   await installUpdate({ version: '1.3.0', base: 'https://h/b/' }, { fetchImpl: ok, storage });
-  expect(got).toEqual(['https://h/b/js/main.js', 'https://h/b/css/main.css']);
+  // A build without files.json (older): main.js and main.css.
+  expect(got).toEqual(['https://h/b/files.json', 'https://h/b/js/main.js', 'https://h/b/css/main.css']);
   expect(JSON.parse(store.get(BUNDLE_KEY))).toEqual({ version: '1.3.0', base: 'https://h/b/' });
   forgetUpdate(storage);
   expect(store.has(BUNDLE_KEY)).toBe(false);
   await expect(installUpdate({ version: '1.3.0', base: 'https://h/b/' }, { fetchImpl: async () => ({ ok: false, status: 404 }), storage })).rejects.toThrow('404');
+  expect(store.has(BUNDLE_KEY)).toBe(false);
+});
+
+test('installing a build with files.json downloads every script of it (pages and workers), nothing outside js/ and css/', async () => {
+  const store = new Map();
+  const storage = { setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) };
+  const got = [];
+  const fetchImpl = async (url) => {
+    got.push(url);
+    if (url.endsWith('files.json')) return { ok: true, json: async () => ({ files: ['css/main.css', 'js/main.js', 'js/page-player.js', 'fonts/a.woff2', '../x.js'] }) };
+    return { ok: true, status: 200, text: async () => 'x' };
+  };
+  await installUpdate({ version: '1.4.0', base: 'https://h/b/' }, { fetchImpl, storage });
+  expect(got).toEqual(['https://h/b/files.json', 'https://h/b/css/main.css', 'https://h/b/js/main.js', 'https://h/b/js/page-player.js']);
+  expect(JSON.parse(store.get(BUNDLE_KEY)).version).toBe('1.4.0');
+  // A page script missing online: nothing installed.
+  store.clear();
+  const missing = async (url) => (url.endsWith('files.json') ? { ok: true, json: async () => ({ files: ['js/main.js', 'js/page-player.js'] }) } : { ok: !url.endsWith('page-player.js'), status: 404, text: async () => 'x' });
+  await expect(installUpdate({ version: '1.4.0', base: 'https://h/b/' }, { fetchImpl: missing, storage })).rejects.toThrow('page-player.js');
   expect(store.has(BUNDLE_KEY)).toBe(false);
 });

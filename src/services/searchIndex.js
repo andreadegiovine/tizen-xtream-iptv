@@ -47,6 +47,23 @@ export function searchRows(rows, query, { limit = 40, types = null } = {}) {
 }
 
 /**
+ * Channels to merge with (`skipId`: the channel being merged): the groups first (flagged `group`), then the channels that are in none;
+ * with nothing typed, all of them by name. `[{ key, name, icon, group, memberId, count }]`.
+ */
+export function mergeCandidates(allRows, query, { limit = 30, skipId = null } = {}) {
+  const rows = allRows.filter((r) => r.type === 'live' && !r.isNetwork && r.defaultId !== skipId);
+  const out = (row) => ({ key: row.key, name: row.name, icon: row.icon, group: Boolean(row.group), memberId: row.defaultId, count: row.group ? row.members.length : 1 });
+  if (!String(query || '').trim()) {
+    const byName = (a, b) => String(a.name).localeCompare(String(b.name));
+    const pick = (list) => list.slice().sort(byName);
+    return pick(rows.filter((r) => r.group)).concat(pick(rows.filter((r) => !r.group))).slice(0, limit).map(out);
+  }
+  const groups = searchRows(rows.filter((r) => r.group), query, { limit });
+  const singles = searchRows(rows.filter((r) => !r.group), query, { limit });
+  return groups.concat(singles).slice(0, limit).map(out);
+}
+
+/**
  * Search service. With `createWorker` the index is built and queried in a worker (nothing heavy on the UI thread); without it (tests,
  * browsers without workers, a worker that fails) the same code runs in the page. `warm()` loads the index of the active provider ahead
  * of the first search; `invalidate()` drops it (after a catalog sync) and the next `warm()` / `search()` loads it again.
@@ -90,6 +107,13 @@ export function createSearchService({ active, types = ['movie', 'series', 'live'
           log.info(`Search index ${message.cached ? 'read from the database' : 'built'}: ${message.count} rows in ${message.ms} ms`);
           loads.get(message.token).resolve();
           loads.delete(message.token);
+        } else if (message.event === 'programmes-ready' && loads.has(message.token)) {
+          if (message.error) loads.get(message.token).reject(new Error(message.error));
+          else {
+            log.info(`Programme titles for the search: ${message.count} in ${message.ms} ms`);
+            loads.get(message.token).resolve();
+          }
+          loads.delete(message.token);
         } else if (message.event === 'error' && loads.has(message.token)) {
           loads.get(message.token).reject(new Error(message.message || 'Search index failed'));
           loads.delete(message.token);
@@ -122,10 +146,56 @@ export function createSearchService({ active, types = ['movie', 'series', 'live'
     return cache.rows.then((rows) => searchRows(rows, query, options));
   }
 
+  /** Asks the worker something and waits for its answer (null when the worker is not there or failed). */
+  function ask(message) {
+    const w = getWorker();
+    if (!w) return Promise.resolve(null);
+    nextId += 1;
+    const id = nextId;
+    return new Promise((resolve) => {
+      waiting.set(id, resolve);
+      w.postMessage({ ...message, id });
+    });
+  }
+
   return {
     invalidate() {
       cache = null;
       loaded = null;
+    },
+    /**
+     * The programme titles of the guide, read and searched in the worker (a large guide never reaches the UI thread). `searchProgrammes`
+     * resolves null without a worker: the guide service then searches in the page.
+     */
+    async warmProgrammes() {
+      const current = await active.get();
+      const w = current && current.provider ? getWorker() : null;
+      if (!w) return;
+      token += 1;
+      const mine = token;
+      const ready = new Promise((resolve, reject) => loads.set(mine, { resolve, reject }));
+      w.postMessage({ op: 'programmes-load', providerId: current.provider.id, now: Date.now(), token: mine });
+      await ready.catch(() => undefined);
+    },
+    async searchProgrammes(query, options = {}) {
+      const current = await active.get();
+      if (!current || !current.provider) return null;
+      return ask({ op: 'programmes-search', providerId: current.provider.id, query, options: { ...options, now: options.now || Date.now() } });
+    },
+    /** `mergeCandidates` over the rows the worker holds; null without a worker (the caller reads the rows itself). */
+    async mergeCandidates(query, options) {
+      const current = await active.get();
+      const ready = current ? ensureLoaded(current) : null;
+      if (!ready) return null;
+      try {
+        await ready;
+      } catch {
+        return null;
+      }
+      return ask({ op: 'merge', query, options });
+    },
+    invalidateProgrammes() {
+      if (worker) worker.postMessage({ op: 'programmes-forget' });
     },
     /** Loads the index in the background (at start, after a sync): the first search finds it ready. */
     async warm() {

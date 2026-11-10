@@ -1,6 +1,6 @@
 import { requestToPromise } from '../core/idb.js';
 import { isCompositeKey, NETWORK_PREFIX, LIVE_ALL } from './liveGrouping.js';
-import { loadSearchRows, searchRows } from './searchIndex.js';
+import { loadSearchRows, mergeCandidates } from './searchIndex.js';
 
 export { LIVE_ALL };
 
@@ -123,26 +123,17 @@ export async function getEntry(db, key) {
  * Channels to merge with: the groups first (flagged `group`), then the channels that are in none.
  * `skipId` is the channel being merged. Returns [{ key, name, icon, group, memberId, count }].
  */
-export function createMergeSearch(db, skipId) {
+export function createMergeSearch(db, skipId, inWorker = null) {
   let cache = null;
   const load = () => {
-    if (!cache) {
-      cache = loadSearchRows(db, ['live']).then((rows) => ({ rows: rows.filter((r) => !r.isNetwork && r.defaultId !== skipId) }));
-    }
+    if (!cache) cache = loadSearchRows(db, ['live']);
     return cache;
   };
   return async (query, limit = 30) => {
-    const { rows } = await load();
-    if (!String(query || '').trim()) {
-      // Nothing typed yet: the list is there at once (groups first, then the channels, by name).
-      const byName = (a, b) => String(a.name).localeCompare(String(b.name));
-      const pick = (list) => list.slice().sort(byName);
-      const all = pick(rows.filter((r) => r.group)).concat(pick(rows.filter((r) => !r.group && !r.isNetwork)));
-      return all.slice(0, limit).map((row) => ({ key: row.key, name: row.name, icon: row.icon, group: Boolean(row.group), memberId: row.defaultId, count: row.group ? row.members.length : 1 }));
-    }
-    const groups = searchRows(rows.filter((r) => r.group), query, { limit });
-    const singles = searchRows(rows.filter((r) => !r.group && !r.isNetwork), query, { limit });
-    return groups.concat(singles).slice(0, limit).map((row) => ({ key: row.key, name: row.name, icon: row.icon, group: Boolean(row.group), memberId: row.defaultId, count: row.group ? row.members.length : 1 }));
+    // The search worker already holds the rows: nothing is read on the UI thread. Without it (or when it fails) the rows are read here.
+    const found = inWorker ? await inWorker(query, limit).catch(() => null) : null;
+    if (found) return found;
+    return mergeCandidates(await load(), query, { limit, skipId });
   };
 }
 

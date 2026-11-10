@@ -17,7 +17,7 @@ describe('InputService', () => {
 
   test('emits actions and throttles held navigation keys', () => {
     let t = 1000;
-    const service = new InputService(document, { minRepeatMs: 80, now: () => t });
+    const service = new InputService(document, { minRepeatMs: 80, now: () => t, nextFrame: null });
     const seen = [];
     service.onAction((a) => seen.push(a));
     service.start();
@@ -29,6 +29,26 @@ describe('InputService', () => {
     press(13);
     service.stop();
     expect(seen).toEqual([Action.RIGHT, Action.RIGHT, Action.ENTER]);
+  });
+
+  test('a move that arrives before the previous one was drawn is dropped (a slow TV: the focus stops when the key is released)', () => {
+    let t = 1000;
+    const frames = [];
+    const service = new InputService(document, { minRepeatMs: 80, now: () => t, nextFrame: (cb) => frames.push(cb) });
+    const seen = [];
+    service.onAction((a) => seen.push(a));
+    service.start();
+    press(40);
+    t += 100;
+    press(40); // the first move is not drawn yet: dropped
+    frames.shift()();
+    t += 100;
+    press(40);
+    t += 300;
+    press(40); // the frame never came (page not drawn): after 250 ms the keys work again
+    press(13); // OK is never held back
+    service.stop();
+    expect(seen).toEqual([Action.DOWN, Action.DOWN, Action.DOWN, Action.ENTER]);
   });
 
   test('stays silent while a text field is focused', () => {

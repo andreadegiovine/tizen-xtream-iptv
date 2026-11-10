@@ -237,7 +237,7 @@
     line-height: 1.25;
     text-shadow: 0 2px 6px $black, 0 0 12px $black;
     white-space: pre-line;
-    transition: bottom 0.2s; // moves above the progress bar while the controls are shown (see placeSubtitle)
+    transition: transform 0.2s; // moves above the progress bar while the controls are shown (see placeSubtitle)
 
     &.visible {
       display: block;

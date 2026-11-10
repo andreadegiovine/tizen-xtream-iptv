@@ -31,6 +31,11 @@ export const LONG_PRESS_MS = 600;
 
 const THROTTLED = new Set([Action.UP, Action.DOWN, Action.LEFT, Action.RIGHT]);
 
+/** A move waits for the frame of the previous one at most this long (a page that is not drawn, e.g. hidden, never blocks the keys). */
+const FRAME_WAIT_MS = 250;
+
+const animationFrame = typeof requestAnimationFrame === 'function' ? (callback) => requestAnimationFrame(callback) : null;
+
 export function actionFromKeyCode(code) {
   return KEY_MAP[code] || null;
 }
@@ -43,7 +48,7 @@ export function isTextEditing(doc) {
 
 /** Single place that reads the keyboard/remote: the rest of the app only sees abstract actions. */
 export class InputService {
-  constructor(target = document, { minRepeatMs = 80, now = () => Date.now(), longPressMs = LONG_PRESS_MS, holdsEnter = () => false } = {}) {
+  constructor(target = document, { minRepeatMs = 80, now = () => Date.now(), longPressMs = LONG_PRESS_MS, holdsEnter = () => false, nextFrame = animationFrame } = {}) {
     this.target = target;
     this.longPressMs = longPressMs;
     /** True when the focused element has a long-press action: then OK is told apart (short on release, long after `longPressMs`). */
@@ -53,6 +58,12 @@ export class InputService {
     this.onKeyUp = this.onKeyUp.bind(this);
     this.doc = target.nodeType === 9 ? target : target.ownerDocument;
     this.minRepeatMs = minRepeatMs;
+    /**
+     * A held arrow repeats faster than a slow TV draws: a move that arrives before the previous one was drawn is dropped, so the focus never
+     * runs on after the key is released (`nextFrame`: requestAnimationFrame; null: no wait).
+     */
+    this.nextFrame = nextFrame;
+    this.frameWaitSince = 0;
     this.now = now;
     this.handlers = new Set();
     this.lastAt = {};
@@ -110,8 +121,15 @@ export class InputService {
     }
     if (THROTTLED.has(action)) {
       const t = this.now();
+      if (this.frameWaitSince && t - this.frameWaitSince < FRAME_WAIT_MS) return;
       if (t - (this.lastAt[action] || 0) < this.minRepeatMs) return;
       this.lastAt[action] = t;
+      if (this.nextFrame) {
+        this.frameWaitSince = t;
+        this.nextFrame(() => {
+          this.frameWaitSince = 0;
+        });
+      }
     }
     this.emit(action, event);
   }

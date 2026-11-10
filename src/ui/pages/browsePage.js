@@ -183,6 +183,11 @@ export function createBrowsePage(ctx, params = {}) {
   let entries = [];
   let cardNodes = [];
   let cards = [];
+  // Rows far above the screen leave the page (a long walk down a large catalog keeps the page small): the cards before `keptFrom` are
+  // out of the DOM, with their pictures freed, and `spacer` (as tall as the rows it stands for, `rowHeights`) keeps the scroll position.
+  let keptFrom = 0;
+  let spacer = null;
+  let rowHeights = [];
   let loadToken = 0;
   const counts = new Map(); // sidebar numbers: 'kind:id' → how many titles
   // Continue watching, favourites, suggestions: out of the sidebar until counted, and while they have nothing (except the one on screen).
@@ -374,6 +379,7 @@ export function createBrowsePage(ctx, params = {}) {
 
   function renderGrid() {
     while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
+    resetWindow();
     cards = [];
     cardNodes = [];
     appendCards(entries);
@@ -466,8 +472,8 @@ export function createBrowsePage(ctx, params = {}) {
   /** Rows of cards the screen shows (measured once there are two rows). */
   function screenRows() {
     const scroller = gridEl.closest('.page');
-    const first = cardNodes[0];
-    const below = cardNodes[columns];
+    const first = cardNodes[keptFrom];
+    const below = cardNodes[keptFrom + columns];
     const rowHeight = first && below ? below.offsetTop - first.offsetTop : 0;
     return scroller && rowHeight > 0 ? Math.ceil(scroller.clientHeight / rowHeight) : DEFAULT_SCREEN_ROWS;
   }
@@ -509,13 +515,50 @@ export function createBrowsePage(ctx, params = {}) {
     return moreJob;
   }
 
-  /** The pictures of the rows more than PREFETCH_ROWS above the screen are freed; the ones near it again are loaded back. */
+  /** Nothing out of the page: the grid was emptied (a new view, the guide). */
+  function resetWindow() {
+    keptFrom = 0;
+    spacer = null;
+    rowHeights = [];
+  }
+
+  /**
+   * The rows more than PREFETCH_ROWS above the screen leave the page with their pictures; the ones near it again come back. Only the rows
+   * that cross the line are touched (not every card at every key).
+   */
   function syncImages(index) {
-    const keepFrom = firstKeptRow(index, columns, screenRows()) * columns;
-    cards.forEach((card, i) => {
-      if (i < keepFrom) card.release();
-      else card.restore();
-    });
+    const keepFrom = Math.min(firstKeptRow(index, columns, screenRows()) * columns, Math.floor(cards.length / columns) * columns);
+    if (keepFrom === keptFrom) return;
+    if (keepFrom > keptFrom) {
+      // Rows leave: their height (measured while they are on the page) goes to the spacer.
+      if (!spacer) {
+        spacer = h('div', { class: 'grid-spacer' });
+        gridEl.insertBefore(spacer, gridEl.firstChild);
+      }
+      let height = 0;
+      for (let row = keptFrom / columns; row < keepFrom / columns; row += 1) {
+        const top = cardNodes[row * columns];
+        const next = cardNodes[(row + 1) * columns];
+        rowHeights[row] = top && next ? next.offsetTop - top.offsetTop : rowHeights[row - 1] || 0;
+        height += rowHeights[row];
+      }
+      for (let i = keptFrom; i < keepFrom; i += 1) {
+        cards[i].release();
+        if (cardNodes[i].parentNode) cardNodes[i].parentNode.removeChild(cardNodes[i]);
+      }
+      spacer.style.height = `${(parseFloat(spacer.style.height) || 0) + height}px`;
+    } else {
+      // Rows come back, in their order, before the first row on the page.
+      const before = cardNodes[keptFrom] || null;
+      let height = 0;
+      for (let i = keepFrom; i < keptFrom; i += 1) {
+        gridEl.insertBefore(cardNodes[i], before);
+        cards[i].restore();
+      }
+      for (let row = keepFrom / columns; row < keptFrom / columns; row += 1) height += rowHeights[row] || 0;
+      spacer.style.height = `${Math.max(0, (parseFloat(spacer.style.height) || 0) - height)}px`;
+    }
+    keptFrom = keepFrom;
   }
 
   /** The focus is on `index`: the cards down to PREFETCH_ROWS rows below the screen are loaded (in the background). */
@@ -544,6 +587,7 @@ export function createBrowsePage(ctx, params = {}) {
     if (!entries.length) {
       // Nothing on screen yet: pulsing placeholders instead of an empty page.
       while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
+      resetWindow();
       for (let i = 0; i < columns * 2; i += 1) gridEl.appendChild(createSkeletonCard());
     }
     // The first cards of a catalog view (all, a category, a genre, a network) are cached; the views the user fills are not.
@@ -724,6 +768,7 @@ export function createBrowsePage(ctx, params = {}) {
     cards = [];
     cardNodes = [];
     while (gridEl.firstChild) gridEl.removeChild(gridEl.firstChild);
+    resetWindow();
     gridEl.style.display = 'none';
     empty.style.display = 'none';
     titleEl.textContent = items[selected] ? items[selected].name : '';
@@ -824,10 +869,10 @@ export function createBrowsePage(ctx, params = {}) {
     }),
     onFocus: (i) => {
       if (!cardNodes[i]) return;
+      syncImages(i); // first: a far jump (back to a title, the top) brings its rows into the page before scrolling to it
       cardNodes[i].classList.add('focused');
       ensureVisible(cardNodes[i], { first: i < columns });
       ensureLoaded(i);
-      syncImages(i);
     },
     onBlur: (i) => cardNodes[i] && cardNodes[i].classList.remove('focused'),
     onActivate: (i) => {

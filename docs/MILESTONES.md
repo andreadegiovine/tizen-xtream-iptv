@@ -686,3 +686,16 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 
 ### Patch 142 — Samsung App Description File
 - `platforms/tizen/store/App_Description_Xtream_IPTV.pptx`: the Seller Office template (v1.42) filled in: revision history, UI structure with a flow graph, usage scenario with the test account (public M3U playlist of free channels, the same for every model group), screens, menu and function slides with numbered screenshots, key policy, how to change languages. `APP-DESCRIPTION.md` has the same content as text. Not verified on the TV.
+
+### Patch 143 — Performance: guide search in the worker, smaller grid, start without waiting for updates
+Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-TEST.md: 6,000 movies, 3,000 channels with a guide of about 67,000 programmes, CPU slowed down 4 times), before → after:
+- Search: the programme titles are read and searched in the search worker (`programmeSearch.js`; the page reads them only without a worker): opening the search blocked the UI thread for 735 ms, now 0; JS heap 14 → 4 MB. The titles are read with a cursor, without descriptions and ended programmes; the worker forgets them when the guide is downloaded again or deleted.
+- Movies / Series grid: the rows more than 3 rows above the screen leave the page (a spacer keeps their height, they come back in order going up) and only the rows that cross that line are touched at each key. After 150 rows down: 852 → 78 cards and 12,470 → 1,338 nodes in the page, a key press 199 → 55 ms on average (p95 469 → 155 ms), layout and style 23.6 → 3.1 s over the walk, long tasks 197 → 4. Same position on screen and same card when coming back from a title.
+- "_autoupdate" packages: version.json is checked in the background once the app is up; a newer build is downloaded and used from the next start (notice "Version X is ready"), a version that needs a new package is still announced. With version.json answering after 4 s the first screen came after 4.4 s, now 0.37 s. `installUpdate` downloads every script of the build (`files.json`, written by `publish-updates.js`), not only main.js.
+- Detail, player, settings and diagnostics pages are files of their own (`lazyPage.js`), read the first time they open and in the idle time after the start (2 s for a build loaded online): main.js 431 → 339 KB (138 → 110 KB gzip). No difference measurable on a PC in the time to the first screen.
+- Remote: a held arrow that arrives before the previous move was drawn is dropped (at most 250 ms), so the focus stops when the key is released on a slow TV.
+- Scheduled viewing: one timer to the next notice, start or end (none while nothing is scheduled, at most one minute) instead of a check every 5 s; an app opened while a scheduled programme is on still opens its channel at once.
+- Player: the subtitle line moves above the controls with a transform (no layout while the video plays).
+- Channel merge: the candidates come from the rows the search worker already holds.
+- Not changed: `ensureVisible` still measures the focused card (one layout per key, the one the frame needs anyway; with the smaller grid it is no longer a cost).
+- Tests: grid window, lazy pages, programme search in the worker and in the service, search worker messages, nextAt, frame wait of the keys, files.json. Not verified on the TV.

@@ -10,7 +10,7 @@ import { youtubeStreamUrl } from '../../services/trailer.js';
 import { formatClockTime } from '../../core/clock.js';
 import { watchKey, shouldResume } from '../../services/watchStore.js';
 import { pageEntries, getEntry, liveSequence, neighborKey } from '../../services/catalogQuery.js';
-import { streamLabel } from './detailPage.js';
+import { streamLabel } from '../streamLabel.js';
 import { portableKeyFor } from '../../services/shareKeys.js';
 import { cueAt, subtitleLanguages } from '../../services/openSubtitles.js';
 import { createRangeReader, probeMkv, createTrackLoader } from '../../services/mkvSubtitles.js';
@@ -168,9 +168,12 @@ export function createPlayerPage(ctx, params) {
 
   /** The subtitle line sits above the progress bar and the buttons while they are shown, back at the bottom when they fade out. */
   const CONTROLS_PAD_TOP = 96; // the shaded space above the bar (`.player-controls` padding)
+  const SUBTITLE_BOTTOM = 56; // `.player-subtitle` bottom in the stylesheet
   function placeSubtitle() {
     const shown = controls.classList.contains('visible');
-    subtitleEl.style.bottom = shown ? `${Math.max(0, controls.offsetHeight - CONTROLS_PAD_TOP) + 24}px` : '';
+    // Moved with a transform (no layout of the page while the video plays), as far as the old `bottom` would have put it.
+    const lift = shown ? Math.max(0, controls.offsetHeight - CONTROLS_PAD_TOP) + 24 - SUBTITLE_BOTTOM : 0;
+    subtitleEl.style.transform = lift ? `translateY(${-lift}px)` : '';
   }
 
   function showControls() {

@@ -45,3 +45,17 @@ npm run perf:compare -- reference.json new.json [--threshold 25] [--min-ms 80]
 For each step it compares the timings felt in the interface (cards, posters, search results, detail page, long tasks) and the sync durations: it marks `✗` what got worse by more than the threshold (25%) and by more than 80 ms, `✓` what improved. It exits with code 1 if something got worse: to be used before delivering a change. Two runs of the same version differ by a few tens of ms: to decide you need repeated differences, not a single value.
 
 The last step of `perf.js` simulates a startup after 12 hours with the same catalog: the sync re-reads the lists and, with the differential sync, writes nothing (`changes: 0`).
+
+## Focused bench (large guide, deep grid, start-up)
+
+```
+npm run build && npm run bench -- --out after.json [--dist dist] [--cpu 4] [--rows 150] [--shots dir]
+npm run bench -- --start-only --update-delay 4000 --dist <an --env autoupdate build>
+```
+
+`scripts/mock-xtream/bench.js` starts the mock by itself (6,000 movies, 2,000 series, 3,000 channels, every channel with its own guide of
+3 days: about 70,000 programmes), sets the provider up, asks for the guide from Settings, then with the CPU slowed down 4 times measures:
+the warm start to the first cards of Home; the search opened (long tasks while the programme titles are read) and a programme title typed;
+the Movies grid walked down `--rows` rows (time of every key press until the next frame, DOM size at the end); 30 s idle (main-thread
+time). `--start-only --update-delay N` measures only the time to the first screen while version.json answers after N ms (the
+"_autoupdate" builds check it). `--shots dir` saves a screenshot after every step, to check the walk.

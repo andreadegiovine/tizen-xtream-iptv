@@ -46,3 +46,30 @@ test('a programme stays scheduled while it is on (the channel opens once) and le
   expect(await schedules.list()).toEqual([]);
   expect(await schedules.prune()).toBe(0);
 });
+
+test('nextAt: when the next notice, start or end is due (the app waits until then), null with nothing scheduled', async () => {
+  let now = 1000 * M;
+  const schedules = createScheduledViewing({ db: await openAppDb(`sched-${Math.random()}`), now: () => now });
+  expect(await schedules.nextAt()).toBeNull();
+  const news = { providerId: 'p', entryKey: 'live:1', entryName: 'One', channelId: 'one', title: 'News', start: now + 60 * M, stop: now + 90 * M };
+  await schedules.add(news);
+  expect(await schedules.nextAt()).toBe(news.start - LEAD_MS - NOTICE_MS);
+  now = news.start - LEAD_MS - NOTICE_MS;
+  await schedules.markNoticed(news);
+  expect(await schedules.nextAt()).toBe(news.start - LEAD_MS);
+  now = news.start - LEAD_MS;
+  await schedules.markStarted(news);
+  expect(await schedules.nextAt()).toBe(news.stop);
+  now = news.stop + 1; // ended, not pruned yet: due now
+  expect(await schedules.nextAt()).toBe(now);
+  await schedules.prune();
+  expect(await schedules.nextAt()).toBeNull();
+});
+
+test('nextAt: the app opened while a scheduled programme is already on (channel not opened yet): due now', async () => {
+  const now = 1000 * M;
+  const schedules = createScheduledViewing({ db: await openAppDb(`sched-${Math.random()}`), now: () => now });
+  await schedules.add({ providerId: 'p', entryKey: 'live:1', entryName: 'One', channelId: 'one', title: 'News', start: now - 10 * M, stop: now + 20 * M });
+  expect(await schedules.nextAt()).toBe(now);
+  expect((await schedules.due()).start.map((s) => s.title)).toEqual(['News']);
+});

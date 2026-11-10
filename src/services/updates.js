@@ -1,8 +1,8 @@
 /*
  * Updates from the app itself, without the store or the system: the installed package is a shell that holds a working copy of the app;
  * a newer build of the web code (JavaScript, styles, fonts) published on GitHub Pages (`gh-pages` branch, written by the release workflow)
- * is loaded instead of it. The loader in index.html picks the copy at every start (see src/index.html); this module checks for a newer one,
- * as the first thing the app does, and switches to it (the app starts again).
+ * is loaded instead of it. The loader in index.html picks the copy at every start (see src/index.html); this module checks for a newer one in
+ * the background once the app is up, and downloads it: the loader uses it from the next start.
  *
  * version.json: { version, date, platforms: { <platform>: { base: "bundles/<version>/<platform>/", minShell } } }. `minShell` is the oldest
  * installed package that can run the build (a build that needs new native parts asks for a new package instead).
@@ -66,12 +66,25 @@ export async function checkForUpdate({ platform, running, shell, fetchImpl = (..
   }
 }
 
+/** The files of a build to download: its `files.json` (scripts of the pages and workers too), or main.js and main.css (older builds). */
+export async function buildFiles(base, fetchImpl) {
+  const fallback = ['js/main.js', 'css/main.css'];
+  try {
+    const res = await fetchImpl(`${base}files.json`);
+    const list = res.ok ? (await res.json()).files : null;
+    if (!Array.isArray(list) || list.indexOf('js/main.js') < 0) return fallback;
+    return list.filter((file) => /^(js|css)\/[\w.-]+$/.test(file));
+  } catch {
+    return fallback;
+  }
+}
+
 /**
- * Gets a build ready: its script and stylesheet are downloaded (they must answer, and stay in the browser cache) and the loader is told to
- * use it from the next start. Throws when the build cannot be reached (the app then starts as it is).
+ * Gets a build ready: every script and stylesheet is downloaded (they must answer, and stay in the browser cache) and the loader is told
+ * to use it from the next start. Throws when the build cannot be reached (the app then starts as it is).
  */
 export async function installUpdate(update, { fetchImpl = (...args) => fetch(...args), storage = window.localStorage } = {}) {
-  for (const file of ['js/main.js', 'css/main.css']) {
+  for (const file of await buildFiles(update.base, fetchImpl)) {
     const res = await fetchImpl(update.base + file);
     if (!res.ok) throw new Error(`${file}: HTTP ${res.status}`);
     const body = await res.text();

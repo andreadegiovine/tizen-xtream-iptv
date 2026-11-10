@@ -3,7 +3,7 @@
  * Mock Xtream Codes panel for performance tests (development only, never shipped).
  *
  *   node scripts/mock-xtream/server.js [--port 8090] [--movies 20000] [--series 8000] [--live 3000]
- *                                      [--latency 150] [--img-latency 40] [--kbps 0] [--dist dist]
+ *                                      [--latency 150] [--img-latency 40] [--kbps 0] [--dist dist] [--epg-days 2] [--epg-per-channel 1]
  *
  * Serves on one origin (no CORS involved): the app build (`--dist`, default ./dist), the Xtream API (/player_api.php, /xmltv.php),
  * posters and logos (/img/...svg, cacheable) and a fake TMDB (/tmdb/3/...) that tests route api.themoviedb.org and image.tmdb.org to.
@@ -33,6 +33,11 @@ const count = (name, bytes = 0) => {
   stats.requests[name] = (stats.requests[name] || 0) + 1;
   stats.bytes += bytes;
 };
+// --epg-per-channel 1: every channel has a guide of its own (a large guide, as the big providers give); --epg-days N: N days of programmes.
+const EPG_DAYS = Number(args['epg-days'] || 2);
+if (args['epg-per-channel']) catalog.live.forEach((c) => {
+  if (c.epg_channel_id) c.epg_channel_id = `${c.epg_channel_id}.${c.stream_id}`;
+});
 console.log(`catalog: ${catalog.vod.length} movies, ${catalog.series.length} series, ${catalog.live.length} channels (${Date.now() - t0} ms)`);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -116,7 +121,7 @@ function xmltv() {
   ids.forEach((id, n) => {
     // One channel in 25 has a guide that only says it has nothing (as some providers do): the app must treat it as no guide.
     const placeholder = n % 25 === 24;
-    for (let i = 0; i < 48; i += 1) {
+    for (let i = 0; i < 24 * EPG_DAYS; i += 1) {
       // Categories as many guides give them: one genre per channel (a third of the channels have none), sometimes a second one.
       const genre = n % 3 === 2 ? '' : GENRES[n % GENRES.length];
       const demoGenre = DEMO && genre ? DEMO_GENRES[GENRES.indexOf(genre)] : '';

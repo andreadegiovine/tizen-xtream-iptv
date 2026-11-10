@@ -28,6 +28,7 @@
     "mock": "node scripts/mock-xtream/server.js",
     "perf": "node scripts/mock-xtream/perf.js",
     "perf:compare": "node scripts/mock-xtream/compare.js",
+    "bench": "node scripts/mock-xtream/bench.js",
     "format": "prettier --write \"src/**/*.{js,scss,json}\" \"test/**/*.js\"",
     "screenshots": "node scripts/screenshots.js",
     "store-assets": "node scripts/store-assets.js"

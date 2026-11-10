@@ -178,4 +178,9 @@
     width: auto;
     min-width: 0;
   }
+
+  // Stands for the rows far above the screen taken out of the page (see syncImages in browsePage.js).
+  .grid-spacer {
+    grid-column: 1 / -1;
+  }
 }

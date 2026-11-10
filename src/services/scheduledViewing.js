@@ -60,6 +60,25 @@ export function createScheduledViewing({ db, now = Date.now }) {
         start: all.filter((s) => !s.started && t >= s.start - LEAD_MS && t < s.stop),
       };
     },
+    /**
+     * When something is due next (a notice, a channel to open, a programme that ends and leaves the list), or null when nothing is
+     * scheduled: the app waits until then instead of checking all the time.
+     */
+    async nextAt() {
+      const t = now();
+      let next = null;
+      let dueNow = false;
+      const consider = (from, until) => {
+        if (t >= from && t < until) dueNow = true;
+        else if (from > t && (next === null || from < next)) next = from;
+      };
+      (await load()).forEach((s) => {
+        if (!s.noticed) consider(s.start - LEAD_MS - NOTICE_MS, s.start - LEAD_MS);
+        if (!s.started) consider(s.start - LEAD_MS, s.stop);
+        consider(s.stop, Infinity); // it leaves the list when it ends
+      });
+      return dueNow ? t : next;
+    },
     async markNoticed(item) {
       const all = await load();
       await save(all.map((s) => (scheduleId(s) === scheduleId(item) ? { ...s, noticed: true } : s)));

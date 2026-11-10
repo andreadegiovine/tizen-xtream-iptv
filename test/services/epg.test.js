@@ -1,4 +1,5 @@
 import { parseXmltvTime, decodeEntities, createXmltvParser, isPlaceholderTitle } from '../../src/services/xmltv.js';
+import { loadProgrammeRows, searchProgrammeRows } from '../../src/services/programmeSearch.js';
 import { isEpgUrl } from '../../src/services/settings.js';
 import { syncEpg, shouldSyncEpg, EPG_TTL_MS, probeGuide, runEpgForProvider } from '../../src/services/epgSync.js';
 import { createEpgService } from '../../src/services/epgService.js';
@@ -205,5 +206,46 @@ describe('programme search', () => {
     ]);
     expect(await svc.searchProgrammes('m')).toEqual([]);
     expect(await svc.searchProgrammes('disponibile')).toEqual([]);
+  });
+});
+
+describe('programme search in the search worker', () => {
+  const NOW = Date.UTC(2026, 10, 2, 12, 0, 0);
+  const H = 3600000;
+  test('the titles are read without the ended programmes and the descriptions; the guide service asks the worker and tells it when the guide changes', async () => {
+    const db = await openProviderDb('epg-search-worker-test');
+    await dbPutMany(db, 'entries', [{ key: 'live:i1', type: 'live', added: 1, name: 'Uno', epgChannelId: 'a' }]);
+    await dbPutMany(db, 'epg', [
+      { channelId: 'a', start: NOW - 3 * H, stop: NOW - 2 * H, title: 'Ended', desc: 'long text' },
+      { channelId: 'a', start: NOW - H, stop: NOW + H, title: 'On air', desc: 'long text' },
+      { channelId: 'a', start: NOW + H, stop: NOW + 2 * H, title: 'EPG non disponibile' },
+    ]);
+    const data = await loadProgrammeRows(db, NOW);
+    expect(data.titles).toEqual([{ key: 'on air', title: 'On air', start: NOW - H, stop: NOW + H, channelId: 'a' }]);
+    expect(data.rowOf.get('a')).toBe('live:i1');
+    expect(searchProgrammeRows(data, 'air', { now: NOW }).map((p) => p.rowKey)).toEqual(['live:i1']);
+
+    const asked = [];
+    let invalidated = 0;
+    const programmeSearch = {
+      warm: async () => asked.push('warm'),
+      search: async (query, options) => {
+        asked.push(`${query}@${options.now}`);
+        return [{ title: 'From the worker' }];
+      },
+      invalidate: () => {
+        invalidated += 1;
+      },
+    };
+    const svc = createEpgService({ active: { get: async () => ({ db }) }, providers: {}, createWorker: () => { throw new Error('none'); }, now: () => NOW, programmeSearch });
+    await svc.warmSearch();
+    expect(await svc.searchProgrammes('air')).toEqual([{ title: 'From the worker' }]);
+    expect(await svc.searchProgrammes('a')).toEqual([]); // too short: the worker is not asked
+    expect(asked).toEqual(['warm', `air@${NOW}`]);
+    await svc.clear();
+    expect(invalidated).toBe(1);
+    // The worker failed (null): the page searches itself.
+    programmeSearch.search = async () => null;
+    expect(await svc.searchProgrammes('air')).toEqual([]); // the guide was cleared
   });
 });

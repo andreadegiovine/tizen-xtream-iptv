@@ -64,8 +64,6 @@ import { createCreditsStore } from './services/creditsStore.js';
 import { createGuideLayoutStore } from './services/guideLayout.js';
 import { portableKeyFor } from './services/shareKeys.js';
 import { createSearchPage } from './ui/pages/searchPage.js';
-import { createDetailPage } from './ui/pages/detailPage.js';
-import { createPlayerPage } from './ui/pages/playerPage.js';
 import { createBrowsePage } from './ui/pages/browsePage.js';
 import { createProvidersPage } from './ui/pages/providersPage.js';
 import { createProviderSetupPage } from './ui/pages/providerSetupPage.js';
@@ -74,9 +72,16 @@ import { createTraktClient } from './services/traktClient.js';
 import { createOpenSubtitles } from './services/openSubtitles.js';
 import { createTraktService, createWatchState } from './services/traktService.js';
 import { createScreensaver } from './ui/screensaver.js';
+import { createLazyPage, preloadPages } from './ui/lazyPage.js';
+
+// Pages read the first time they open (and in the idle time after the start): the start reads and compiles less code.
+const LAZY_PAGES = {
+  detail: () => import(/* webpackChunkName: "page-detail" */ './ui/pages/detailPage.js').then((m) => m.createDetailPage),
+  player: () => import(/* webpackChunkName: "page-player" */ './ui/pages/playerPage.js').then((m) => m.createPlayerPage),
+  settings: () => import(/* webpackChunkName: "page-settings" */ './ui/pages/settingsPage.js').then((m) => m.createSettingsPage),
+  diagnostics: () => import(/* webpackChunkName: "page-diagnostics" */ './ui/pages/diagnosticsPage.js').then((m) => m.createDiagnosticsPage),
+};
 import { applyTextSize } from './core/textSize.js';
-import { createSettingsPage } from './ui/pages/settingsPage.js';
-import { createDiagnosticsPage } from './ui/pages/diagnosticsPage.js';
 
 // Last line of defence: log (credentials are masked by the logger) instead of dying silently.
 window.addEventListener('unhandledrejection', (event) => log.error('Unhandled rejection', event.reason && event.reason.message));
@@ -84,37 +89,33 @@ window.addEventListener('error', (event) => log.error('Uncaught error', event.me
 
 
 /**
- * Checks version.json (a few seconds at most). A newer build this package can run: downloaded, then the app starts again ('restarting').
- * A newer version that needs a new package: its number, for a notice once the app is up. Otherwise (or offline, or in development): null.
+ * Checks version.json in the background, once the app is up (the start never waits for the network). A newer build this package can run
+ * is downloaded and used from the next start (the loader in index.html picks it); a newer version that needs a new package: a notice.
  */
-async function updateFirst(notices) {
+async function updateInBackground(notices) {
   const versions = runningVersions();
   log.info(`App ${versions.bundle || APP_VERSION} (package ${versions.shell || APP_VERSION})`);
   // Only the "_autoupdate" packages (Tizen, webOS) update themselves, each from the online build of the same variant.
-  if (IS_DEV || !versions.shell || typeof __AUTOUPDATE__ === 'undefined' || !__AUTOUPDATE__) return null;
+  if (IS_DEV || !versions.shell || typeof __AUTOUPDATE__ === 'undefined' || !__AUTOUPDATE__) return;
   let update = null;
   try {
-    update = await checkForUpdate({ platform: __UPDATE_CHANNEL__, running: versions.bundle || APP_VERSION, shell: versions.shell });
+    update = await checkForUpdate({ platform: __UPDATE_CHANNEL__, running: versions.bundle || APP_VERSION, shell: versions.shell, timeoutMs: 20000 });
   } catch (err) {
     log.warn('Update check failed', err && err.message);
-    return null;
+    return;
   }
-  if (!update) return null;
+  if (!update) return;
   if (update.needsPackage) {
     log.info(`Version ${update.version} needs a new package`);
-    return update.version;
+    notices.show({ type: 'info', message: t('update.needsPackage', { version: update.version }), permanent: true, key: 'update' });
+    return;
   }
-  // A notice over the start screen while the update is downloaded (the app then starts again).
-  const notice = notices.show({ type: 'info', message: t('update.installing', { version: update.version }), permanent: true, key: 'update' });
   try {
     await installUpdate(update);
-    log.info(`Update ${update.version} installed: starting again`);
-    window.location.reload();
-    return 'restarting';
+    log.info(`Update ${update.version} downloaded: used from the next start`);
+    notices.show({ type: 'info', message: t('update.ready', { version: update.version }), key: 'update' });
   } catch (err) {
     log.warn('Update failed', err && err.message);
-    notices.close(notice);
-    return null;
   }
 }
 
@@ -127,11 +128,7 @@ async function boot() {
   applyTextSize(prefs.textSize);
   i18n.setLocale(prefs.language === 'auto' ? detectLocale(navigator.language) : prefs.language);
   document.documentElement.lang = i18n.getLocale(); // the page says which language it speaks (voices, hyphenation)
-  // The first thing the app does: a newer build online is installed before anything else starts, then the app starts again with it.
-  // Notices exist from here: the update check uses them before the rest of the app is set up.
   const notices = createNoticeService();
-  const pendingPackage = await updateFirst(notices);
-  if (pendingPackage === 'restarting') return;
 
   const focus = new FocusManager();
   const liveGrouping = createLiveGroupingService({ db, settings });
@@ -228,7 +225,28 @@ async function boot() {
       break; // one channel at a time
     }
   };
-  setInterval(() => runSchedules().catch((err) => log.warn('Scheduled viewing failed', err && err.message)), 5000);
+  // A timer to the next thing due (none while nothing is scheduled); at most a minute, so a TV that slept or a clock that moved is caught up.
+  let scheduleTimer = null;
+  let scheduleRunning = false;
+  const planSchedules = async () => {
+    clearTimeout(scheduleTimer);
+    scheduleTimer = null;
+    const at = await ctx.schedules.nextAt().catch(() => null);
+    if (at === null || scheduleRunning) return;
+    scheduleTimer = setTimeout(async () => {
+      scheduleRunning = true;
+      try {
+        await runSchedules();
+      } catch (err) {
+        log.warn('Scheduled viewing failed', err && err.message);
+      } finally {
+        scheduleRunning = false;
+        planSchedules();
+      }
+    }, Math.min(60000, Math.max(1000, at - Date.now() + 50)));
+  };
+  ctx.schedules.onChange(() => planSchedules());
+  planSchedules();
   // What Settings asks (updates, rebuilds) runs one job at a time, after any catalog / genre / TMDB work already running.
   const EXCLUSIVE = ['catalog', 'tmdb', 'genres', 'rebuild'];
   ctx.jobs = createJobQueue({
@@ -273,7 +291,10 @@ async function boot() {
   });
   ctx.suggestions = createSuggestionsService({ active, watch: ctx.watch, tmdb, trakt: ctx.trakt, getSource: async () => (await settings.get()).suggestionSource });
   ctx.meta = { forEntry: (entry) => tmdb.forEntry(entry) };
-  const epg = createEpgService({ active, providers, createWorker: createEpgWorker, operations: ctx.operations, customUrl: () => ctx.settings.get().then((s) => s.customEpgUrl) });
+  const epg = createEpgService({ active, providers, createWorker: createEpgWorker, operations: ctx.operations, customUrl: () => ctx.settings.get().then((s) => s.customEpgUrl),
+    // The programme titles are read and searched in the search worker.
+    programmeSearch: { warm: () => ctx.search.warmProgrammes(), search: (query, options) => ctx.search.searchProgrammes(query, options), invalidate: () => ctx.search.invalidateProgrammes() },
+  });
   ctx.epg = epg;
   // The guide is the last start-up task (after the catalog, metadata, Trakt and the search index), at most once a day: `maybeSync`
   // downloads only when the last download is a day old. While the app stays open it is checked again every hour.
@@ -410,14 +431,14 @@ async function boot() {
       collections: (params) => createCollectionsPage(ctx, params),
       collection: (params) => createCollectionPage(ctx, params),
       network: (params) => createNetworkPage(ctx, params),
-      detail: (params) => createDetailPage(ctx, params),
-      player: (params) => createPlayerPage(ctx, params),
+      detail: (params) => createLazyPage(LAZY_PAGES.detail, (create) => create(ctx, params), { errorText: t('error.UNKNOWN') }),
+      player: (params) => createLazyPage(LAZY_PAGES.player, (create) => create(ctx, params), { errorText: t('error.UNKNOWN') }),
       browse: (params) => createBrowsePage(ctx, params),
       providers: (params) => createProvidersPage(ctx, params),
       providerSetup: (params) => createProviderSetupPage(ctx, params),
-      settings: () => createSettingsPage(ctx),
+      settings: () => createLazyPage(LAZY_PAGES.settings, (create) => create(ctx), { errorText: t('error.UNKNOWN') }),
       categories: () => createCategoriesPage(ctx),
-      diagnostics: () => createDiagnosticsPage(ctx),
+      diagnostics: () => createLazyPage(LAZY_PAGES.diagnostics, (create) => create(ctx), { errorText: t('error.UNKNOWN') }),
     },
     onChange: (entry, page) => {
       const section = sectionForEntry(entry);
@@ -579,7 +600,6 @@ async function boot() {
   if (hasProvider) {
     router.reset('home', { section: 'home' });
     showSubscriptionNotice(notices, hasProvider);
-    if (pendingPackage) notices.show({ type: 'info', message: t('update.needsPackage', { version: pendingPackage }), permanent: true, key: 'update' });
     // Stale-while-revalidate: the cached catalog is usable at once, lists older than 12 h refresh in background.
     catalog.start();
     queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) });
@@ -612,6 +632,11 @@ async function boot() {
   } else {
     router.reset('providerSetup', { firstRun: true });
   }
+  // The code of the other pages is read once the start-up work is done (the first opening is then as quick as the others).
+  // A build loaded online reads them sooner (the network may drop later).
+  setTimeout(() => preloadPages([LAZY_PAGES.detail, LAZY_PAGES.player, LAZY_PAGES.settings, LAZY_PAGES.diagnostics]), window.__XI_BASE__ ? 2000 : 15000);
+  // A newer build is looked for once the first page is up (a few seconds later: the start-up work goes first).
+  setTimeout(() => updateInBackground(notices).catch((err) => log.warn('Update failed', err && err.message)), 3000);
   // The parental PIN is set the first time the app opens (asked again at the next start if it was skipped).
   setTimeout(() => {
     ctx.parental
