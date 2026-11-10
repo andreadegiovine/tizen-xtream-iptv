@@ -679,3 +679,7 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - Fix: going back from a channel / group opened from "Show all" could raise "Cannot read properties of null (reading 'remove')": a card picture that failed to load after the card had let it go (`release()`) removed `img`, already null. The error handler now removes only its own `<img>`.
 - Live TV: the "Schedule" entry is listed only when the guide has rows (a channel with programmes in the hours shown); without it the page opens on "Show all", and the entry appears when a guide download brings rows.
 - Tests: picture error after release, sidebar without the guide. Applies after patch 139. Not verified on the TV.
+
+### Patch 141 — Tizen widgets signed again
+- Regression of patch 138: to sign the four Tizen variants in one job, `package.sh` added the signing profile only when `tizen security-profiles list` did not mention it; that output contains paths with "xtream" (the repository name), so the check always passed, the profile was never added, and `tizen package` produced unsigned widgets ("Not found tizen author signature file" in the 1.4.0 job log). The TV refused them ("Check certificate error") and the Seller Office could not read `author-signature.xml`.
+- The profile is now added once per job, remembered by a marker file; every widget is checked for `author-signature.xml` and `signature1.xml` before it is attached (the job fails otherwise). A new release is needed. Not verified on the TV.

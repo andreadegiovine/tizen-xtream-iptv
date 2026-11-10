@@ -52,9 +52,14 @@ fi
 # Signing profile
 mkdir -p "$SIGN_DIR"
 cp "$CERT_SOURCE" "$CERT"
-# Run once per variant (release workflow): the profile is added the first time only.
-if ! "$TIZEN" security-profiles list 2>/dev/null | grep -q "$TIZEN_PROFILE"; then
+# Run once per variant (release workflow): the profile is added the first time only, remembered by a marker file. (Do not test the
+# output of `security-profiles list`: it prints paths, and a path with "xtream" in it made the check pass without a profile, so the
+# 1.4.0 widgets were packaged unsigned.)
+PROFILE_MARK="${DATA}/.profile-${TIZEN_PROFILE}-added"
+if [ ! -f "$PROFILE_MARK" ]; then
   "$TIZEN" security-profiles add -n "$TIZEN_PROFILE" -a "$CERT" -p "$CERT_PASSWORD"
+  mkdir -p "$DATA"
+  touch "$PROFILE_MARK"
 fi
 "$TIZEN" cli-config "profiles.path=${PROFILES}"
 chmod 755 "$PROFILES"
@@ -92,6 +97,13 @@ if [ -z "$WGT" ]; then
   echo "::error::No .wgt produced"
   exit 1
 fi
+# A widget without its signatures installs nowhere (TV: "Check certificate error"; Seller Office: "Unable to read author signature").
+for sig in author-signature.xml signature1.xml; do
+  if ! unzip -l "$WGT" | grep -q " ${sig}$"; then
+    echo "::error::${NAME}.wgt is not signed (${sig} missing)"
+    exit 1
+  fi
+done
 mv "$WGT" "${OUT}/${NAME}.wgt"
 (cd "$OUT" && sha256sum "${NAME}.wgt" > "${NAME}.wgt.sha256")
 echo "Signed ${OUT}/${NAME}.wgt"
