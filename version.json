@@ -1,17 +1,17 @@
 {
-  "version": "1.4.3",
-  "date": "2026-11-10T20:18:46.304Z",
+  "version": "1.4.4",
+  "date": "2026-11-10T20:45:23.339Z",
   "platforms": {
     "tizen": {
-      "base": "bundles/1.4.3/tizen/",
+      "base": "bundles/1.4.4/tizen/",
       "minShell": "0.0.0"
     },
     "tizen_youtube": {
-      "base": "bundles/1.4.3/tizen_youtube/",
+      "base": "bundles/1.4.4/tizen_youtube/",
       "minShell": "0.0.0"
     },
     "webos": {
-      "base": "bundles/1.4.3/webos/",
+      "base": "bundles/1.4.4/webos/",
       "minShell": "0.0.0"
     }
   }
