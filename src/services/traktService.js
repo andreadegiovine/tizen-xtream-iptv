@@ -45,6 +45,38 @@ export function progressPayload(record) {
   return ep ? { show: { ids: { tmdb } }, episode: { season: Number(ep[1]), number: Number(ep[2]) }, progress } : null;
 }
 
+/**
+ * Every page of a paginated Trakt list: `fetchPage(page)` → { ok, data, pages }. Resolves with all the items, or null when a page could not
+ * be read (a partial list must never be taken for the whole one). Stops at the page count of the headers, on an empty page, or at maxPages.
+ */
+export async function readAllPages(fetchPage, maxPages = 200) {
+  const all = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const res = await fetchPage(page);
+    if (!res || !res.ok || !Array.isArray(res.data)) return null;
+    all.push(...res.data);
+    if (!res.data.length || (res.pages > 0 && page >= res.pages)) break; // no page count in the headers: until an empty page
+  }
+  return all;
+}
+
+/** What Trakt did not take from a /sync/history answer: { movies: Set(tmdb), shows: Set(tmdb) } (ids it could not match). */
+export function notFoundIds(data) {
+  const nf = (data && data.not_found) || {};
+  const ids = (list) => new Set((Array.isArray(list) ? list : []).map((item) => item && item.ids && item.ids.tmdb).filter(Boolean).map(Number));
+  return { movies: ids(nf.movies), shows: ids(nf.shows) };
+}
+
+/** True when Trakt matched none of the titles of an /sync/history payload (every movie and show of it is in `not_found`). */
+export function unmatched(payload, data) {
+  const missing = notFoundIds(data);
+  const tmdbOf = (item) => Number(item && item.ids && item.ids.tmdb);
+  const movies = (payload && payload.movies) || [];
+  const shows = (payload && payload.shows) || [];
+  if (!movies.length && !shows.length) return false;
+  return movies.every((m) => missing.movies.has(tmdbOf(m))) && shows.every((sh) => missing.shows.has(tmdbOf(sh)));
+}
+
 /** Trakt "watched shows" payload → flat episode list, newest shows first. */
 export function flattenWatchedShows(data, limit = 3000, fallbackAt = Date.now()) {
   const out = [];
@@ -225,8 +257,9 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
      * Sends watched records Trakt does not have yet, in bulk (movies, and the episodes of each show). Resolves with the keys Trakt took;
      * what fails stays unsent and goes out the next time.
      */
-    async sendHistory(records) {
+    async sendHistory(records, { onNotFound = () => undefined } = {}) {
       const sent = [];
+      const notFound = [];
       try {
         const access = await token();
         if (!access) return sent;
@@ -258,11 +291,21 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
             ...(shows.size ? { shows: [...shows.values()].map((s) => ({ ids: s.ids, seasons: [...s.seasons].map(([number, episodes]) => ({ number, episodes })) })) } : {}),
           };
           const res = await client.addHistory(access, payload);
-          if (res.ok) sent.push(...keys);
+          if (!res.ok) continue;
+          // The titles Trakt could not match by their TMDB id were not added: not sent (told to the caller, not sent again every time).
+          const missing = notFoundIds(res.data);
+          chunk.forEach((rec) => {
+            const match = /^(movie|series):t(\d+)$/.exec(rec.entryKey || '');
+            if (!match || !keys.includes(rec.key)) return;
+            const lost = match[1] === 'movie' ? missing.movies.has(Number(match[2])) : missing.shows.has(Number(match[2]));
+            if (lost) notFound.push(rec.key);
+            else sent.push(rec.key);
+          });
         }
       } catch (err) {
         log.warn('Trakt history upload failed', err && err.message);
       }
+      if (notFound.length) await Promise.resolve(onNotFound(notFound)).catch(() => undefined);
       return sent;
     },
     /** Sends what is waiting. Resolves with the ids of the entries Trakt took. */
@@ -279,7 +322,10 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
         const left = [];
         for (const item of pending) {
           const res = item.op === 'remove' ? await client.removeHistory(access, item.payload) : await client.addHistory(access, item.payload);
-          if (res.ok) sent.push(item.id);
+          if (res.ok && item.op !== 'remove' && unmatched(item.payload, res.data)) {
+            // 201, but Trakt does not know the title (its TMDB id): nothing was added, it would never be (not kept, not counted as sent).
+            log.warn('Trakt did not find the title', JSON.stringify(item.payload).slice(0, 120));
+          } else if (res.ok) sent.push(item.id);
           else if (res.status >= 500) left.push(item); // transient: keep; 4xx would never succeed
         }
         await kvSet(db, QUEUE_KEY, left);
@@ -323,9 +369,8 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
     async watchedEpisodes(limit = 3000) {
       const access = await token();
       if (!access) return [];
-      const res = await client.watchedShows(access);
-      if (!res.ok || !Array.isArray(res.data)) return [];
-      return flattenWatchedShows(res.data, limit, now());
+      const shows = await readAllPages((page) => client.watchedShows(access, { page }));
+      return shows ? flattenWatchedShows(shows, limit, now()) : [];
     },
     /**
      * Everything Trakt knows: { movies, episodes, playback }, or null when the watched lists could not be read
@@ -349,13 +394,21 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
     async fetchState() {
       const access = await token();
       if (!access) return null;
-      const [movies, shows, playback] = await Promise.all([client.watchedMovies(access), client.watchedShows(access), client.playback(access).catch(() => ({ ok: false }))]);
-      if (!movies.ok || !Array.isArray(movies.data) || !shows.ok || !Array.isArray(shows.data)) return null;
+      // Every page of both lists (Trakt gives 100 items a page): a list read only in part would make the rest look removed from Trakt.
+      const [movies, shows, playback] = await Promise.all([
+        readAllPages((page) => client.watchedMovies(access, { page })),
+        readAllPages((page) => client.watchedShows(access, { page })),
+        client.playback(access).catch(() => ({ ok: false })),
+      ]);
+      if (!movies || !shows) return null;
+      const valid = shows.filter((entry) => entry.show && entry.show.ids && entry.show.ids.tmdb);
       return {
-        movies: movies.data
+        movies: movies
           .filter((m) => m.movie && m.movie.ids && m.movie.ids.tmdb)
           .map((m) => ({ tmdbId: m.movie.ids.tmdb, title: m.movie.title || '', watchedAt: Date.parse(m.last_watched_at) || now() })),
-        episodes: flattenWatchedShows(shows.data, Infinity, now()),
+        episodes: flattenWatchedShows(valid, Infinity, now()),
+        // Shows Trakt gives without their episodes (an answer without seasons): watched there, their episodes here are left as they are.
+        showsWithoutEpisodes: valid.filter((entry) => !Array.isArray(entry.seasons)).map((entry) => Number(entry.show.ids.tmdb)),
         playback: playback.ok && Array.isArray(playback.data) ? playbackItems(playback.data) : [],
       };
     },
@@ -363,9 +416,9 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
     async recentMovies(limit = 30) {
       const access = await token();
       if (!access) return [];
-      const res = await client.watchedMovies(access);
-      if (!res.ok || !Array.isArray(res.data)) return [];
-      return res.data
+      const movies = await readAllPages((page) => client.watchedMovies(access, { page }));
+      if (!movies) return [];
+      return movies
         .filter((m) => m.movie && m.movie.ids && m.movie.ids.tmdb)
         .sort((a, b) => String(b.last_watched_at).localeCompare(String(a.last_watched_at)))
         .slice(0, limit)
@@ -379,7 +432,10 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
  * Watch-state adapter: local store first (the source of truth for resume), Trakt as an add-on.
  * Same surface as WatchStore, so pages do not know whether Trakt is connected.
  */
-export function createWatchState({ store, trakt }) {
+/** A record changed this recently is never taken out because Trakt does not have it yet. */
+const RECENT_MS = 15 * 60 * 1000;
+
+export function createWatchState({ store, trakt, nowMs = () => Date.now() }) {
   let importOk = false;
   // Saves run one after the other, and every read waits for the ones already requested: a page that opens right
   // after the player (which saves while it closes) must see the progress that was just written.
@@ -488,8 +544,13 @@ export function createWatchState({ store, trakt }) {
         const key = `${entryKey}|s${ep.season}e${ep.episode}`;
         await watched(key, { key, entryKey, episodeKey: `s${ep.season}e${ep.episode}`, type: 'series', title: ep.title }, ep.watchedAt);
       }
+      // Not taken for removed on Trakt: the episodes of a show Trakt gives without them, and what changed in the last minutes (Trakt can
+      // take a while to show what it was just sent).
+      const noEpisodes = new Set((state.showsWithoutEpisodes || []).map((id) => `series:t${id}`));
+      const settled = (rec) => !(rec.updatedAt > nowMs() - RECENT_MS);
       for (const rec of all) {
         if (aborted()) return changed;
+        if (noEpisodes.has(rec.entryKey) || !settled(rec)) continue;
         if (rec.watched && (rec.source === 'trakt' || rec.traktSynced) && /:t\d+/.test(rec.key) && !onTrakt.has(rec.key)) {
           await store.remove(rec.key);
           local.delete(rec.key);
@@ -534,9 +595,10 @@ export function createWatchState({ store, trakt }) {
     /** Watched titles Trakt has never received (watched before connecting, or when it was unreachable): sent in bulk. Resolves with how many went. */
     async pushUnsent() {
       if (!trakt || !trakt.sendHistory) return 0;
-      const pending = (await store.all()).filter((r) => r.watched && !r.traktSynced && /^(movie|series):t\d+$/.test(r.entryKey || ''));
+      const pending = (await store.all()).filter((r) => r.watched && !r.traktSynced && !r.traktUnknown && /^(movie|series):t\d+$/.test(r.entryKey || ''));
       if (!pending.length) return 0;
-      const sent = await trakt.sendHistory(pending);
+      // Titles Trakt does not know (their TMDB id): kept here, not sent again at every alignment.
+      const sent = await trakt.sendHistory(pending, { onNotFound: async (keys) => { for (const key of keys) await store.patch(key, { traktUnknown: true }); } });
       for (const key of sent) await store.patch(key, { traktSynced: true });
       return sent.length;
     },

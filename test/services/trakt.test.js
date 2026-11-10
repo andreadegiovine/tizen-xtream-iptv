@@ -1,6 +1,7 @@
 import { openAppDb } from '../../src/db/appDb.js';
 import { WatchStore } from '../../src/services/watchStore.js';
-import { createTraktService, createWatchState, historyPayload, flattenWatchedShows, manualPayload, progressPayload } from '../../src/services/traktService.js';
+import { createTraktService, createWatchState, historyPayload, flattenWatchedShows, manualPayload, progressPayload, readAllPages, unmatched } from '../../src/services/traktService.js';
+import { createTraktClient } from '../../src/services/traktClient.js';
 import { kvSet } from '../../src/db/kv.js';
 
 let n = 0;
@@ -182,7 +183,7 @@ describe('watch-state adapter', () => {
     await store.patch('movie:t1', { traktSynced: true });
     await store.save({ key: 'movie:t2', entryKey: 'movie:t2', ...done }); // never sent
     await store.save({ key: 'movie:t3', entryKey: 'movie:t3', source: 'trakt', ...done });
-    const state = createWatchState({ store, trakt: fakeTrakt({ movies: [], episodes: [], playback: [] }) });
+    const state = createWatchState({ store, trakt: fakeTrakt({ movies: [], episodes: [], playback: [] }), nowMs: () => Date.now() + 3600000 }); // an hour later
     expect(await state.importFromTrakt()).toBe(2);
     expect(await store.get('movie:t1')).toBeUndefined();
     expect(await store.get('movie:t3')).toBeUndefined();
@@ -305,4 +306,91 @@ test('the connected account name is looked up once and forgotten on disconnect',
   expect(profile).toHaveBeenCalledTimes(1);
   await service.disconnect();
   expect(await service.account()).toBe('');
+});
+
+describe('watched lists paginated by Trakt (since July 2026), titles Trakt does not know', () => {
+  const page = (data, pages) => ({ ok: true, status: 200, data, pages });
+
+  test('readAllPages reads every page; a page that fails gives null (never a partial list)', async () => {
+    expect(await readAllPages(async (n) => page([n], 3))).toEqual([1, 2, 3]);
+    expect(await readAllPages(async (n) => page(n < 3 ? [n] : [], 0))).toEqual([1, 2]); // no header: until an empty page
+    expect(await readAllPages(async (n) => (n === 2 ? { ok: false, status: 500 } : page([n], 3)))).toBeNull();
+  });
+
+  test('the client asks shows with their episodes (extended=progress) page by page and reads the page count', async () => {
+    const urls = [];
+    const client = createTraktClient({
+      clientId: 'id',
+      clientSecret: 's',
+      doFetch: async (url) => {
+        urls.push(url);
+        return { status: 200, ok: true, text: async () => '[]', headers: { get: (h) => (h === 'X-Pagination-Page-Count' ? '4' : null) } };
+      },
+    });
+    expect((await client.watchedShows('T', { page: 2 })).pages).toBe(4);
+    await client.watchedMovies('T', { page: 3 });
+    expect(urls).toEqual(['https://api.trakt.tv/sync/watched/shows?extended=progress&page=2&limit=100', 'https://api.trakt.tv/sync/watched/movies?page=3&limit=250']);
+  });
+
+  test('fetchState reads every page of movies and shows; a show without its episodes is reported apart', async () => {
+    const db = await appDb();
+    await kvSet(db, 'trakt.token', { accessToken: 'AT', refreshToken: 'RT', expiresAt: Date.now() + 90 * 24 * 3600 * 1000 });
+    const movie = (id) => ({ movie: { ids: { tmdb: id }, title: `M${id}` }, last_watched_at: '2026-11-01T00:00:00Z' });
+    const client = {
+      enabled: true,
+      watchedMovies: async (t, { page }) => page === 1 ? { ok: true, data: [movie(1), movie(2)], pages: 2 } : { ok: true, data: [movie(3)], pages: 2 },
+      watchedShows: async () => ({ ok: true, data: [{ show: { ids: { tmdb: 7 } }, last_watched_at: '2026-11-01T00:00:00Z', seasons: [{ number: 1, episodes: [{ number: 1 }] }] }, { show: { ids: { tmdb: 8 } }, last_watched_at: '2026-11-01T00:00:00Z' }], pages: 1 }),
+      playback: async () => ({ ok: true, data: [] }),
+    };
+    const svc = createTraktService({ db, client });
+    const state = await svc.fetchState();
+    expect(state.movies.map((m) => m.tmdbId)).toEqual([1, 2, 3]);
+    expect(state.episodes.map((e) => `${e.tmdbId}s${e.season}e${e.episode}`)).toEqual(['7s1e1']);
+    expect(state.showsWithoutEpisodes).toEqual([8]);
+    // A page that cannot be read: nothing (nothing must be removed here).
+    client.watchedMovies = async (t, { page }) => (page === 1 ? { ok: true, data: [movie(1)], pages: 2 } : { ok: false, status: 503 });
+    expect(await svc.fetchState()).toBeNull();
+  });
+
+  test('import: the episodes of a show Trakt gives without them, and what changed in the last minutes, are not taken out', async () => {
+    const store = new WatchStore(await appDb());
+    const done = { type: 'series', position: 100, duration: 100, traktSynced: true };
+    await store.save({ key: 'series:t8|s1e1', entryKey: 'series:t8', episodeKey: 's1e1', ...done });
+    await store.save({ key: 'movie:t5', entryKey: 'movie:t5', type: 'movie', position: 100, duration: 100, traktSynced: true }); // just marked
+    const trakt = { flush: async () => [], sendHistory: async () => [], fetchState: async () => ({ movies: [], episodes: [], showsWithoutEpisodes: [8], playback: [] }) };
+    const state = createWatchState({ store, trakt });
+    expect(await state.importFromTrakt()).toBe(0);
+    expect((await store.get('series:t8|s1e1')).watched).toBe(true);
+    expect((await store.get('movie:t5')).watched).toBe(true); // Trakt can take a while to list what it was just sent
+  });
+
+  test('a title Trakt does not know (not_found): not counted as sent, not sent again at every alignment', async () => {
+    expect(unmatched({ movies: [{ ids: { tmdb: 5 } }] }, { added: { movies: 0 }, not_found: { movies: [{ ids: { tmdb: 5 } }] } })).toBe(true);
+    expect(unmatched({ shows: [{ ids: { tmdb: 9 } }] }, { added: { episodes: 10 }, not_found: { shows: [] } })).toBe(false);
+    const db = await appDb();
+    await kvSet(db, 'trakt.token', { accessToken: 'AT', refreshToken: 'RT', expiresAt: Date.now() + 90 * 24 * 3600 * 1000 });
+    const added = [];
+    const client = {
+      enabled: true,
+      addHistory: async (t, payload) => {
+        added.push(payload);
+        const ids = [...(payload.movies || []), ...(payload.shows || [])].map((x) => x.ids.tmdb);
+        return { ok: true, status: 201, data: { not_found: { movies: ids.includes(5) ? [{ ids: { tmdb: 5 } }] : [], shows: [] } } };
+      },
+    };
+    const svc = createTraktService({ db, client });
+    const store = new WatchStore(await appDb());
+    const state = createWatchState({ store, trakt: svc });
+    await state.markWatched([{ key: 'movie:t5', entryKey: 'movie:t5', type: 'movie' }]);
+    expect((await store.get('movie:t5')).traktSynced).toBeFalsy(); // watched here, not counted as on Trakt
+    expect((await state.traktCounts()).watched).toBe(0);
+    await state.markWatched([{ key: 'movie:t6', entryKey: 'movie:t6', type: 'movie' }]);
+    expect((await store.get('movie:t6')).traktSynced).toBe(true);
+    // The bulk upload: the unknown one is marked and left out of the next ones.
+    expect(await state.pushUnsent()).toBe(0);
+    expect((await store.get('movie:t5')).traktUnknown).toBe(true);
+    const before = added.length;
+    await state.pushUnsent();
+    expect(added.length).toBe(before);
+  });
 });

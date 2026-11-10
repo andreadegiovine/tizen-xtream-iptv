@@ -27,7 +27,9 @@ export function createTraktClient({ clientId = '', clientSecret = '', getCredent
     } catch {
       data = null;
     }
-    return { status: res.status, ok: res.ok, data };
+    // Paginated lists (the watched lists since July 2026): the pages there are, from the headers.
+    const pages = res.headers && typeof res.headers.get === 'function' ? Number(res.headers.get('X-Pagination-Page-Count')) || 0 : 0;
+    return { status: res.status, ok: res.ok, data, pages };
   }
 
   return {
@@ -53,8 +55,12 @@ export function createTraktClient({ clientId = '', clientSecret = '', getCredent
     /** Titles stopped half way, with their progress (percent). */
     playback: (token) => call('/sync/playback?extended=full', { token }), // full: the runtime, to turn the percentage into a position
     lastActivities: (token) => call('/sync/last_activities', { token }), // when each kind of data last changed: tells if a full read is needed
-    watchedMovies: (token) => call('/sync/watched/movies', { token }),
-    watchedShows: (token) => call('/sync/watched/shows', { token }),
+    /**
+     * The watched lists are paginated (100 items without `limit`, at most 250 a page; `extended=progress` at most 100): one page here, the
+     * service reads them all. Shows need `extended=progress` for their seasons and episodes (not given by default any more).
+     */
+    watchedMovies: (token, { page = 1, limit = 250 } = {}) => call(`/sync/watched/movies?page=${page}&limit=${limit}`, { token }),
+    watchedShows: (token, { page = 1, limit = 100 } = {}) => call(`/sync/watched/shows?extended=progress&page=${page}&limit=${limit}`, { token }),
     /** Personalised picks for the signed-in user. */
     recommendations: (token, kind) => call(`/recommendations/${kind}?limit=100`, { token }), // the most Trakt gives
     /** tmdb id → trakt ids (slug), needed by the "related" call. */
