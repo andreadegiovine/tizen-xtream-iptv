@@ -14,6 +14,9 @@ but not yet tried on those systems.
 
 ## Install
 
+Each package comes in two versions: the plain one, and `_autoupdate` (e.g. `xtream-iptv-<version>_windows-x64_autoupdate.exe`), which
+updates its web code itself from the online `desktop` build at every start (a new Electron still needs a new package).
+
 ### Windows
 
 1. Run `xtream-iptv-<version>_windows-x64.exe`.
@@ -59,6 +62,8 @@ The mouse works only where the interface already provides for it (the player pro
   navigation to other addresses is blocked and links open in the system browser. Trailers open in the system browser.
 - **Video:** Chromium's `<video>` with hls.js (HLS) and mpegts.js (MPEG-TS). **MKV files and AC3 / E-AC3 audio are not supported by Chromium**: some films do not start and some
   channels have no audio. A native player (mpv / libVLC) would solve it and may come later.
+- **Screen:** while a video plays the display does not go to sleep (Electron `powerSaveBlocker`, from the page's `media-started-playing`
+  to `media-paused`).
 - **Window:** the app opens as a normal, resizable 16:9 window (the interface scales with it). The player has a full-screen button (also `F11`) that switches the whole window.
 
 ## What is in this folder

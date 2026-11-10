@@ -9,8 +9,8 @@ name: Release
 #     _tizen_youtube.wgt (trailers in the app), _tizen_autoupdate.wgt, _tizen_youtube_autoupdate.wgt (update themselves)
 #   - xtream-iptv-<version>_webos.ipk   LG webOS (+ .sha256); _webos_autoupdate.ipk updates itself
 #   - xtream-iptv-<version>_windows-x64.exe, _macos-x64.dmg, _macos-arm64.dmg, _linux-x64.AppImage, _linux-x64.deb
-#                                       desktop app (Electron), not signed        (+ .sha256)
-#   - xtream-iptv-<version>_androidtv.apk, _firetv.apk
+#                                       desktop app (Electron), not signed; each also as _autoupdate (e.g. _windows-x64_autoupdate.exe) (+ .sha256)
+#   - xtream-iptv-<version>_androidtv.apk, _firetv.apk; _androidtv_autoupdate.apk, _firetv_autoupdate.apk update themselves
 #                                       Android TV / Fire TV (Capacitor + ExoPlayer)  (+ .sha256)
 #
 # Secrets: TIZEN_CERT_PASSWORD (password of platforms/tizen/tizencert.p12); ANDROID_KEYSTORE_PASSWORD (and optionally ANDROID_KEY_ALIAS,
@@ -158,11 +158,17 @@ jobs:
       - name: Stamp version
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      # Production build for the desktop app -> dist/.
-      - run: npm run build:desktop
-
+      # Two packages per system, each from its own production build -> dist/: the plain one and _autoupdate (it updates its web code
+      # itself from the online "desktop" build; a new Electron still needs a new package).
       - name: Package the app
-        run: bash platforms/desktop/package.sh "$VERSION" release "${{ matrix.system }}"
+        run: |
+          for variant in "" "_autoupdate"; do
+            flags="--env platform=desktop"
+            case "$variant" in *autoupdate*) flags="$flags --env autoupdate" ;; esac
+            npx webpack --mode production $flags
+            node scripts/check-dist.js
+            VARIANT="$variant" bash platforms/desktop/package.sh "$VERSION" release "${{ matrix.system }}"
+          done
 
       - name: Upload assets to the release
         env:
@@ -193,15 +199,22 @@ jobs:
       - name: Stamp version
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      # Production build for Android -> dist/ (with the launcher icons and the banner in dist/android-res/).
-      - run: npm run build:android
-
+      # Two sets of APKs, each from its own production build -> dist/ (with the launcher icons and the banner in dist/android-res/):
+      # _androidtv / _firetv (no online updates, for the stores) and _androidtv_autoupdate / _firetv_autoupdate (they update their web
+      # code themselves from the online "android" build; native changes still need a new APK).
       - name: Build the APKs
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: bash platforms/android/package.sh "$VERSION" release all
+        run: |
+          for variant in "" "_autoupdate"; do
+            flags="--env platform=android"
+            case "$variant" in *autoupdate*) flags="$flags --env autoupdate" ;; esac
+            npx webpack --mode production $flags
+            node scripts/check-dist.js
+            VARIANT="$variant" bash platforms/android/package.sh "$VERSION" release all
+          done
 
       - name: Upload assets to the release
         env:
@@ -236,6 +249,8 @@ jobs:
           npx webpack --mode production --env platform=tizen --env autoupdate --output-path builds/tizen
           npx webpack --mode production --env platform=tizen --env youtube --env autoupdate --output-path builds/tizen_youtube
           npx webpack --mode production --env platform=webos --env autoupdate --output-path builds/webos
+          npx webpack --mode production --env platform=android --env autoupdate --output-path builds/android
+          npx webpack --mode production --env platform=desktop --env autoupdate --output-path builds/desktop
 
       - uses: actions/checkout@v4
         with:
@@ -244,7 +259,7 @@ jobs:
 
       - name: Publish the builds and version.json
         run: |
-          node scripts/publish-updates.js pages "$VERSION" tizen=builds/tizen tizen_youtube=builds/tizen_youtube webos=builds/webos
+          node scripts/publish-updates.js pages "$VERSION" tizen=builds/tizen tizen_youtube=builds/tizen_youtube webos=builds/webos android=builds/android desktop=builds/desktop
           cd pages
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -6,7 +6,8 @@
 # 1. the launcher icons and the TV banner drawn by the build (dist/android-res/) go into the Android project;
 # 2. Capacitor (its own package.json here, npm ci) copies dist/ into the app (npx cap sync android);
 # 3. Gradle builds the release APK of each flavor, versionName <version>, versionCode x*10000 + y*100 + z.
-# Output: <out-dir>/xtream-iptv-<version>_androidtv.apk and _firetv.apk, each with its .sha256 (out-dir: release).
+# Output: <out-dir>/xtream-iptv-<version>_androidtv<VARIANT>.apk and _firetv<VARIANT>.apk, each with its .sha256 (out-dir: release);
+# VARIANT (environment): "" or "_autoupdate", matching the build in dist/ (`--env autoupdate`).
 #
 # Signing: platforms/android/release.keystore with ANDROID_KEYSTORE_PASSWORD (and ANDROID_KEY_ALIAS, default "xtream";
 # ANDROID_KEY_PASSWORD, default the keystore one). Without them the APKs are signed with the debug key of the machine: they install,
@@ -64,7 +65,7 @@ for flavor in "${FLAVORS[@]}"; do
     echo "::error::No APK produced for ${flavor}"
     exit 1
   fi
-  NAME="xtream-iptv-${VERSION}_${flavor}.apk"
+  NAME="xtream-iptv-${VERSION}_${flavor}${VARIANT:-}.apk" # VARIANT: "" or "_autoupdate" (the build in dist/ decides)
   cp "$APK" "${OUT}/${NAME}"
   (cd "$OUT" && checksum "$NAME" > "${NAME}.sha256")
   echo "Packaged ${OUT}/${NAME}"

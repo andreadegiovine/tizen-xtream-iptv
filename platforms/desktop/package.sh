@@ -69,6 +69,8 @@ for file in "${STAGE}"/out/xtream-iptv-*; do
   [ -f "$file" ] || continue
   case "$file" in *.AppImage|*.deb|*.exe|*.dmg) ;; *) continue ;; esac
   name="$(basename "$file")"
+  # VARIANT (environment): "" or "_autoupdate" (the build in dist/ decides): xtream-iptv-1.5.0_linux-x64_autoupdate.AppImage
+  if [ -n "${VARIANT:-}" ]; then name="${name%.*}${VARIANT}.${name##*.}"; fi
   mv "$file" "${OUT}/${name}"
   (cd "$OUT" && checksum "$name" > "${name}.sha256")
   echo "Packaged ${OUT}/${name}"

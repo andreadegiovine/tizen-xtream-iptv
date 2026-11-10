@@ -9,7 +9,7 @@
  */
 const path = require('path');
 const { pathToFileURL } = require('url');
-const { app, BrowserWindow, protocol, net, shell, screen, ipcMain } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, screen, ipcMain, powerSaveBlocker } = require('electron');
 
 const SCHEME = 'app';
 const ORIGIN = `${SCHEME}://xtream`;
@@ -72,6 +72,18 @@ function createWindow() {
   win.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith(`${ORIGIN}/`)) event.preventDefault();
   });
+  // While a video plays the display does not go to sleep (nor the screensaver of the system start); paused or closed: it may again.
+  let blocker = null;
+  const awake = (on) => {
+    if (on && blocker === null) blocker = powerSaveBlocker.start('prevent-display-sleep');
+    else if (!on && blocker !== null) {
+      powerSaveBlocker.stop(blocker);
+      blocker = null;
+    }
+  };
+  win.webContents.on('media-started-playing', () => awake(true));
+  win.webContents.on('media-paused', () => awake(false));
+  win.on('closed', () => awake(false));
   win.loadURL(`${ORIGIN}/index.html`);
 }
 

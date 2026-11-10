@@ -4,6 +4,7 @@ import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.webkit.WebView;
 import androidx.annotation.OptIn;
 import androidx.media3.common.C;
@@ -137,6 +138,13 @@ public class ExoPlayerPlugin extends Plugin {
             public void onTracksChanged(Tracks tracks) {
                 readTracks(tracks);
             }
+
+            // While the video plays the screen stays on: the system screensaver (Fire TV, Android TV) never covers it. Paused, ended or
+            // stopped: the system decides again.
+            @Override
+            public void onIsPlayingChanged(boolean isPlaying) {
+                keepScreenOn(isPlaying);
+            }
         });
         view = new PlayerView(getContext());
         view.setUseController(false);
@@ -203,7 +211,9 @@ public class ExoPlayerPlugin extends Plugin {
     /** seekTo({ ms }) */
     @PluginMethod
     public void seekTo(PluginCall call) {
-        long ms = call.getLong("ms", 0L);
+        // Not getLong: Capacitor's getLong returns the default for a number that arrives as an Integer (any position below 24 days),
+        // and every seek went back to the start. getDouble takes Integer, Long and Double.
+        long ms = Math.round(call.getDouble("ms", 0.0));
         getActivity().runOnUiThread(() -> {
             if (player != null) player.seekTo(Math.max(0, ms));
             call.resolve();
@@ -264,8 +274,15 @@ public class ExoPlayerPlugin extends Plugin {
         });
     }
 
+    private void keepScreenOn(boolean on) {
+        if (getActivity() == null || getActivity().getWindow() == null) return;
+        if (on) getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
     private void release() {
         handler.removeCallbacks(ticker);
+        keepScreenOn(false);
         if (player != null) {
             player.release();
             player = null;
