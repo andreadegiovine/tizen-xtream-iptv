@@ -56,6 +56,7 @@ import { createSuggestionsPage } from './ui/pages/suggestionsPage.js';
 import { createFavoritesPage } from './ui/pages/favoritesPage.js';
 import { createFavoritesService } from './services/favorites.js';
 import { createCollectionsService } from './services/collections.js';
+import { createNavCounts } from './services/navCounts.js';
 import { createCollectionsPage } from './ui/pages/collectionsPage.js';
 import { createCollectionPage } from './ui/pages/collectionPage.js';
 import { createNetworkPage } from './ui/pages/networkPage.js';
@@ -161,6 +162,9 @@ async function boot() {
   };
   ctx.favorites = createFavoritesService({ db });
   ctx.collections = createCollectionsService({ db });
+  // The last known numbers of the entries shown only when they have something (top bar, sidebars): read before the first page.
+  ctx.navCounts = createNavCounts({ db });
+  const navCountsReady = ctx.navCounts.load();
   ctx.pins = createPinsService({ db });
   ctx.credits = createCreditsStore({ db });
   ctx.guideLayout = createGuideLayoutStore({ db });
@@ -185,6 +189,7 @@ async function boot() {
   // Everything read from the catalog is out of date (a rebuild, a sync, hidden categories): caches emptied, the search index rebuilt.
   ctx.catalogChanged = () => {
     ctx.pageCache.clear();
+    if (ctx.suggestions && ctx.suggestions.invalidate) ctx.suggestions.invalidate(); // the titles to suggest are found in the catalog
     ctx.search.invalidate();
     queueSearchWarm();
   };
@@ -460,31 +465,72 @@ async function boot() {
   ctx.router = router;
 
   /**
-   * Favorites, Collections and Suggestions are in the top bar only when they have something to show (suggestions: what the last
-   * suggestion list held). Checked again at every page change, and when suggestions are worked out.
+   * Suggestions come from TMDB / Trakt (several requests): the last list is kept for SUGGESTIONS_TTL_MS and shared by Home, the Movies /
+   * Series sidebars and the Suggestions page; worked out again sooner when what it depends on changed (provider, source, keys, catalog).
    */
-  let suggestionsFound = false;
+  const SUGGESTIONS_TTL_MS = 10 * 60 * 1000;
+  let suggestionsMemo = null; // { signature, startedAt, limit, promise }
   const buildSuggestions = ctx.suggestions.build.bind(ctx.suggestions);
-  ctx.suggestions.build = async (options) => {
-    const result = await buildSuggestions(options);
-    const found = Boolean(result && result.entries && result.entries.length);
-    if (found !== suggestionsFound) {
-      suggestionsFound = found;
+  const suggestionsSignature = async () => {
+    const current = await active.get().catch(() => null);
+    const keys = ctx.apiKeys.get();
+    return [current ? current.provider.id : '', (await settings.get()).suggestionSource, keys.tmdbKey ? 1 : 0, keys.traktId ? 1 : 0, ctx.trakt && ctx.trakt.enabled ? 1 : 0].join('|');
+  };
+  ctx.suggestions.invalidate = () => {
+    suggestionsMemo = null;
+  };
+  ctx.suggestions.build = async (options = {}) => {
+    const limit = options.limit || 36;
+    const signature = await suggestionsSignature();
+    const memo = suggestionsMemo;
+    if (!(memo && memo.signature === signature && memo.limit >= limit && Date.now() - memo.startedAt < SUGGESTIONS_TTL_MS)) {
+      const promise = buildSuggestions({ ...options, limit });
+      suggestionsMemo = { signature, startedAt: Date.now(), limit, promise };
+      promise.catch(() => {
+        if (suggestionsMemo && suggestionsMemo.promise === promise) suggestionsMemo = null; // a failure is not kept
+      });
+    }
+    const result = await suggestionsMemo.promise;
+    const entries = result && result.entries ? result.entries : [];
+    noteSuggestions(signature.split('|')[0], entries.length);
+    return { ...result, entries: entries.slice(0, limit) };
+  };
+
+  /**
+   * Favorites, Collections and Suggestions are in the top bar only when they have something to show. The numbers last known (kept in the
+   * database, ctx.navCounts) place them at once; the ones worked out now (at every page change, and when suggestions are worked out)
+   * correct them.
+   */
+  let suggestionsCount = null; // the last suggestion list of this session (null: none yet, the remembered number counts)
+  function noteSuggestions(providerId, count) {
+    ctx.navCounts.set(providerId, 'top:suggestions', count);
+    if (count !== suggestionsCount) {
+      suggestionsCount = count;
       ctx.refreshTopbar();
     }
-    return result;
+  }
+  const applyTopbar = (current, { favorites, collections, suggestions }) => {
+    const hide = [];
+    if (!favorites) hide.push('favorites');
+    if (!collections) hide.push('collections');
+    if (!suggestions || !ctx.suggestions.enabled) hide.push('suggestions');
+    topbar.setHidden(hide.concat(providerHiddenSections(current && current.provider)));
   };
   ctx.refreshTopbar = async () => {
     const current = await active.get().catch(() => null);
     const id = current && current.provider.id;
+    const remembered = (key) => ctx.navCounts.get(id, key) || 0;
+    const suggestions = suggestionsCount === null ? remembered('top:suggestions') : suggestionsCount;
+    // At once with the numbers last known, then with the ones read now.
+    applyTopbar(current, { favorites: remembered('top:favorites'), collections: remembered('top:collections'), suggestions });
     // Favorites: only what the provider can show (favourites of another provider, or titles gone from the catalog, do not count).
-    const favorites = current ? (await visibleFavorites(ctx, current).catch(() => [])).length : 0;
-    const collections = id ? (await ctx.collections.list(id).catch(() => [])).length : 0;
-    const hide = [];
-    if (!favorites) hide.push('favorites');
-    if (!collections) hide.push('collections');
-    if (!suggestionsFound || !ctx.suggestions.enabled) hide.push('suggestions');
-    topbar.setHidden(hide.concat(providerHiddenSections(current && current.provider)));
+    const [favorites, collections] = await Promise.all([
+      current ? visibleFavorites(ctx, current).then((list) => list.length, () => 0) : 0,
+      id ? ctx.collections.list(id).then((list) => list.length, () => 0) : 0,
+    ]);
+    ctx.navCounts.set(id, 'top:favorites', favorites);
+    ctx.navCounts.set(id, 'top:collections', collections);
+    applyTopbar(current, { favorites, collections, suggestions: suggestionsCount === null ? remembered('top:suggestions') : suggestionsCount });
   };
 
   let wasSyncing = false;
@@ -595,7 +641,7 @@ async function boot() {
   queue.add({ name: 'trakt', priority: Priority.TRAKT, run: () => ctx.trakt.flush().then(() => ctx.watch.syncIfChanged()).catch(() => undefined) });
   // Trakt stays aligned while the app is open: one small check every 15 minutes, a full read only if the account changed.
   setInterval(() => queue.add({ name: 'trakt', priority: Priority.TRAKT, run: () => ctx.watch.syncIfChanged().catch(() => undefined) }), 15 * 60 * 1000);
-  const [hasProvider] = await Promise.all([providers.getActive(), keysReady]);
+  const [hasProvider] = await Promise.all([providers.getActive(), keysReady, navCountsReady]);
   if (hasProvider) await ctx.refreshAdult();
   if (hasProvider) {
     router.reset('home', { section: 'home' });

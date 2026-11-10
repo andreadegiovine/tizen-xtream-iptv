@@ -271,21 +271,42 @@ export function createBrowsePage(ctx, params = {}) {
     return filters.length + titles.length;
   }
 
-  /** The numbers that depend on the user (continue watching, favourites, suggestions): read every time, never cached. */
-  async function loadUserCounts() {
-    if (type === 'live') {
-      await safe(async () => setCount('guide:', (await guideList()).length));
-      setCount('scheduled:', scheduledCount);
-    }
-    // Counted on what the views show: titles still in the catalog, favourites this provider has.
-    if (type !== 'live') await safe(async () => setCount('continue:', (await byKeys((await continueWatching(ctx, { providerId, limit: 200 })).filter((r) => r.type === type).map((r) => r.entryKey))).length));
-    await safe(async () => setCount('favorites:', await favoriteCount()));
-    if (type !== 'live') await safe(async () => setCount('suggestions:', (await suggestionEntries()).length));
-    // The entries with nothing to show leave the sidebar (and come back when they have something).
-    const next = new Set(USER_KINDS.filter((kind) => counts.get(`${kind}:`) === 0 && !(items[selected] && items[selected].kind === kind)));
+  /** The entries with nothing to show leave the sidebar, the ones that have something come back (the one on screen always stays). */
+  function syncUserEntries() {
+    const next = new Set(
+      USER_KINDS.filter((kind) => {
+        if (items[selected] && items[selected].kind === kind) return false;
+        const n = counts.get(`${kind}:`);
+        return n === undefined ? userHidden.has(kind) : n === 0; // not counted yet: as it is (shown when the number last known had some)
+      }),
+    );
     if (destroyed || (next.size === userHidden.size && Array.from(next).every((k) => userHidden.has(k)))) return;
     userHidden = next;
     rebuildSidebar();
+  }
+
+  /** A number that depends on the user: shown, remembered for the next visit (ctx.navCounts) and the entry shown or hidden at once. */
+  const setUserCount = (kind, n) => {
+    setCount(`${kind}:`, n);
+    if (ctx.navCounts) ctx.navCounts.set(providerId, `${type}:${kind}`, n);
+    syncUserEntries();
+  };
+
+  /**
+   * The numbers that depend on the user (continue watching, favourites, suggestions): read every time, never cached, all at the same time;
+   * each entry shows (or leaves) as soon as its own number is known. Suggestions are the slow one (TMDB / Trakt): the others never wait for it.
+   */
+  async function loadUserCounts() {
+    const jobs = [];
+    if (type === 'live') {
+      jobs.push(safe(async () => setCount('guide:', (await guideList()).length)));
+      setCount('scheduled:', scheduledCount);
+    }
+    // Counted on what the views show: titles still in the catalog, favourites this provider has.
+    if (type !== 'live') jobs.push(safe(async () => setUserCount('continue', (await byKeys((await continueWatching(ctx, { providerId, limit: 200 })).filter((r) => r.type === type).map((r) => r.entryKey))).length)));
+    jobs.push(safe(async () => setUserCount('favorites', await favoriteCount())));
+    if (type !== 'live') jobs.push(safe(async () => setUserCount('suggestions', (await suggestionEntries()).length)));
+    await Promise.all(jobs);
   }
 
   /** The numbers of the catalog (all, networks, genres, categories): one source at a time, none of them blocks the page. Resolves true when all were read. */
@@ -410,7 +431,9 @@ export function createBrowsePage(ctx, params = {}) {
       pinActive,
       onToggle: async () => {
         const now = await (isNetwork ? ctx.favorites.toggle(providerId, item.id, type) : ctx.favorites.toggleFilter(providerId, target));
-        counts.set('favorites:', await favoriteCount());
+        const n = await favoriteCount();
+        counts.set('favorites:', n);
+        if (ctx.navCounts) ctx.navCounts.set(providerId, `${type}:favorites`, n);
         if (!destroyed) {
           showCounts();
           syncFavorite();
@@ -932,6 +955,13 @@ export function createBrowsePage(ctx, params = {}) {
     }
     const filter = back ? back.item : params.filter || null;
     userHidden = new Set(USER_KINDS.filter((kind) => !(filter && filter.kind === kind)));
+    // The entries that had something last time are there at once, with that number (corrected when it is read again).
+    USER_KINDS.forEach((kind) => {
+      const known = ctx.navCounts ? ctx.navCounts.get(providerId, `${type}:${kind}`) : undefined;
+      if (!known) return;
+      userHidden.delete(kind);
+      counts.set(`${kind}:`, known);
+    });
     // Live TV: the guide entry only when the guide has rows (read before the sidebar is drawn: the page opens on it when it is there).
     if (type === 'live' && !(await guideList().catch(() => [])).length) userHidden.add('guide');
     const wantsGenre = filter && filter.kind === 'genre';
@@ -956,6 +986,8 @@ export function createBrowsePage(ctx, params = {}) {
     selected = indexOfFilter(items, filter);
     renderCategories();
     syncFavorite();
+    // The user's numbers next to the grid (not after it and the genres): the entries they show or hide come in at once.
+    loadUserCounts().catch((err) => log.warn('Sidebar counts failed', err && err.message));
     await loadView();
     if (!destroyed && back && back.zone === GRID_ZONE && back.index > 0) await loadUntil(back.index);
     if (destroyed) return;
@@ -979,8 +1011,7 @@ export function createBrowsePage(ctx, params = {}) {
       genresLoading = false;
       if (!destroyed) rebuildSidebar();
     }
-    loadUserCounts().catch((err) => log.warn('Sidebar counts failed', err && err.message));
-    if (fresh && haveCounts) return;
+    if (destroyed || (fresh && haveCounts)) return; // (the user's numbers go on by themselves: the slow suggestions never hold these back)
     loadCatalogCounts()
       .then((complete) => {
         if (complete && !destroyed) storeSidebar();
