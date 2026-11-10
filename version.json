@@ -1,17 +1,25 @@
 {
-  "version": "1.4.6",
-  "date": "2026-11-10T21:27:33.845Z",
+  "version": "1.5.0",
+  "date": "2026-11-10T22:17:45.959Z",
   "platforms": {
     "tizen": {
-      "base": "bundles/1.4.6/tizen/",
+      "base": "bundles/1.5.0/tizen/",
       "minShell": "0.0.0"
     },
     "tizen_youtube": {
-      "base": "bundles/1.4.6/tizen_youtube/",
+      "base": "bundles/1.5.0/tizen_youtube/",
       "minShell": "0.0.0"
     },
     "webos": {
-      "base": "bundles/1.4.6/webos/",
+      "base": "bundles/1.5.0/webos/",
+      "minShell": "0.0.0"
+    },
+    "android": {
+      "base": "bundles/1.5.0/android/",
+      "minShell": "0.0.0"
+    },
+    "desktop": {
+      "base": "bundles/1.5.0/desktop/",
       "minShell": "0.0.0"
     }
   }
