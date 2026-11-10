@@ -9,7 +9,7 @@ import { getEntry, pageEntries } from '../../services/catalogQuery.js';
 import { log } from '../../core/logger.js';
 
 const ROW_LIMIT = 200; // a home row ends here, however long the catalog
-const SUGGESTION_LIMIT = 120;
+const SUGGESTION_LIMIT = 500; // every suggestion found (the rows load lazily)
 
 /** "s1e2" → "S1E2". */
 export const episodeLabel = (episodeKey) => (episodeKey ? episodeKey.toUpperCase() : '');

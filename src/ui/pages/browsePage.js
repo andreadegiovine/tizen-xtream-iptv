@@ -83,12 +83,12 @@ export function createGrowingGridModel({ columns, getCount, hasMore, more }) {
  * the "Genres" entry of the guide's categories (open, only when the guide has them), the "Networks" entry (open, closed when the guide genres
  * are there) and the categories (closed).
  */
-export function sidebarItems({ type, genres = [], epgGenres = [], epgGenresExpanded = true, categories = [], pinned = [], networks = [], networksExpanded = true, expanded = false, genresExpanded = true, genresLoading = false, scheduled = false, labels }) {
+export function sidebarItems({ type, hidden = null, genres = [], epgGenres = [], epgGenresExpanded = true, categories = [], pinned = [], networks = [], networksExpanded = true, expanded = false, genresExpanded = true, genresLoading = false, scheduled = false, labels }) {
   // Live TV opens on the programme guide; "show all" follows it.
   // "Scheduled" (programmes whose viewing is scheduled) follows the guide when there are any.
   const items = type === 'live' ? [{ kind: 'guide', name: labels.guide }].concat(scheduled ? [{ kind: 'scheduled', name: labels.scheduled }] : [], [{ kind: 'all', name: labels.all }]) : [{ kind: 'all', name: labels.all }];
   if (type === 'live') {
-    items.push({ kind: 'favorites', name: labels.favorites });
+    if (!(hidden && hidden.has('favorites'))) items.push({ kind: 'favorites', name: labels.favorites });
     pinned.forEach((p) => items.push({ kind: p.kind, id: String(p.id), name: p.name, pinned: true }));
     if (epgGenres.length) {
       items.push({ kind: 'epgGenresToggle', name: labels.genres, expanded: epgGenresExpanded });
@@ -104,7 +104,10 @@ export function sidebarItems({ type, genres = [], epgGenres = [], epgGenresExpan
     }
     return items;
   }
-  items.push({ kind: 'continue', name: labels.continue }, { kind: 'favorites', name: labels.favorites }, { kind: 'suggestions', name: labels.suggestions });
+  // Continue watching, favourites and suggestions are listed only when they have something to show (`hidden`).
+  [{ kind: 'continue', name: labels.continue }, { kind: 'favorites', name: labels.favorites }, { kind: 'suggestions', name: labels.suggestions }].forEach((item) => {
+    if (!(hidden && hidden.has(item.kind))) items.push(item);
+  });
   // Pinned categories and genres sit between the suggestions and the genres.
   pinned.forEach((p) => items.push({ kind: p.kind, id: String(p.id), name: p.name, pinned: true }));
   if (genres.length || genresLoading) {
@@ -180,6 +183,9 @@ export function createBrowsePage(ctx, params = {}) {
   let cards = [];
   let loadToken = 0;
   const counts = new Map(); // sidebar numbers: 'kind:id' → how many titles
+  // Continue watching, favourites, suggestions: out of the sidebar until counted, and while they have nothing (except the one on screen).
+  const USER_KINDS = ['continue', 'favorites', 'suggestions'];
+  let userHidden = new Set(USER_KINDS); // set again in init(), keeping the entry the page opens on
 
   const labels = () => ({ guide: t('epg.guide'), scheduled: t('epg.scheduled'), all: t('browse.all'), continue: t('home.continue'), favorites: t('nav.favorites'), suggestions: t('nav.suggestions'), genres: t('detail.genres'), categories: t('detail.categories'), networks: t('networks.title') });
 
@@ -264,9 +270,15 @@ export function createBrowsePage(ctx, params = {}) {
       await safe(async () => setCount('guide:', (await guideList()).length));
       setCount('scheduled:', scheduledCount);
     }
-    if (type !== 'live') await safe(async () => setCount('continue:', (await continueWatching(ctx, { providerId, limit: 200 })).filter((r) => r.type === type).length));
+    // Counted on what the views show: titles still in the catalog, favourites this provider has.
+    if (type !== 'live') await safe(async () => setCount('continue:', (await byKeys((await continueWatching(ctx, { providerId, limit: 200 })).filter((r) => r.type === type).map((r) => r.entryKey))).length));
     await safe(async () => setCount('favorites:', await favoriteCount()));
     if (type !== 'live') await safe(async () => setCount('suggestions:', (await suggestionEntries()).length));
+    // The entries with nothing to show leave the sidebar (and come back when they have something).
+    const next = new Set(USER_KINDS.filter((kind) => counts.get(`${kind}:`) === 0 && !(items[selected] && items[selected].kind === kind)));
+    if (destroyed || (next.size === userHidden.size && Array.from(next).every((k) => userHidden.has(k)))) return;
+    userHidden = next;
+    rebuildSidebar();
   }
 
   /** The numbers of the catalog (all, networks, genres, categories): one source at a time, none of them blocks the page. Resolves true when all were read. */
@@ -303,7 +315,7 @@ export function createBrowsePage(ctx, params = {}) {
 
   let suggestionsCache = null;
   async function suggestionEntries(fresh = false) {
-    if (!suggestionsCache || fresh) suggestionsCache = ctx.suggestions.build({ limit: 120 }).then((result) => result.entries.filter((entry) => entry.type === type));
+    if (!suggestionsCache || fresh) suggestionsCache = ctx.suggestions.build({ limit: 500 }).then((result) => result.entries.filter((entry) => entry.type === type));
     return suggestionsCache;
   }
 
@@ -333,7 +345,7 @@ export function createBrowsePage(ctx, params = {}) {
   /** Rebuilds the sidebar keeping the same entry selected (genres arrive late, categories expand). */
   function rebuildSidebar(focusKey) {
     const keep = items[selected];
-    items = sidebarItems({ type, genres, epgGenres, epgGenresExpanded, categories, pinned: pinnedView(), networks, networksExpanded, expanded, genresExpanded, genresLoading, scheduled: scheduledCount > 0, labels: labels() });
+    items = sidebarItems({ type, hidden: userHidden, genres, epgGenres, epgGenresExpanded, categories, pinned: pinnedView(), networks, networksExpanded, expanded, genresExpanded, genresLoading, scheduled: scheduledCount > 0, labels: labels() });
     const same = keep ? items.findIndex((item) => item.kind === keep.kind && String(item.id) === String(keep.id)) : -1;
     selected = same >= 0 ? same : 0;
     renderCategories();
@@ -869,6 +881,7 @@ export function createBrowsePage(ctx, params = {}) {
       if (back.epgGenresExpanded !== undefined) epgGenresExpanded = back.epgGenresExpanded;
     }
     const filter = back ? back.item : params.filter || null;
+    userHidden = new Set(USER_KINDS.filter((kind) => !(filter && filter.kind === kind)));
     const wantsGenre = filter && filter.kind === 'genre';
     const loadGenres = async () => {
       if (type === 'live' || fresh) return;
@@ -887,7 +900,7 @@ export function createBrowsePage(ctx, params = {}) {
     if (!back) networksExpanded = !epgGenres.length || Boolean(filter && filter.kind === 'network');
     if (stale) listCategories(db, type).then((found) => { if (!destroyed) { categories = found.filter((c) => !excluded.has(String(c.id))).map((c) => ({ id: c.id, name: c.name })); rebuildSidebar(); } }).catch(() => undefined);
     if (stale && type === 'live') listNetworks(db).then((found) => { if (!destroyed) { networks = found; rebuildSidebar(); } }).catch(() => undefined);
-    items = sidebarItems({ type, genres, epgGenres, epgGenresExpanded, categories, pinned: pinnedView(), networks, networksExpanded, expanded, genresExpanded, genresLoading, scheduled: scheduledCount > 0, labels: labels() });
+    items = sidebarItems({ type, hidden: userHidden, genres, epgGenres, epgGenresExpanded, categories, pinned: pinnedView(), networks, networksExpanded, expanded, genresExpanded, genresLoading, scheduled: scheduledCount > 0, labels: labels() });
     selected = indexOfFilter(items, filter);
     renderCategories();
     syncFavorite();

@@ -10,7 +10,7 @@ export function createSuggestionsPage(ctx) {
   let destroyed = false;
 
   async function load() {
-    const result = await ctx.suggestions.build({ limit: 60 });
+    const result = await ctx.suggestions.build({ limit: 500 });
     if (destroyed) return;
     rows.set(result.entries);
     if (!result.entries.length) status.textContent = t('common.empty');

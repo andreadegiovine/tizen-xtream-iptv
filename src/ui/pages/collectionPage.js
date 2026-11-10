@@ -148,13 +148,20 @@ export function createCollectionPage(ctx, params) {
         id: 'collectionItems',
         title: '',
         items: members.map((entry) => ({ entry, type: entry.type })),
+        onAdded: (list, made) => {
+          if (!ctx.enrich) return;
+          ['movie', 'series', 'live'].forEach((type) => {
+            const at = list.map((item, i) => (item.type === type ? i : -1)).filter((i) => i >= 0);
+            if (at.length) ctx.enrich(at.map((i) => list[i].entry), at.map((i) => made[i]), type, true);
+          });
+        },
         onOpen: (item) => ctx.openEntry(item.entry, { section: 'collections' }),
       });
       itemsEl.appendChild(carousel.el);
       next.push({ id: 'collectionItems', zone: carousel.zone });
       if (ctx.enrich) {
         ['movie', 'series', 'live'].forEach((type) => {
-          const at = members.map((entry, i) => (entry.type === type ? i : -1)).filter((i) => i >= 0);
+          const at = members.map((entry, i) => (entry.type === type && i < carousel.cards.length ? i : -1)).filter((i) => i >= 0);
           if (at.length) ctx.enrich(at.map((i) => members[i]), at.map((i) => carousel.cards[i]), type, true);
         });
       }

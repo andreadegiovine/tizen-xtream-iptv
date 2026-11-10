@@ -446,10 +446,11 @@ export function createDetailPage(ctx, params) {
       title: t('detail.related'),
       items: related.map((item) => ({ entry: item, type: item.type })),
       onOpen: (item) => ctx.openEntry(item.entry, { section: params.section }),
+      onAdded: (list, made) => ctx.enrich && ctx.enrich(list.map((item) => item.entry), made, entry.type, true),
     });
     relatedEl.appendChild(carousel.el);
     next.push({ id: 'detailRelated', zone: carousel.zone });
-    if (ctx.enrich) ctx.enrich(related, carousel.cards, entry.type, true);
+    if (ctx.enrich) ctx.enrich(related.slice(0, carousel.cards.length), carousel.cards, entry.type, true);
   }
 
   function renderEpisodes(next, episodes) {
@@ -750,7 +751,7 @@ export function createDetailPage(ctx, params) {
     }
     if (ctx.suggestions && entry.type !== 'live') {
       try {
-        related = await ctx.suggestions.forEntry(entry, { tmdbId: meta && meta.tmdbId, limit: 20 });
+        related = await ctx.suggestions.forEntry(entry, { tmdbId: meta && meta.tmdbId, limit: 200 });
       } catch (err) {
         log.warn('Related failed', err && err.message);
       }

@@ -63,7 +63,8 @@ test('Collections page restores its sidebar entry too', async () => {
     notices: { success: jest.fn() },
     router: { push: jest.fn() },
   };
-  await ctx.collections.create('p', 'A', []);
+  const made = await ctx.collections.create('p', 'A', []);
+  await ctx.favorites.toggle('p', `collection:${made.id}`, 'collection'); // the Favourites entry is there only with a favourite collection
   const first = createCollectionsPage(ctx, {});
   first.mount();
   await tick();

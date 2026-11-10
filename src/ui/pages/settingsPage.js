@@ -461,27 +461,29 @@ export function createSettingsPage(ctx) {
   // Preferences in sections, in the order of the page. `list`: rows of the usual list; `fields`: text fields (with their reset buttons).
   const sections = [
     {
-      titleKey: 'settings.section.appearance',
+      // Everything about the app as a whole: language and look, clock, then playback, suggestions and the parental PIN.
+      titleKey: 'settings.section.general',
       list: [
         optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
         optionRow({ ctx, labelKey: 'settings.textSize', key: 'textSize', options: TEXT_SIZES, format: (v) => `${v}%` }),
         optionRow({ ctx, labelKey: 'settings.timeFormat', key: 'timeFormat', options: TIME_FORMATS, format: timeName }),
         optionRow({ ctx, labelKey: 'settings.dateFormat', key: 'dateFormat', options: DATE_FORMATS, format: dateName }),
         optionRow({ ctx, labelKey: 'settings.screensaver', key: 'screensaver', options: SCREENSAVER_OPTIONS, format: (v) => (v ? t('settings.screensaver.minutes', { count: v }) : t('settings.screensaver.off')) }),
+        optionRow({ ctx, labelKey: 'settings.buffer', key: 'bufferSeconds', options: BUFFER_OPTIONS, format: seconds }),
+        optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }),
+        pinRow,
       ],
     },
+    { titleKey: 'settings.section.vod', list: [cleanTitlesRow, autoplay] },
     {
-      titleKey: 'settings.section.playback',
-      list: [optionRow({ ctx, labelKey: 'settings.buffer', key: 'bufferSeconds', options: BUFFER_OPTIONS, format: seconds }), autoplay],
-    },
-    {
+      // Channels: their grouping by quality, the words removed from their names to compare them, the custom guide.
       titleKey: 'settings.section.live',
-      // The toggle for the numbers sits right under the maximum difference, the setting it goes with.
-      parts: [{ list: [liveGrouping, liveNetworks] }, { fields: [similarityRow, similarityClearRow, maxDiffRow, maxDiffClearRow] }, { list: [ignoreNumbersRow] }, { fields: [patternsRow, patternsClearRow] }, { fields: [epgRow, epgClearRow] }],
+      parts: [{ list: [liveGrouping] }, { fields: [patternsRow, patternsClearRow] }, { fields: [epgRow, epgClearRow] }],
     },
     {
-      titleKey: 'settings.section.content',
-      list: [cleanTitlesRow, optionRow({ ctx, labelKey: 'settings.suggestionSource', key: 'suggestionSource', options: SUGGESTION_SOURCE_OPTIONS, format: (v) => (v === 'trakt' ? 'Trakt' : 'TMDB') }), pinRow],
+      // Networks: on / off, then how similar names must be; the toggle for the numbers sits right under the maximum difference.
+      titleKey: 'settings.section.networks',
+      parts: [{ list: [liveNetworks] }, { fields: [similarityRow, similarityClearRow, maxDiffRow, maxDiffClearRow] }, { list: [ignoreNumbersRow] }],
     },
     { titleKey: 'settings.section.advanced', list: [diagnostics, resetAll] },
   ];
@@ -577,14 +579,16 @@ export function createSettingsPage(ctx) {
     return { el, refresh };
   })();
 
-  // After the title: " • version 1.2.0 - last check 11/08, 23:15" (the build running, and when version.json last answered).
+  // Under the title, small: the version running; the packages that update themselves add when version.json last answered.
   const versions = runningVersions();
   const checked = lastCheck();
   const version = versions.bundle || APP_VERSION;
-  const versionEl = h('span', { class: 'settings-version', text: ` • ${checked ? t('settings.versionLine', { version, time: formatDateTime(checked, i18n.getLocale()) }) : t('settings.versionNever', { version })}` });
+  const autoupdate = typeof __AUTOUPDATE__ !== 'undefined' && __AUTOUPDATE__;
+  const versionText = !autoupdate ? `v${version}` : checked ? t('settings.versionLine', { version, time: formatDateTime(checked, i18n.getLocale()) }) : t('settings.versionNever', { version });
+  const versionEl = h('p', { class: 'settings-version', text: versionText });
 
   return {
-    el: framedPage(h('h1', {}, t('nav.settings'), versionEl), promos.el, opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), h('h2', { class: 'prefs-title', text: 'OpenSubtitles' }), h('div', { class: 'fields' }, openSubtitlesRow.root), devicePanel.el, prefsBlocks),
+    el: framedPage(h('h1', { class: 'settings-title', text: t('nav.settings') }), versionEl, promos.el, opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), h('h2', { class: 'prefs-title', text: 'OpenSubtitles' }), h('div', { class: 'fields' }, openSubtitlesRow.root), devicePanel.el, prefsBlocks),
     mount() {
       opsPanel.mount();
       tmdbPanel.mount();

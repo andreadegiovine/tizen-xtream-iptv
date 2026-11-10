@@ -33,8 +33,8 @@ export function createTmdbClient({ getApiKey = () => '', fetcher = fetchJson } =
       get(`/${kind(type)}/${id}`, full ? { language, append_to_response: 'credits,videos', include_video_language: `${String(language || 'en').slice(0, 2)},en,null` } : { language }),
     search: (type, query, year, language) =>
       get(`/search/${kind(type)}`, { query, language, ...(year ? { [type === 'series' ? 'first_air_date_year' : 'year']: year } : {}) }),
-    recommendations: (type, id, language) => get(`/${kind(type)}/${id}/recommendations`, { language }),
-    trending: (type, language) => get(`/trending/${kind(type)}/week`, { language }),
+    recommendations: (type, id, language, page = 1) => get(`/${kind(type)}/${id}/recommendations`, { language, page }),
+    trending: (type, language, page = 1) => get(`/trending/${kind(type)}/week`, { language, page }),
   };
 }
 

@@ -257,3 +257,9 @@ For a title with TMDB genres (`entry_genre_tmdb`, `|tmdb`) the provider rows (`e
 - **Guide**: rows 156 px (`ROW_HEIGHT` / `$epg-row`), programme titles 1.35rem.
 - **Viewport**: no `initial-scale` (on Android it overrode the overview mode that fits the 1920 px page to the screen).
 - **Settings**: " • v1.3.0 - last check …"; one box per optional service that is off (TMDB, Trakt, OpenSubtitles).
+
+## Patch 139
+- `createCarousel` is always lazy: a whole `items` list is shown `VISIBLE_CARDS + AHEAD_CARDS` cards at a time (at least up to `startIndex`), the next ones made synchronously from the list when the focus nears them (`ListModel` counts the whole list); `more(offset, count)` stays for rows read page by page (home). Callers that decorate cards pass `onAdded(items, cards)`.
+- `visibleFavorites(ctx, current)` (`favoriteEntries.js`): the favourites the provider can show, shared by the Favorites page and the top bar.
+- Browse sidebar: `sidebarItems({ hidden })` leaves out `continue`, `favorites`, `suggestions` while their count is 0 (hidden until counted, except the entry the page opens on).
+- Guide titles: `transform: translateX(var(--pin)) scaleY(1.6)`; `pinTitles` sets `--pin`.

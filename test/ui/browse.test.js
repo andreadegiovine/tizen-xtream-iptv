@@ -63,6 +63,12 @@ describe('sidebar', () => {
     expect(sidebarItems({ type: 'live', epgGenres: [], categories: cats, labels }).some((i) => i.kind === 'epgGenresToggle')).toBe(false);
   });
 
+  test('continue watching, favourites and suggestions are left out while they have nothing to show', () => {
+    const hidden = new Set(['continue', 'suggestions']);
+    expect(sidebarItems({ type: 'movie', hidden, categories: cats, labels }).map((i) => i.kind)).toEqual(['all', 'favorites', 'toggle']);
+    expect(sidebarItems({ type: 'live', hidden: new Set(['favorites']), categories: cats, labels }).map((i) => i.kind)).toEqual(['guide', 'all', 'toggle']);
+  });
+
   test('filter lookup falls back to "show all"', () => {
     const items = sidebarItems({ type: 'movie', genres: [{ key: 'animation', name: 'X' }], categories: [], labels });
     expect(indexOfFilter(items, { kind: 'genre', id: 'animation' })).toBe(5);

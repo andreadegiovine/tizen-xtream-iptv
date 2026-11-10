@@ -4,6 +4,7 @@ import { openAppDb } from './db/appDb.js';
 import { InputService, Action } from './core/input.js';
 import { log } from './core/logger.js';
 import { providerHiddenSections } from './services/providerTypes.js';
+import { visibleFavorites } from './services/favoriteEntries.js';
 import { checkForUpdate, installUpdate, forgetUpdate, runningVersions } from './services/updates.js';
 import { APP_VERSION, IS_DEV } from './core/env.js';
 import { FocusManager } from './ui/focus/FocusManager.js';
@@ -455,7 +456,8 @@ async function boot() {
   ctx.refreshTopbar = async () => {
     const current = await active.get().catch(() => null);
     const id = current && current.provider.id;
-    const favorites = id ? (await ctx.favorites.list(id).catch(() => [])).length : 0;
+    // Favorites: only what the provider can show (favourites of another provider, or titles gone from the catalog, do not count).
+    const favorites = current ? (await visibleFavorites(ctx, current).catch(() => [])).length : 0;
     const collections = id ? (await ctx.collections.list(id).catch(() => [])).length : 0;
     const hide = [];
     if (!favorites) hide.push('favorites');

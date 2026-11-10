@@ -665,3 +665,12 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - **Home rows** load the cards on screen plus five, the rest while scrolling; the "titles per carousel" preference is removed.
 - **Guide**: taller rows and bigger programme titles. **Top bar**: Favorites, Collections and Suggestions only when they have something. **Settings**: "v1.3.0 - last check …", boxes about the services that are off. **Android / Fire TV**: no `initial-scale` in the viewport (the page was too big).
 - Checked in Chromium with the mock (M3U setup, sync and guide; demo screenshots; top bar). Tests: M3U parser and client, provider types, sync of a playlist, setup steps, lazy carousel, Trakt counts, Tizen config variants. Not verified on the TV.
+
+### Patch 139 — version subtitle, visible-only entries, lazy carousels everywhere, preference groups
+- Settings: the version is a small bold subtitle under the title: "v1.3.0" for the store packages, "v1.3.0 • last check …" for the `_autoupdate` ones.
+- Top bar: Favorites counts only what the provider can show (the same list as the Favorites page; favourites of another provider or titles gone from the catalog do not count).
+- Sidebars (Movies, TV Series, Live TV, Collections): Continue watching, Favorites and Suggestions are listed only when they have something to show (counted on the cards the view would show); the entry the page opens on stays.
+- Every carousel is lazy (home, search, Favorites, Suggestions page, related titles, cast, episodes, networks, collections): the cards on screen plus five, the next ones made as the focus moves right; the focus can go over the whole row. Rows have no small limits any more: TMDB recommendations and trending read every page (up to 5), Trakt recommendations and related titles ask for 100 (the most it gives); search shows up to 100 results per type.
+- Programme guide: rows back to 128 px; the titles are taller (`scaleY(1.6)`, same width).
+- Preferences: General (language, text size, clock, screensaver, buffer, suggestions source, parental PIN), Movies & TV Series (clean titles, next episode), Live TV (grouping, words removed from channel names, custom guide), Live TV • Networks (networks, similarity, maximum difference, numbers), Advanced.
+- Checked in Chromium with the demo mock (screenshots regenerated). Tests: sidebar entries, collections favourites, lazy rows. Applies after patch 138. Not verified on the TV.

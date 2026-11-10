@@ -121,11 +121,12 @@ export function createNetworkPage(ctx, params) {
         id: 'networkItems',
         title: '',
         items: members.map((entry) => ({ entry, type: 'live', meta: { square: true } })),
+        onAdded: (list, made) => ctx.enrich && ctx.enrich(list.map((item) => item.entry), made, 'live', true),
         onOpen: (item) => ctx.openEntry(item.entry, { section: params.section }),
       });
       itemsEl.appendChild(carousel.el);
       next.push({ id: 'networkItems', zone: carousel.zone });
-      if (ctx.enrich) ctx.enrich(members, carousel.cards, 'live', true);
+      if (ctx.enrich) ctx.enrich(members.slice(0, carousel.cards.length), carousel.cards, 'live', true);
     } else {
       itemsEl.appendChild(h('p', { class: 'muted', text: t('networks.empty') }));
     }

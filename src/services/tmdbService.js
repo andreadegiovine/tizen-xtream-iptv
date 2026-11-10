@@ -206,14 +206,27 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
     return record.value || null;
   }
 
-  /** TMDB ids recommended for a title, or this week's trending titles when `id` is null. */
+  /**
+   * TMDB ids recommended for a title, or this week's trending titles when `id` is null: every page TMDB has (20 titles each; recommendations
+   * rarely go past 2 pages), up to MAX_PAGES for the trending list. The rows show them lazily, so there is no reason to stop at 20.
+   */
+  const MAX_PAGES = 5;
   async function recommendations(type, id) {
     if (!client.enabled) return [];
     const language = getLanguage();
     const key = `rec:${type}:${id || 'trending'}:${language}`;
     const record = await cached('tmdb', key, () => RECOMMENDATIONS_TTL_MS, async () => {
-      const data = id ? await client.recommendations(type, id, language) : await client.trending(type, language);
-      return ((data && data.results) || []).map((r) => ({ id: r.id, popularity: Number(r.popularity) || 0 }));
+      const page = (n) => (id ? client.recommendations(type, id, language, n) : client.trending(type, language, n));
+      const first = await page(1);
+      const results = ((first && first.results) || []).slice();
+      const pages = Math.min(MAX_PAGES, Number(first && first.total_pages) || 1);
+      for (let n = 2; n <= pages; n += 1) {
+        const more = await page(n).catch(() => null);
+        if (!more || !more.results || !more.results.length) break;
+        results.push(...more.results);
+      }
+      const seen = new Set();
+      return results.filter((r) => !seen.has(r.id) && seen.add(r.id)).map((r) => ({ id: r.id, popularity: Number(r.popularity) || 0 }));
     });
     return record.value || [];
   }

@@ -11,7 +11,7 @@ import { ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 
-const PER_TYPE = 20;
+const PER_TYPE = 100; // results per type (the rows load their cards lazily)
 const RECENT_ZONE = 'searchRecent';
 
 /**

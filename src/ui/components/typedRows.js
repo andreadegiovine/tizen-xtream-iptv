@@ -15,7 +15,7 @@ const isGenreFilter = (entry) => entry.filterKind === 'genre' || entry.filterKin
 export const filterCardMeta = (entry) => ({ placeholder: isGenreFilter(entry) ? 'genres' : 'categories', subtitle: t(isGenreFilter(entry) ? 'favorites.genre' : 'favorites.category') });
 
 /** Splits entries by type (collections first), keeping the order and at most `limit` per type. */
-export function groupByType(entries, limit = 20) {
+export function groupByType(entries, limit = 500) {
   const first = (entry) => (entry.isNetwork ? 0 : 1); // networks come ahead of the channels and groups
   return ORDER.map((type) => ({ type, entries: entries.filter((entry) => entry.type === type).sort((a, b) => first(a) - first(b)).slice(0, limit) })).filter((group) => group.entries.length);
 }
@@ -24,7 +24,7 @@ export function groupByType(entries, limit = 20) {
  * One carousel per media type (movies, series, channels), stacked vertically with linked focus zones.
  * Used by Favorites, Suggestions and the search results. A `collection` entry carries `collectionId` and a `subtitle` (its item count).
  */
-export function createTypedRows(ctx, { prefix, onOpen, limit = 20, hideFavorite = false }) { // onOpen(entry): titles and favourite filters (see isFilterEntry)
+export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite = false }) { // onOpen(entry): titles and favourite filters (see isFilterEntry)
   const el = h('div', { class: 'typed-rows' });
   let carousels = [];
 
@@ -49,6 +49,10 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 20, hideFavorite 
           }),
           onOpen: (item) => onOpen(item.entry),
           revealTop: index === 0,
+          // Cards made while scrolling get the same badges and metadata as the first ones.
+          onAdded: (list, made) => {
+            if (ctx.enrich && group.type !== 'collection' && group.type !== 'programme') ctx.enrich(list.map((item) => item.entry), made, group.type, true, { hideFavorite });
+          },
         });
         carousel.type = group.type;
         return carousel;

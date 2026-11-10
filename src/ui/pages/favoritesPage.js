@@ -1,9 +1,8 @@
 import { h } from '../dom.js';
+import { visibleFavorites } from '../../services/favoriteEntries.js';
 import { t } from '../../i18n/index.js';
 import { createTypedRows } from '../components/typedRows.js';
-import { getEntry, listCategories } from '../../services/catalogQuery.js';
-import { openFilter, favoriteFilterEntries } from '../../services/favoriteFilters.js';
-import { collectionEntry, isCollectionKey } from '../../services/collections.js';
+import { openFilter } from '../../services/favoriteFilters.js';
 import { log } from '../../core/logger.js';
 
 /** Titles, categories and genres the user marked with the heart, one carousel per type (categories and genres first). */
@@ -23,19 +22,7 @@ export function createFavoritesPage(ctx) {
   async function load() {
     const current = await ctx.active.get();
     if (!current || destroyed) return;
-    const saved = await ctx.favorites.list(current.provider.id);
-    const guideGenres = async () => (ctx.epg && ctx.epg.genreRows ? new Set((await ctx.epg.genreRows({ shown: true })).genres.map((g) => g.key)) : new Set());
-    const entries = await favoriteFilterEntries(saved, (type) => listCategories(current.db, type), guideGenres);
-    for (const item of saved) {
-      if (item.kind) continue;
-      if (isCollectionKey(item.entryKey)) {
-        const collection = await ctx.collections.get(item.entryKey.slice('collection:'.length), current.provider.id);
-        if (collection) entries.push(await collectionEntry(current.db, collection, getEntry, (count) => t('collections.items', { count })));
-        continue;
-      }
-      const entry = await getEntry(current.db, item.entryKey);
-      if (entry) entries.push(entry); // gone from the catalog after a sync: skipped, not deleted
-    }
+    const entries = await visibleFavorites(ctx, current);
     if (destroyed) return;
     rows.set(entries);
     status.textContent = entries.length ? '' : t('common.empty');

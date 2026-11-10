@@ -7,7 +7,7 @@ import { icon } from '../icons.js';
 
 /** Minutes → pixels on the time axis (a half hour is 240 px: a 30-minute programme shows a title of ~20 letters). */
 export const PX_PER_MIN = 8;
-export const ROW_HEIGHT = 156; // keep in sync with $epg-row (_epg.scss)
+export const ROW_HEIGHT = 128;
 export const CHANNEL_WIDTH = 132;
 export const RULER_HEIGHT = 44;
 const HALF_HOUR = 30 * 60 * 1000;
@@ -149,7 +149,7 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
       const left = xOf(seg.start, start);
       const shift = left < x ? Math.max(0, Math.min(x - left, xOf(seg.stop, start) - left - 160)) : 0;
       const title = segNode.firstChild;
-      if (title) title.style.transform = shift > 0 ? `translateX(${Math.round(shift)}px)` : '';
+      if (title) title.style.setProperty('--pin', `${shift > 0 ? Math.round(shift) : 0}px`); // the stylesheet adds the taller letters
     });
   }
 

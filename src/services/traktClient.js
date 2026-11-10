@@ -56,9 +56,9 @@ export function createTraktClient({ clientId = '', clientSecret = '', getCredent
     watchedMovies: (token) => call('/sync/watched/movies', { token }),
     watchedShows: (token) => call('/sync/watched/shows', { token }),
     /** Personalised picks for the signed-in user. */
-    recommendations: (token, kind) => call(`/recommendations/${kind}?limit=40`, { token }),
+    recommendations: (token, kind) => call(`/recommendations/${kind}?limit=100`, { token }), // the most Trakt gives
     /** tmdb id → trakt ids (slug), needed by the "related" call. */
     lookupTmdb: (kind, tmdbId) => call(`/search/tmdb/${tmdbId}?type=${kind === 'shows' ? 'show' : 'movie'}`),
-    related: (kind, slug) => call(`/${kind}/${slug}/related?limit=20`),
+    related: (kind, slug) => call(`/${kind}/${slug}/related?limit=100`),
   };
 }

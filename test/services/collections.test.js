@@ -87,6 +87,7 @@ test('collections sidebar: all, favourites, pinned genres, then the open genres'
   expect(items[2]).toMatchObject({ pinned: true, id: 'drama' });
   expect(collectionSidebarItems({ genres, genresExpanded: false, labels }).map((i) => i.kind)).toEqual(['all', 'favorites', 'genresToggle']);
   expect(collectionSidebarItems({ labels }).map((i) => i.kind)).toEqual(['all', 'favorites']);
+  expect(collectionSidebarItems({ labels, hasFavorites: false }).map((i) => i.kind)).toEqual(['all']); // no favourite collection: no entry
 });
 
 test('collections views: all, favourites and a genre', () => {

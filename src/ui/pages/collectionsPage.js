@@ -17,8 +17,9 @@ const GRID_ZONE = 'collectionsGrid';
 const HEAD_ZONE = 'collectionsHead';
 
 /** Sidebar entries: show all, favourites, the pinned genres, then the "Genres" entry (open) with the genres of the collections. */
-export function collectionSidebarItems({ genres = [], pinned = [], genresExpanded = true, labels }) {
-  const items = [{ kind: 'all', name: labels.all }, { kind: 'favorites', name: labels.favorites }];
+export function collectionSidebarItems({ genres = [], pinned = [], genresExpanded = true, hasFavorites = true, labels }) {
+  // Favourites only when some collection of this provider is one.
+  const items = [{ kind: 'all', name: labels.all }].concat(hasFavorites ? [{ kind: 'favorites', name: labels.favorites }] : []);
   pinned.forEach((p) => items.push({ kind: 'genre', id: String(p.id), name: p.name, pinned: true }));
   if (genres.length) {
     items.push({ kind: 'genresToggle', name: labels.genres, expanded: genresExpanded });
@@ -98,7 +99,7 @@ export function createCollectionsPage(ctx, params = {}) {
 
   function rebuildSidebar(focusKind) {
     const keep = items[selected];
-    items = collectionSidebarItems({ genres, pinned, genresExpanded, labels: labels() });
+    items = collectionSidebarItems({ genres, pinned, genresExpanded, hasFavorites: collections.some((c) => favoriteIds.has(c.id)), labels: labels() });
     const same = keep ? items.findIndex((item) => item.kind === keep.kind && String(item.id) === String(keep.id)) : -1;
     selected = same >= 0 ? same : 0;
     renderCategories();
@@ -225,7 +226,9 @@ export function createCollectionsPage(ctx, params = {}) {
     // Coming back from a collection: the same sidebar entry and focus as when the page was left.
     const back = restored;
     if (back) genresExpanded = back.genresExpanded;
-    items = collectionSidebarItems({ genres, pinned, genresExpanded, labels: labels() });
+    // Favourites stay listed when the page comes back to them (even if the last favourite was just removed).
+    const onFavorites = Boolean(back && back.item && back.item.kind === 'favorites');
+    items = collectionSidebarItems({ genres, pinned, genresExpanded, hasFavorites: onFavorites || collections.some((c) => favoriteIds.has(c.id)), labels: labels() });
     const wanted = back && back.item ? items.findIndex((item) => item.kind === back.item.kind && String(item.id) === String(back.item.id)) : params.filter ? items.findIndex((item) => item.kind === 'genre' && item.id === String(params.filter.id)) : 0;
     selected = Math.max(0, wanted);
     renderCategories();

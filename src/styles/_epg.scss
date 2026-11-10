@@ -2,7 +2,7 @@
 // transforms; sizes match PX_PER_MIN, ROW_HEIGHT and CHANNEL_WIDTH of the component.
 @use 'tokens' as *;
 
-$epg-row: 156px; // taller programmes, easier to read from the sofa (keep in sync with ROW_HEIGHT)
+$epg-row: 128px;
 $epg-channel: 132px;
 $epg-ruler: 44px;
 
@@ -178,7 +178,10 @@ $epg-ruler: 44px;
 }
 
 .epg-prog-title {
-  font-size: 1.35rem; // read from the sofa on a TV
+  font-size: 1rem;
+  // Taller letters (same width, same row height) to read them from the sofa; --pin keeps a title in view while the axis scrolls (pinTitles).
+  transform: translateX(var(--pin, 0)) scaleY(1.6);
+  transform-origin: left center;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
