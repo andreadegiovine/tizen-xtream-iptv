@@ -49,7 +49,8 @@ export function createExoEngine(env = typeof window !== 'undefined' ? window : {
       clock.buffered = null;
       tracks = { audio: [], text: [] };
       listener = cap.addListener(PLUGIN, 'event', onEvent);
-      if (typeof document !== 'undefined') document.body.classList.add('video-active'); // the page is see-through over the video
+      // The page is see-through over the video: <html> too, its background fills the whole WebView.
+      if (typeof document !== 'undefined') [document.documentElement, document.body].forEach((node) => node.classList.add('video-active'));
       call('start', { url, bufferSeconds });
     },
     play: () => call('play'),
@@ -77,7 +78,7 @@ export function createExoEngine(env = typeof window !== 'undefined' ? window : {
       }
       handlers = null;
       call('stop');
-      if (typeof document !== 'undefined') document.body.classList.remove('video-active');
+      if (typeof document !== 'undefined') [document.documentElement, document.body].forEach((node) => node.classList.remove('video-active'));
     },
   };
 }

@@ -144,6 +144,7 @@ public class ExoPlayerPlugin extends Plugin {
         view.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
         view.setPlayer(player);
         WebView webView = getBridge().getWebView();
+        webView.setBackgroundColor(Color.TRANSPARENT); // again: the video shows only where the WebView (and the page) is transparent
         ViewGroup parent = (ViewGroup) webView.getParent();
         parent.addView(view, 0, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }

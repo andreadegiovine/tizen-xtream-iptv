@@ -56,8 +56,10 @@ test('ExoPlayer engine: commands to the plugin, events kept for the synchronous 
   engine.seekTo(30000);
   expect(fake.calls.slice(-3)).toEqual([['ExoPlayer', 'setAspect', { mode: 'zoom' }], ['ExoPlayer', 'selectText', { index: -1 }], ['ExoPlayer', 'seekTo', { ms: 30000 }]]);
   expect(document.body.classList.contains('video-active')).toBe(true);
+  expect(document.documentElement.classList.contains('video-active')).toBe(true); // <html> too: its background would cover the video
   engine.stop();
   expect(document.body.classList.contains('video-active')).toBe(false);
+  expect(document.documentElement.classList.contains('video-active')).toBe(false);
   fake.emit({ type: 'ended' }); // after stop: nobody listens
   expect(handlers.onEnded).not.toHaveBeenCalled();
 });

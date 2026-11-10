@@ -699,3 +699,7 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - Channel merge: the candidates come from the rows the search worker already holds.
 - Not changed: `ensureVisible` still measures the focused card (one layout per key, the one the frame needs anyway; with the smaller grid it is no longer a cost).
 - Tests: grid window, lazy pages, programme search in the worker and in the service, search worker messages, nextAt, frame wait of the keys, files.json. Not verified on the TV.
+
+### Patch 144 — Android / Fire TV: the video was heard but not seen
+- On a Fire TV Stick every title played only its audio. ExoPlayer draws behind the WebView, which is transparent, and while the video plays the page made `body`, `#content` and the top bar transparent, but not `<html>`: its background (`$bg-bottom`) fills the whole canvas and covered the video. On Tizen it does not show because AVPlay's `<object>` opens its own hole in the page. Reproduced in Chromium with the Android build and a fake Capacitor bridge: with the player open the whole screen was opaque (rgb 11, 11, 12); now it is transparent (alpha 0) and the controls are still drawn.
+- The Android engine marks `<html>` too with `video-active` (`html.video-active { background: transparent }`); `ExoPlayerPlugin.start` sets the WebView transparent again before adding the player view behind it. Java not compiled here (no Android SDK). Not verified on the Fire TV.

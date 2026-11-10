@@ -26,7 +26,9 @@ body {
   background: $bg-gradient; // the screen is 1080 px tall and does not scroll: the gradient goes from its top to its bottom
 }
 
-// AVPlay renders on a plane behind the page: while video plays the page must be see-through.
+// AVPlay renders on a plane behind the page (ExoPlayer on Android: a view behind the WebView): while video plays the page must be
+// see-through, the root element too (its background fills the whole canvas: on Android the video was heard but not seen).
+html.video-active,
 body.video-active,
 body.video-active #content,
 body.video-active #topbar {
