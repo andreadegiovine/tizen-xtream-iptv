@@ -674,3 +674,8 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 - Programme guide: rows back to 128 px; the titles are taller (`scaleY(1.6)`, same width).
 - Preferences: General (language, text size, clock, screensaver, buffer, suggestions source, parental PIN), Movies & TV Series (clean titles, next episode), Live TV (grouping, words removed from channel names, custom guide), Live TV • Networks (networks, similarity, maximum difference, numbers), Advanced.
 - Checked in Chromium with the demo mock (screenshots regenerated). Tests: sidebar entries, collections favourites, lazy rows. Applies after patch 138. Not verified on the TV.
+
+### Patch 140 — picture error after leaving a grid, Schedule only with rows
+- Fix: going back from a channel / group opened from "Show all" could raise "Cannot read properties of null (reading 'remove')": a card picture that failed to load after the card had let it go (`release()`) removed `img`, already null. The error handler now removes only its own `<img>`.
+- Live TV: the "Schedule" entry is listed only when the guide has rows (a channel with programmes in the hours shown); without it the page opens on "Show all", and the entry appears when a guide download brings rows.
+- Tests: picture error after release, sidebar without the guide. Applies after patch 139. Not verified on the TV.

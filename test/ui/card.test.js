@@ -56,3 +56,16 @@ test('a favourite filter card shows a skeleton after the dot until the count is 
   expect(card.el.querySelector('.card-meta .skeleton-line')).toBeNull();
   expect(card.el.querySelector('.card-meta').textContent).toMatch(/^Genre · 1.?033$/);
 });
+
+test('a picture that fails after the card let it go does not break (going back to a grid of channels)', () => {
+  const card = createCard({ key: 'live:1', name: 'A', icon: 'http://h/a.png' }, 'live');
+  const img = card.el.querySelector('img');
+  expect(img).not.toBeNull();
+  card.release(); // the card leaves the screen: its picture is let go
+  const errors = jest.spyOn(console, 'error').mockImplementation(() => undefined); // jsdom reports listener errors here
+  img.dispatchEvent(new Event('error'));
+  expect(errors).not.toHaveBeenCalled();
+  errors.mockRestore();
+  card.restore();
+  expect(card.el.querySelector('img')).not.toBeNull(); // shown again when the card comes back
+});

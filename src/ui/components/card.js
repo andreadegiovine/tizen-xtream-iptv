@@ -62,12 +62,14 @@ export function createCard(entry, type, meta = {}) {
     posterUrl = url;
     if (released) return; // shown again by restore()
     if (!img) {
-      img = h('img', { alt: '', referrerpolicy: 'no-referrer' });
+      const node = h('img', { alt: '', referrerpolicy: 'no-referrer' });
+      img = node;
       const done = () => poster.classList.remove('loading');
-      img.addEventListener('load', done);
-      img.addEventListener('error', () => {
-        img.remove();
-        img = null;
+      node.addEventListener('load', done);
+      // The picture may fail after the card let it go (release(): `img` is null, or already another one): only this <img> goes.
+      node.addEventListener('error', () => {
+        node.remove();
+        if (img === node) img = null;
         done();
       });
       poster.insertBefore(img, badges);

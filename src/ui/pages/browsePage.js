@@ -86,7 +86,9 @@ export function createGrowingGridModel({ columns, getCount, hasMore, more }) {
 export function sidebarItems({ type, hidden = null, genres = [], epgGenres = [], epgGenresExpanded = true, categories = [], pinned = [], networks = [], networksExpanded = true, expanded = false, genresExpanded = true, genresLoading = false, scheduled = false, labels }) {
   // Live TV opens on the programme guide; "show all" follows it.
   // "Scheduled" (programmes whose viewing is scheduled) follows the guide when there are any.
-  const items = type === 'live' ? [{ kind: 'guide', name: labels.guide }].concat(scheduled ? [{ kind: 'scheduled', name: labels.scheduled }] : [], [{ kind: 'all', name: labels.all }]) : [{ kind: 'all', name: labels.all }];
+  // The programme guide (Live TV) is listed only when it has rows (a channel with programmes in the hours shown).
+  const guide = hidden && hidden.has('guide') ? [] : [{ kind: 'guide', name: labels.guide }];
+  const items = type === 'live' ? guide.concat(scheduled ? [{ kind: 'scheduled', name: labels.scheduled }] : [], [{ kind: 'all', name: labels.all }]) : [{ kind: 'all', name: labels.all }];
   if (type === 'live') {
     if (!(hidden && hidden.has('favorites'))) items.push({ kind: 'favorites', name: labels.favorites });
     pinned.forEach((p) => items.push({ kind: p.kind, id: String(p.id), name: p.name, pinned: true }));
@@ -807,7 +809,10 @@ export function createBrowsePage(ctx, params = {}) {
   }
 
   /** The main grid of the page: the guide for Live TV, "show all" for the others. */
-  const mainIndex = () => items.findIndex((item) => item.kind === (type === 'live' ? 'guide' : 'all'));
+  const mainIndex = () => {
+    const at = items.findIndex((item) => item.kind === (type === 'live' ? 'guide' : 'all'));
+    return at >= 0 ? at : items.findIndex((item) => item.kind === 'all'); // no guide: "show all"
+  };
 
   const gridZone = new FocusZone({
     id: GRID_ZONE,
@@ -882,6 +887,8 @@ export function createBrowsePage(ctx, params = {}) {
     }
     const filter = back ? back.item : params.filter || null;
     userHidden = new Set(USER_KINDS.filter((kind) => !(filter && filter.kind === kind)));
+    // Live TV: the guide entry only when the guide has rows (read before the sidebar is drawn: the page opens on it when it is there).
+    if (type === 'live' && !(await guideList().catch(() => [])).length) userHidden.add('guide');
     const wantsGenre = filter && filter.kind === 'genre';
     const loadGenres = async () => {
       if (type === 'live' || fresh) return;
@@ -974,7 +981,15 @@ export function createBrowsePage(ctx, params = {}) {
               .then(() => !destroyed && rebuildSidebar())
               .catch(() => undefined);
             if (guide && (guideKind === 'guide' || String(guideKind).indexOf('epgGenre:') === 0)) guide.reload().then(handOff);
-            safe(async () => setCount('guide:', (await guideList()).length));
+            safe(async () => {
+              const rows = (await guideList()).length;
+              setCount('guide:', rows);
+              // A guide that arrives (or empties) while the page is open: its entry appears (or goes).
+              if (destroyed || (rows > 0) !== userHidden.has('guide')) return;
+              if (rows > 0) userHidden.delete('guide');
+              else if (!(items[selected] && items[selected].kind === 'guide')) userHidden.add('guide');
+              rebuildSidebar();
+            });
           });
         // Scheduled programmes added or removed (here or from a channel page): the "scheduled" entry and its view follow.
         if (ctx.schedules)

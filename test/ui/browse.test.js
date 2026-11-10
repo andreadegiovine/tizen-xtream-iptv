@@ -67,6 +67,7 @@ describe('sidebar', () => {
     const hidden = new Set(['continue', 'suggestions']);
     expect(sidebarItems({ type: 'movie', hidden, categories: cats, labels }).map((i) => i.kind)).toEqual(['all', 'favorites', 'toggle']);
     expect(sidebarItems({ type: 'live', hidden: new Set(['favorites']), categories: cats, labels }).map((i) => i.kind)).toEqual(['guide', 'all', 'toggle']);
+    expect(sidebarItems({ type: 'live', hidden: new Set(['guide']), categories: cats, labels }).map((i) => i.kind)).toEqual(['all', 'favorites', 'toggle']); // no guide rows
   });
 
   test('filter lookup falls back to "show all"', () => {
