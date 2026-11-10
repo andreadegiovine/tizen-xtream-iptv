@@ -9,8 +9,11 @@ export const EPG_BATCH = 2000;
 export const EPG_TTL_MS = 24 * 3600 * 1000;
 const META_KEY = 'epg';
 
+/** The guide of a provider: Xtream's xmltv.php, or the XMLTV address of an M3U provider ('' when it has none). */
 export const xmltvUrl = (provider) =>
-  `${provider.baseUrl}/xmltv.php?username=${encodeURIComponent(provider.username)}&password=${encodeURIComponent(provider.password)}`;
+  provider && provider.type === 'm3u'
+    ? provider.epgUrl || ''
+    : `${provider.baseUrl}/xmltv.php?username=${encodeURIComponent(provider.username)}&password=${encodeURIComponent(provider.password)}`;
 
 /** Channel ids used by the live entries: only their programmes are worth storing. */
 export function liveChannelIds(db) {
@@ -158,7 +161,8 @@ export async function runEpgForProvider({ provider, customUrl = '', force = fals
           if (signal && signal.aborted) throw err;
         }
       }
-      if (!meta) meta = await syncEpg({ db, url: wrapApiUrl(xmltvUrl(provider)), now, signal, emit, fetchImpl });
+      if (!meta && xmltvUrl(provider)) meta = await syncEpg({ db, url: wrapApiUrl(xmltvUrl(provider)), now, signal, emit, fetchImpl });
+      else if (!meta) emit({ event: 'progress', phase: 'skipped' }); // a playlist without a guide
     }
   } catch (err) {
     const error = toAppError(err);

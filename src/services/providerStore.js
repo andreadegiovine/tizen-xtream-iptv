@@ -33,11 +33,15 @@ export class ProviderStore {
     return dbGet(this.db, 'providers', id);
   }
 
-  async add({ name, baseUrl, username, password }) {
-    if (!name || !baseUrl || !username || !password) {
+  /** An Xtream account ({ name, baseUrl, username, password }) or an M3U playlist ({ type: 'm3u', name, playlistUrl, epgUrl? }). */
+  async add({ type = 'xtream', name, baseUrl, username, password, playlistUrl, epgUrl = '', expiresAt = null }) {
+    const m3u = type === 'm3u';
+    if (!name || (m3u ? !playlistUrl : !baseUrl || !username || !password)) {
       throw new AppError(ErrorCode.INVALID_INPUT, 'Missing provider fields');
     }
-    const provider = { id: generateId(), name, baseUrl, username, password, createdAt: nextCreatedAt() };
+    const provider = m3u
+      ? { id: generateId(), type: 'm3u', name, playlistUrl, epgUrl: epgUrl || '', baseUrl: playlistUrl, username: '', password: '', createdAt: nextCreatedAt() }
+      : { id: generateId(), name, baseUrl, username, password, ...(expiresAt ? { expiresAt } : {}), createdAt: nextCreatedAt() };
     await dbPut(this.db, 'providers', provider);
     return provider;
   }

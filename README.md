@@ -6,7 +6,7 @@ cast and guides in a clean interface designed for a 1920x1080 screen. One app, t
 
 <p align="center"><img src="docs/screenshots/home.jpg" alt="Home screen" width="860"></p>
 
-> This project does not provide, host or link to any content. You need your own Xtream Codes provider account.
+> This project does not provide, host or link to any content. You need your own IPTV provider: an Xtream Codes account or an M3U playlist.
 
 > **For the best experience, set up TMDB, Trakt and OpenSubtitles** (all free, see [Optional services](#optional-services)): posters,
 > plots, cast and trailers, watch history on every device, and subtitles for any title.
@@ -18,8 +18,8 @@ Every release on the [Releases](../../releases) page has one package per platfor
 
 | Platform | Package | Install guide |
 |---|---|---|
-| Samsung Tizen TV (6.0 or newer) | `_tizen.wgt`, signed | [`platforms/tizen`](platforms/tizen/README.md) |
-| LG webOS TV (6.0 or newer) | `_webos.ipk` | [`platforms/webos`](platforms/webos/README.md) |
+| Samsung Tizen TV (6.0 or newer) | `_tizen.wgt` (store build), `_tizen_youtube.wgt` (trailers in the app), and both with `_autoupdate` | [`platforms/tizen`](platforms/tizen/README.md) |
+| LG webOS TV (6.0 or newer) | `_webos.ipk` (store build), `_webos_autoupdate.ipk` | [`platforms/webos`](platforms/webos/README.md) |
 | Android TV / Google TV | `_androidtv.apk` | [`platforms/android`](platforms/android/README.md) |
 | Amazon Fire TV (Fire OS models) | `_firetv.apk` | [`platforms/android`](platforms/android/README.md) |
 | Windows, macOS, Linux | `_windows-x64.exe`, `_macos-x64.dmg`, `_macos-arm64.dmg`, `_linux-x64.AppImage`, `_linux-x64.deb` | [`platforms/desktop`](platforms/desktop/README.md) |
@@ -96,16 +96,15 @@ store listings). "Not advertised" means we found no mention of it, not that it i
 | ![Movies](docs/screenshots/movies.jpg) **Movies**: genres, categories and filters | ![TV series](docs/screenshots/series.jpg) **TV series** |
 | ![Live TV](docs/screenshots/live-tv.jpg) **Live TV** with the programme now playing | ![Search](docs/screenshots/search.jpg) **Search** from the top bar |
 | ![Movie detail](docs/screenshots/movie-detail.jpg) **Movie**: play, trailer, watched, favorite | ![Series detail](docs/screenshots/series-detail.jpg) **Series**: seasons and episodes |
-| ![Player](docs/screenshots/player.jpg) **Player** | ![Favorites](docs/screenshots/favorites.jpg) **Favorites** |
-| ![Settings](docs/screenshots/settings.jpg) **Settings**: catalog, TMDB, Trakt, preferences | ![Providers](docs/screenshots/providers.jpg) **Providers** |
-| ![Visible categories](docs/screenshots/categories.jpg) **Visible categories** | |
+| ![Player](docs/screenshots/player.jpg) **Player** | ![Settings](docs/screenshots/settings.jpg) **Settings**: catalog, guide, services, preferences |
+| ![Providers](docs/screenshots/providers.jpg) **Providers** | |
 
-The screenshots use a fictional demo provider.
+The screenshots use the fictional demo catalog of the mock server (`npm run screenshots`).
 
 ## First steps
 
 1. **Install the app** with the guide of your platform (see [Platforms](#platforms)).
-2. **Add a provider**: name, server URL, username and password. The catalog downloads in the background.
+2. **Add a provider**: choose **Xtream API** (server URL, username and password) or **M3U / XMLTV** (playlist URL and, optionally, its guide). The catalog downloads in the background.
 3. **Recommended:** type the TMDB, Trakt and OpenSubtitles keys in **Settings** (see below).
 
 ## Optional services

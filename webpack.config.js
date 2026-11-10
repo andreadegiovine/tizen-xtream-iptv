@@ -24,7 +24,13 @@ function platformOf(env) {
 module.exports = (env = {}, argv = {}) => {
   const isProd = argv.mode === 'production';
   const target = platformOf(env);
-  const buildOptions = { isProd, version: pkg.version };
+  // Package variants (release workflow): `--env youtube` the Tizen trailer service, `--env autoupdate` the updates from the app itself
+  // (only the "_autoupdate" packages of Tizen and webOS; the store packages never load code from outside the package).
+  const flag = (name) => Boolean(env[name] && env[name] !== 'false' && env[name] !== '0');
+  const youtube = flag('youtube');
+  const autoupdate = flag('autoupdate');
+  const channel = `${target.name}${youtube ? '_youtube' : ''}`; // the online build an "_autoupdate" package follows (same variant)
+  const buildOptions = { isProd, version: pkg.version, youtube, autoupdate };
 
   return {
     mode: isProd ? 'production' : 'development',
@@ -61,6 +67,9 @@ module.exports = (env = {}, argv = {}) => {
         __DEV__: JSON.stringify(!isProd),
         __APP_VERSION__: JSON.stringify(pkg.version),
         __PLATFORM__: JSON.stringify(target.name),
+        __YOUTUBE__: JSON.stringify(youtube),
+        __AUTOUPDATE__: JSON.stringify(autoupdate),
+        __UPDATE_CHANNEL__: JSON.stringify(channel),
         // hls.js / mpegts.js in the build: development, and the platforms that play HLS / MPEG-TS with them (build.js `demux`).
         __JS_DEMUX__: JSON.stringify(!isProd || Boolean(target.build.demux)),
       }),
@@ -71,6 +80,7 @@ module.exports = (env = {}, argv = {}) => {
         // Options of the page template given by the platform (Tizen: webapis.js, which only exists inside a packaged app).
         includeWebapis: false,
         appVersion: pkg.version,
+        autoupdate,
         logoSvg: fs.readFileSync(LOGO, 'utf8'), // the start screen shows the logo while the app loads
         ...(target.build.html ? target.build.html(buildOptions) : {}),
       }),

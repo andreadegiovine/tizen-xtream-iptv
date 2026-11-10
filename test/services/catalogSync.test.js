@@ -298,3 +298,18 @@ describe('idb helpers used by the sync', () => {
     db.close();
   });
 });
+
+describe('M3U provider', () => {
+  test('a playlist syncs its live channels and movies like an Xtream account (no series)', async () => {
+    const { M3uClient } = await import('../../src/services/m3uClient.js');
+    const playlist = ['#EXTM3U', '#EXTINF:-1 tvg-id="a.it" group-title="News",Canale A', 'http://h/live/u/p/1.ts', '#EXTINF:-1 group-title="Film",Matrix', 'http://h/movie/u/p/603.mkv'].join('\n');
+    const client = new M3uClient({ playlistUrl: 'http://h/list.m3u', fetchText: async () => playlist, wrapUrl: (u) => u });
+    const db = await newDb();
+    const results = await runSync({ db, client, types: ['movie', 'series', 'live'], force: true });
+    expect(results.map((r) => r.type || (r.meta && r.meta.key))).toBeTruthy();
+    const entries = await dbGetAll(db, 'entries');
+    expect(entries.map((e) => [e.type, e.name]).sort()).toEqual([['live', 'Canale A'], ['movie', 'Matrix']]);
+    expect(entries.find((e) => e.type === 'live').epgChannelId).toBe('a.it');
+    db.close();
+  });
+});

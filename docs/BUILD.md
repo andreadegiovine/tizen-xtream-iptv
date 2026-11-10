@@ -53,6 +53,19 @@ by `platforms/<name>/build.js`. The result is always in `dist/`, and `scripts/ch
 
 Platform icons are not kept in the repository: the build draws them from `logo.svg` (`scripts/platform-icons.js`) into `dist/` (the Android launcher icons and banner go to `dist/android-res/`).
 
+## Package variants
+
+Two build flags of webpack (`--env youtube`, `--env autoupdate`) make the variants the release attaches:
+
+| Package | Flags | What it has |
+|---|---|---|
+| `_tizen.wgt` | none (`npm run build:tizen`) | store build: no `<tizen:service>` (Samsung allows it to partners only), trailers in the TV's YouTube app, no online updates |
+| `_tizen_youtube.wgt` | `--env youtube` | trailers in the app, played by the on-TV YouTube service |
+| `_tizen_autoupdate.wgt`, `_tizen_youtube_autoupdate.wgt` | `--env autoupdate` (and `--env youtube`) | the same, updating themselves from the online build of the same variant |
+| `_webos.ipk` / `_webos_autoupdate.ipk` | none / `--env autoupdate` | store build / updates itself |
+
+The package scripts take the variant suffix in `VARIANT` (`VARIANT=_youtube_autoupdate bash platforms/tizen/package.sh 1.0.0`).
+
 ## Package
 
 Every platform has a script that turns `dist/` into the release package. They are the ones the release workflow runs; you can run them locally with the same arguments:
@@ -147,8 +160,10 @@ To try a release without publishing a real one, create a pre-release with a tag 
 
 Installed apps update their web code (JavaScript, styles, fonts) by themselves, without the store or the system (`src/services/updates.js`):
 
-- The release workflow's `pages` job builds every platform and writes `bundles/<version>/<platform>/` and `version.json` on the `gh-pages`
-  branch (`scripts/publish-updates.js`, last three versions kept). GitHub Pages must serve that branch (Settings → Pages → Deploy from a
+- Only the `_autoupdate` packages of Tizen and webOS check for updates; each follows its own channel (`tizen`, `tizen_youtube`, `webos`),
+  so a package receives builds of its own variant. Store packages never load code from outside (the loader ignores any stored build).
+- The release workflow's `pages` job builds those channels (with `--env autoupdate`) and writes `bundles/<version>/<channel>/` and
+  `version.json` on the `gh-pages` branch (`scripts/publish-updates.js`, last three versions kept). GitHub Pages must serve that branch (Settings → Pages → Deploy from a
   branch → `gh-pages`, `/ (root)`); the app reads `https://andreadegiovine.github.io/xtream-iptv-client/version.json`.
 - At start-up the check is the first thing the app does (5 s at most): a newer build that the installed package can run is downloaded
   ("Updating to version X…" in a notice over the start screen), the app starts again with it and only then runs its usual start-up work. The loader in
@@ -158,6 +173,15 @@ Installed apps update their web code (JavaScript, styles, fonts) by themselves, 
   when a release changes them, raise `updates.minShell` in `package.json` to that version; older packages then show a notice asking to install
   the new package instead of loading the build.
 - Not used in development builds. The web code is checked by HTTPS only (no signature yet).
+
+## Screenshots and store material
+
+- `npm run build && npm run screenshots`: starts the mock server with `--demo` (fictional English titles, drawn posters, made-up channel
+  brands and guide), walks the app with the keyboard and writes `docs/screenshots/*.jpg` (1280x720) and the store screenshots
+  (`platforms/tizen/store/screenshots`, `platforms/webos/store/screenshots`, 1920x1080 JPG under 500 kB).
+- `npm run store-assets`: the store icons drawn from `logo.svg` (Samsung 512x423 and 1920x1080 with its logo and background; LG 400x400).
+- The fields to fill in the Samsung Seller Office and the LG Seller Lounge are in `platforms/tizen/store/STORE.md` and
+  `platforms/webos/store/STORE.md` (with the UX scenario LG asks for); the privacy policy is `docs/PRIVACY.md`.
 
 ## Project layout
 

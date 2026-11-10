@@ -1,16 +1,16 @@
 import { openProviderDb } from '../db/providerDb.js';
-import { XtreamClient } from './xtreamClient.js';
+import { createProviderClient } from './providerTypes.js';
 
 /**
  * Shared handle on the active provider: its database (opened once, kept open) and an API client that
  * authenticates lazily (needed for the live stream format). Pages never close the shared database;
  * call `release()` before a provider is deleted so the delete is not blocked.
  */
-export function createActiveProvider({ providers, openDb = openProviderDb, makeClient = (p) => new XtreamClient({ baseUrl: p.baseUrl, username: p.username, password: p.password }) }) {
+export function createActiveProvider({ providers, openDb = openProviderDb, makeClient = createProviderClient }) {
   let cache = null;
   let pending = null;
 
-  const same = (a, b) => a.id === b.id && a.baseUrl === b.baseUrl && a.username === b.username && a.password === b.password;
+  const same = (a, b) => a.id === b.id && a.baseUrl === b.baseUrl && a.username === b.username && a.password === b.password && a.playlistUrl === b.playlistUrl && a.epgUrl === b.epgUrl;
 
   function release() {
     if (cache) {
@@ -34,6 +34,8 @@ export function createActiveProvider({ providers, openDb = openProviderDb, makeC
     const db = await openDb(provider.id);
     db.onversionchange = () => db.close();
     cache = { provider, db, client: makeClient(provider), auth: null };
+    // A playlist client gives stream addresses once it has read the playlist (the player asks for them without waiting).
+    if (cache.client.prepare) await cache.client.prepare().catch(() => undefined);
     return cache;
   }
 

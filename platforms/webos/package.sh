@@ -30,7 +30,7 @@ if [ -z "$IPK" ]; then
   echo "::error::No .ipk produced"
   exit 1
 fi
-NAME="xtream-iptv-${VERSION}_webos"
+NAME="xtream-iptv-${VERSION}_webos${VARIANT:-}" # _autoupdate: the package that updates itself
 mv "$IPK" "${OUT}/${NAME}.ipk"
 (cd "$OUT" && sha256sum "${NAME}.ipk" > "${NAME}.ipk.sha256")
 echo "Packaged ${OUT}/${NAME}.ipk"

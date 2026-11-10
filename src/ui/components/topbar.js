@@ -57,8 +57,9 @@ export function createTopbar(ctx, handlers = {}) {
   let field = null;
   let closeBtn = null;
   let timer = null;
-  const items = () => SECTIONS;
-  const indexOf = (id) => Math.max(0, SECTIONS.findIndex((s) => s.id === id));
+  let hidden = new Set(); // sections left out of the bar (empty favourites, collections, suggestions; or not offered by the provider)
+  const items = () => SECTIONS.filter((section) => !hidden.has(section.id));
+  const indexOf = (id) => Math.max(0, items().findIndex((s) => s.id === id));
 
   const zone = new FocusZone({
     id: TOPBAR_ZONE,
@@ -199,6 +200,16 @@ export function createTopbar(ctx, handlers = {}) {
     setVisible(visible) {
       el.style.display = visible ? '' : 'none';
     },
+    /** Leaves the given sections out of the bar (the others shift); the cursor stays on the same section when it is still there. */
+    setHidden(ids) {
+      const next = new Set(ids);
+      if (next.size === hidden.size && Array.from(next).every((id) => hidden.has(id))) return;
+      const focusedId = (items()[zone.index] || {}).id;
+      hidden = next;
+      zone.index = focusedId && !hidden.has(focusedId) ? indexOf(focusedId) : indexOf(currentSection);
+      api.render();
+    },
+    isHidden: (id) => hidden.has(id),
     /** Marks the section as current and parks the bar's cursor on it (so coming back lands on it). */
     setCurrentSection(id) {
       currentSection = id;

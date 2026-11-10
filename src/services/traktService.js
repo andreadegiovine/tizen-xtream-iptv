@@ -399,14 +399,20 @@ export function createWatchState({ store, trakt }) {
     all: read(() => store.all()),
     /**
      * "Seen" by hand on a whole title (a movie, or a series with all its episodes): stored locally, and told to Trakt as ONE
-     * change on the title (episodes of a series are reported one by one only when they are really watched).
+     * change on the title (episodes of a series are reported one by one only when they are really watched). It runs in the
+     * background queue: the page shows the title as seen at once and reads the episodes again when the returned promise resolves.
+     * All the records go in one transaction (a long series used to take seconds, one write per episode).
      */
     markWatched: (records, now) =>
       queued(async () => {
-        for (const record of records) await store.save({ ...record, position: 1, duration: 1 }, now);
-        if (!trakt || !records.length) return;
+        if (!records.length) return;
+        const seen = records.map((record) => ({ ...record, position: 1, duration: 1 }));
+        if (store.saveMany) await store.saveMany(seen, now);
+        else for (const record of seen) await store.save(record, now);
+        if (!trakt) return;
         if (await trakt.reportManual(records[0].entryKey, true).catch(() => false)) {
-          for (const record of records) await store.patch(record.key, { traktSynced: true });
+          if (store.saveMany) await store.saveMany(seen.map((record) => ({ ...record, traktSynced: true })), now);
+          else for (const record of records) await store.patch(record.key, { traktSynced: true });
         }
       }),
     /** "Not seen" by hand: local history of the title forgotten, and the title taken out of the Trakt history. */
@@ -510,16 +516,20 @@ export function createWatchState({ store, trakt }) {
       await this.pushUnsent(); // what was watched only here goes to Trakt too
       return changed;
     },
-    /** How many titles are aligned with Trakt: watched (movies and episodes) and in progress (continue watching). */
+    /**
+     * How many titles are aligned with Trakt: watched and in progress (continue watching). A series counts once, however many of its
+     * episodes are watched (Trakt receives the show as one title when it is marked as seen).
+     */
     async traktCounts() {
-      let watched = 0;
-      let progress = 0;
+      const watched = new Set();
+      const progress = new Set();
       for (const r of await store.all()) {
+        const title = r.entryKey || r.key;
         if (r.watched) {
-          if (r.source === 'trakt' || r.traktSynced) watched += 1;
-        } else if (r.source === 'trakt' && r.position > 0) progress += 1;
+          if (r.source === 'trakt' || r.traktSynced) watched.add(title);
+        } else if (r.source === 'trakt' && r.position > 0) progress.add(title);
       }
-      return { watched, progress };
+      return { watched: watched.size, progress: progress.size };
     },
     /** Watched titles Trakt has never received (watched before connecting, or when it was unreachable): sent in bulk. Resolves with how many went. */
     async pushUnsent() {

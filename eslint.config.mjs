@@ -7,6 +7,9 @@ const appGlobals = {
   tizen: 'readonly',
   webapis: 'readonly',
   __PLATFORM__: 'readonly',
+  __YOUTUBE__: 'readonly',
+  __AUTOUPDATE__: 'readonly',
+  __UPDATE_CHANNEL__: 'readonly',
   __JS_DEMUX__: 'readonly',
 };
 

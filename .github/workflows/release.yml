@@ -5,8 +5,9 @@ name: Release
 # same for all. The release tag must be a plain semantic version (v1.2.3 or 1.2.3): Tizen widget versions only accept numeric x.y.z.
 #
 # Assets attached to the release, named xtream-iptv-<version>_<platform>.<ext>:
-#   - xtream-iptv-<version>_tizen.wgt   Samsung Tizen, signed production widget   (+ .sha256)
-#   - xtream-iptv-<version>_webos.ipk   LG webOS, for TVs in Developer Mode       (+ .sha256)
+#   - xtream-iptv-<version>_tizen.wgt   Samsung Tizen, signed widget for the store (no trailer service, no online updates) (+ .sha256)
+#     _tizen_youtube.wgt (trailers in the app), _tizen_autoupdate.wgt, _tizen_youtube_autoupdate.wgt (update themselves)
+#   - xtream-iptv-<version>_webos.ipk   LG webOS (+ .sha256); _webos_autoupdate.ipk updates itself
 #   - xtream-iptv-<version>_windows-x64.exe, _macos-x64.dmg, _macos-arm64.dmg, _linux-x64.AppImage, _linux-x64.deb
 #                                       desktop app (Electron), not signed        (+ .sha256)
 #   - xtream-iptv-<version>_androidtv.apk, _firetv.apk
@@ -69,13 +70,20 @@ jobs:
       - name: Stamp version
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      # Production build for Tizen -> dist/.
-      - run: npm run build:tizen
-
-      - name: Sign the widget
+      # Four widgets: _tizen (store: no trailer service, no online updates), _tizen_youtube (trailers in the app), and the same two
+      # with _autoupdate (they update themselves from the online build of the same variant).
+      - name: Build and sign the widgets
         env:
           CERT_PASSWORD: ${{ secrets.TIZEN_CERT_PASSWORD }}
-        run: bash platforms/tizen/package.sh "$VERSION" release
+        run: |
+          for variant in "" "_youtube" "_autoupdate" "_youtube_autoupdate"; do
+            flags=""
+            case "$variant" in *youtube*) flags="$flags --env youtube" ;; esac
+            case "$variant" in *autoupdate*) flags="$flags --env autoupdate" ;; esac
+            npx webpack --mode production --env platform=tizen $flags
+            node scripts/check-dist.js
+            VARIANT="$variant" bash platforms/tizen/package.sh "$VERSION" release
+          done
 
       - name: Upload assets to the release
         env:
@@ -101,11 +109,16 @@ jobs:
       - name: Stamp version
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      # Production build for webOS -> dist/.
-      - run: npm run build:webos
-
-      - name: Package the app
-        run: bash platforms/webos/package.sh "$VERSION" release
+      # Two packages: _webos (store: no online updates) and _webos_autoupdate (updates itself from the online build).
+      - name: Build and package the apps
+        run: |
+          for variant in "" "_autoupdate"; do
+            flags=""
+            case "$variant" in *autoupdate*) flags="--env autoupdate" ;; esac
+            npx webpack --mode production --env platform=webos $flags
+            node scripts/check-dist.js
+            VARIANT="$variant" bash platforms/webos/package.sh "$VERSION" release
+          done
 
       - name: Upload assets to the release
         env:
@@ -217,11 +230,12 @@ jobs:
       - name: Stamp version
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      - name: Build the web code of every platform
+      # One online build per "_autoupdate" variant (channel): the package follows the build of its own variant.
+      - name: Build the web code of every update channel
         run: |
-          for platform in tizen webos desktop android; do
-            npx webpack --mode production --env platform=$platform --output-path "builds/$platform"
-          done
+          npx webpack --mode production --env platform=tizen --env autoupdate --output-path builds/tizen
+          npx webpack --mode production --env platform=tizen --env youtube --env autoupdate --output-path builds/tizen_youtube
+          npx webpack --mode production --env platform=webos --env autoupdate --output-path builds/webos
 
       - uses: actions/checkout@v4
         with:
@@ -230,7 +244,7 @@ jobs:
 
       - name: Publish the builds and version.json
         run: |
-          node scripts/publish-updates.js pages "$VERSION" tizen=builds/tizen webos=builds/webos desktop=builds/desktop android=builds/android
+          node scripts/publish-updates.js pages "$VERSION" tizen=builds/tizen tizen_youtube=builds/tizen_youtube webos=builds/webos
           cd pages
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

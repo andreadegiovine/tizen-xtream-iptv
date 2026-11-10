@@ -13,7 +13,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const { buildCatalog, rng, title, TMDB_GENRES } = require('./data');
+const { buildCatalog, rng, title, TMDB_GENRES, DEMO_GENRE_NAMES } = require('./data');
 
 const args = Object.fromEntries(process.argv.slice(2).reduce((out, arg, i, all) => (arg.startsWith('--') ? out.concat([[arg.slice(2), all[i + 1]]]) : out), []));
 const PORT = Number(args.port || 8090);
@@ -24,7 +24,8 @@ const DIST = path.resolve(args.dist || path.join(__dirname, '../../dist'));
 const BASE = `http://localhost:${PORT}`;
 
 const t0 = Date.now();
-const catalog = buildCatalog({ movies: Number(args.movies || 20000), series: Number(args.series || 8000), live: Number(args.live || 3000), baseUrl: BASE });
+const DEMO = Boolean(args.demo); // fictional English names and drawn posters (screenshots: npm run screenshots)
+const catalog = buildCatalog({ movies: Number(args.movies || 20000), series: Number(args.series || 8000), live: Number(args.live || 3000), baseUrl: BASE, demo: DEMO });
 const json = (value) => Buffer.from(JSON.stringify(value));
 const cache = new Map(); // big bodies built once
 const stats = { requests: {}, bytes: 0 };
@@ -92,6 +93,18 @@ function shortEpg(streamId) {
 }
 
 const GENRES = ['Sport', 'Notizie', 'Film', 'Bambini', 'Documentari', 'Musica', 'Serie TV'];
+// --demo: English genres and made-up programme titles per genre.
+const DEMO_GENRES = ['Sport', 'News', 'Movies', 'Kids', 'Documentary', 'Music', 'Series'];
+const DEMO_SHOWS = {
+  Sport: ['Match Day Live', 'Goals of the Week', 'The Training Ground', 'Track and Field', 'Race Night'],
+  News: ['Morning Briefing', 'World Today', 'Evening News', 'Business Hour', 'Weather Watch'],
+  Movies: ['Silent Orbit', 'The Glass Garden', 'Neon Horizon', 'Iron Valley', 'Paper Moons'],
+  Kids: ['Little Explorers', 'Cartoon Club', 'Robot Friends', 'Story Time', 'Jungle Band'],
+  Documentary: ['Wild Coasts', 'Deep Oceans', 'Mountain Life', 'Ancient Cities', 'Night Sky'],
+  Music: ['Top 20 Countdown', 'Live Session', 'Classic Hits', 'Jazz Corner', 'New Sounds'],
+  Series: ['Harbor Lights', 'Frontier Doctors', 'The Night Shift', 'Kingdoms of Ash', 'Little Orbit'],
+  '': ['Talk Tonight', 'Home Makeover', 'Quiz Hour', 'Cooking Together', 'Travel Diaries'],
+};
 
 function xmltv() {
   const ids = Array.from(new Set(catalog.live.map((c) => c.epg_channel_id).filter(Boolean)));
@@ -104,18 +117,41 @@ function xmltv() {
     // One channel in 25 has a guide that only says it has nothing (as some providers do): the app must treat it as no guide.
     const placeholder = n % 25 === 24;
     for (let i = 0; i < 48; i += 1) {
-      const title = placeholder ? 'EPG non disponibile' : `Programma ${i}`;
       // Categories as many guides give them: one genre per channel (a third of the channels have none), sometimes a second one.
       const genre = n % 3 === 2 ? '' : GENRES[n % GENRES.length];
-      const category = genre ? `<category lang="it">${genre}</category>${i % 4 === 0 ? '<category lang="it">Intrattenimento</category>' : ''}` : '';
-      parts.push(`<programme start="${stamp(day + i * 3600)}" stop="${stamp(day + (i + 1) * 3600)}" channel="${id}"><title>${title}</title><desc>Descrizione ${i} di ${id}.</desc>${category}</programme>\n`);
+      const demoGenre = DEMO && genre ? DEMO_GENRES[GENRES.indexOf(genre)] : '';
+      const title = placeholder ? 'EPG non disponibile' : DEMO ? DEMO_SHOWS[demoGenre][(i + n) % 5] : `Programma ${i}`;
+      const shown = DEMO ? demoGenre : genre;
+      const extra = DEMO ? 'Entertainment' : 'Intrattenimento';
+      const category = shown ? `<category lang="it">${shown}</category>${i % 4 === 0 ? `<category lang="it">${extra}</category>` : ''}` : '';
+      parts.push(`<programme start="${stamp(day + i * 3600)}" stop="${stamp(day + (i + 1) * 3600)}" channel="${id}"><title>${title}</title><desc>${DEMO ? 'A made-up programme of the demo guide.' : `Descrizione ${i} di ${id}.`}</desc>${category}</programme>\n`);
     }
   });
   parts.push('</tv>\n');
   return Buffer.from(parts.join(''));
 }
 
+const esc = (text) => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+/** --demo: a poster with a gradient, a sun, hills and the title; a channel logo with its name; a backdrop with soft shapes. */
+function demoSvg(kind, id) {
+  const hue = (Number(id) * 47) % 360;
+  const list = kind === 'm' ? catalog.vod : kind === 's' ? catalog.series : catalog.live;
+  // TMDB pictures (p, b) carry the TMDB id: the title the fake TMDB gives that id.
+  const item = kind === 'p' || kind === 'b' ? { name: title(rng(Number(id)), 2) } : list[(Number(id) - 1) % list.length] || {};
+  const name = String(item.name || '').replace(/ (HD|FHD|4K|SD|HEVC)$/, '');
+  if (kind === 'l') {
+    return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},70%,55%)"/><stop offset="1" stop-color="hsl(${(hue + 40) % 360},70%,35%)"/></linearGradient></defs><rect width="200" height="200" rx="36" fill="url(#g)"/><text x="100" y="112" fill="#fff" font-family="Arial,sans-serif" font-weight="700" font-size="34" text-anchor="middle">${esc(name.split(' ')[0] || '')}</text><text x="100" y="146" fill="#fff" font-family="Arial,sans-serif" font-size="22" text-anchor="middle" opacity=".85">${esc(name.split(' ').slice(1).join(' '))}</text></svg>`);
+  }
+  const [w, h] = kind === 'b' ? [780, 439] : [342, 513];
+  const words = name.split(' ');
+  const lines = words.length > 2 ? [words.slice(0, 2).join(' '), words.slice(2).join(' ')] : words;
+  const text = kind === 'b' ? '' : lines.map((line, i) => `<text x="${w / 2}" y="${h * 0.6 + i * 34}" fill="#fff" font-family="Arial,sans-serif" font-weight="700" font-size="28" text-anchor="middle">${esc(line)}</text>`).join('');
+  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="hsl(${hue},65%,45%)"/><stop offset="1" stop-color="hsl(${(hue + 30) % 360},60%,12%)"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><circle cx="${w * 0.68}" cy="${h * 0.3}" r="${w * 0.24}" fill="#fff" opacity=".18"/><path d="M0 ${h} L${w * 0.35} ${h * 0.62} L${w * 0.6} ${h * 0.82} L${w * 0.8} ${h * 0.55} L${w} ${h * 0.78} L${w} ${h} Z" fill="#000" opacity=".35"/>${text}</svg>`);
+}
+
 function svg(kind, id) {
+  if (DEMO) return demoSvg(kind, id);
   const hue = (Number(id) * 47) % 360;
   const [w, h] = kind === 'l' ? [200, 200] : kind === 'b' ? [780, 439] : [342, 513];
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="hsl(${hue},45%,35%)"/><text x="50%" y="50%" fill="#fff" font-family="sans-serif" font-size="${Math.round(w / 8)}" text-anchor="middle">${kind}${id}</text></svg>`);
@@ -129,12 +165,14 @@ function tmdb(pathname, query) {
     const n = 1 + Math.floor(r() * 3);
     const set = new Map();
     while (set.size < n) {
-      const [gid, name] = TMDB_GENRES[Math.floor(r() * TMDB_GENRES.length)];
+      const index = Math.floor(r() * TMDB_GENRES.length);
+      const [gid, italian] = TMDB_GENRES[index];
+      const name = DEMO ? DEMO_GENRE_NAMES[index] : italian;
       set.set(gid, { id: gid, name });
     }
     return Array.from(set.values());
   };
-  const item = (kind, id) => ({ id: Number(id), [kind === 'movie' ? 'title' : 'name']: title(rng(Number(id)), 2), overview: `Trama TMDB ${id}.`, poster_path: `/p${id}.svg`, backdrop_path: `/b${id}.svg`, vote_average: (Number(id) % 90) / 10, [kind === 'movie' ? 'release_date' : 'first_air_date']: '2010-01-01', genres: genresFor(id), genre_ids: genresFor(id).map((g) => g.id), runtime: 100, credits: { cast: [], crew: [] }, videos: { results: [] } });
+  const item = (kind, id) => ({ id: Number(id), [kind === 'movie' ? 'title' : 'name']: title(rng(Number(id)), 2), overview: DEMO ? 'A fictional story made up for this demo catalog: no real title, no real content.' : `Trama TMDB ${id}.`, poster_path: `/p${id}.svg`, backdrop_path: `/b${id}.svg`, vote_average: (Number(id) % 90) / 10, [kind === 'movie' ? 'release_date' : 'first_air_date']: '2010-01-01', genres: genresFor(id), genre_ids: genresFor(id).map((g) => g.id), runtime: 100, credits: { cast: [], crew: [] }, videos: { results: [] } });
   if (m && m[3]) return { results: Array.from({ length: 12 }, (_, i) => item(m[1], Number(m[2]) + i + 1)) };
   if (m) return Number(m[2]) % 50 === 0 ? null : item(m[1], m[2]); // some ids are not found: 404
   const s = pathname.match(/^\/3\/search\/(movie|tv)$/);
@@ -189,7 +227,20 @@ const server = http.createServer(async (req, res) => {
       count(action, body.length);
       return send(req, res, 200, body, 'application/json');
     }
-    if (url.pathname === '/xmltv.php') {
+    // M3U / XMLTV provider: the same live channels and movies as an M3U playlist (Xtream-style stream paths), and the same guide as
+    // /epg.xml. `?guide=0` leaves the url-tvg header out (the guide must then be typed with the provider).
+    if (url.pathname === '/playlist.m3u') {
+      const host = `http://${req.headers.host}`;
+      const head = q.get('guide') === '0' ? '#EXTM3U' : `#EXTM3U url-tvg="${host}/epg.xml"`;
+      const group = (list, id) => (list.find((c) => c.category_id === id) || {}).category_name || '';
+      const lines = [head];
+      catalog.live.forEach((c) => lines.push(`#EXTINF:-1 tvg-id="${c.epg_channel_id || ''}" tvg-logo="${c.stream_icon || ''}" group-title="${group(catalog.liveCats, c.category_id)}",${c.name}`, `${host}/live/test/test/${c.stream_id}.ts`));
+      catalog.vod.slice(0, 500).forEach((m) => lines.push(`#EXTINF:-1 tvg-logo="${m.stream_icon || ''}" group-title="${group(catalog.vodCats, m.category_id)}",${m.name}`, `${host}/movie/test/test/${m.stream_id}.${m.container_extension}`));
+      const body = Buffer.from(`${lines.join('\n')}\n`);
+      count('playlist', body.length);
+      return send(req, res, 200, body, 'audio/x-mpegurl');
+    }
+    if (url.pathname === '/xmltv.php' || url.pathname === '/epg.xml') {
       const body = memo('xmltv', xmltv);
       count('xmltv', body.length);
       return send(req, res, 200, body, 'application/xml');

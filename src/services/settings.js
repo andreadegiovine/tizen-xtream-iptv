@@ -4,7 +4,6 @@ import { TEXT_SIZES, DEFAULT_TEXT_SIZE } from '../core/textSize.js';
 import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF, DEFAULT_IGNORE_NUMBERS } from './liveNetworks.js';
 
 export const BUFFER_OPTIONS = [2, 5, 10, 20, 30];
-export const CAROUSEL_OPTIONS = [10, 15, 20, 30];
 // Multiples of 12 fill whole rows for both poster grids (6 columns) and channel grids (4 columns).
 export const GRID_OPTIONS = [12, 24, 36];
 // Screensaver: minutes without a key before it starts; 0 = off.
@@ -15,7 +14,6 @@ export const SUGGESTION_SOURCE_OPTIONS = ['tmdb', 'trakt'];
 export const DEFAULT_SETTINGS = Object.freeze({
   language: 'auto',
   bufferSeconds: 10,
-  carouselItems: 15,
   gridItems: 24,
   autoplayNext: true,
   textSize: DEFAULT_TEXT_SIZE, // % of the base text size (75, 100, 125)
@@ -54,7 +52,6 @@ function sanitize(raw) {
   return {
     language: pick(raw.language, LANGUAGE_OPTIONS, DEFAULT_SETTINGS.language),
     bufferSeconds: pick(raw.bufferSeconds, BUFFER_OPTIONS, DEFAULT_SETTINGS.bufferSeconds),
-    carouselItems: pick(raw.carouselItems, CAROUSEL_OPTIONS, DEFAULT_SETTINGS.carouselItems),
     gridItems: pick(raw.gridItems, GRID_OPTIONS, DEFAULT_SETTINGS.gridItems),
     textSize: pick(raw.textSize, TEXT_SIZES, DEFAULT_SETTINGS.textSize),
     // Older versions stored on / off: on is the default delay.

@@ -127,6 +127,12 @@ export function createSyncPanel(ctx) {
     /** The guide row's buttons: { remove, refresh }. */
     epgButtons: { remove: epgButtons.remove, refresh: epgButtons.refresh },
     refreshEpg: () => refreshEpg(),
+    /** Only the media types the provider has (a playlist has no series): the other rows are hidden. */
+    setTypes(types) {
+      rows.forEach((row) => {
+        row.el.style.display = types.indexOf(row.type) >= 0 ? '' : 'none';
+      });
+    },
     /** Nickname of the active provider, next to the title. */
     setProviderName(name) {
       providerName.textContent = name ? ` · ${name}` : '';

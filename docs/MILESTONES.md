@@ -656,3 +656,12 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 
 ### Patch 137 — repository renamed
 - The repository is now `andreadegiovine/xtream-iptv-client`: the online updates read `https://andreadegiovine.github.io/xtream-iptv-client/version.json` (GitHub Pages follows the repository name; the old address no longer answers). The gh-pages page links to the new repository. Applies after patch 136.
+
+### Patch 138 — M3U providers, package variants, store material, lazy rows, Trakt counts
+- **M3U / XMLTV providers**: adding a provider starts by choosing its kind (Xtream API or M3U / XMLTV); a playlist gives live channels and movies (grouped by its groups, with logos and guide ids) and its guide (typed, or the one the playlist names). The Series section and the series rows of Settings are hidden for playlists. Mock: `/playlist.m3u` and `/epg.xml`.
+- **Packages**: `_tizen.wgt` is now the store build (no `<tizen:service>`, which Samsung reserves to partners, so trailers open the TV's YouTube app; no online updates); `_tizen_youtube.wgt` keeps the in-app trailers; `_tizen_autoupdate.wgt`, `_tizen_youtube_autoupdate.wgt`, `_webos_autoupdate.ipk` are the only ones that update themselves, each from the online build of its own variant (channels `tizen`, `tizen_youtube`, `webos` on gh-pages).
+- **Store material**: `platforms/tizen/store/` and `platforms/webos/store/` with icons, four 1920x1080 screenshots, `STORE.md` (every field, texts in English and Italian, tester instructions with a public legal M3U), LG's UX scenario; `docs/PRIVACY.md`. New scripts: `npm run screenshots` (mock in `--demo` mode) and `npm run store-assets`. Documentation screenshots regenerated.
+- **Trakt**: marking a series as seen counts one title in Settings (Trakt receives the show); the episodes are written in the background in one transaction, the result is immediate.
+- **Home rows** load the cards on screen plus five, the rest while scrolling; the "titles per carousel" preference is removed.
+- **Guide**: taller rows and bigger programme titles. **Top bar**: Favorites, Collections and Suggestions only when they have something. **Settings**: "v1.3.0 - last check …", boxes about the services that are off. **Android / Fire TV**: no `initial-scale` in the viewport (the page was too big).
+- Checked in Chromium with the mock (M3U setup, sync and guide; demo screenshots; top bar). Tests: M3U parser and client, provider types, sync of a playlist, setup steps, lazy carousel, Trakt counts, Tizen config variants. Not verified on the TV.

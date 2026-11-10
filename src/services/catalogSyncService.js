@@ -76,7 +76,7 @@ export class CatalogSyncService {
     this.notify();
 
     const payload = {
-      provider: { id: provider.id, baseUrl: provider.baseUrl, username: provider.username, password: provider.password },
+      provider: { id: provider.id, type: provider.type || 'xtream', baseUrl: provider.baseUrl, username: provider.username, password: provider.password, playlistUrl: provider.playlistUrl || '', epgUrl: provider.epgUrl || '' },
       types,
       excluded,
       cleanTitles: Boolean(await this.getCleanTitles()),

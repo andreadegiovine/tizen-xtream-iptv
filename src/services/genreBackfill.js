@@ -257,7 +257,8 @@ export async function runGenreBackfillForProvider({ provider, tmdbKey, language,
         appDb = await openAppDb();
         done = await runTmdbDownload({ db, appDb, tmdb, language, signal, gate, emit, force });
       }
-    } else {
+    } else if (provider.type !== 'm3u') {
+      // The provider's genres come from its per-title details: a playlist has none.
       const xtream = new XtreamClient({ baseUrl: provider.baseUrl, username: provider.username, password: provider.password });
       await xtream.authenticate().catch(() => undefined);
       done = await runGenreBackfill({ db, xtream, tmdb: null, language, signal, gate, emit, limit });

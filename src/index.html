@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=1920, height=1080, initial-scale=1" />
+    <meta name="viewport" content="width=1920, height=1080" /> <!-- no initial-scale: on Android it overrode the page fitted to the screen (overview mode) -->
     <title>Xtream IPTV</title>
     <% if (htmlWebpackPlugin.options.includeWebapis) { %>
     <script src="$WEBAPIS/webapis/webapis.js"></script>
@@ -16,6 +16,7 @@
       // than this package. A build that does not load falls back to the package's copy.
       (function () {
         var SHELL = '<%= htmlWebpackPlugin.options.appVersion %>';
+        var AUTOUPDATE = <%= htmlWebpackPlugin.options.autoupdate ? 'true' : 'false' %>; // only the "_autoupdate" packages load a build from outside
         var JS = <%= JSON.stringify(htmlWebpackPlugin.files.js) %>;
         var CSS = <%= JSON.stringify(htmlWebpackPlugin.files.css) %>;
         function newer(a, b) {
@@ -29,7 +30,7 @@
         }
         var bundle = null;
         try {
-          bundle = JSON.parse(window.localStorage.getItem('xi.bundle') || 'null');
+          bundle = AUTOUPDATE ? JSON.parse(window.localStorage.getItem('xi.bundle') || 'null') : null;
           if (bundle && !(bundle.base && newer(bundle.version, SHELL))) {
             window.localStorage.removeItem('xi.bundle'); // the package is as new: its own copy
             bundle = null;

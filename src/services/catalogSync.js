@@ -14,7 +14,7 @@ import { unavailableKeys } from './unavailable.js';
 import { buildGuideIndex, writeGuideIndex, GUIDE_INDEX_KEY } from './guideIndex.js';
 import { AppError, ErrorCode, Severity, toAppError } from '../core/errors.js';
 import { MediaType } from './mediaType.js';
-import { XtreamClient } from './xtreamClient.js';
+import { createProviderClient } from './providerTypes.js';
 import { projectItem } from './itemProjector.js';
 import { buildEntries, buildEntryCategoryRows, buildEntryGenreRows } from './grouping.js';
 import { LIVE_LAYOUT, DEFAULT_GROUPING, groupLiveItems, annotateGroupKeys, buildLiveAllRows, cleanChannelNames, compileTerms } from './liveGrouping.js';
@@ -389,7 +389,7 @@ export async function runSyncForProvider({ provider, types, excluded, cleanTitle
   let results = [];
   let failure = null;
   try {
-    const client = makeClient ? makeClient(provider) : new XtreamClient(provider);
+    const client = makeClient ? makeClient(provider) : createProviderClient(provider);
     emit({ event: 'progress', mediaType: null, phase: 'auth' });
     const auth = await client.authenticate();
     emit({ event: 'account', expiresAt: (auth && auth.user && auth.user.expiresAt) || null });

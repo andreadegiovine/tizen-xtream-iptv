@@ -80,7 +80,7 @@ export function createProvidersPage(ctx, params = {}) {
             { class: `provider-row${active ? ' is-active' : ''}` },
             h('div', { class: 'provider-info' },
               h('span', { class: 'provider-name', text: provider.name }, validity(provider) ? h('span', { class: `provider-valid${validity(provider).expired ? ' expired' : ''}`, text: validity(provider).text }) : null),
-              h('span', { class: 'provider-meta', text: `${hostOf(provider.baseUrl)} · ${provider.username}` })),
+              h('span', { class: 'provider-meta', text: provider.type === 'm3u' ? `${hostOf(provider.playlistUrl)} · M3U` : `${hostOf(provider.baseUrl)} · ${provider.username}` })),
             h('div', { class: 'provider-actions' }, nodes[cursor], nodes[cursor + 1], nodes[cursor + 2], nodes[cursor + 3]),
           ),
         );

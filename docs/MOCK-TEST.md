@@ -14,6 +14,9 @@ npm run mock -- [--port 8090] [--movies 20000] [--series 8000] [--live 3000] [--
 - Deterministic catalog (same seed, same catalog): 15% of titles without a TMDB id, 30% without genres, 7% without a poster, 1% adult, channels with quality variants (HD, FHD, 4K...) and country for the grouping; 48-hour XMLTV EPG (one channel in 25 has only "EPG not available" programmes, which the app must treat as no guide).
 - `--latency` is the delay of every API response, `--img-latency` that of images, `--kbps` limits the bandwidth (0 = no limit, gzip responses).
 - `GET /__stats` gives the requests received by type, `POST /__stats` resets them.
+- M3U / XMLTV provider: `GET /playlist.m3u` is the same live channels and the first 500 movies as an M3U playlist (Xtream-style stream
+  paths, `url-tvg` pointing at `/epg.xml`, the same guide); `?guide=0` leaves `url-tvg` out. Add it with the "M3U / XMLTV" kind of provider.
+- `--demo 1`: fictional English titles, genres, channel brands and guide programmes, drawn posters and logos (used by `npm run screenshots`).
 - It also works with the development build (`/__proxy` and `/__media` are handled).
 
 ## Measurements

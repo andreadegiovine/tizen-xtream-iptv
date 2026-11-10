@@ -139,6 +139,9 @@ describe('watch-state adapter', () => {
     await store.save({ key: 'movie:t4', entryKey: 'movie:t4', type: 'movie', position: 30, duration: 100, source: 'trakt' });
     await store.save({ key: 'movie:t5', entryKey: 'movie:t5', type: 'movie', position: 30, duration: 100 });
     expect(await ws.traktCounts()).toEqual({ watched: 2, progress: 1 });
+    // A series marked as seen is one title for Trakt: its episodes count once.
+    await ws.markWatched([1, 2, 3].map((n) => ({ key: `series:t9|s1e${n}`, entryKey: 'series:t9', episodeKey: `s1e${n}`, type: 'series', traktSynced: true })));
+    expect(await ws.traktCounts()).toEqual({ watched: 3, progress: 1 });
   });
 
   test('reads wait for a save that is still being written', async () => {

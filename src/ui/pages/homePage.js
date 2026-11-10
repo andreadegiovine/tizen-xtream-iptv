@@ -3,10 +3,13 @@ import { h } from '../dom.js';
 import { t } from '../../i18n/index.js';
 import { MediaType } from '../../services/mediaType.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
-import { createCarousel } from '../components/carousel.js';
+import { createCarousel, VISIBLE_CARDS, AHEAD_CARDS } from '../components/carousel.js';
 import { createSkeletonCard } from '../components/card.js';
 import { getEntry, pageEntries } from '../../services/catalogQuery.js';
 import { log } from '../../core/logger.js';
+
+const ROW_LIMIT = 200; // a home row ends here, however long the catalog
+const SUGGESTION_LIMIT = 120;
 
 /** "s1e2" → "S1E2". */
 export const episodeLabel = (episodeKey) => (episodeKey ? episodeKey.toUpperCase() : '');
@@ -67,7 +70,13 @@ export function createHomePage(ctx) {
           previous.delete(d.id);
           return kept;
         }
-        const carousel = createCarousel({ ...d, revealTop: index === 0, onOpen: (item) => ctx.openEntry(item.entry, { section: 'home' }) });
+        const carousel = createCarousel({
+          ...d,
+          revealTop: index === 0,
+          onOpen: (item) => ctx.openEntry(item.entry, { section: 'home' }),
+          // Cards read while scrolling get the same metadata as the first ones.
+          onAdded: (list, made) => enrich({ items: list, cards: made }),
+        });
         return Object.assign(carousel, { id: d.id, sig, first: index === 0, fresh: true });
       });
     previous.forEach((c) => {
@@ -96,30 +105,34 @@ export function createHomePage(ctx) {
     const mine = (building += 1);
     const current = await ctx.active.get();
     if (!current || destroyed) return;
-    const { carouselItems } = await ctx.settings.get();
     providerId = current.provider.id;
 
+    // Each row reads the cards on screen plus AHEAD_CARDS; the carousel asks for the next ones while the focus moves right (`more`).
+    const first = VISIBLE_CARDS + AHEAD_CARDS;
     const definitions = [];
-    const recent = await continueWatching(ctx, { providerId, limit: carouselItems });
-    const resumed = [];
-    for (const rec of recent) {
+    const recent = await continueWatching(ctx, { providerId, limit: ROW_LIMIT });
+    const resumeItem = async (rec) => {
       const entry = await getEntry(current.db, rec.entryKey);
-      if (!entry) continue;
-      resumed.push({ entry, type: entry.type, meta: { progress: rec.duration ? rec.position / rec.duration : 0, subtitle: episodeLabel(rec.episodeKey) } });
-    }
-    definitions.push({ id: 'homeContinue', title: t('home.continue'), items: resumed });
+      return entry ? { entry, type: entry.type, meta: { progress: rec.duration ? rec.position / rec.duration : 0, subtitle: episodeLabel(rec.episodeKey) } } : null;
+    };
+    const resumedFrom = async (offset, count) => (await Promise.all(recent.slice(offset, offset + count).map(resumeItem))).filter(Boolean);
+    definitions.push({ id: 'homeContinue', title: t('home.continue'), items: await resumedFrom(0, first), more: (offset, count) => resumedFrom(offset, count) });
     for (const type of [MediaType.MOVIE, MediaType.SERIES]) {
-      const page = await pageEntries(current.db, { type, offset: 0, limit: carouselItems });
-      definitions.push({ id: `homeLatest-${type}`, title: t(`home.new.${type}`), items: page.entries.map((entry) => ({ entry, type })) });
+      const page = await pageEntries(current.db, { type, offset: 0, limit: first });
+      const more = async (offset, count) => (offset >= ROW_LIMIT ? [] : (await pageEntries(current.db, { type, offset, limit: count })).entries.map((entry) => ({ entry, type })));
+      definitions.push({ id: `homeLatest-${type}`, title: t(`home.new.${type}`), items: page.entries.map((entry) => ({ entry, type })), more });
     }
     if (destroyed || mine !== building) return;
 
     render(definitions);
 
     // Suggestions come from TMDB / Trakt: they can take a while (or fail), so they never hold the other rows back.
-    const suggested = await ctx.suggestions.build({ limit: carouselItems * 4 }).then((result) => result.entries, () => []);
+    const suggested = await ctx.suggestions.build({ limit: SUGGESTION_LIMIT }).then((result) => result.entries, () => []);
     if (destroyed || mine !== building || !suggested.length) return;
-    const more = [MediaType.MOVIE, MediaType.SERIES].map((type) => ({ id: `homeSuggested-${type}`, title: t(`home.suggested.${type}`), items: suggested.filter((entry) => entry.type === type).slice(0, carouselItems).map((entry) => ({ entry, type })) }));
+    const more = [MediaType.MOVIE, MediaType.SERIES].map((type) => {
+      const all = suggested.filter((entry) => entry.type === type).map((entry) => ({ entry, type }));
+      return { id: `homeSuggested-${type}`, title: t(`home.suggested.${type}`), items: all.slice(0, first), more: async (offset, count) => all.slice(offset, offset + count) };
+    });
     render(definitions.concat(more));
   }
 

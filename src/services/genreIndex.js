@@ -186,7 +186,7 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     let done = 0;
     const p = current.provider;
     const payload = {
-      provider: { id: p.id, baseUrl: p.baseUrl, username: p.username, password: p.password },
+      provider: { id: p.id, type: p.type || 'xtream', baseUrl: p.baseUrl, username: p.username, password: p.password },
       tmdbKey: getTmdbKey(),
       language: getLanguage(),
       phase: name,

@@ -3,6 +3,7 @@ import { i18n, t, detectLocale } from './i18n/index.js';
 import { openAppDb } from './db/appDb.js';
 import { InputService, Action } from './core/input.js';
 import { log } from './core/logger.js';
+import { providerHiddenSections } from './services/providerTypes.js';
 import { checkForUpdate, installUpdate, forgetUpdate, runningVersions } from './services/updates.js';
 import { APP_VERSION, IS_DEV } from './core/env.js';
 import { FocusManager } from './ui/focus/FocusManager.js';
@@ -88,10 +89,11 @@ window.addEventListener('error', (event) => log.error('Uncaught error', event.me
 async function updateFirst(notices) {
   const versions = runningVersions();
   log.info(`App ${versions.bundle || APP_VERSION} (package ${versions.shell || APP_VERSION})`);
-  if (IS_DEV || !versions.shell || typeof __PLATFORM__ === 'undefined') return null;
+  // Only the "_autoupdate" packages (Tizen, webOS) update themselves, each from the online build of the same variant.
+  if (IS_DEV || !versions.shell || typeof __AUTOUPDATE__ === 'undefined' || !__AUTOUPDATE__) return null;
   let update = null;
   try {
-    update = await checkForUpdate({ platform: __PLATFORM__, running: versions.bundle || APP_VERSION, shell: versions.shell });
+    update = await checkForUpdate({ platform: __UPDATE_CHANNEL__, running: versions.bundle || APP_VERSION, shell: versions.shell });
   } catch (err) {
     log.warn('Update check failed', err && err.message);
     return null;
@@ -427,12 +429,40 @@ async function boot() {
       if (ctx.notices) ctx.notices.setPlayback(entry.name === 'player');
       if (ctx.screensaver) ctx.screensaver.setSuspended(entry.name === 'player'); // never over a video
       topbar.setCurrentSection(section);
+      ctx.refreshTopbar().catch(() => undefined);
       // Pages with their own zone take focus in mount(). When the user switched section from the bar,
       // or the page has no zone, the focus stays on (or returns to) the bar, on the current section.
       if (entry.params.focusTopbar || !focus.active) focus.focus(TOPBAR_ZONE, topbar.indexOfSection(section));
     },
   });
   ctx.router = router;
+
+  /**
+   * Favorites, Collections and Suggestions are in the top bar only when they have something to show (suggestions: what the last
+   * suggestion list held). Checked again at every page change, and when suggestions are worked out.
+   */
+  let suggestionsFound = false;
+  const buildSuggestions = ctx.suggestions.build.bind(ctx.suggestions);
+  ctx.suggestions.build = async (options) => {
+    const result = await buildSuggestions(options);
+    const found = Boolean(result && result.entries && result.entries.length);
+    if (found !== suggestionsFound) {
+      suggestionsFound = found;
+      ctx.refreshTopbar();
+    }
+    return result;
+  };
+  ctx.refreshTopbar = async () => {
+    const current = await active.get().catch(() => null);
+    const id = current && current.provider.id;
+    const favorites = id ? (await ctx.favorites.list(id).catch(() => [])).length : 0;
+    const collections = id ? (await ctx.collections.list(id).catch(() => [])).length : 0;
+    const hide = [];
+    if (!favorites) hide.push('favorites');
+    if (!collections) hide.push('collections');
+    if (!suggestionsFound || !ctx.suggestions.enabled) hide.push('suggestions');
+    topbar.setHidden(hide.concat(providerHiddenSections(current && current.provider)));
+  };
 
   let wasSyncing = false;
   let endCatalogOp = () => undefined;

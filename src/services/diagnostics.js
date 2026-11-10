@@ -1,5 +1,5 @@
 import { openDb, deleteDb, dbPut, dbGet } from '../core/idb.js';
-import { XtreamClient } from './xtreamClient.js';
+import { createProviderClient } from './providerTypes.js';
 import { platform } from '../platform/index.js';
 
 const ok = (id, detail = '') => ({ id, status: 'ok', detail });
@@ -127,7 +127,7 @@ async function checkStorage() {
 async function checkProvider(provider) {
   if (!provider) return warn('provider', 'no provider configured');
   try {
-    const client = new XtreamClient(provider);
+    const client = createProviderClient(provider);
     const auth = await client.authenticate();
     return ok('provider', `authenticated, status ${auth.user.status}`);
   } catch (err) {

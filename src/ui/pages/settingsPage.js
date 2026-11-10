@@ -13,7 +13,7 @@ import { TIME_FORMATS, DATE_FORMATS, formatClockTime, formatClockDate } from '..
 import { t, i18n, detectLocale } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { Dir } from '../focus/models.js';
-import { LANGUAGE_OPTIONS, CAROUSEL_OPTIONS, BUFFER_OPTIONS, SCREENSAVER_OPTIONS, SUGGESTION_SOURCE_OPTIONS, isEpgUrl } from '../../services/settings.js';
+import { LANGUAGE_OPTIONS, BUFFER_OPTIONS, SCREENSAVER_OPTIONS, SUGGESTION_SOURCE_OPTIONS, isEpgUrl } from '../../services/settings.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { createSyncPanel, createTmdbPanel, createTraktPanel, createDevicePanel, createOperationsPanel } from '../components/syncPanel.js';
@@ -25,6 +25,7 @@ import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from '../../services/liveNetwork
 import { createField } from '../components/field.js';
 import { framedPage } from '../components/formPage.js';
 import { runningVersions, lastCheck } from '../../services/updates.js';
+import { providerMediaTypes } from '../../services/providerTypes.js';
 import { APP_VERSION } from '../../core/env.js';
 import { formatDateTime } from '../../core/format.js';
 
@@ -464,7 +465,6 @@ export function createSettingsPage(ctx) {
       list: [
         optionRow({ ctx, labelKey: 'settings.language', key: 'language', options: LANGUAGE_OPTIONS, format: language }),
         optionRow({ ctx, labelKey: 'settings.textSize', key: 'textSize', options: TEXT_SIZES, format: (v) => `${v}%` }),
-        optionRow({ ctx, labelKey: 'settings.carouselItems', key: 'carouselItems', options: CAROUSEL_OPTIONS }),
         optionRow({ ctx, labelKey: 'settings.timeFormat', key: 'timeFormat', options: TIME_FORMATS, format: timeName }),
         optionRow({ ctx, labelKey: 'settings.dateFormat', key: 'dateFormat', options: DATE_FORMATS, format: dateName }),
         optionRow({ ctx, labelKey: 'settings.screensaver', key: 'screensaver', options: SCREENSAVER_OPTIONS, format: (v) => (v ? t('settings.screensaver.minutes', { count: v }) : t('settings.screensaver.off')) }),
@@ -556,6 +556,27 @@ export function createSettingsPage(ctx) {
     ctx.focus.focus(ZONE_ID, same >= 0 ? same : Math.min(opsPanel.rows.length, rowsNow.length - 1));
   };
 
+  // Under the title: one box per optional service that is off (TMDB, Trakt, OpenSubtitles), saying what it adds. A box goes away as soon
+  // as its key is typed (or the Trakt account connected).
+  const promos = (() => {
+    const el = h('div', { class: 'service-promos' });
+    const boxes = ['tmdb', 'trakt', 'opensubtitles'].map((id) => {
+      const box = h('div', { class: `service-promo ${id}` }, h('h3', { text: t(`settings.promo.${id}.title`) }), h('p', { text: t(`settings.promo.${id}.text`) }));
+      el.appendChild(box);
+      return { id, box };
+    });
+    const refresh = async () => {
+      const keys = ctx.apiKeys.get();
+      const traktOn = ctx.trakt && ctx.trakt.isConnected ? await ctx.trakt.isConnected().catch(() => false) : false;
+      const on = { tmdb: Boolean(keys.tmdbKey), trakt: traktOn, opensubtitles: Boolean(keys.openSubtitlesKey) };
+      boxes.forEach(({ id, box }) => {
+        box.style.display = on[id] ? 'none' : '';
+      });
+      el.style.display = boxes.some(({ id }) => !on[id]) ? '' : 'none';
+    };
+    return { el, refresh };
+  })();
+
   // After the title: " • version 1.2.0 - last check 11/08, 23:15" (the build running, and when version.json last answered).
   const versions = runningVersions();
   const checked = lastCheck();
@@ -563,7 +584,7 @@ export function createSettingsPage(ctx) {
   const versionEl = h('span', { class: 'settings-version', text: ` • ${checked ? t('settings.versionLine', { version, time: formatDateTime(checked, i18n.getLocale()) }) : t('settings.versionNever', { version })}` });
 
   return {
-    el: framedPage(h('h1', {}, t('nav.settings'), versionEl), opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), h('h2', { class: 'prefs-title', text: 'OpenSubtitles' }), h('div', { class: 'fields' }, openSubtitlesRow.root), devicePanel.el, prefsBlocks),
+    el: framedPage(h('h1', {}, t('nav.settings'), versionEl), promos.el, opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), h('h2', { class: 'prefs-title', text: 'OpenSubtitles' }), h('div', { class: 'fields' }, openSubtitlesRow.root), devicePanel.el, prefsBlocks),
     mount() {
       opsPanel.mount();
       tmdbPanel.mount();
@@ -572,10 +593,18 @@ export function createSettingsPage(ctx) {
       ctx.providers.getActive().then((provider) => {
         const id = provider && provider.id;
         panel.setProviderName(provider ? provider.name : '');
+        panel.setTypes(providerMediaTypes(provider));
         panel.el.style.display = id ? '' : 'none';
         catalogRows.forEach((row) => { row.el.style.display = id ? '' : 'none'; });
+        // The update / remove buttons of a type the provider does not have (a playlist's series) are hidden with its row.
+        panel.rowButtons.forEach((b) => {
+          if (!provider || providerMediaTypes(provider).indexOf(b.type) >= 0) return;
+          b.refresh.style.display = 'none';
+          b.remove.style.display = 'none';
+        });
         if (id) panel.setProvider(id);
       });
+      promos.refresh().catch(() => undefined);
       tmdbPanel.refresh().catch(() => undefined);
       traktPanel.refresh().catch(() => undefined);
       devicePanel.refresh().catch(() => undefined);

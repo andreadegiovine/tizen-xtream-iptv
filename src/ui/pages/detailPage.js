@@ -520,7 +520,18 @@ export function createDetailPage(ctx, params) {
         const list = entry.type === 'series'
           ? episodes.map((ep) => ({ ...base, key: watchKey(providerId, entry.key, `s${ep.season}e${ep.number}`), episodeKey: `s${ep.season}e${ep.number}`, episodeTitle: ep.title, seriesDone: (meta && meta.episodes) || 1 }))
           : [{ ...base, key: watchKey(providerId, entry.key) }];
-        await ctx.watch.markWatched(list);
+        // Shown as seen at once; the episodes are written (and Trakt told) in the background, then read again.
+        const done = ctx.watch.markWatched(list);
+        const marked = new Map(list.map((record) => [record.key, { ...record, position: 1, duration: 1, watched: true, updatedAt: Date.now() }]));
+        records = Array.from(marked.values()).concat(records.filter((record) => !marked.has(record.key)));
+        followWatchState();
+        if (!destroyed) build();
+        ctx.notices.success(t('notice.done'), { key: 'watched' });
+        done
+          .then(() => reloadRecords())
+          .then(() => !destroyed && build())
+          .catch((err) => log.warn('Mark watched failed', err && err.message));
+        return;
       }
       await reloadRecords();
       if (!destroyed) build();

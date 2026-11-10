@@ -117,3 +117,35 @@
   font-weight: 400;
   opacity: 0.7;
 }
+
+// Settings: what each optional service adds, one box per service still off (side by side, no flex gap: margins).
+.service-promos {
+  display: flex;
+  margin: 8px 0 32px;
+
+  .service-promo {
+    flex: 1 1 0;
+    min-width: 0;
+    margin-right: 24px;
+    padding: 24px 28px;
+    border-left: 6px solid $accent;
+    border-radius: 6px;
+    background: $bg-raised;
+
+    &:last-child {
+      margin-right: 0;
+    }
+
+    h3 {
+      margin: 0 0 10px;
+      font-size: 1.75rem;
+    }
+
+    p {
+      margin: 0;
+      color: $text-muted;
+      font-size: 1.375rem;
+      line-height: 1.4;
+    }
+  }
+}

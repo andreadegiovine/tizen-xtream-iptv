@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Signs the Tizen widget from the production build in dist/ (`npm run build:tizen`).
 #
-#   CERT_PASSWORD=... bash platforms/tizen/package.sh <version> [out-dir]
+#   CERT_PASSWORD=... [VARIANT=_youtube|_autoupdate|_youtube_autoupdate] bash platforms/tizen/package.sh <version> [out-dir]
 #
 # Installs the Tizen Studio CLI, registers the signing profile with platforms/tizen/tizencert.p12 (its password comes from the
 # TIZEN_CERT_PASSWORD secret, passed as CERT_PASSWORD) and writes <out-dir>/xtream-iptv-<version>_tizen.wgt with its .sha256 (out-dir: release).
@@ -52,7 +52,10 @@ fi
 # Signing profile
 mkdir -p "$SIGN_DIR"
 cp "$CERT_SOURCE" "$CERT"
-"$TIZEN" security-profiles add -n "$TIZEN_PROFILE" -a "$CERT" -p "$CERT_PASSWORD"
+# Run once per variant (release workflow): the profile is added the first time only.
+if ! "$TIZEN" security-profiles list 2>/dev/null | grep -q "$TIZEN_PROFILE"; then
+  "$TIZEN" security-profiles add -n "$TIZEN_PROFILE" -a "$CERT" -p "$CERT_PASSWORD"
+fi
 "$TIZEN" cli-config "profiles.path=${PROFILES}"
 chmod 755 "$PROFILES"
 
@@ -79,7 +82,7 @@ EXP
 
 # Sign the production widget
 mkdir -p "$OUT"
-NAME="xtream-iptv-${VERSION}_tizen" # the platform after the version: one file per platform in the release
+NAME="xtream-iptv-${VERSION}_tizen${VARIANT:-}" # the platform (and the variant: _youtube, _autoupdate) after the version
 WGT_DIR="${TMP}/wgt-${NAME}"
 mkdir -p "$WGT_DIR"
 export CERT_PASSWORD

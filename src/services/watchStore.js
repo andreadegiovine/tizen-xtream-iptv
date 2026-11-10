@@ -1,4 +1,4 @@
-import { dbGet, dbPut, dbGetAll, dbDelete } from '../core/idb.js';
+import { dbGet, dbPut, dbPutMany, dbGetAll, dbDelete } from '../core/idb.js';
 
 export const WATCHED_RATIO = 0.9;
 export const STARTED_RATIO = 0.1;
@@ -34,6 +34,15 @@ export class WatchStore {
   async save(record, now = Date.now()) {
     const next = { ...record, watched: isWatched(record.position, record.duration), updatedAt: now };
     const write = dbPut(this.db, 'watch', next);
+    this.writes = this.writes.then(() => write).catch(() => undefined);
+    await write;
+    return next;
+  }
+
+  /** Saves several records in one transaction (a whole series marked as seen). */
+  async saveMany(records, now = Date.now()) {
+    const next = records.map((record) => ({ ...record, watched: isWatched(record.position, record.duration), updatedAt: now }));
+    const write = dbPutMany(this.db, 'watch', next);
     this.writes = this.writes.then(() => write).catch(() => undefined);
     await write;
     return next;
