@@ -85,6 +85,19 @@ export function unmatched(payload, data) {
   return movies.every((m) => missing.movies.has(tmdbOf(m))) && shows.every((sh) => missing.shows.has(tmdbOf(sh)));
 }
 
+/**
+ * One show of the watched list → { tmdbId, aired, watched, complete }: `aired` the episodes aired so far (Trakt's `aired_episodes`, or the
+ * show's own `aired_episodes`), `watched` the ones watched out of the regular seasons (specials do not count, as in Trakt's count).
+ */
+export function showProgress(entry) {
+  const aired = Number(entry.aired_episodes || (entry.show && entry.show.aired_episodes)) || 0;
+  let watched = 0;
+  (entry.seasons || []).forEach((season) => {
+    if (Number(season.number) > 0) watched += (season.episodes || []).length;
+  });
+  return { tmdbId: Number(entry.show.ids.tmdb), aired, watched, complete: aired > 0 && watched >= aired };
+}
+
 /** Trakt "watched shows" payload → flat episode list, newest shows first. */
 export function flattenWatchedShows(data, limit = 3000, fallbackAt = Date.now()) {
   const out = [];
@@ -451,6 +464,8 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
         episodes: flattenWatchedShows(valid, Infinity, now()),
         // Shows Trakt gives without their episodes (an answer without seasons): watched there, their episodes here are left as they are.
         showsWithoutEpisodes: valid.filter((entry) => !Array.isArray(entry.seasons)).map((entry) => Number(entry.show.ids.tmdb)),
+        // Per show: the episodes aired (Trakt's count, specials left out) and the ones watched of them: complete when none is left to watch.
+        showsProgress: valid.filter((entry) => Array.isArray(entry.seasons)).map((entry) => showProgress(entry)),
         playback: playback.ok && Array.isArray(playback.data) ? playbackItems(playback.data) : [],
       };
     },
@@ -544,7 +559,9 @@ export function createWatchState({ store, trakt, nowMs = () => Date.now() }) {
     /** The alignment, but only when Trakt says something changed since the last one (one small request otherwise). */
     async syncIfChanged({ signal = null } = {}) {
       if (!trakt || !trakt.activitiesStamp) return 0;
-      const stamp = await trakt.activitiesStamp();
+      const activities = await trakt.activitiesStamp();
+      // Read again also once a day: the episodes aired since (a complete show with a new episode comes back to Continue watching).
+      const stamp = activities ? `${activities}#${new Date(nowMs()).toISOString().slice(0, 10)}` : null;
       if (stamp && stamp === (await trakt.savedActivities())) {
         await this.pushUnsent();
         return 0;
@@ -598,6 +615,15 @@ export function createWatchState({ store, trakt, nowMs = () => Date.now() }) {
           local.delete(rec.key);
           changed += 1;
         }
+      }
+      // A show Trakt has as complete (every aired episode watched) is finished here too: out of Continue watching, whatever TMDB counts
+      // (TMDB also counts the episodes announced and not aired yet). It comes back when Trakt has a new aired episode not watched.
+      const complete = new Map((state.showsProgress || []).map((show) => [`series:t${show.tmdbId}`, show.complete]));
+      for (const rec of await store.all()) {
+        if (aborted()) return changed;
+        if (rec.type !== 'series' || !complete.has(rec.entryKey)) continue;
+        const done = complete.get(rec.entryKey);
+        if (Boolean(rec.traktComplete) !== done) await store.patch(rec.key, { traktComplete: done });
       }
       // Every point reached that Trakt holds (a series started there: its season, episode and progress) comes here when it is newer than ours.
       for (const item of state.playback) {

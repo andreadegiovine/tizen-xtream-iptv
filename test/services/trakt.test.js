@@ -205,7 +205,21 @@ describe('watch-state adapter', () => {
     expect(reads).toBe(2);
     const bad = createWatchState({ store, trakt: fakeTrakt(null, { fetchState: async () => null, activitiesStamp: async () => 'c', savedActivities: async () => saved, saveActivities: async (s) => { saved = s; } }) });
     await bad.syncIfChanged();
-    expect(saved).toBe('b');
+    expect(saved.split('#')[0]).toBe('b'); // the stamp of the last good read (with its day)
+  });
+
+  test('syncIfChanged: read again the next day even when nothing changed on Trakt (episodes aired since)', async () => {
+    const store = new WatchStore(await appDb());
+    let saved = '';
+    let reads = 0;
+    let clock = Date.UTC(2026, 10, 10, 20, 0, 0);
+    const trakt = fakeTrakt(null, { fetchState: async () => { reads += 1; return { movies: [], episodes: [], playback: [] }; }, activitiesStamp: async () => 'same', savedActivities: async () => saved, saveActivities: async (s) => { saved = s; } });
+    const state = createWatchState({ store, trakt, nowMs: () => clock });
+    await state.syncIfChanged();
+    clock += 6 * 3600 * 1000; // the next day (UTC)
+    await state.syncIfChanged();
+    await state.syncIfChanged();
+    expect(reads).toBe(2);
   });
 
   test('sync: when Trakt cannot be read nothing changes', async () => {
@@ -447,5 +461,32 @@ describe('the point reached in a title, app closed while it is sent', () => {
     release({ ok: true, status: 201 });
     await older;
     expect((await kvGet(db, 'trakt.progress', {}))['movie:t5'].payload.progress).toBe(60);
+  });
+});
+
+describe('series watched on Trakt and Continue watching', () => {
+  const { continueWatching } = require('../../src/services/continueWatching.js');
+  const { showProgress } = require('../../src/services/traktService.js');
+
+  test('showProgress: aired episodes against the watched ones of the regular seasons', () => {
+    const entry = { show: { ids: { tmdb: 7 } }, aired_episodes: 3, seasons: [{ number: 0, episodes: [{ number: 1 }] }, { number: 1, episodes: [{ number: 1 }, { number: 2 }, { number: 3 }] }] };
+    expect(showProgress(entry)).toEqual({ tmdbId: 7, aired: 3, watched: 3, complete: true });
+    expect(showProgress({ ...entry, aired_episodes: 4 }).complete).toBe(false);
+    expect(showProgress({ ...entry, aired_episodes: undefined }).complete).toBe(false); // unknown: as before
+  });
+
+  test('a series complete on Trakt leaves Continue watching (whatever TMDB counts); a new aired episode brings it back', async () => {
+    const store = new WatchStore(await appDb());
+    const episodes = [1, 2, 3].map((n) => ({ tmdbId: 7, title: 'S', season: 1, episode: n, watchedAt: 10 }));
+    let progress = [{ tmdbId: 7, aired: 3, watched: 3, complete: true }];
+    const trakt = { flush: async () => [], sendHistory: async () => [], fetchState: async () => ({ movies: [], episodes, showsProgress: progress, playback: [] }) };
+    const watch = createWatchState({ store, trakt });
+    await watch.importFromTrakt();
+    // TMDB counts 10 episodes (announced ones too): the series would stay without Trakt's count.
+    const ctx = { watch, tmdb: { getMeta: async () => ({ episodes: 10 }) } };
+    expect(await continueWatching(ctx, {})).toEqual([]);
+    progress = [{ tmdbId: 7, aired: 4, watched: 3, complete: false }];
+    await watch.importFromTrakt();
+    expect((await continueWatching(ctx, {})).map((r) => r.entryKey)).toEqual(['series:t7']);
   });
 });

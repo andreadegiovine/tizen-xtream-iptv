@@ -2,10 +2,12 @@ import { summarizeWatch } from './watchStatus.js';
 import { watchKey } from './watchStore.js';
 
 /**
- * A series is finished when every episode TMDB knows is watched, or when it was marked as seen by hand
- * (`seriesDone` = the episode total known at that moment). New episodes (a bigger TMDB total) bring it back.
+ * A series is finished when Trakt has every aired episode watched (`traktComplete`), when every episode TMDB knows is watched, or when it
+ * was marked as seen by hand (`seriesDone` = the episode total known at that moment). New episodes (a bigger TMDB total) bring it back.
  */
 export function isSeriesFinished(record, watchedEpisodes, total) {
+  // Trakt has every aired episode watched (set at each alignment with Trakt; a new aired episode clears it).
+  if (record.traktComplete) return true;
   if (record.seriesDone) return !total || total <= record.seriesDone;
   return Boolean(total && watchedEpisodes >= total);
 }

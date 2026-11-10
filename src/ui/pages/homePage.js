@@ -113,7 +113,8 @@ export function createHomePage(ctx) {
     const recent = await continueWatching(ctx, { providerId, limit: ROW_LIMIT });
     const resumeItem = async (rec) => {
       const entry = await getEntry(current.db, rec.entryKey);
-      return entry ? { entry, type: entry.type, meta: { progress: rec.duration ? rec.position / rec.duration : 0, subtitle: episodeLabel(rec.episodeKey) } } : null;
+      // A finished episode (a series goes on with the next one) has no bar: the bar is the point reached in something not finished.
+      return entry ? { entry, type: entry.type, meta: { progress: rec.duration && !rec.watched ? rec.position / rec.duration : 0, subtitle: episodeLabel(rec.episodeKey) } } : null;
     };
     const resumedFrom = async (offset, count) => (await Promise.all(recent.slice(offset, offset + count).map(resumeItem))).filter(Boolean);
     definitions.push({ id: 'homeContinue', title: t('home.continue'), items: await resumedFrom(0, first), more: (offset, count) => resumedFrom(offset, count) });
