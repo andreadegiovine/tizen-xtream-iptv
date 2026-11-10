@@ -28,8 +28,11 @@ export function createTraktClient({ clientId = '', clientSecret = '', getCredent
       data = null;
     }
     // Paginated lists (the watched lists since July 2026): the pages there are, from the headers.
-    const pages = res.headers && typeof res.headers.get === 'function' ? Number(res.headers.get('X-Pagination-Page-Count')) || 0 : 0;
-    return { status: res.status, ok: res.ok, data, pages };
+    const header = (name) => (res.headers && typeof res.headers.get === 'function' ? res.headers.get(name) : null);
+    const pages = Number(header('X-Pagination-Page-Count')) || 0;
+    // 429 (too many requests: Trakt takes about one POST a second): how long to wait, in seconds.
+    const retryAfter = Number(header('Retry-After')) || 0;
+    return { status: res.status, ok: res.ok, data, pages, retryAfter };
   }
 
   return {

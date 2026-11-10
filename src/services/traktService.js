@@ -9,6 +9,14 @@ const DEFAULT_MOVIE_S = 6000;
 const DEFAULT_EPISODE_S = 2700;
 const ACCOUNT_KEY = 'trakt.account';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Trakt takes about one write (POST) a second from the same user: the writes sent one after the other wait this long between them. */
+const POST_GAP_MS = 1100;
+
+/**
+ * An answer that may go through another time: Trakt down (5xx), too many requests (429), the session to renew (401) or refused for now (403).
+ * Anything else (400, 404, 409, 420, 422...) would never be taken: dropped.
+ */
+export const isTransient = (res) => !res || res.status >= 500 || res.status === 429 || res.status === 401 || res.status === 403;
 
 /** History payload for one finished title (movie, or one episode of a show). */
 export function historyPayload(record, watchedAt = new Date().toISOString()) {
@@ -119,6 +127,21 @@ export function playbackItems(data) {
 }
 
 export function createTraktService({ db, client, now = Date.now, wait = sleep }) {
+  let lastPost = 0;
+  /** One write to Trakt: spaced from the previous one, tried once more after the wait Trakt asks for when it answers 429. */
+  async function post(send) {
+    const gap = lastPost + POST_GAP_MS - now();
+    if (gap > 0) await wait(gap);
+    let res = await send();
+    lastPost = now();
+    if (res && res.status === 429) {
+      await wait(Math.min(10, Math.max(1, res.retryAfter || 1)) * 1000);
+      res = await send();
+      lastPost = now();
+    }
+    return res;
+  }
+
   async function token() {
     const stored = await kvGet(db, TOKEN_KEY, null);
     if (!stored) return null;
@@ -144,8 +167,8 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
       const access = await token();
       if (!access) return;
       for (const title of titles) {
-        const res = await client.scrobble(access, 'pause', waiting[title].payload);
-        if (res.ok || res.status < 500) delete waiting[title];
+        const res = await post(() => client.scrobble(access, 'pause', waiting[title].payload));
+        if (res.ok || !isTransient(res)) delete waiting[title];
       }
       await kvSet(db, PROGRESS_KEY, waiting);
     } catch (err) {
@@ -236,9 +259,9 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
         try {
           const access = await token();
           if (access) {
-            const res = await client.scrobble(access, 'pause', payload);
+            const res = await post(() => client.scrobble(access, 'pause', payload));
             ok = res.ok;
-            drop = !res.ok && res.status < 500; // a 4xx would never succeed
+            drop = !res.ok && !isTransient(res); // a 400 / 404 would never succeed; 429, 401 and 5xx are tried again
           }
         } catch {
           /* unreachable: kept below */
@@ -290,7 +313,7 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
             ...(movies.length ? { movies } : {}),
             ...(shows.size ? { shows: [...shows.values()].map((s) => ({ ids: s.ids, seasons: [...s.seasons].map(([number, episodes]) => ({ number, episodes })) })) } : {}),
           };
-          const res = await client.addHistory(access, payload);
+          const res = await post(() => client.addHistory(access, payload));
           if (!res.ok) continue;
           // The titles Trakt could not match by their TMDB id were not added: not sent (told to the caller, not sent again every time).
           const missing = notFoundIds(res.data);
@@ -321,12 +344,17 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
         if (!access) return sent;
         const left = [];
         for (const item of pending) {
-          const res = item.op === 'remove' ? await client.removeHistory(access, item.payload) : await client.addHistory(access, item.payload);
-          if (res.ok && item.op !== 'remove' && unmatched(item.payload, res.data)) {
+          let res = null;
+          try {
+            res = await post(() => (item.op === 'remove' ? client.removeHistory(access, item.payload) : client.addHistory(access, item.payload)));
+          } catch {
+            res = null; // unreachable: kept, tried again later
+          }
+          if (res && res.ok && item.op !== 'remove' && unmatched(item.payload, res.data)) {
             // 201, but Trakt does not know the title (its TMDB id): nothing was added, it would never be (not kept, not counted as sent).
             log.warn('Trakt did not find the title', JSON.stringify(item.payload).slice(0, 120));
-          } else if (res.ok) sent.push(item.id);
-          else if (res.status >= 500) left.push(item); // transient: keep; 4xx would never succeed
+          } else if (res && res.ok) sent.push(item.id);
+          else if (isTransient(res)) left.push(item); // kept: Trakt down, too many requests, session to renew
         }
         await kvSet(db, QUEUE_KEY, left);
       } catch (err) {

@@ -172,6 +172,18 @@ describe('syncType', () => {
     db.close();
   });
 
+  test('a category list that comes back empty while the titles do not keeps the stored categories', async () => {
+    const db = await newDb();
+    const lists = { movie: [movie(1, 'A'), movie(2, 'B')] };
+    let categories = [{ category_id: '1', category_name: 'Action' }];
+    const client = { ...makeClient(lists), getCategories: async () => categories };
+    await syncType({ db, client, type: 'movie', retryDelays: [0, 0] });
+    categories = [];
+    await syncType({ db, client, type: 'movie', retryDelays: [0, 0] });
+    expect((await dbGetAll(db, 'categories')).map((c) => c.name)).toEqual(['Action']);
+    db.close();
+  });
+
   test('cancellation stops between batches', async () => {
     const db = await newDb();
     const many = Array.from({ length: 4500 }, (_, i) => movie(i + 1, `Movie ${i + 1}`));

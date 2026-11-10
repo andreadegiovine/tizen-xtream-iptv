@@ -328,7 +328,10 @@ export async function syncType({
   const entryChanges = await writeEntries(db, type, entries, { groups, networks, full });
   if (report) await dbPut(db, 'meta', { key: NETWORK_REPORT_KEY, type, report });
   const entriesMs = now() - entriesStart;
-  const categoryChanges = await replaceRows(db, 'categories', type, categories, { full });
+  // A category list that came back empty while the titles did not (a glitch of the panel) keeps the categories we have: the titles still
+  // point at them, and the sidebar would lose every category until the next sync.
+  const keepCategories = categories.length === 0 && itemCount > 0 && previous && previous.categoryCount > 0;
+  const categoryChanges = keepCategories ? 0 : await replaceRows(db, 'categories', type, categories, { full });
   const writeMs = now() - writeStart;
 
   const meta = {
@@ -339,7 +342,7 @@ export async function syncType({
     itemCount,
     entryCount: entries.length,
     ...(type === MediaType.LIVE ? { layout: LIVE_LAYOUT, ...groupCounts(entries, groups, networks) } : {}),
-    categoryCount: categories.length,
+    categoryCount: keepCategories ? previous.categoryCount : categories.length,
     excludedCount: excludedCategories.size,
     fetchMs,
     writeMs,

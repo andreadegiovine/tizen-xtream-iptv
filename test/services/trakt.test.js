@@ -394,3 +394,27 @@ describe('watched lists paginated by Trakt (since July 2026), titles Trakt does 
     expect(added.length).toBe(before);
   });
 });
+
+describe('writes to Trakt: limits and answers that may go through later', () => {
+  test('429 waits what Trakt asks and tries again; 401 / 5xx stay queued; a 404 is dropped; writes are spaced', async () => {
+    const db = await appDb();
+    await kvSet(db, 'trakt.token', { accessToken: 'AT', refreshToken: 'RT', expiresAt: Date.now() + 90 * 24 * 3600 * 1000 });
+    let clock = 1000000;
+    const waits = [];
+    const answers = { 1: [{ ok: false, status: 429, retryAfter: 3 }, { ok: true, status: 201, data: {} }], 2: [{ ok: false, status: 401 }], 3: [{ ok: false, status: 404 }], 4: [{ ok: false, status: 503 }] };
+    const client = {
+      enabled: true,
+      addHistory: async (t, payload) => {
+        const id = payload.movies[0].ids.tmdb;
+        return answers[id].length > 1 ? answers[id].shift() : answers[id][0];
+      },
+    };
+    const svc = createTraktService({ db, client, now: () => clock, wait: async (ms) => { waits.push(ms); clock += ms; } });
+    await kvSet(db, 'trakt.queue', [1, 2, 3, 4].map((id) => ({ op: 'add', payload: manualPayload(`movie:t${id}`, true, 'T'), id: `q${id}` })));
+    expect(await svc.flush()).toEqual(['q1']);
+    expect(waits[0]).toBe(3000); // the Retry-After of the 429
+    expect(waits.filter((ms) => ms > 1000 && ms <= 1100).length).toBeGreaterThanOrEqual(3); // about a second between the writes
+    const { kvGet } = require('../../src/db/kv.js');
+    expect((await kvGet(db, 'trakt.queue', [])).map((item) => item.id)).toEqual(['q2', 'q4']);
+  });
+});
