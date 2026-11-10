@@ -640,7 +640,8 @@ async function boot() {
   queue.add({ name: 'share-keys', priority: Priority.METADATA, run: () => ctx.shareKeys().catch(() => undefined) });
   queue.add({ name: 'trakt', priority: Priority.TRAKT, run: () => ctx.trakt.flush().then(() => ctx.watch.syncIfChanged()).catch(() => undefined) });
   // Trakt stays aligned while the app is open: one small check every 15 minutes, a full read only if the account changed.
-  setInterval(() => queue.add({ name: 'trakt', priority: Priority.TRAKT, run: () => ctx.watch.syncIfChanged().catch(() => undefined) }), 15 * 60 * 1000);
+  // The changes still waiting for Trakt (an error that may go through later: 429, 5xx, no network) go out at every check too.
+  setInterval(() => queue.add({ name: 'trakt', priority: Priority.TRAKT, run: () => ctx.trakt.flush().then(() => ctx.watch.syncIfChanged()).catch(() => undefined) }), 15 * 60 * 1000);
   const [hasProvider] = await Promise.all([providers.getActive(), keysReady, navCountsReady]);
   if (hasProvider) await ctx.refreshAdult();
   if (hasProvider) {

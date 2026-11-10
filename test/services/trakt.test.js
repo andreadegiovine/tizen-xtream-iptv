@@ -418,3 +418,34 @@ describe('writes to Trakt: limits and answers that may go through later', () => 
     expect((await kvGet(db, 'trakt.queue', [])).map((item) => item.id)).toEqual(['q2', 'q4']);
   });
 });
+
+describe('the point reached in a title, app closed while it is sent', () => {
+  test('kept before it is sent: the next start sends it; a newer point is never taken out by an older answer', async () => {
+    const db = await appDb();
+    await kvSet(db, 'trakt.token', { accessToken: 'AT', refreshToken: 'RT', expiresAt: Date.now() + 90 * 24 * 3600 * 1000 });
+    const { kvGet } = require('../../src/db/kv.js');
+    const record = (position) => ({ key: 'movie:t5', entryKey: 'movie:t5', type: 'movie', position, duration: 100 });
+    // The request never answers: the app is closed meanwhile.
+    const hanging = createTraktService({ db, client: { enabled: true, scrobble: () => new Promise(() => undefined) }, wait: async () => {} });
+    hanging.reportProgress(record(30));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(Object.keys(await kvGet(db, 'trakt.progress', {}))).toEqual(['movie:t5']);
+    // Next start: what waits goes out with the queue.
+    const sent = [];
+    const next = createTraktService({ db, client: { enabled: true, scrobble: async (t, a, payload) => { sent.push(payload.progress); return { ok: true, status: 201 }; } }, wait: async () => {} });
+    await next.flush();
+    expect(sent).toEqual([30]);
+    expect(await kvGet(db, 'trakt.progress', {})).toEqual({});
+    // An answer for an older point arriving after a newer one was kept: the newer one stays.
+    let release;
+    let clock = 1;
+    const slow = createTraktService({ db, now: () => (clock += 1), client: { enabled: true, scrobble: () => new Promise((resolve) => { release = resolve; }) }, wait: async () => {} });
+    const older = slow.reportProgress(record(40));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const waiting = await kvGet(db, 'trakt.progress', {});
+    await kvSet(db, 'trakt.progress', { 'movie:t5': { ...waiting['movie:t5'], savedAt: 999999, payload: { ...waiting['movie:t5'].payload, progress: 60 } } });
+    release({ ok: true, status: 201 });
+    await older;
+    expect((await kvGet(db, 'trakt.progress', {}))['movie:t5'].payload.progress).toBe(60);
+  });
+});

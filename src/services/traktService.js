@@ -158,7 +158,22 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
     return kvGet(db, QUEUE_KEY, []);
   }
 
-  /** The points reached that could not be sent (one per title): tried again, whatever the history queue holds. */
+  /** The point reached waiting for Trakt, one per title (the latest replaces the one before). */
+  async function setWaiting(entryKey, value) {
+    const waiting = await kvGet(db, PROGRESS_KEY, {});
+    waiting[entryKey] = value;
+    await kvSet(db, PROGRESS_KEY, waiting);
+  }
+
+  /** Taken out once Trakt has it (or would never take it): only if no newer point of the title was kept meanwhile. */
+  async function forgetWaiting(entryKey, savedAt) {
+    const waiting = await kvGet(db, PROGRESS_KEY, {});
+    if (!waiting[entryKey] || waiting[entryKey].savedAt !== savedAt) return; // (points kept by older versions have none: undefined both)
+    delete waiting[entryKey];
+    await kvSet(db, PROGRESS_KEY, waiting);
+  }
+
+  /** The points reached not sent yet (one per title): tried again, whatever the history queue holds. */
   async function sendWaitingProgress() {
     try {
       const waiting = await kvGet(db, PROGRESS_KEY, {});
@@ -168,9 +183,8 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
       if (!access) return;
       for (const title of titles) {
         const res = await post(() => client.scrobble(access, 'pause', waiting[title].payload));
-        if (res.ok || !isTransient(res)) delete waiting[title];
+        if (res.ok || !isTransient(res)) await forgetWaiting(title, waiting[title].savedAt);
       }
-      await kvSet(db, PROGRESS_KEY, waiting);
     } catch (err) {
       log.warn('Trakt progress retry failed', err && err.message);
     }
@@ -254,6 +268,9 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
       try {
         const payload = progressPayload(record);
         if (!payload || !(await service.isConnected())) return false;
+        // Kept first, sent after: an app closed while the request waits (spacing, 429) still has it for the next start.
+        const savedAt = now();
+        await setWaiting(record.entryKey, { payload, savedAt });
         let ok = false;
         let drop = false;
         try {
@@ -264,12 +281,9 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
             drop = !res.ok && !isTransient(res); // a 400 / 404 would never succeed; 429, 401 and 5xx are tried again
           }
         } catch {
-          /* unreachable: kept below */
+          /* unreachable: stays kept */
         }
-        const waiting = await kvGet(db, PROGRESS_KEY, {});
-        if (ok || drop) delete waiting[record.entryKey];
-        else waiting[record.entryKey] = { payload, at: now() };
-        await kvSet(db, PROGRESS_KEY, waiting);
+        if (ok || drop) await forgetWaiting(record.entryKey, savedAt);
         return ok;
       } catch (err) {
         log.warn('Trakt progress failed', err && err.message);
