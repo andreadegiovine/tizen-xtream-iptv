@@ -683,3 +683,6 @@ User request (2026-11-03). Status: `[x]` done in sandbox and desktop Chrome (hea
 ### Patch 141 — Tizen widgets signed again
 - Regression of patch 138: to sign the four Tizen variants in one job, `package.sh` added the signing profile only when `tizen security-profiles list` did not mention it; that output contains paths with "xtream" (the repository name), so the check always passed, the profile was never added, and `tizen package` produced unsigned widgets ("Not found tizen author signature file" in the 1.4.0 job log). The TV refused them ("Check certificate error") and the Seller Office could not read `author-signature.xml`.
 - The profile is now added once per job, remembered by a marker file; every widget is checked for `author-signature.xml` and `signature1.xml` before it is attached (the job fails otherwise). A new release is needed. Not verified on the TV.
+
+### Patch 142 — Samsung App Description File
+- `platforms/tizen/store/App_Description_Xtream_IPTV.pptx`: the Seller Office template (v1.42) filled in: revision history, UI structure with a flow graph, usage scenario with the test account (public M3U playlist of free channels, the same for every model group), screens, menu and function slides with numbered screenshots, key policy, how to change languages. `APP-DESCRIPTION.md` has the same content as text. Not verified on the TV.
