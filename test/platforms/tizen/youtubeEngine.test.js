@@ -1,4 +1,4 @@
-import { videoIdOf, youtubeStreamUrl, playerPageUrl, applyBridgeMessage, createYouTubeEngine, YOUTUBE_SERVICE_PORT } from '../../../platforms/tizen/youtubeEngine.js';
+import { videoIdOf, youtubeStreamUrl, playerPageUrl, applyBridgeMessage, createYouTubeEngine, waitForService, YOUTUBE_SERVICE_PORT } from '../../../platforms/tizen/youtubeEngine.js';
 import { trailerKeyOf } from '../../../src/services/tmdbService.js';
 
 const handlers = () => ({ onPrepared: jest.fn(), onEnded: jest.fn(), onBuffering: jest.fn(), onBufferingDone: jest.fn(), onError: jest.fn() });
@@ -56,4 +56,30 @@ test('TMDB trailer: UI language first, trailers before teasers, YouTube only', (
   expect(trailerKeyOf(videos, 'de-DE')).toBe('en1');
   expect(trailerKeyOf({ results: [] }, 'it-IT')).toBe('');
   expect(trailerKeyOf(undefined)).toBe('');
+});
+
+describe('waitForService (the first trailer after the TV started)', () => {
+  const file = { protocol: 'file:' };
+  test('asks /health until the service listens, then the page can load', async () => {
+    let calls = 0;
+    const fetchImpl = jest.fn(async (url) => {
+      calls += 1;
+      expect(url).toBe(`http://localhost:${YOUTUBE_SERVICE_PORT}/health`);
+      if (calls < 4) throw new TypeError('Failed to fetch'); // connection refused: not listening yet
+      return { ok: true };
+    });
+    let t = 0;
+    const up = await waitForService({ fetchImpl, location: file, now: () => t, wait: async (ms) => { t += ms; } });
+    expect(up).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+  });
+
+  test('gives up after the limit (the page loads anyway); nothing to wait for outside a package', async () => {
+    let t = 0;
+    const fetchImpl = jest.fn(async () => { throw new TypeError('Failed to fetch'); });
+    expect(await waitForService({ fetchImpl, location: file, limitMs: 1000, pollMs: 300, now: () => t, wait: async (ms) => { t += ms; } })).toBe(false);
+    const never = jest.fn();
+    expect(await waitForService({ fetchImpl: never, location: { protocol: 'http:' } })).toBe(true);
+    expect(never).not.toHaveBeenCalled();
+  });
 });

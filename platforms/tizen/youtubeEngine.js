@@ -6,8 +6,11 @@ export { youtubeStreamUrl, videoIdOf } from '../../src/services/trailer.js';
 
 /** Port of the on-TV service that serves the YouTube player page (see platforms/tizen/youtube/service.js). */
 export const YOUTUBE_SERVICE_PORT = 8125;
-const READY_TIMEOUT_MS = 20000;
+const READY_TIMEOUT_MS = 30000; // the service may take up to SERVICE_READY_MS to answer, then the page loads
 const SERVICE_WAIT_MS = 1500;
+/** The service just launched may take seconds to listen (a cold start of its Node runtime): its /health is asked until it answers. */
+export const SERVICE_POLL_MS = 300;
+export const SERVICE_READY_MS = 15000;
 
 
 /** Player page: the on-TV service when the app runs from a package (file://), otherwise the page next to the app. */
@@ -54,6 +57,26 @@ function launchService() {
 }
 
 /**
+ * Resolves once the on-TV service answers on /health (true), or after `limitMs` (false). The first trailer after the TV started used to
+ * load the player page before the service listened: the iframe showed the browser's error page and the trailer never started. Nothing to
+ * wait for outside a package (the page sits next to the app).
+ */
+export async function waitForService({ fetchImpl = typeof fetch === 'function' ? fetch.bind(window) : null, location = typeof window !== 'undefined' ? window.location : { protocol: 'http:' }, limitMs = SERVICE_READY_MS, pollMs = SERVICE_POLL_MS, now = Date.now, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
+  if (location.protocol !== 'file:' || !fetchImpl) return true;
+  const until = now() + limitMs;
+  for (;;) {
+    try {
+      const res = await fetchImpl(`http://localhost:${YOUTUBE_SERVICE_PORT}/health`, { cache: 'no-store' });
+      if (res && res.ok) return true;
+    } catch {
+      /* not listening yet */
+    }
+    if (now() >= until) return false;
+    await wait(pollMs);
+  }
+}
+
+/**
  * Player engine for YouTube videos (same contract as the AVPlay / <video> engines): the player page runs in an
  * iframe behind the app's own controls and is driven with postMessage. Aspect ratio and subtitles do not apply.
  */
@@ -91,9 +114,12 @@ export function createYouTubeEngine() {
       document.body.classList.add('video-active');
       document.body.appendChild(mine);
       timer = setTimeout(() => handlers.onError('player did not start'), READY_TIMEOUT_MS);
-      launchService().then(() => {
-        if (frame === mine) mine.src = playerPageUrl(id);
-      });
+      launchService()
+        .then(() => waitForService())
+        .then((up) => {
+          if (!up) log.warn('YouTube service not answering: loading the player page anyway');
+          if (frame === mine) mine.src = playerPageUrl(id);
+        });
     },
     play: () => send('play'),
     pause: () => send('pause'),
