@@ -11,6 +11,42 @@ const QUALITY_TOKENS = new Set([
 
 const SEPARATORS = /^[\s\-–—:|]+|[\s\-–—:|]+$/g;
 
+/**
+ * What a version of a title is (quality, language, source, audio), as the providers write it in the name: the tokens of VERSION_TOKENS
+ * in brackets ("[FHD] (ITA) |IT|"), a leading language ("IT - ") and at the end ("Title 1080p HEVC"). Only for the label of a version:
+ * the title cleaning (normalizeTitle) is not changed by these extra words.
+ */
+const VERSION_TOKENS = new Set([
+  ...QUALITY_TOKENS,
+  ...LANG_CODES,
+  'cam', 'hdcam', 'camrip', 'ts', 'hdts', 'telesync', 'tc', 'telecine', 'screener', 'scr', 'dvdscr', '3d',
+  'ac3', 'eac3', 'dts', 'aac', 'atmos', 'dolby', 'remux', 'hdrip', 'dvd', 'fullhd', '8k', 'h.264', 'h.265', 'avc',
+]);
+const VERSION_SPLIT = /[\s,/+_-]+/;
+
+export function versionTags(raw) {
+  const text = String(raw == null ? '' : raw);
+  const found = [];
+  const known = (token) => VERSION_TOKENS.has(token);
+  text.replace(/[[(|]([^[\]()|]{1,30})[\])|]/g, (match, inner) => {
+    const tokens = inner.toLowerCase().split(VERSION_SPLIT).filter(Boolean);
+    if (tokens.length && tokens.every(known)) found.push(...tokens);
+    return match;
+  });
+  const lead = /^\s*([A-Za-z]{2,5})\s*[-:–—|]\s+/.exec(text);
+  if (lead && LANG_CODES.has(lead[1].toLowerCase())) found.push(lead[1].toLowerCase());
+  const words = text.replace(/[[(|][^[\]()|]*[\])|]/g, ' ').split(/\s+/).filter(Boolean);
+  const trailing = [];
+  for (let i = words.length - 1; i > 0; i -= 1) {
+    const word = words[i].replace(SEPARATORS, '').toLowerCase();
+    if (!word) continue;
+    if (!known(word)) break;
+    trailing.unshift(word);
+  }
+  found.push(...trailing);
+  return Array.from(new Set(found)).map((token) => token.toUpperCase());
+}
+
 /** Lowercase, accent-free, punctuation-free key used for search and matching. */
 export function makeSearchKey(text) {
   return String(text ?? '')

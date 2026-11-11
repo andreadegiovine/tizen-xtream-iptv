@@ -117,7 +117,9 @@ export function createPlayerPage(ctx, params) {
   const buttonDefs = [
     // Series: previous / next episode on both sides of play / pause, shown only when there is one (the position is moved with the progress pointer).
     { id: 'prevEpisode', icon: 'previous', label: () => t('player.prevEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(-1) },
+    { id: 'back30', icon: 'backward', label: () => t('player.back30', { seconds: SEEK_LONG }), vodOnly: true, run: () => controller.seekBy(-SEEK_LONG) },
     { id: 'toggle', icon: 'pause', label: () => t('player.pause'), vodOnly: true, group: 'start', run: () => controller.togglePause() },
+    { id: 'forward30', icon: 'forward', label: () => t('player.forward30', { seconds: SEEK_LONG }), vodOnly: true, run: () => controller.seekBy(SEEK_LONG) },
     { id: 'nextEpisode', icon: 'next', label: () => t('player.nextEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(1) },
     { id: 'versions', icon: 'group', label: () => t('player.versions'), liveOnly: true, hidden: true, run: () => openVersions() }, // a group with several versions
     { id: 'network', icon: 'network', label: () => t('networks.open'), liveOnly: true, hidden: true, run: () => openNetwork() }, // a channel of a network
@@ -142,8 +144,8 @@ export function createPlayerPage(ctx, params) {
     if (def.hidden) def.el.style.display = 'none';
   });
   const buttonEl = (id) => (buttonDefs.find((d) => d.id === id) || {}).el;
-  // Full-width progress bar, then one row: back, play/pause, forward and the time on the left, aspect ratio and subtitles on the right.
-  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('prevEpisode'), buttonEl('toggle'), buttonEl('nextEpisode'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
+  // Full-width progress bar, then one row: previous episode, back 30 s, play/pause, forward 30 s, next episode and the time on the left, aspect ratio and subtitles on the right.
+  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('prevEpisode'), buttonEl('back30'), buttonEl('toggle'), buttonEl('forward30'), buttonEl('nextEpisode'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
   const top = h('div', { class: 'player-top' }, titleEl, nowEl);
   const controls = h('div', { class: 'player-controls' }, ...(isLive ? [] : [seek]), row);
   const el = h('section', { class: 'player' }, top, controls, statusEl, subtitleEl);

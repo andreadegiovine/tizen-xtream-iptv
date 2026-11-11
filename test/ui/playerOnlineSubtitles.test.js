@@ -50,7 +50,7 @@ afterEach(() => {
 function pressSubtitles(s) {
   const subtitles = Array.from(s.page.el.querySelectorAll('.player-btn')).find((b) => b.getAttribute('aria-label') === 'Subtitles');
   s.page.onAction(Action.DOWN); // focus on the controls: play / pause
-  [Action.RIGHT, Action.RIGHT].forEach((a) => s.page.onAction(a)); // aspect ratio, subtitles
+  [Action.RIGHT, Action.RIGHT, Action.RIGHT].forEach((a) => s.page.onAction(a)); // forward 30 s, aspect ratio, subtitles
   expect(subtitles.classList.contains('focused')).toBe(true);
   s.page.onAction(Action.ENTER);
 }

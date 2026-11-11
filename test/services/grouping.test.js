@@ -33,6 +33,19 @@ describe('buildEntries', () => {
     expect(entries[0].categoryIds.sort()).toEqual(['1', '2']);
   });
 
+  test('each member carries what its own name says it is (quality, language, source)', () => {
+    const entries = buildEntries('movie', [
+      item(30, 'IT - Heat (1995) [4K]', { tmdbId: 949 }),
+      item(10, 'Heat', { tmdbId: 949 }),
+      item(20, 'Heat (1995) CAM', { tmdbId: 949 }),
+    ]);
+    const byId = {};
+    entries[0].members.forEach((m) => { byId[m.id] = m; });
+    expect(byId[30].tags).toEqual(['4K', 'IT']);
+    expect(byId[10].tags).toBeUndefined();
+    expect(byId[20].tags).toEqual(['CAM']);
+  });
+
   test('never merges items without tmdb, even with identical names', () => {
     const entries = buildEntries('movie', [item(1, 'Same Name'), item(2, 'Same Name')]);
     expect(entries).toHaveLength(2);

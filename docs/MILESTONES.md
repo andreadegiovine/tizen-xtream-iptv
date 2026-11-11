@@ -759,3 +759,8 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 
 ### Patch 155 — Pointer: the guide dragged like the rows of cards
 - The Live TV guide is dragged with the mouse button held, as well as with a finger: left / right moves the hours, up / down the rows; the focus does not follow the pointer while dragging, and a drag never opens the programme under it (a plain click still does). `touch-action: none` on the guide always (the first touch is no longer scrolled by the browser before pointer mode is on). Checked in Chromium with the mouse and with touch events. Not verified on a touch screen.
+
+### Patch 156 — Player ±30s, favourite category in the sidebar, version tags
+- Player: the Back / Forward 30 seconds buttons are back (films and episodes), in the order previous episode, back 30s, play / pause, forward 30s, next episode.
+- A genre / category added to the favourites from the heart of its own grid now shows the sidebar's Favourites entry (or updates its number) at once, and the top bar's; removing it hides it again.
+- Grouped films and series: each version carries the tags its own provider name gives (quality, language, source: HD, FHD, 4K, ITA, CAM...), shown in the version choice of the title page and of the player: "#1234 · FHD ITA · mkv". Read from the names in brackets, a leading language and the words at the end; new tokens for the source (CAM, TS, TC, screener...) and the audio. The stored catalog gets them at the next sync. Not verified on the TV.

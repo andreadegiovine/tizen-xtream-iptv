@@ -170,6 +170,8 @@
   "player.aspect.zoom": "Ingrandisci",
   "player.aspect.failed": "non applicato dal player",
   "player.versions": "Versioni",
+  "player.back30": "Indietro di {seconds} secondi",
+  "player.forward30": "Avanti di {seconds} secondi",
   "player.prevEpisode": "Episodio precedente",
   "player.nextEpisode": "Episodio successivo",
   "player.credits": "Inizio titoli di coda",

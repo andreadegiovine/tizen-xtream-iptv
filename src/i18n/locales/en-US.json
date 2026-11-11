@@ -170,6 +170,8 @@
   "player.aspect.zoom": "Zoom to fill",
   "player.aspect.failed": "not applied by the player",
   "player.versions": "Versions",
+  "player.back30": "Back {seconds} seconds",
+  "player.forward30": "Forward {seconds} seconds",
   "player.prevEpisode": "Previous episode",
   "player.nextEpisode": "Next episode",
   "player.credits": "End credits start",

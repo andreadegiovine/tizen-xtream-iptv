@@ -1,6 +1,6 @@
 import { MediaType } from './mediaType.js';
 import { mergeGenres } from './genres.js';
-import { normalizeTitle, normalizeChannelName, makeSearchKey } from './titleNormalizer.js';
+import { normalizeTitle, normalizeChannelName, makeSearchKey, versionTags } from './titleNormalizer.js';
 
 /**
  * Builds the entries shown in grids.
@@ -45,7 +45,11 @@ export function buildEntries(type, items, { excludedCategories = new Set(), clea
       added: Math.max(...members.map((m) => m.item.added)),
       defaultId: base.item.id,
       memberIds: members.map((m) => m.item.id),
-      members: members.map((m) => ({ id: m.item.id, ext: m.item.ext, categoryId: m.item.categoryId })),
+      // `tags`: what each version is, from its own name (HD, FHD, ITA, CAM...): the label of the version (streamLabel).
+      members: members.map((m) => {
+        const tags = type === MediaType.LIVE ? [] : versionTags(m.item.name);
+        return { id: m.item.id, ext: m.item.ext, categoryId: m.item.categoryId, ...(tags.length ? { tags } : {}) };
+      }),
       categoryIds: Array.from(new Set(members.map((m) => m.item.categoryId))),
       searchKeys: Array.from(new Set(members.map((m) => m.norm.searchKey))),
       genres: type === MediaType.LIVE ? [] : mergeGenres(members.map((m) => m.item.genre)),

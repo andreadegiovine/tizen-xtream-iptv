@@ -441,13 +441,14 @@ export function createBrowsePage(ctx, params = {}) {
       pinActive,
       onToggle: async () => {
         const now = await (isNetwork ? ctx.favorites.toggle(providerId, item.id, type) : ctx.favorites.toggleFilter(providerId, target));
+        // The number of the Favorites entry, and the entry itself shown or hidden (the first favourite, or the last one taken away);
+        // the top bar's Favorites too.
         const n = await favoriteCount();
-        counts.set('favorites:', n);
-        if (ctx.navCounts) ctx.navCounts.set(providerId, `${type}:favorites`, n);
         if (!destroyed) {
-          showCounts();
+          setUserCount('favorites', n);
           syncFavorite();
-        }
+        } else if (ctx.navCounts) ctx.navCounts.set(providerId, `${type}:favorites`, n);
+        if (ctx.refreshTopbar) ctx.refreshTopbar().catch(() => undefined);
         ctx.notices.success(t(now ? 'notice.added' : 'notice.removed'), { key: 'favorite' });
       },
       onPin: async () => {

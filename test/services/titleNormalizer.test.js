@@ -1,4 +1,4 @@
-import { normalizeTitle, makeSearchKey, normalizeChannelName } from '../../src/services/titleNormalizer.js';
+import { normalizeTitle, makeSearchKey, normalizeChannelName, versionTags } from '../../src/services/titleNormalizer.js';
 
 describe('normalizeTitle', () => {
   test('strips language prefix, year and quality tag', () => {
@@ -41,5 +41,19 @@ describe('search keys', () => {
 
   test('channels keep their full name', () => {
     expect(normalizeChannelName('Sky Cinema HD').cleanTitle).toBe('Sky Cinema HD');
+  });
+});
+
+describe('versionTags', () => {
+  test.each([
+    ['Matrix (1999) [FHD] [ITA]', ['FHD', 'ITA']],
+    ['IT - Matrix 1080p HEVC', ['IT', '1080P', 'HEVC']],
+    ['|IT| Matrix CAM', ['IT', 'CAM']],
+    ['Spider-Man: No Way Home (2021) [HD ENG]', ['HD', 'ENG']],
+    ['Matrix', []],
+    ['Blade Runner 2049', []],
+    ['Heat (Director\'s Cut)', []],
+  ])('%s', (name, tags) => {
+    expect(versionTags(name)).toEqual(tags);
   });
 });
