@@ -317,6 +317,20 @@ export function createSettingsPage(ctx) {
   const traktSyncRow = { el: traktPanel.syncButton, refresh: async () => undefined, activate: syncTrakt };
   const traktRemoveRow = { secondary: 'left', el: traktPanel.removeButton, refresh: async () => undefined, activate: removeTrakt };
   const tmdbTokenRow = textRow({ ctx, label: t('settings.tmdbKey'), field: 'tmdbKey' });
+  // Titles without a TMDB id in the lists and in their details: looked for on TMDB by title during the scan (conservative match). Switching
+  // it on or off scans the catalog again (movies and series: the lists are not downloaded again when fresh).
+  const titleSearchValue = createToggle();
+  const titleSearchRow = {
+    el: createListRow({ label: t('settings.tmdbTitleSearch'), valueEl: titleSearchValue }).el,
+    refresh: () => ctx.settings.get().then((s) => { setToggle(titleSearchValue, s.tmdbTitleSearch); }),
+    async activate() {
+      const s = await ctx.settings.get();
+      const next = await ctx.settings.update({ tmdbTitleSearch: !s.tmdbTitleSearch });
+      setToggle(titleSearchValue, next.tmdbTitleSearch);
+      ctx.notices.success(t('notice.saved'), { key: 'setting' });
+      queueJob('catalog:titles', t('operations.catalog'), () => ctx.catalog.start({ types: ['movie', 'series'] }));
+    },
+  };
   const traktIdRow = textRow({ ctx, label: t('settings.traktId'), field: 'traktId' });
   const traktSecretRow = textRow({ ctx, label: t('settings.traktSecret'), field: 'traktSecret', secret: true });
   const openSubtitlesRow = textRow({ ctx, label: t('settings.openSubtitlesKey'), field: 'openSubtitlesKey', secret: true });
@@ -493,7 +507,7 @@ export function createSettingsPage(ctx) {
     ]),
   ]);
   // Focus order follows the page: catalog, TMDB, Trakt, preferences.
-  const rows = [...catalogRows, ...tmdbRows, tmdbTokenRow, tmdbTokenRow.clearRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktIdRow.clearRow, traktSecretRow, traktSecretRow.clearRow, openSubtitlesRow, openSubtitlesRow.clearRow, dbUpdateRow, dbRemoveRow, ...prefs];
+  const rows = [...catalogRows, ...tmdbRows, tmdbTokenRow, tmdbTokenRow.clearRow, titleSearchRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktIdRow.clearRow, traktSecretRow, traktSecretRow.clearRow, openSubtitlesRow, openSubtitlesRow.clearRow, dbUpdateRow, dbRemoveRow, ...prefs];
   // The Trakt sync / remove buttons exist only while an account is connected.
   const visibleRows = () => rows.filter((row) => row.el.style.display !== 'none');
   rows.forEach((row) => row.refresh());
@@ -584,7 +598,7 @@ export function createSettingsPage(ctx) {
   const versionEl = createHint({ text: versionText, className: 'settings-version', muted: false });
 
   return {
-    el: framedPage(createHeading({ level: 1, text: t('nav.settings'), className: 'settings-title' }), versionEl, promos.el, opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), createHeading({ text: 'OpenSubtitles', className: 'prefs-title' }), h('div', { class: 'fields' }, openSubtitlesRow.root), devicePanel.el, prefsBlocks),
+    el: framedPage(createHeading({ level: 1, text: t('nav.settings'), className: 'settings-title' }), versionEl, promos.el, opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), h('div', { class: 'list' }, titleSearchRow.el), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), createHeading({ text: 'OpenSubtitles', className: 'prefs-title' }), h('div', { class: 'fields' }, openSubtitlesRow.root), devicePanel.el, prefsBlocks),
     mount() {
       opsPanel.mount();
       tmdbPanel.mount();

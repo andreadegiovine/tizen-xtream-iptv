@@ -17,8 +17,8 @@ const ACTIVE_PHASES = new Set(['queued', 'categories', 'download', 'write', 'ent
 export function describeType(state, meta, locale) {
   const phase = (state && state.phase) || 'idle';
   if (phase === 'error') return t(`error.${state.code}`);
-  if (phase === 'write') {
-    return t('home.phase.write', { done: formatNumber(state.done, locale), total: formatNumber(state.total, locale) });
+  if (phase === 'write' || phase === 'enrich') {
+    return t(`home.phase.${phase}`, { done: formatNumber(state.done, locale), total: formatNumber(state.total, locale) });
   }
   if (phase === 'queued') return t('common.queued');
   if (phase === 'retry') return t('home.phase.retry', { attempt: state.attempt, attempts: state.attempts });

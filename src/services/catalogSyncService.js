@@ -21,7 +21,9 @@ const emptyState = () => ({
  * code on the main thread instead.
  */
 export class CatalogSyncService {
-  constructor({ providers, settings, createWorker, getCleanTitles = () => true, getGrouping = async () => undefined, runLocal = runSyncForProvider, readyTimeoutMs = 4000 }) {
+  constructor({ providers, settings, createWorker, getCleanTitles = () => true, getGrouping = async () => undefined, getTitleSearch = async () => null, runLocal = runSyncForProvider, readyTimeoutMs = 4000 }) {
+    /** `getTitleSearch()`: { tmdbKey, language } when the titles without a TMDB id are looked for on TMDB by title, otherwise null. */
+    this.getTitleSearch = getTitleSearch;
     this.providers = providers;
     this.settings = settings;
     this.createWorker = createWorker;
@@ -83,6 +85,7 @@ export class CatalogSyncService {
       grouping: await this.getGrouping(provider.id),
       force,
       rewrite,
+      search: (await this.getTitleSearch().catch(() => null)) || null,
     };
 
     let outcome = null;
@@ -161,6 +164,7 @@ export class CatalogSyncService {
       grouping: payload.grouping || undefined,
       force: payload.force,
       rewrite: payload.rewrite,
+      search: payload.search,
       signal: this.controller.signal,
       emit: (message) => this.handle(job, message),
       gate: this.gate.wait,
@@ -173,6 +177,10 @@ export class CatalogSyncService {
       if (this.state.providerId && this.providers.update) this.providers.update(this.state.providerId, { expiresAt: message.expiresAt || null }).catch(() => undefined);
       return;
     }
+    if (message.event === 'info') {
+      log.info(message.message);
+      return;
+    }
     if (message.event === 'done') {
       this.state.running = false;
       this.state.error = message.error || null;
@@ -181,7 +189,8 @@ export class CatalogSyncService {
       if (message.mediaType) {
         this.state.types[message.mediaType] = { ...message };
         const m = message.meta;
-        if (message.phase === 'done' && m) log.info(`Catalog ${message.mediaType}: ${m.itemCount} items, ${m.entryCount} entries, ${m.categoryCount} categories, ${m.changes === undefined ? "?" : m.changes} rows changed; fetch ${m.fetchMs} ms, write ${m.writeMs} ms, total ${m.durationMs} ms`);
+        if (message.phase === 'enrich' && message.done === 0) log.info(`Catalog ${message.mediaType}: reading the details of ${message.total} titles listed without a TMDB id`);
+        else if (message.phase === 'done' && m) log.info(`Catalog ${message.mediaType}: ${m.itemCount} items, ${m.entryCount} entries, ${m.categoryCount} categories, ${m.changes === undefined ? "?" : m.changes} rows changed; fetch ${m.fetchMs} ms, write ${m.writeMs} ms, total ${m.durationMs} ms`);
         else if (message.phase === 'error') log.warn(`Catalog ${message.mediaType} failed: ${message.code || ''} ${message.message || ''}`);
       } else if (message.phase === 'error') this.state.error = { code: message.code, message: message.message };
     }

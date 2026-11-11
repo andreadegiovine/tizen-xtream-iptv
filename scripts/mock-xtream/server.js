@@ -4,6 +4,7 @@
  *
  *   node scripts/mock-xtream/server.js [--port 8090] [--movies 20000] [--series 8000] [--live 3000]
  *                                      [--latency 150] [--img-latency 40] [--kbps 0] [--dist dist] [--epg-days 2] [--epg-per-channel 1]
+ *                                      [--tmdb-info-only 1]  (the lists carry no TMDB id: only the details of each title do)
  *
  * Serves on one origin (no CORS involved): the app build (`--dist`, default ./dist), the Xtream API (/player_api.php, /xmltv.php),
  * posters and logos (/img/...svg, cacheable) and a fake TMDB (/tmdb/3/...) that tests route api.themoviedb.org and image.tmdb.org to.
@@ -61,8 +62,16 @@ async function send(req, res, status, body, type, { latency = LATENCY, cacheable
   return res.end();
 }
 
+const TMDB_INFO_ONLY = Boolean(Number(args['tmdb-info-only'] || 0));
 function streams(list, categoryId) {
-  return categoryId ? list.filter((s) => s.category_id === categoryId) : list;
+  const rows = categoryId ? list.filter((s) => s.category_id === categoryId) : list;
+  if (!TMDB_INFO_ONLY) return rows;
+  return rows.map((row) => {
+    const copy = { ...row };
+    delete copy.tmdb;
+    delete copy.tmdb_id;
+    return copy;
+  });
 }
 
 function memo(key, build) {

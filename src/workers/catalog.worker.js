@@ -24,6 +24,7 @@ self.onmessage = function (event) {
         grouping: message.grouping || undefined,
         force: message.force,
         rewrite: Boolean(message.rewrite),
+        search: message.search || null,
         signal: controller.signal,
         emit: (payload) => self.postMessage(payload),
         gate: gate.wait,

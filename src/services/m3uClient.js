@@ -78,6 +78,7 @@ const extensionOf = (url) => {
 
 export class M3uClient {
   constructor({ playlistUrl, epgUrl = '', fetchText = null, wrapUrl = wrapApiUrl }) {
+    this.detailsInLists = true; // a playlist has no per-title details: the catalog scan asks none (catalogEnrich.js)
     this.playlistUrl = playlistUrl;
     this.epgUrl = epgUrl;
     this.wrapUrl = wrapUrl;

@@ -4,7 +4,8 @@ import { openDb, deleteDb } from '../core/idb.js';
 // a grouped entry's key already is `${type}:t${tmdbId}`, so "is this tmdb id in the catalog?" is a plain get().
 // v3/v4: genre stores (provider genres rebuilt at every sync, other sources filled as they arrive); added without a rebuild.
 // v5: `groups` (versions of the same live channel, merged at every sync).
-export const PROVIDER_DB_VERSION = 5;
+// v6: `enrich` (what the details of titles listed without a TMDB id gave, see catalogEnrich.js); added without a rebuild.
+export const PROVIDER_DB_VERSION = 6;
 export const providerDbName = (providerId) => `provider_${providerId}`;
 
 function createGenreStores(db) {
@@ -33,6 +34,7 @@ function createSchema(db) {
   epg.createIndex('byStop', 'stop');
 
   db.createObjectStore('meta', { keyPath: 'key' });
+  db.createObjectStore('enrich', { keyPath: 'key' }); // `${type}:${id}`
   createGenreStores(db);
 }
 
@@ -45,6 +47,7 @@ export function openProviderDb(providerId) {
         ['entry_genre', 'entry_genre_tmdb'].forEach((name) => db.objectStoreNames.contains(name) && db.deleteObjectStore(name));
         createGenreStores(db);
         if (!db.objectStoreNames.contains('groups')) db.createObjectStore('groups', { keyPath: 'key' });
+        if (!db.objectStoreNames.contains('enrich')) db.createObjectStore('enrich', { keyPath: 'key' });
         return;
       }
       Array.from(db.objectStoreNames).forEach((name) => db.deleteObjectStore(name));

@@ -157,7 +157,18 @@ async function boot() {
 
   const focus = new FocusManager();
   const liveGrouping = createLiveGroupingService({ db, settings });
-  const catalog = new CatalogSyncService({ providers, settings, createWorker: createCatalogWorker, getCleanTitles: async () => (await settings.get()).cleanTitles, getGrouping: (providerId) => liveGrouping.config(providerId) });
+  const catalog = new CatalogSyncService({
+    providers,
+    settings,
+    createWorker: createCatalogWorker,
+    getCleanTitles: async () => (await settings.get()).cleanTitles,
+    getGrouping: (providerId) => liveGrouping.config(providerId),
+    // Settings › TMDB: titles without a TMDB id (lists and details) looked for on TMDB by title during the scan (needs the TMDB key).
+    getTitleSearch: async () => {
+      const key = ctx.apiKeys ? ctx.apiKeys.get().tmdbKey : '';
+      return key && (await settings.get()).tmdbTitleSearch ? { tmdbKey: key, language: i18n.getLocale() } : null;
+    },
+  });
   const active = createActiveProvider({ providers });
   const ctx = {
     db,
