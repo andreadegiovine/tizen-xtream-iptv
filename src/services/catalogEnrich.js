@@ -12,7 +12,9 @@ import { createTmdbClient } from './tmdbClient.js';
  * details have no id for either is looked for on TMDB by its title, with the conservative match of the title page (pickMatch).
  *
  * What was learned is kept per provider in the `enrich` store (`${type}:${id}`): the next scans apply it to the downloaded list without
- * asking again. A title whose details had no id is asked again after RECHECK_MS (the provider may add it).
+ * asking again. A title whose details had no id is asked again after RECHECK_MS (the provider may add it); one the title search found
+ * nothing for is searched again after RECHECK_MS too (TMDB may add it), and at once when its title or year in the list changed (a
+ * title found by an old name is searched again as well).
  */
 export const RECHECK_MS = 30 * 24 * 3600 * 1000;
 /** Details asked at the same time (a provider limits or blocks clients that send too many at once). */
@@ -82,6 +84,13 @@ export async function applyEnrichment(db, type, items, { titleSearch = false } =
   }
   return changed;
 }
+
+/** What a title search looks for: the clean title and the year (the list's, otherwise the details'). */
+export function searchQuery(item, record) {
+  const { cleanTitle, year } = normalizeTitle(item.name);
+  return { title: cleanTitle, year: item.year || (record && record.year) || year || null };
+}
+const queryKey = (query) => `${query.title.toLowerCase()}|${query.year || ''}`;
 
 /** Runs `fn` on every element, `concurrency` at a time, in order; stops starting new ones when `stop()` says so. */
 async function eachLimited(list, concurrency, fn, stop) {
@@ -153,12 +162,17 @@ export async function enrichType({
     const record = records.get(item.key);
     return !record || !record.checkedAt || (!record.tmdbId && t - record.checkedAt > RECHECK_MS);
   };
-  const needsSearch = (item) => {
-    const record = records.get(item.key);
-    return titleSearch && !(record && record.searchedAt);
+  // Searched again: never searched; nothing found and RECHECK_MS gone by; the title or year in the list changed since (found or not).
+  const searchDue = (item, record, at) => {
+    if (!titleSearch) return false;
+    if (!record || !record.searchedAt) return true;
+    if (record.searchedFor !== undefined && record.searchedFor !== queryKey(searchQuery(item, record))) return true;
+    return record.source !== 'search' && at - record.searchedAt > RECHECK_MS;
   };
+  const needsSearch = (item) => searchDue(item, records.get(item.key), t);
   let infoOff = typeof client.getVodInfo !== 'function' || client.detailsInLists === true; // a playlist has no details
-  const todo = items.filter((item) => !item.tmdbId && ((!infoOff && needsInfo(item)) || needsSearch(item)));
+  const fromSearch = (item) => item.tmdbFrom === 'search';
+  const todo = items.filter((item) => (!item.tmdbId && ((!infoOff && needsInfo(item)) || needsSearch(item))) || (fromSearch(item) && needsSearch(item)));
   if (!todo.length) return result;
   const aborted = () => Boolean(signal && signal.aborted);
   let failures = 0;
@@ -201,14 +215,15 @@ export async function enrichType({
           }
         }
       }
-      if (!record.tmdbId && tmdb && !record.searchedAt) {
+      if (tmdb && (!record.tmdbId || record.source === 'search') && searchDue(item, record, now())) {
         try {
           result.searched += 1;
-          const { cleanTitle, year } = normalizeTitle(item.name);
-          const wanted = item.year || record.year || year || null;
-          const data = await tmdb.search(type, cleanTitle, wanted, search.language);
-          const id = pickMatch(type, data && data.results, cleanTitle, wanted);
-          record = { ...record, searchedAt: now(), ...(id ? { tmdbId: id, source: 'search' } : {}) };
+          const query = searchQuery(item, record);
+          const data = await tmdb.search(type, query.title, query.year, search.language);
+          const id = pickMatch(type, data && data.results, query.title, query.year);
+          // A new answer replaces the one of an older name (found or not); the id of the details is never replaced.
+          const base = record.source === 'search' ? { ...record, tmdbId: null, source: null } : record;
+          record = { ...base, searchedAt: now(), searchedFor: queryKey(query), ...(id ? { tmdbId: id, source: 'search' } : {}) };
           if (id) result.matched += 1;
         } catch {
           /* TMDB unreachable: searched again at the next scan */

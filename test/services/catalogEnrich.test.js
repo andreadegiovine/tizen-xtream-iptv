@@ -116,3 +116,36 @@ test('title search: only for titles the details have no id for, conservative, un
   expect((await entries(db)).some((e) => e.key === 'movie:t949')).toBe(false);
   db.close();
 });
+
+test('title search again: nothing found and a month gone by, or the title in the list changed (found or not)', async () => {
+  const db = await newDb();
+  let list = [movie(1, 'Rare Film (2004)'), movie(2, 'Old Name (2010)')];
+  const client = {
+    ...makeClient([]),
+    getStreams: jest.fn(async (type) => (type === 'movie' ? list.map((row) => ({ ...row })) : [])),
+  };
+  await runSync({ db, client, types: ['movie'], enrich: false });
+  const known = { 'Old Name': [{ id: 50, title: 'Old Name', release_date: '2010-01-01' }], 'New Name': [{ id: 60, title: 'New Name', release_date: '2010-01-01' }] };
+  const search = jest.fn(async (type, title) => ({ results: known[title] || [] }));
+  const rebuild = () => rebuildEntries({ db, type: 'movie' });
+  const opts = { db, client, type: 'movie', search: { tmdbKey: 'k', language: 'it-IT' }, rebuild, makeTmdb: () => ({ search }) };
+  await enrichType(opts);
+  expect(search.mock.calls.map((c) => c[1]).sort()).toEqual(['Old Name', 'Rare Film']);
+  expect((await items(db)).find((i) => i.id === 2).tmdbId).toBe(50);
+
+  // Nothing changed: no search. A month later: only the one never found.
+  search.mockClear();
+  await enrichType(opts);
+  expect(search).not.toHaveBeenCalled();
+  await enrichType({ ...opts, now: () => Date.now() + RECHECK_MS + 1000 });
+  expect(search.mock.calls.map((c) => c[1])).toEqual(['Rare Film']);
+
+  // The provider renames a title: searched again at once, the new answer replaces the old one.
+  search.mockClear();
+  list = [movie(1, 'Rare Film (2004)'), movie(2, 'New Name (2010)')];
+  await runSync({ db, client, types: ['movie'], force: true, enrich: false });
+  await enrichType(opts);
+  expect(search.mock.calls.map((c) => c[1])).toEqual(['New Name']);
+  expect((await items(db)).find((i) => i.id === 2)).toMatchObject({ tmdbId: 60, tmdbFrom: 'search' });
+  db.close();
+});
