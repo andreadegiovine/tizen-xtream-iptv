@@ -1,4 +1,6 @@
 import { h } from '../dom.js';
+import { createHeading } from '../atoms/heading.js';
+import { createHint } from '../atoms/hint.js';
 import { t } from '../../i18n/index.js';
 import { XtreamClient, normalizeBaseUrl } from '../../services/xtreamClient.js';
 import { M3uClient } from '../../services/m3uClient.js';
@@ -35,7 +37,7 @@ export function normalizeAddress(input, { required = true } = {}) {
  */
 export function createProviderSetupPage(ctx, params = {}) {
   const editId = params.providerId || null;
-  const title = h('h1', { text: t(editId ? 'setup.editTitle' : 'setup.title') });
+  const title = createHeading({ level: 1, text: t(editId ? 'setup.editTitle' : 'setup.title') });
   const body = h('div', { class: 'setup-step' });
   let form = null;
   let kind = null; // chosen provider type (null: the choice is on screen)
@@ -63,7 +65,7 @@ export function createProviderSetupPage(ctx, params = {}) {
     ];
     if (!params.firstRun) actions.push({ label: t('setup.cancel'), run: () => ctx.router.back() });
     const next = createForm({ id: ZONE_ID, focus: ctx.focus, fields: [], actions });
-    next.el.insertBefore(h('p', { class: 'muted setup-hint', text: t('setup.type.hint') }), next.el.firstChild);
+    next.el.insertBefore(createHint({ text: t('setup.type.hint'), className: 'setup-hint' }), next.el.firstChild);
     next.el.classList.add('setup-types');
     show(next);
   }

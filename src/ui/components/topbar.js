@@ -1,4 +1,6 @@
 import { h } from '../dom.js';
+import { createTopbarItem, createTopbarItemSkeleton } from '../atoms/topbarItem.js';
+import { createTextInput } from '../atoms/textInput.js';
 import { t, i18n } from '../../i18n/index.js';
 import { icon } from '../icons.js';
 import { FocusZone } from '../focus/FocusManager.js';
@@ -98,13 +100,11 @@ export function createTopbar(ctx, handlers = {}) {
         spacerAdded = true;
       }
       if (skeleton) {
-        el.appendChild(h('span', { class: 'topbar-item' }, h('span', { class: `skeleton-line${section.iconOnly ? ' icon' : ''}` })));
+        el.appendChild(createTopbarItemSkeleton({ icon: section.iconOnly }));
         return;
       }
       const label = t(section.labelKey);
-      const node = h('span', { class: `topbar-item${section.id === currentSection ? ' current' : ''}${section.iconOnly ? ' icon-only' : ''}`, 'aria-label': label });
-      if (section.icon) node.appendChild(icon(section.icon));
-      if (!section.iconOnly) node.appendChild(h('span', { text: label }));
+      const node = createTopbarItem({ label, icon: section.icon || null, iconOnly: Boolean(section.iconOnly), current: section.id === currentSection });
       nodes.push(node);
       el.appendChild(node);
     });
@@ -151,10 +151,10 @@ export function createTopbar(ctx, handlers = {}) {
 
   function renderSearch(initial) {
     while (el.firstChild) el.removeChild(el.firstChild);
-    input = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: t('search.placeholder') });
+    input = createTextInput({ placeholder: t('search.placeholder') });
     input.value = initial || '';
     field = h('label', { class: 'topbar-search' }, icon('search'), input);
-    closeBtn = h('span', { class: 'topbar-item icon-only', 'aria-label': t('search.close') }, icon('close'));
+    closeBtn = createTopbarItem({ label: t('search.close'), icon: 'close', iconOnly: true });
     el.append(createLogo(), field, closeBtn); // the field takes the room between the logo and the clock
     appendClock();
     input.addEventListener('input', () => {

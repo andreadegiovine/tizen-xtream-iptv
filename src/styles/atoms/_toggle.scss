@@ -1,0 +1,40 @@
+// On / off switch (src/ui/atoms/toggle.js) inside a list row.
+@use '../tokens' as *;
+
+.list .row .toggle {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 64px;
+  height: 32px;
+  border-radius: 16px;
+  background: $bg-focus;
+  transition: background 0.12s ease-out;
+
+  .toggle-knob {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: $text;
+    transition: transform 0.12s ease-out;
+  }
+
+  &.on {
+    background: $accent;
+
+    .toggle-knob {
+      transform: translateX(32px);
+    }
+  }
+}
+
+.list .row.focused .toggle:not(.on) {
+  background: $text-muted;
+
+  .toggle-knob {
+    background: $bg;
+  }
+}

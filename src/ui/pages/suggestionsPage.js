@@ -1,11 +1,12 @@
 import { h } from '../dom.js';
+import { createHint } from '../atoms/hint.js';
 import { t } from '../../i18n/index.js';
 import { createTypedRows } from '../components/typedRows.js';
 import { log } from '../../core/logger.js';
 
 /** Suggested titles available in the provider catalog (TMDB recommendations from the watch history). */
 export function createSuggestionsPage(ctx) {
-  const status = h('p', { class: 'muted search-status', text: t('suggestions.loading') });
+  const status = createHint({ text: t('suggestions.loading'), className: 'search-status' });
   const rows = createTypedRows(ctx, { prefix: 'suggestions', onOpen: (entry) => ctx.openEntry(entry, { section: 'suggestions' }) });
   let destroyed = false;
 

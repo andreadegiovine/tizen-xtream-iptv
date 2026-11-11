@@ -1,0 +1,38 @@
+// Icon box (src/ui/atoms/iconButton.js).
+@use '../tokens' as *;
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 65px;
+  margin-right: 14px;
+  padding: 0;
+  border: 2px solid $focus-ring;
+  border-radius: 6px;
+  background: transparent;
+  color: $text;
+  transition: transform 0.12s ease-out;
+
+  .icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  // Same look as the search field in the bar: white box, dark icon on focus.
+  &.focused {
+    border-color: $text;
+    background: $text;
+    color: $bg;
+    transform: scale(1.06);
+  }
+
+  // Toggled on (watched / favourite): drawn like the focused state.
+  &.active {
+    border-color: $text;
+    background: $text;
+    color: $bg;
+  }
+
+}

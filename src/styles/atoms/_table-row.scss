@@ -1,0 +1,62 @@
+// Row of a settings table (src/ui/atoms/tableRow.js).
+@use '../tokens' as *;
+
+.sync-row {
+  display: flex;
+  margin-bottom: 8px;
+  padding: 12px 20px;
+  border-radius: 6px;
+  background: $bg-raised;
+
+  .sync-name {
+    width: 280px;
+    font-weight: 700;
+  }
+
+  .sync-status {
+    color: $text-muted;
+  }
+}
+
+.sync-row.with-buttons {
+  align-items: center;
+  padding-top: 6px;
+  padding-bottom: 6px;
+
+  .sync-status {
+    flex: 1;
+  }
+
+  .row-buttons {
+    display: flex;
+    flex: none;
+
+    .btn + .btn {
+      margin-left: 12px;
+    }
+
+    .btn.panel-button {
+      width: 64px;
+      padding: 8px 0;
+    }
+  }
+}
+
+.sync-row.op-row {
+  align-items: center;
+
+  .sync-status {
+    flex: 1;
+  }
+
+  .op-stop {
+    flex: none;
+    width: 64px;
+    margin: 0;
+    padding: 8px 0;
+  }
+}
+
+.sync-status.in-progress {
+  color: $warn;
+}

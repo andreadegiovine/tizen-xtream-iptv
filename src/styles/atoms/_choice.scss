@@ -1,0 +1,49 @@
+// Choice of a choice list (src/ui/atoms/choice.js) and the list itself.
+@use '../tokens' as *;
+
+.choice-list {
+  max-height: 560px;
+  overflow-x: hidden; // long labels are cut by the choice, never scrolled sideways
+  overflow-y: auto; // moved by the focus, without a visible bar
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none; // older Chromium (TVs) ignores scrollbar-width
+  }
+}
+
+.choice {
+  padding: 14px 24px;
+  overflow-wrap: break-word; // a long word wraps instead of widening the list
+  border-radius: 4px;
+  font-size: 1.8125rem;
+
+  &.current {
+    background: $bg-focus;
+  }
+
+  // Option with an icon (the actions of a programme): icon and label on one centred line, a gap between them like the sidebar lists.
+  &.with-icon {
+    display: flex;
+    align-items: center;
+
+    .icon {
+      flex: none;
+      width: 30px;
+      height: 30px;
+      margin-right: 20px;
+    }
+
+    span {
+      flex: 1;
+      min-width: 0;
+      line-height: 1.2;
+    }
+  }
+
+  &.focused {
+    background: $text;
+    color: $bg;
+    transform: scale(1.02);
+  }
+}

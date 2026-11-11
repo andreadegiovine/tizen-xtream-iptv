@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { createHint } from '../atoms/hint.js';
 import { visibleFavorites } from '../../services/favoriteEntries.js';
 import { t } from '../../i18n/index.js';
 import { createTypedRows } from '../components/typedRows.js';
@@ -7,7 +8,7 @@ import { log } from '../../core/logger.js';
 
 /** Titles, categories and genres the user marked with the heart, one carousel per type (categories and genres first). */
 export function createFavoritesPage(ctx) {
-  const status = h('p', { class: 'muted search-status', text: t('player.loading') });
+  const status = createHint({ text: t('player.loading'), className: 'search-status' });
   const rows = createTypedRows(ctx, {
     hideFavorite: true, // everything here is a favourite: the heart would say nothing
     prefix: 'favorites',

@@ -1,6 +1,10 @@
 import { h } from '../dom.js';
+import { createIconButton } from '../atoms/iconButton.js';
+import { createHint } from '../atoms/hint.js';
+import { createHeading } from '../atoms/heading.js';
+import { createPlaceholder } from '../atoms/placeholder.js';
+import { createMetaText } from '../atoms/metaParts.js';
 import { t } from '../../i18n/index.js';
-import { icon } from '../icons.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
@@ -26,7 +30,7 @@ export function createNetworkPage(ctx, params) {
   let focusedOnce = false;
 
   const poster = h('div', { class: 'detail-poster square' });
-  const titleEl = h('h1', { class: 'detail-title' });
+  const titleEl = createHeading({ level: 1, className: 'detail-title' });
   const metaEl = h('p', { class: 'detail-meta' });
   const actionsEl = h('div', { class: 'detail-actions' });
   const itemsEl = h('div', { class: 'detail-section' });
@@ -55,7 +59,7 @@ export function createNetworkPage(ctx, params) {
   }
 
   function createActions(buttons) {
-    const nodes = buttons.map((b) => h('button', { class: `icon-btn${b.active ? ' active' : ''}`, type: 'button', 'aria-label': b.label }, icon(b.icon)));
+    const nodes = buttons.map((b) => createIconButton({ icon: b.icon, label: b.label, active: b.active }));
     clear(actionsEl);
     nodes.forEach((n) => actionsEl.appendChild(n));
     return new FocusZone({
@@ -108,7 +112,7 @@ export function createNetworkPage(ctx, params) {
     const next = [];
     titleEl.textContent = network.name;
     clear(metaEl);
-    metaEl.appendChild(h('span', { text: t('collections.items', { count: (network.memberKeys || []).length }) }));
+    metaEl.appendChild(createMetaText(t('collections.items', { count: (network.memberKeys || []).length })));
     const buttons = [
       { icon: 'heart', active: favorite, label: favorite ? t('detail.unfavorite') : t('detail.favorite'), run: toggleFavorite },
       { icon: 'collectionAdd', label: t('collections.add'), run: () => addToCollection(ctx, { providerId, entry: network }) },
@@ -128,13 +132,13 @@ export function createNetworkPage(ctx, params) {
       next.push({ id: 'networkItems', zone: carousel.zone });
       if (ctx.enrich) ctx.enrich(members.slice(0, carousel.cards.length), carousel.cards, 'live', true);
     } else {
-      itemsEl.appendChild(h('p', { class: 'muted', text: t('networks.empty') }));
+      itemsEl.appendChild(createHint({ text: t('networks.empty') }));
     }
     setRows(next);
     clear(poster);
     poster.classList.remove('loading');
     if (network.icon) poster.appendChild(h('img', { src: network.icon, alt: '', referrerpolicy: 'no-referrer' }));
-    else poster.appendChild(h('div', { class: 'card-placeholder' }, icon('network')));
+    else poster.appendChild(createPlaceholder({ icon: 'network' }));
   }
 
   async function reload() {

@@ -1,0 +1,19 @@
+// Text input inside a list row (src/ui/atoms/textInput.js, class value-input).
+@use '../tokens' as *;
+
+.list .row .value-input {
+  flex: 1;
+  min-width: 0;
+  margin-left: 24px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: $text-muted;
+  font: inherit;
+  text-align: right;
+}
+
+.list .row.focused .value-input {
+  color: $bg;
+}

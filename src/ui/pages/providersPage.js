@@ -1,6 +1,7 @@
 import { h } from '../dom.js';
+import { createButton } from '../atoms/button.js';
+import { createHeading } from '../atoms/heading.js';
 import { t, i18n } from '../../i18n/index.js';
-import { icon } from '../icons.js';
 import { formatDate } from '../../core/format.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel } from '../focus/models.js';
@@ -55,20 +56,19 @@ export function createProvidersPage(ctx, params = {}) {
       cells = buildCells(providers, activeId);
       nodes = cells.map((cell) => {
         if (cell.action === ProviderAction.ADD) {
-          return h('button', { class: 'btn primary provider-add icon-only', type: 'button', 'aria-label': t('setup.title') }, icon('add'));
+          return createButton({ label: t('setup.title'), icon: 'add', variant: 'primary', iconOnly: true, className: 'provider-add' });
         }
         const labelKey = cell.action === ProviderAction.USE && cell.disabled ? 'common.active' : `providers.${cell.action}`;
         // Use / Active keep their label; the others are icons only (categories: the one of the sidebar).
         const iconName = { [ProviderAction.CATEGORIES]: 'categories', [ProviderAction.EDIT]: 'edit', [ProviderAction.REMOVE]: 'remove' }[cell.action];
-        return h(
-          'button',
-          {
-            class: `btn provider-action${iconName ? ' icon-only' : ''}${cell.disabled ? ' is-current' : ''}${cell.action === ProviderAction.REMOVE ? ' danger' : ''}`,
-            type: 'button',
-            'aria-label': t(labelKey),
-          },
-          iconName ? icon(iconName) : t(labelKey),
-        );
+        return createButton({
+          label: t(labelKey),
+          icon: iconName || null,
+          iconOnly: Boolean(iconName),
+          ariaLabel: t(labelKey),
+          variant: cell.action === ProviderAction.REMOVE ? 'danger' : '',
+          className: `provider-action${cell.disabled ? ' is-current' : ''}`,
+        });
       });
       while (list.firstChild) list.removeChild(list.firstChild);
       let cursor = 0;
@@ -156,7 +156,7 @@ export function createProvidersPage(ctx, params = {}) {
   });
 
   return {
-    el: h('section', { class: 'page framed providers' }, h('div', { class: 'page-container' }, h('h1', { text: t('nav.provider') }), list)),
+    el: h('section', { class: 'page framed providers' }, h('div', { class: 'page-container' }, createHeading({ level: 1, text: t('nav.provider') }), list)),
     mount() {
       ctx.focus.register(zone);
       ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);

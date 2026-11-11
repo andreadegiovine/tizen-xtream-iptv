@@ -190,9 +190,10 @@ src/
   core/       env, errors, logger (masks credentials), http, idb, input
   db/         app database and one database per provider
   services/   Xtream client, sync, grouping, title normalisation, TMDB, Trakt, EPG, player engines
-  ui/         focus manager, router, top bar, pages, components
+  ui/         focus manager, router, pages; components/ (cards, carousels, dialogs, guide, top bar) built from
+              atoms/ (buttons, fields, chips, rows, sidebar entries...: see src/ui/atoms/README.md)
   i18n/       en-US and it-IT dictionaries
-  styles/     SCSS
+  styles/     SCSS, one file per part of the UI; styles/atoms/ the styles of the atomic components
   platform/   the contract of a platform adapter (contract.js) and the adapter of the build (index.js)
 platforms/
   tizen/      adapter (AVPlay, remote keys, system info, YouTube trailers), config.xml, YouTube service,

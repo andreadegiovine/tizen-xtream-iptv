@@ -1,4 +1,6 @@
 import { h } from '../dom.js';
+import { createSkeletonLine } from '../atoms/skeleton.js';
+import { createPlaceholder } from '../atoms/placeholder.js';
 import { icon } from '../icons.js';
 import { lazySrc } from '../lazyImage.js';
 import { i18n, t } from '../../i18n/index.js';
@@ -24,7 +26,7 @@ export function cardMeta({ year, seasons, episodes, tag, subtitle } = {}) {
 
 /** Empty card with the same footprint, pulsing while the real ones are loaded. */
 export function createSkeletonCard() {
-  return h('div', { class: 'card skeleton-card' }, h('div', { class: 'card-poster loading' }), h('div', { class: 'card-title skeleton-line' }), h('div', { class: 'card-meta skeleton-line short' }));
+  return h('div', { class: 'card skeleton-card' }, h('div', { class: 'card-poster loading' }), createSkeletonLine({ className: 'card-title' }), createSkeletonLine({ className: 'card-meta short' }));
 }
 
 export const formatRating = (rating) => (Number(rating) > 0 ? Number(rating).toFixed(1) : '');
@@ -46,8 +48,8 @@ export function createCard(entry, type, meta = {}) {
   const sub = h('div', { class: 'card-meta' });
   const bar = h('div', { class: 'card-progress' }, h('span'));
   const locked = Boolean(entry && isAdultEntry(entry));
-  if (locked) poster.appendChild(h('div', { class: 'card-placeholder locked' }, icon('lock')));
-  else if (meta.placeholder) poster.appendChild(h('div', { class: 'card-placeholder' }, icon(meta.placeholder)));
+  if (locked) poster.appendChild(createPlaceholder({ icon: 'lock', className: 'locked' }));
+  else if (meta.placeholder) poster.appendChild(createPlaceholder({ icon: meta.placeholder }));
   poster.append(badges, statusBadge, bar);
   const el = h('div', { class: `card ${type}${meta.square ? ' square' : ''}` }, poster, title, sub); // `square`: the logo box of Live TV channels
   const state = { year: entry.year, seasons: null, episodes: null, tag: '', subtitle: '', count: null, countLoading: false };
@@ -97,7 +99,7 @@ export function createCard(entry, type, meta = {}) {
     sub.textContent = text;
     if (state.countLoading) {
       if (text) sub.appendChild(document.createTextNode(' · '));
-      sub.appendChild(h('span', { class: 'skeleton-line card-count-skeleton' }));
+      sub.appendChild(createSkeletonLine({ className: 'card-count-skeleton', tag: 'span' }));
     } else if (state.count !== null && state.count !== undefined) {
       sub.appendChild(document.createTextNode(`${text ? ' · ' : ''}${formatNumber(state.count, i18n.getLocale())}`));
     }

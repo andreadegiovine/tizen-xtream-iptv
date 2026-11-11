@@ -1,8 +1,9 @@
 import { h } from '../dom.js';
+import { createButton } from '../atoms/button.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { Dir } from '../focus/models.js';
 import { ensureVisible } from '../scroll.js';
-import { createField } from './field.js';
+import { createField } from '../atoms/field.js';
 
 /** A page in the centred, full-width frame (Settings, Visible categories, Diagnostics, provider form): title, then the content. */
 export function framedPage(...children) {
@@ -53,7 +54,7 @@ export function formModel({ fieldCount, actionCount, clearable = false }) {
  */
 export function createForm({ id, focus, fields: specs, actions }) {
   const status = h('div', { class: 'status', role: 'status' });
-  const actionButtons = actions.map((a) => h('button', { class: `btn${a.primary ? ' primary' : ''}`, type: 'button', text: a.label }));
+  const actionButtons = actions.map((a) => createButton({ label: a.label, variant: a.primary ? 'primary' : '' }));
   const total = specs.length + actions.length;
   const fields = specs.map((spec, i) => createField({ ...spec, onSubmit: () => focus.focus(id, Math.min(i + 1, total - 1)), onClear: () => undefined }));
   const nodes = fields.map((f) => f.el).concat(actionButtons, fields.map((f) => f.clearEl));

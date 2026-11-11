@@ -1,4 +1,7 @@
 import { h } from '../dom.js';
+import { createButton } from '../atoms/button.js';
+import { createField } from '../atoms/field.js';
+import { createHeading } from '../atoms/heading.js';
 import { framedPage } from '../components/formPage.js';
 import { t } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
@@ -12,25 +15,26 @@ import { NETWORK_REPORT_KEY } from '../../services/catalogSync.js';
 import { formatNetworkReport } from '../../services/liveNetworks.js';
 
 const ZONE_ID = 'diagnostics';
-const IME_DONE = 65376;
 
 export function createDiagnosticsPage(ctx) {
   const spike = platform.createDiagnosticPlayer(); // the player lab of the platform (AVPlay on Tizen)
   const results = h('div', { class: 'diag-results' });
   const logBox = h('pre', { class: 'diag-log scroll' });
-  const runButton = h('button', { class: 'btn primary', type: 'button', text: t('diag.run') });
-  const urlInput = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
-  const urlRow = h('label', { class: 'field' }, h('span', { class: 'field-label', text: t('diag.avplayUrl') }), urlInput);
-  const playButton = h('button', { class: 'btn', type: 'button', text: t('diag.play') });
-  const stopButton = h('button', { class: 'btn', type: 'button', text: t('operations.stop') });
+  const runButton = createButton({ label: t('diag.run'), variant: 'primary' });
+  // A text field like the others (it owns its keys: Enter / Done / Cancel close the keyboard).
+  const urlField = createField({ label: t('diag.avplayUrl'), clearable: false });
+  const urlInput = urlField.input;
+  const urlRow = urlField.el;
+  const playButton = createButton({ label: t('diag.play') });
+  const stopButton = createButton({ label: t('operations.stop') });
   // The log is focusable too: it is the last stop, so Down scrolls the page all the way to it.
   // Subtitle lab: pick a text track, then try one way of showing it (see platforms/tizen/avplaySpike.js, selectText).
   let labTrack = 0;
   const subtitleOverlay = h('div', { class: 'diag-subtitle' });
-  const modeButtons = ['events', 'native', 'before', 'late', 'off'].map((mode) => ({ mode, el: h('button', { class: 'btn', type: 'button', text: t(`diag.sub.${mode}`) }) }));
-  const trackButton = h('button', { class: 'btn', type: 'button', text: t('diag.sub.track', { n: '…' }) });
+  const modeButtons = ['events', 'native', 'before', 'late', 'off'].map((mode) => ({ mode, el: createButton({ label: t(`diag.sub.${mode}`) }) }));
+  const trackButton = createButton({ label: t('diag.sub.track', { n: '…' }) });
   // How the Live networks were found (saved by the last Live sync): what was grouped, why, and what was left out.
-  const reportButton = h('button', { class: 'btn', type: 'button', text: t('diag.networks') });
+  const reportButton = createButton({ label: t('diag.networks') });
   const reportBox = h('pre', { class: 'diag-log' });
   const focusables = [runButton, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el), reportButton, logBox];
   const FIRST_MODE = 5;
@@ -111,20 +115,13 @@ export function createDiagnosticsPage(ctx) {
       }
     },
   });
-  urlInput.addEventListener('keydown', (event) => {
-    event.stopPropagation();
-    if (event.keyCode === 13 || event.keyCode === IME_DONE || event.keyCode === 65385) {
-      event.preventDefault();
-      urlInput.blur();
-    }
-  });
 
   return {
     el: framedPage(
       subtitleOverlay,
-      h('h1', { text: t('settings.diagnostics') }),
+      createHeading({ level: 1, text: t('settings.diagnostics') }),
       h('div', { class: 'form' }, runButton, results, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el), reportButton, reportBox),
-      h('h2', { class: 'prefs-title', text: t('diag.logs') }),
+      createHeading({ text: t('diag.logs'), className: 'prefs-title' }),
       logBox,
     ),
     mount() {

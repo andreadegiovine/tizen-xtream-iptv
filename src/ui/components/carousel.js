@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { createHeading } from '../atoms/heading.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
 import { ensureVisible } from '../scroll.js';
@@ -61,7 +62,7 @@ export function createCarousel({ id, title, items: given, onOpen, className = ''
       });
     return reading;
   }
-  const el = h('div', { class: `carousel${className ? ` ${className}` : ''}` }, title ? h('h2', { class: 'carousel-title', text: title }) : null, track);
+  const el = h('div', { class: `carousel${className ? ` ${className}` : ''}` }, title ? createHeading({ text: title, className: 'carousel-title' }) : null, track);
 
   const zone = new FocusZone({
     id,

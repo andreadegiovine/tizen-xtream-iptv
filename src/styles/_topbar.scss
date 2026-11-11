@@ -58,43 +58,6 @@
   }
 }
 
-.topbar-item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: $topbar-item-height;
-  margin-right: calc(#{$topbar-external-margin} / 2);
-  padding: 0 20px;
-  border-radius: 6px;
-  color: $text-muted;
-  transition: transform 0.12s ease-out, background-color 0.12s ease-out;
-
-  .icon {
-    width: 26px;
-    height: 26px;
-  }
-
-  .icon + span {
-    margin-left: 10px;
-  }
-
-  &.icon-only {
-    width: 56px;
-    padding: 0;
-  }
-
-  &.current {
-    color: $text;
-    font-weight: 700;
-  }
-
-  &.focused {
-    background: $text;
-    color: $bg;
-    transform: scale(#{$focus-scale});
-  }
-}
-
 .topbar-search {
   display: flex;
   flex: 1;

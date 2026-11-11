@@ -1,0 +1,86 @@
+// Labelled text field (src/ui/atoms/field.js), and a field with a button at its right.
+@use '../tokens' as *;
+
+.field {
+  display: block;
+  margin-bottom: 16px;
+  padding: 12px 20px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: $bg-raised;
+  transition: transform 0.12s ease-out;
+
+  .field-label {
+    display: block;
+    color: $text-muted;
+    font-size: 1.375rem;
+  }
+
+  input {
+    display: block;
+    width: 100%;
+    padding: 6px 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: $text;
+    font: inherit;
+  }
+
+  &.focused,
+  &.clearing {
+    border-color: $text;
+    background: $bg-focus;
+    transform: scale(1.02);
+  }
+
+  // The "x" that empties the field: at the right edge of the box, only while the field (or the x itself) has the focus.
+  &.clearable {
+    position: relative;
+    padding-right: 84px;
+  }
+
+  .field-clear {
+    position: absolute;
+    top: 50%;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    margin-top: -26px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    color: $text-muted;
+    opacity: 0;
+    transition: opacity 0.12s;
+
+    .icon {
+      width: 24px;
+      height: 24px;
+    }
+
+    &.focused {
+      border-color: $text;
+      background: $text;
+      color: $bg-raised;
+    }
+  }
+
+  &.focused .field-clear,
+  &.clearing .field-clear {
+    opacity: 1;
+  }
+}
+
+// A field with a button at its right.
+.field-line {
+  display: flex;
+  align-items: stretch;
+
+  .field {
+    flex: 1;
+    min-width: 0;
+  }
+}

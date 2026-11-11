@@ -1,4 +1,10 @@
 import { h } from '../dom.js';
+import { createIconButton } from '../atoms/iconButton.js';
+import { createChip, createChipLabel } from '../atoms/chip.js';
+import { createHint } from '../atoms/hint.js';
+import { createHeading } from '../atoms/heading.js';
+import { createPlaceholder } from '../atoms/placeholder.js';
+import { createMetaSeparator, createMetaRating, createMetaText } from '../atoms/metaParts.js';
 import { streamLabel } from '../streamLabel.js';
 import { cssUrl } from '../cssUrl.js';
 import { isEmptySeries, markUnavailable } from '../../services/unavailable.js';
@@ -11,7 +17,7 @@ import { ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { createCarousel } from '../components/carousel.js';
-import { createSelectField } from '../components/selectField.js';
+import { createSelectField } from '../atoms/selectField.js';
 import { getEntry, listCategories, listNetworks, createMergeSearch } from '../../services/catalogQuery.js';
 import { rebuildLive } from '../../services/rebuildLive.js';
 import { watchKey, shouldResume, isWatched } from '../../services/watchStore.js';
@@ -134,7 +140,7 @@ export function createDetailPage(ctx, params) {
   let posterUrl = '';
   const poster = h('div', { class: 'detail-poster loading' });
   const backdropEl = h('div', { class: 'detail-backdrop' });
-  const titleEl = h('h1', { class: 'detail-title' });
+  const titleEl = createHeading({ level: 1, className: 'detail-title' });
   const metaEl = h('p', { class: 'detail-meta' });
   const versionEl = h('div', { class: 'detail-version' });
   const plotEl = h('p', { class: 'detail-plot' });
@@ -304,7 +310,7 @@ export function createDetailPage(ctx, params) {
 
   /** Icon-only button row (play / resume) with its own horizontal zone. */
   function createActions(buttons, initial) {
-    const nodes = buttons.map((b) => h('button', { class: `icon-btn${b.active ? ' active' : ''}`, type: 'button', 'aria-label': b.label }, icon(b.icon)));
+    const nodes = buttons.map((b) => createIconButton({ icon: b.icon, label: b.label, active: b.active }));
     while (actionsEl.firstChild) actionsEl.removeChild(actionsEl.firstChild);
     nodes.forEach((n) => actionsEl.appendChild(n));
     if (buttons.note) actionsEl.appendChild(h('span', { class: 'detail-note', text: buttons.note }));
@@ -372,8 +378,8 @@ export function createDetailPage(ctx, params) {
   /** A row of chips; the clickable ones form a horizontal focus zone that opens the matching browse view. */
   function renderChips(container, zoneId, chipItems, kind, next, label, open = null) {
     clear(container);
-    if (chipItems.length) container.appendChild(h('span', { class: 'detail-label', text: label }));
-    const nodes = chipItems.map((item) => h('span', { class: `chip${item.id !== undefined ? ' link' : ''}`, text: item.name }));
+    if (chipItems.length) container.appendChild(createChipLabel(label));
+    const nodes = chipItems.map((item) => createChip({ text: item.name, link: item.id !== undefined }));
     nodes.forEach((node) => container.appendChild(node));
     const links = chipItems.map((item, i) => ({ item, node: nodes[i] })).filter(({ item }) => item.id !== undefined && item.id !== null);
     if (!links.length) return;
@@ -410,8 +416,8 @@ export function createDetailPage(ctx, params) {
     clear(directorEl);
     const list = entry.type === 'live' || !meta || !meta.directors ? [] : meta.directors;
     if (!list.length) return;
-    directorEl.appendChild(h('span', { class: 'detail-label', text: t('detail.director') }));
-    list.forEach((name) => directorEl.appendChild(h('span', { class: 'chip', text: name })));
+    directorEl.appendChild(createChipLabel(t('detail.director')));
+    list.forEach((name) => directorEl.appendChild(createChip({ text: name })));
   }
 
   /** Production companies: names as chips, same style as categories and genres but not clickable. */
@@ -419,8 +425,8 @@ export function createDetailPage(ctx, params) {
     clear(companiesEl);
     const list = entry.type === 'live' || !meta || !meta.companies ? [] : meta.companies;
     if (!list.length) return;
-    companiesEl.appendChild(h('span', { class: 'detail-label', text: t('detail.companies') }));
-    list.forEach((company) => companiesEl.appendChild(h('span', { class: 'chip', text: company.name })));
+    companiesEl.appendChild(createChipLabel(t('detail.companies')));
+    list.forEach((company) => companiesEl.appendChild(createChip({ text: company.name })));
   }
 
   function renderCast(next) {
@@ -457,7 +463,7 @@ export function createDetailPage(ctx, params) {
     clear(episodesEl);
     if (entry.type !== 'series' || !info) return;
     if (!episodes.length) {
-      episodesEl.appendChild(h('p', { class: 'muted', text: t('detail.noEpisodes') }));
+      episodesEl.appendChild(createHint({ text: t('detail.noEpisodes') }));
       return;
     }
     const season = info.seasons[seasonIndex];
@@ -637,9 +643,8 @@ export function createDetailPage(ctx, params) {
     titleEl.textContent = d.title;
     clear(metaEl);
     detailMetaParts({ type: entry && entry.type, ...d }).forEach((part, i) => {
-      if (i > 0) metaEl.appendChild(h('span', { class: 'meta-sep', text: '·' }));
-      if (part.kind === 'rating') metaEl.appendChild(h('span', { class: 'meta-rating' }, icon('star'), h('span', { text: part.text })));
-      else metaEl.appendChild(h('span', { text: part.text }));
+      if (i > 0) metaEl.appendChild(createMetaSeparator());
+      metaEl.appendChild(part.kind === 'rating' ? createMetaRating(part.text) : createMetaText(part.text));
     });
     plotEl.textContent = (meta && meta.overview) || (info && info.plot) || '';
     const logo = entry && entry.isGroup && selectedMember && selectedMember.icon ? selectedMember.icon : entry && entry.icon;
@@ -660,7 +665,7 @@ export function createDetailPage(ctx, params) {
       posterUrl = '';
       clear(poster);
       poster.classList.remove('loading');
-      poster.appendChild(h('div', { class: 'card-placeholder' }, icon(entry && entry.type === 'live' ? 'network' : 'trailer')));
+      poster.appendChild(createPlaceholder({ icon: entry && entry.type === 'live' ? 'network' : 'trailer' }));
     }
     showBackdrop((info && info.backdrop) || (meta && meta.backdrop));
   }
@@ -786,7 +791,7 @@ export function createDetailPage(ctx, params) {
   function renderEpg(next) {
     clear(epgEl);
     if (!epgList.length) return;
-    epgEl.appendChild(h('h2', { text: t('detail.epg') }));
+    epgEl.appendChild(createHeading({ text: t('detail.epg') }));
     const at = Date.now();
     const nodes = epgList.map((p) =>
       h(

@@ -1,9 +1,11 @@
 import { h } from '../dom.js';
+import { createHint } from '../atoms/hint.js';
+import { createIconButton } from '../atoms/iconButton.js';
+import { createSkeletonBlock } from '../atoms/skeleton.js';
 import { createCard } from './card.js';
 import { t, i18n } from '../../i18n/index.js';
 import { formatClockTime } from '../../core/clock.js';
 import { log } from '../../core/logger.js';
-import { icon } from '../icons.js';
 
 /** Minutes → pixels on the time axis (a half hour is 240 px: a 30-minute programme shows a title of ~20 letters). */
 export const PX_PER_MIN = 8;
@@ -95,8 +97,8 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
   const corner = h('div', { class: 'epg-corner' });
   const rowsEl = h('div', { class: 'epg-rows' });
   const nowLine = h('div', { class: 'epg-now' });
-  const status = h('p', { class: 'muted epg-status' });
-  const actionButtons = rowActions.map((a) => h('button', { class: 'icon-btn', type: 'button', 'aria-label': a.label, title: a.label }, icon(a.icon)));
+  const status = createHint({ className: 'epg-status' });
+  const actionButtons = rowActions.map((a) => createIconButton({ icon: a.icon, label: a.label, title: a.label }));
   const actionsEl = h('div', { class: 'guide-row-actions' }, actionButtons);
   actionsEl.style.display = 'none';
   const selection = h('div', { class: 'guide-row-selection' });
@@ -218,7 +220,7 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
       const card = createCard(entry, 'live', { square: true });
       channel.appendChild(card.el);
       if (enrich) enrich([entry], [card]);
-    } else channel.appendChild(h('div', { class: 'skeleton-block epg-channel-skeleton' }));
+    } else channel.appendChild(createSkeletonBlock({ className: 'epg-channel-skeleton' }));
     const segments = segmentsOf(row);
     const segNodes = segments.map((seg) => {
       const node = h('div', { class: `epg-prog${seg.empty ? ' empty' : ''}${seg.loading ? ' loading' : ''}${seg.programme && seg.start <= now() && seg.stop > now() ? ' live' : ''}` }, h('span', { class: `epg-prog-title${seg.loading ? ' skeleton-line' : ''}`, text: seg.loading ? '' : seg.title || noInfo() }));

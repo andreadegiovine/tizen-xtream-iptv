@@ -1,8 +1,8 @@
 import { h } from '../dom.js';
+import { createPlayerButton, setPlayerButtonIcon } from '../atoms/playerButton.js';
 import { t, i18n } from '../../i18n/index.js';
 import { Action } from '../../core/input.js';
 import { log } from '../../core/logger.js';
-import { icon } from '../icons.js';
 import { platform } from '../../platform/index.js';
 import { createPlayerController, cleanSubtitle, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer } from '../../services/playerController.js';
 import { ASPECT_MODES } from '../../services/playerEngines.js';
@@ -134,8 +134,9 @@ export function createPlayerPage(ctx, params) {
     .filter((def) => !(isLive && def.vodOnly) && !(!isLive && def.liveOnly) && !(def.seriesOnly && params.type !== 'series') && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles' || def.id === 'audio')));
   buttonDefs.forEach((def) => {
     // Previous / next channel: the name of the channel they go to shows above them while focused.
-    if (def.tip) def.tipEl = h('span', { class: 'player-btn-tip' });
-    def.el = h('button', { class: 'player-btn', type: 'button', 'aria-label': def.label() }, icon(def.icon), def.tipEl || null);
+    const made = createPlayerButton({ icon: def.icon, label: def.label(), tip: Boolean(def.tip) });
+    def.el = made.el;
+    def.tipEl = made.tipEl;
   });
   buttonDefs.forEach((def) => {
     if (def.hidden) def.el.style.display = 'none';
@@ -156,7 +157,7 @@ export function createPlayerPage(ctx, params) {
     const name = on ? 'fullscreenExit' : 'fullscreen';
     if (!def || def.icon === name) return;
     def.icon = name;
-    def.el.replaceChild(icon(name), def.el.firstChild);
+    setPlayerButtonIcon(def.el, name);
     def.el.setAttribute('aria-label', t(on ? 'player.fullscreen.exit' : 'player.fullscreen'));
   }
   function syncFullscreen() {
@@ -664,7 +665,7 @@ export function createPlayerPage(ctx, params) {
       const name = state.status === 'paused' ? 'play' : 'pause';
       if (toggle.icon !== name) {
         toggle.icon = name;
-        toggle.el.replaceChild(icon(name), toggle.el.firstChild);
+        setPlayerButtonIcon(toggle.el, name);
         toggle.el.setAttribute('aria-label', name === 'play' ? t('detail.play') : t('player.pause'));
       }
     }

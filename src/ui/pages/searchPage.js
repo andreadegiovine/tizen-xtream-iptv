@@ -1,4 +1,7 @@
 import { h } from '../dom.js';
+import { createHint } from '../atoms/hint.js';
+import { createSkeletonLine } from '../atoms/skeleton.js';
+import { createListRow } from '../atoms/listRow.js';
 import { t, i18n } from '../../i18n/index.js';
 import { createTypedRows } from '../components/typedRows.js';
 import { createSkeletonCard } from '../components/card.js';
@@ -19,7 +22,7 @@ const RECENT_ZONE = 'searchRecent';
  * it calls setQuery() while typing and focusResults() on Enter / Down.
  */
 export function createSearchPage(ctx, params = {}) {
-  const status = h('p', { class: 'muted search-status' });
+  const status = createHint({ className: 'search-status' });
   const rows = createTypedRows(ctx, { prefix: 'search', limit: PER_TYPE, onOpen: (entry) => remember() || open(entry) });
 
   /** A collection opens its page; a programme opens its channel / group with the focus on it; the rest opens its detail page. */
@@ -54,7 +57,7 @@ export function createSearchPage(ctx, params = {}) {
     }
     return out;
   }
-  const skeleton = h('div', { class: 'search-skeleton' }, h('div', { class: 'skeleton-line title' }), h('div', { class: 'skeleton-row' }, [0, 1, 2, 3, 4, 5].map(() => createSkeletonCard())));
+  const skeleton = h('div', { class: 'search-skeleton' }, createSkeletonLine({ className: 'title' }), h('div', { class: 'skeleton-row' }, [0, 1, 2, 3, 4, 5].map(() => createSkeletonCard())));
   skeleton.style.display = 'none';
   const recentList = h('div', { class: 'list search-recent-list' });
   const recentEl = h('div', { class: 'search-recent' }, recentList);
@@ -108,7 +111,7 @@ export function createSearchPage(ctx, params = {}) {
     if (destroyed || mine !== token) return;
     recent = list;
     while (recentList.firstChild) recentList.removeChild(recentList.firstChild);
-    recentNodes = recent.map((text) => h('div', { class: 'row' }, h('span', { text })));
+    recentNodes = recent.map((text) => createListRow({ label: text }).el);
     recentNodes.forEach((node) => recentList.appendChild(node));
     recentEl.style.display = recent.length ? '' : 'none';
     if (!recent.length) return;

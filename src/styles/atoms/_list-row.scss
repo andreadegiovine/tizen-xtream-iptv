@@ -1,0 +1,27 @@
+// Row of a list (src/ui/atoms/listRow.js): label at the left, value at the right.
+@use '../tokens' as *;
+
+.list .row {
+  display: flex;
+  justify-content: space-between;
+  width: 880px;
+  margin-bottom: 12px;
+  padding: 18px 24px;
+  border-radius: 6px;
+  background: $bg-raised;
+  transition: transform 0.12s ease-out;
+
+  .value {
+    color: $text-muted;
+  }
+
+  &.focused {
+    background: $text;
+    color: $bg;
+    transform: scale(1.02);
+
+    .value {
+      color: $bg;
+    }
+  }
+}

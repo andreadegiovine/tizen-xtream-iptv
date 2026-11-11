@@ -1,0 +1,62 @@
+// Button of the player controls (src/ui/atoms/playerButton.js).
+@use '../tokens' as *;
+
+.player .player-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 64px;
+  margin: 0 8px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: $text;
+  transition: transform 0.12s ease-out;
+
+  .icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  &.focused {
+    border-color: $text;
+    background: rgba($text, 0.18);
+    transform: scale(1.1);
+  }
+
+  // Previous / next channel: where it goes, above the button while focused (same look as the time above the progress knob).
+  .player-btn-tip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    margin-bottom: 14px;
+    padding: 4px 14px;
+    border-radius: 6px;
+    background: rgba($black, 0.8);
+    font-size: 1.375rem;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateX(-50%);
+    transition: opacity 0.15s;
+    pointer-events: none;
+  }
+
+  &.focused .player-btn-tip:not(:empty) {
+    opacity: 1;
+  }
+
+  // The end credits start is set for this series.
+  &.active {
+    color: $accent;
+  }
+
+  // The last button on the right: its tooltip ends at the button, so it stays on screen.
+  &:last-child .player-btn-tip {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+}

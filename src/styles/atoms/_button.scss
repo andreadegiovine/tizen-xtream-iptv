@@ -1,0 +1,59 @@
+// Button (src/ui/atoms/button.js): the base look, its variants and the icon-only form.
+@use '../tokens' as *;
+
+.btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: $bg-raised;
+  color: $text;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  transition: transform 0.12s ease-out;
+
+  &.primary {
+    background: $accent;
+  }
+
+  &.focused {
+    border-color: $text;
+    transform: scale(1.02);
+  }
+}
+
+.btn.disabled {
+  opacity: 0.5;
+}
+
+// Buttons that show only an icon.
+.btn.icon-only {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .icon {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.btn.danger.focused {
+  background: $fail;
+}
+
+// The provider that is in use: green, with the same focus look as the red "Remove".
+.btn.is-current,
+.btn.is-current.focused {
+  background: $current;
+}
+
+.btn.panel-button {
+  flex: none;
+  width: 72px;
+  margin: 0;
+  padding: 10px 0;
+}

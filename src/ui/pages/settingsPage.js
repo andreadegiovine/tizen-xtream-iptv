@@ -7,6 +7,10 @@ import { Priority } from '../../services/backgroundQueue.js';
 import { transactionDone, dbDelete } from '../../core/idb.js';
 import { GENRES_SOURCE_KEY } from '../../services/genreBackfill.js';
 import { h } from '../dom.js';
+import { createListRow, createRowValue } from '../atoms/listRow.js';
+import { createToggle, setToggle } from '../atoms/toggle.js';
+import { createHeading } from '../atoms/heading.js';
+import { createHint } from '../atoms/hint.js';
 import { changePin } from '../components/pinFlows.js';
 import { TEXT_SIZES, applyTextSize } from '../../core/textSize.js';
 import { TIME_FORMATS, DATE_FORMATS, formatClockTime, formatClockDate } from '../../core/clock.js';
@@ -22,7 +26,7 @@ import { probeGuide } from '../../services/epgSync.js';
 import { rebuildLive } from '../../services/rebuildLive.js';
 import { parseTerms, termsText } from '../../services/liveGrouping.js';
 import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from '../../services/liveNetworks.js';
-import { createField } from '../components/field.js';
+import { createField } from '../atoms/field.js';
 import { framedPage } from '../components/formPage.js';
 import { runningVersions, lastCheck } from '../../services/updates.js';
 import { providerMediaTypes } from '../../services/providerTypes.js';
@@ -66,7 +70,7 @@ export function clearRowOf(field) {
 /** A row that runs an action (optionally after a confirmation). */
 export function actionRow({ label, run, confirm = null, ctx }) {
   return {
-    el: h('div', { class: 'row' }, h('span', { text: label })),
+    el: createListRow({ label: label }).el,
     refresh: async () => undefined,
     async activate() {
       if (confirm) {
@@ -80,8 +84,8 @@ export function actionRow({ label, run, confirm = null, ctx }) {
 
 /** A setting that is picked from a fixed list: shows the current value, OK opens the list. */
 export function optionRow({ labelKey, key, options, format = String, ctx }) {
-  const value = h('span', { class: 'value' });
-  const el = h('div', { class: 'row' }, h('span', { text: t(labelKey) }), value);
+  const value = createRowValue();
+  const el = createListRow({ label: t(labelKey), valueEl: value }).el;
   const show = (current) => {
     value.textContent = format(current);
   };
@@ -103,15 +107,6 @@ export function optionRow({ labelKey, key, options, format = String, ctx }) {
   };
 }
 
-/** On/off switch shown at the right of a settings row. */
-function toggle() {
-  return h('span', { class: 'toggle', role: 'switch', 'aria-checked': 'false' }, h('span', { class: 'toggle-knob' }));
-}
-
-function setToggle(el, on) {
-  el.classList.toggle('on', Boolean(on));
-  el.setAttribute('aria-checked', on ? 'true' : 'false');
-}
 
 export function createSettingsPage(ctx) {
   const language = (v) => (v === 'auto' ? t('settings.language.auto') : v);
@@ -120,9 +115,9 @@ export function createSettingsPage(ctx) {
   const timeName = (v) => (v === 'auto' ? t('settings.format.auto') : `${v === '12h' ? t('settings.time.12h') : t('settings.time.24h')} (${formatClockTime(now, v, i18n.getLocale())})`);
   const dateName = (v) => (v === 'auto' ? t('settings.format.auto') : `${t(`settings.date.${v}`)} (${formatClockDate(now, v, i18n.getLocale())})`);
 
-  const autoplayValue = toggle();
+  const autoplayValue = createToggle();
   const autoplay = {
-    el: h('div', { class: 'row' }, h('span', { text: t('settings.autoplayNext') }), autoplayValue),
+    el: createListRow({ label: t('settings.autoplayNext'), valueEl: autoplayValue }).el,
     refresh: () => ctx.settings.get().then((s) => { setToggle(autoplayValue, s.autoplayNext); }),
     async activate() {
       const s = await ctx.settings.get();
@@ -204,7 +199,7 @@ export function createSettingsPage(ctx) {
     }
   }
 
-  const diagnostics = { el: h('div', { class: 'row' }, h('span', { text: t('settings.diagnostics') })), refresh: async () => undefined, activate: async () => ctx.router.push('diagnostics') };
+  const diagnostics = { el: createListRow({ label: t('settings.diagnostics') }).el, refresh: async () => undefined, activate: async () => ctx.router.push('diagnostics') };
 
   // Catalog and metadata tables at the top; the "update the catalog" button is the first row of the list.
   const panel = createSyncPanel(ctx);
@@ -326,9 +321,9 @@ export function createSettingsPage(ctx) {
   const traktSecretRow = textRow({ ctx, label: t('settings.traktSecret'), field: 'traktSecret', secret: true });
   const openSubtitlesRow = textRow({ ctx, label: t('settings.openSubtitlesKey'), field: 'openSubtitlesKey', secret: true });
 
-  const pinValue = h('span', { class: 'value' });
+  const pinValue = createRowValue();
   const pinRow = {
-    el: h('div', { class: 'row' }, h('span', { text: t('parental.enterPin') }), pinValue),
+    el: createListRow({ label: t('parental.enterPin'), valueEl: pinValue }).el,
     refresh: () => ctx.parental.hasPin().then((has) => { pinValue.textContent = has ? '••••' : t('parental.notSet'); }),
     async activate() {
       await changePin({ dialogs: ctx.dialogs, parental: ctx.parental, notices: ctx.notices });
@@ -337,9 +332,9 @@ export function createSettingsPage(ctx) {
   };
 
   // Clean titles: year in brackets, [tags] and language prefixes taken out of movie / series names; changing it rebuilds the titles.
-  const cleanValue = toggle();
+  const cleanValue = createToggle();
   const cleanTitlesRow = {
-    el: h('div', { class: 'row' }, h('span', { text: t('settings.cleanTitles') }), cleanValue),
+    el: createListRow({ label: t('settings.cleanTitles'), valueEl: cleanValue }).el,
     refresh: () => ctx.settings.get().then((s) => { setToggle(cleanValue, s.cleanTitles); }),
     async activate() {
       const s = await ctx.settings.get();
@@ -349,9 +344,9 @@ export function createSettingsPage(ctx) {
     },
   };
 
-  const groupingValue = toggle();
+  const groupingValue = createToggle();
   const liveGrouping = {
-    el: h('div', { class: 'row' }, h('span', { text: t('settings.liveGrouping') }), groupingValue),
+    el: createListRow({ label: t('settings.liveGrouping'), valueEl: groupingValue }).el,
     refresh: () => ctx.settings.get().then((s) => { setToggle(groupingValue, s.liveGrouping); }),
     async activate() {
       const s = await ctx.settings.get();
@@ -361,9 +356,9 @@ export function createSettingsPage(ctx) {
     },
   };
 
-  const networksValue = toggle();
+  const networksValue = createToggle();
   const liveNetworks = {
-    el: h('div', { class: 'row' }, h('span', { text: t('settings.liveNetworks') }), networksValue),
+    el: createListRow({ label: t('settings.liveNetworks'), valueEl: networksValue }).el,
     refresh: () => ctx.settings.get().then((s) => { setToggle(networksValue, s.liveNetworks); }),
     async activate() {
       const s = await ctx.settings.get();
@@ -374,9 +369,9 @@ export function createSettingsPage(ctx) {
   };
 
   // Numbers left out when comparing names for networks: "Dazn 11 Serie B" and "Dazn 12 Serie B" end in one network.
-  const ignoreNumbersValue = toggle();
+  const ignoreNumbersValue = createToggle();
   const ignoreNumbersRow = {
-    el: h('div', { class: 'row' }, h('span', { text: t('settings.liveNetworkIgnoreNumbers') }), ignoreNumbersValue),
+    el: createListRow({ label: t('settings.liveNetworkIgnoreNumbers'), valueEl: ignoreNumbersValue }).el,
     refresh: () => ctx.settings.get().then((s) => { setToggle(ignoreNumbersValue, s.liveNetworkIgnoreNumbers); }),
     async activate() {
       const s = await ctx.settings.get();
@@ -491,7 +486,7 @@ export function createSettingsPage(ctx) {
   const partsOf = (section) => section.parts || [{ list: section.list, fields: section.fields }];
   const prefs = sections.flatMap((section) => partsOf(section).flatMap((part) => (part.list || []).concat(part.fields || [])));
   const prefsBlocks = sections.flatMap((section) => [
-    h('h2', { class: 'prefs-title', text: t(section.titleKey) }),
+    createHeading({ text: t(section.titleKey), className: 'prefs-title' }),
     ...partsOf(section).flatMap((part) => [
       part.list ? h('div', { class: 'list' }, part.list.map((r) => r.el)) : null,
       part.fields ? h('div', { class: 'fields' }, part.fields.filter((r) => !r.secondary).map((r) => r.root)) : null,
@@ -563,7 +558,7 @@ export function createSettingsPage(ctx) {
   const promos = (() => {
     const el = h('div', { class: 'service-promos' });
     const boxes = ['tmdb', 'trakt', 'opensubtitles'].map((id) => {
-      const box = h('div', { class: `service-promo ${id}` }, h('h3', { text: t(`settings.promo.${id}.title`) }), h('p', { text: t(`settings.promo.${id}.text`) }));
+      const box = h('div', { class: `service-promo ${id}` }, createHeading({ level: 3, text: t(`settings.promo.${id}.title`) }), createHint({ text: t(`settings.promo.${id}.text`), muted: false }));
       el.appendChild(box);
       return { id, box };
     });
@@ -585,10 +580,10 @@ export function createSettingsPage(ctx) {
   const version = versions.bundle || APP_VERSION;
   const autoupdate = typeof __AUTOUPDATE__ !== 'undefined' && __AUTOUPDATE__;
   const versionText = !autoupdate ? `v${version}` : checked ? t('settings.versionLine', { version, time: formatDateTime(checked, i18n.getLocale()) }) : t('settings.versionNever', { version });
-  const versionEl = h('p', { class: 'settings-version', text: versionText });
+  const versionEl = createHint({ text: versionText, className: 'settings-version', muted: false });
 
   return {
-    el: framedPage(h('h1', { class: 'settings-title', text: t('nav.settings') }), versionEl, promos.el, opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), h('h2', { class: 'prefs-title', text: 'OpenSubtitles' }), h('div', { class: 'fields' }, openSubtitlesRow.root), devicePanel.el, prefsBlocks),
+    el: framedPage(createHeading({ level: 1, text: t('nav.settings'), className: 'settings-title' }), versionEl, promos.el, opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), createHeading({ text: 'OpenSubtitles', className: 'prefs-title' }), h('div', { class: 'fields' }, openSubtitlesRow.root), devicePanel.el, prefsBlocks),
     mount() {
       opsPanel.mount();
       tmdbPanel.mount();

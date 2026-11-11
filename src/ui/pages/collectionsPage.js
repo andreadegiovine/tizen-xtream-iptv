@@ -1,6 +1,8 @@
 import { h } from '../dom.js';
+import { createIconButton } from '../atoms/iconButton.js';
+import { createHint } from '../atoms/hint.js';
+import { createSidebarItem } from '../atoms/sidebarItem.js';
 import { t, i18n } from '../../i18n/index.js';
-import { icon } from '../icons.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel, ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
@@ -45,11 +47,11 @@ export function createCollectionsPage(ctx, params = {}) {
   const titleEl = h('span', { class: 'browse-title' });
   const count = h('span', { class: 'muted browse-count' });
   const sepA = h('span', { class: 'browse-sep', text: '·' });
-  const pinBtn = h('span', { class: 'icon-btn browse-fav browse-pin' }, icon('pin'));
+  const pinBtn = createIconButton({ icon: 'pin', className: 'browse-fav browse-pin', tag: 'span' });
   const head = h('div', { class: 'browse-head sticky-head' }, titleEl, sepA, count, h('span', { class: 'browse-head-actions' }, pinBtn));
   const catList = h('div', { class: 'browse-cats' });
   const gridEl = h('div', { class: 'browse-grid movie' });
-  const empty = h('p', { class: 'muted browse-empty', text: t('collections.empty') });
+  const empty = createHint({ text: t('collections.empty'), className: 'browse-empty' });
   let db = null;
   let providerId = null;
   let destroyed = false;
@@ -76,12 +78,15 @@ export function createCollectionsPage(ctx, params = {}) {
   function renderCategories() {
     while (catList.firstChild) catList.removeChild(catList.firstChild);
     catNodes = items.map((item, i) => {
-      const node = h('div', { class: `browse-cat${i === selected ? ' current' : ''}${item.depth ? ' sub' : ''}` });
-      const iconName = item.pinned ? 'pin' : SIDEBAR_ICON[item.kind];
-      if (iconName) node.appendChild(h('span', { class: 'browse-cat-icon' }, icon(iconName)));
-      node.appendChild(h('span', { class: 'browse-cat-name', text: item.name }));
-      node.appendChild(h('span', { class: 'browse-cat-count', text: numberText(countOf(item)) }));
-      if (item.kind === 'genresToggle') node.appendChild(icon('chevron', item.expanded ? 'open' : ''));
+      const node = createSidebarItem({
+        name: item.name,
+        icon: item.pinned ? 'pin' : SIDEBAR_ICON[item.kind] || null,
+        count: numberText(countOf(item)),
+        current: i === selected,
+        sub: Boolean(item.depth),
+        trailingIcon: item.kind === 'genresToggle' ? 'chevron' : null,
+        open: Boolean(item.expanded),
+      });
       catList.appendChild(node);
       return node;
     });

@@ -1,5 +1,8 @@
 import { continueWatching } from '../../services/continueWatching.js';
 import { h } from '../dom.js';
+import { createIconButton } from '../atoms/iconButton.js';
+import { createHint } from '../atoms/hint.js';
+import { createSidebarItem, createSidebarItemSkeleton } from '../atoms/sidebarItem.js';
 import { createCard, createSkeletonCard } from '../components/card.js';
 import { derivedVersion, readDerivedAny, writeDerived } from '../../services/derivedStore.js';
 import { t, i18n } from '../../i18n/index.js';
@@ -12,7 +15,6 @@ import { ensureVisible } from '../scroll.js';
 import { listCategories, listNetworks, pageEntries, getEntry, countEntries, LIVE_ALL } from '../../services/catalogQuery.js';
 import { readGuideIndex } from '../../services/guideIndex.js';
 import { genreKey } from '../../services/epgChannels.js';
-import { icon } from '../icons.js';
 import { formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
 import { createEpgGuide, floorHalfHour, nextProgramme, PAST_MS, SPAN_MS } from '../components/epgGuide.js';
@@ -137,8 +139,8 @@ export function createBrowsePage(ctx, params = {}) {
   const titleEl = h('span', { class: 'browse-title' });
   const count = h('span', { class: 'muted browse-count' });
   const sepA = h('span', { class: 'browse-sep', text: '·' });
-  const pinBtn = h('span', { class: 'icon-btn browse-fav browse-pin' }, icon('pin'));
-  const favBtn = h('span', { class: 'icon-btn browse-fav' }, icon('heart'));
+  const pinBtn = createIconButton({ icon: 'pin', className: 'browse-fav browse-pin', tag: 'span' });
+  const favBtn = createIconButton({ icon: 'heart', className: 'browse-fav', tag: 'span' });
   const head = h('div', { class: 'browse-head sticky-head' }, titleEl, sepA, count, h('span', { class: 'browse-head-actions' }, pinBtn, favBtn));
   let favState = null; // { active, onToggle, pinActive, onPin } while a category / genre is open
   function renderHead() {
@@ -157,7 +159,7 @@ export function createBrowsePage(ctx, params = {}) {
   renderHead();
   const catList = h('div', { class: 'browse-cats' });
   const gridEl = h('div', { class: `browse-grid ${type}` });
-  const empty = h('p', { class: 'muted browse-empty', text: t('common.empty') });
+  const empty = createHint({ text: t('common.empty'), className: 'browse-empty' });
   let db = null;
   let providerId = null;
   let destroyed = false;
@@ -199,19 +201,24 @@ export function createBrowsePage(ctx, params = {}) {
   function renderCategories() {
     while (catList.firstChild) catList.removeChild(catList.firstChild);
     catNodes = items.map((item, i) => {
-      const node = h('div', { class: `browse-cat${i === selected ? ' current' : ''}${item.depth ? ' sub' : ''}` });
       // Only entries with an icon get the icon slot: the others start at the left edge.
-      const iconName = item.pinned ? 'pin' : SIDEBAR_ICON[item.kind];
-      if (iconName) node.appendChild(h('span', { class: 'browse-cat-icon' }, icon(iconName)));
-      node.appendChild(h('span', { class: 'browse-cat-name', text: item.name }));
       const text = countText(item);
-      node.appendChild(h('span', { class: `browse-cat-count${countPending(item, text) ? ' skeleton-line' : ''}`, text }));
-      if (item.kind === 'toggle' || item.kind === 'genresToggle' || item.kind === 'networksToggle' || item.kind === 'epgGenresToggle') node.appendChild(icon('chevron', item.expanded ? 'open' : ''));
+      const group = item.kind === 'toggle' || item.kind === 'genresToggle' || item.kind === 'networksToggle' || item.kind === 'epgGenresToggle';
+      const node = createSidebarItem({
+        name: item.name,
+        icon: item.pinned ? 'pin' : SIDEBAR_ICON[item.kind] || null,
+        count: text,
+        countPending: countPending(item, text),
+        current: i === selected,
+        sub: Boolean(item.depth),
+        trailingIcon: group ? 'chevron' : null,
+        open: Boolean(item.expanded),
+      });
       catList.appendChild(node);
       // While the genres are being found, grey placeholders hold their place under the "Genres" entry.
       if (item.kind === 'genresToggle' && genresLoading && genresExpanded) {
         for (let n = 0; n < GENRE_SKELETONS; n += 1) {
-          catList.appendChild(h('div', { class: 'browse-cat sub skeleton-cat' }, h('span', { class: 'browse-cat-name skeleton-line' }), h('span', { class: 'browse-cat-count skeleton-line' })));
+          catList.appendChild(createSidebarItemSkeleton());
         }
       }
       return node;

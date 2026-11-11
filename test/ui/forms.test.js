@@ -1,6 +1,6 @@
 import { FocusManager } from '../../src/ui/focus/FocusManager.js';
 import { createForm, formModel, framedPage } from '../../src/ui/components/formPage.js';
-import { createField } from '../../src/ui/components/field.js';
+import { createField } from '../../src/ui/atoms/field.js';
 import { Action } from '../../src/core/input.js';
 import { Dir } from '../../src/ui/focus/models.js';
 

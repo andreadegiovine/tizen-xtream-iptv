@@ -1,5 +1,7 @@
 import { continueWatching } from '../../services/continueWatching.js';
 import { h } from '../dom.js';
+import { createSkeletonLine } from '../atoms/skeleton.js';
+import { createHint } from '../atoms/hint.js';
 import { t } from '../../i18n/index.js';
 import { MediaType } from '../../services/mediaType.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
@@ -20,13 +22,13 @@ export const episodeLabel = (episodeKey) => (episodeKey ? episodeKey.toUpperCase
  * movies and series. Sync details and the manual update buttons live in the Settings.
  */
 export function createHomeSkeleton(rows = 3, cards = 9) {
-  const carousel = () => h('div', { class: 'carousel' }, h('h2', { class: 'carousel-title skeleton-line' }), h('div', { class: 'carousel-track' }, Array.from({ length: cards }, () => createSkeletonCard())));
+  const carousel = () => h('div', { class: 'carousel' }, createSkeletonLine({ className: 'carousel-title', tag: 'h2' }), h('div', { class: 'carousel-track' }, Array.from({ length: cards }, () => createSkeletonCard())));
   return h('div', { class: 'home-rows' }, Array.from({ length: rows }, carousel));
 }
 
 export function createHomePage(ctx) {
   const rowsEl = h('div', { class: 'home-rows' });
-  const hint = h('p', { class: 'muted sync-info', text: t('common.empty') });
+  const hint = createHint({ text: t('common.empty'), className: 'sync-info' });
   hint.style.display = 'none'; // shown only once the rows are known to be empty
   let carousels = [];
   let providerId = null;

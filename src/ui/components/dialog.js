@@ -1,4 +1,9 @@
 import { h } from '../dom.js';
+import { createButton } from '../atoms/button.js';
+import { createChoice } from '../atoms/choice.js';
+import { createHeading } from '../atoms/heading.js';
+import { createHint } from '../atoms/hint.js';
+import { createTextInput } from '../atoms/textInput.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel, ListModel } from '../focus/models.js';
 import { icon } from '../icons.js';
@@ -35,13 +40,13 @@ export function createDialogService({ focus, root = document.body }) {
     if (current) return current.promise;
     const previous = snapshot();
     const buttons = [
-      h('button', { class: 'btn', type: 'button', text: cancelLabel }),
-      h('button', { class: 'btn primary', type: 'button', text: confirmLabel }),
+      createButton({ label: cancelLabel }),
+      createButton({ label: confirmLabel, variant: 'primary' }),
     ];
     const overlay = h(
       'div',
       { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' },
-      h('div', { class: 'dialog' }, h('h2', { text: title }), content || h('p', { text: message }), h('div', { class: 'dialog-actions' }, buttons)),
+      h('div', { class: 'dialog' }, createHeading({ text: title }), content || createHint({ text: message, muted: false }), h('div', { class: 'dialog-actions' }, buttons)),
     );
     root.appendChild(overlay);
 
@@ -66,13 +71,9 @@ export function createDialogService({ focus, root = document.body }) {
     if (current) return current.promise;
     const previous = snapshot();
     // An option can carry an icon (`option.icon`) before its label: the actions of a programme, say.
-    const nodes = options.map((option, i) =>
-      option.icon
-        ? h('div', { class: `choice with-icon${option.value === selected ? ' current' : ''}`, 'data-i': i }, icon(option.icon), h('span', { text: option.label }))
-        : h('div', { class: `choice${option.value === selected ? ' current' : ''}`, text: option.label, 'data-i': i }),
-    );
+    const nodes = options.map((option, i) => createChoice({ label: option.label, icon: option.icon || null, current: option.value === selected, index: i }));
     const list = h('div', { class: 'choice-list' }, nodes);
-    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog' }, h('h2', { text: title }), list));
+    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog' }, createHeading({ text: title }), list));
     root.appendChild(overlay);
     const start = Math.max(0, options.findIndex((o) => o.value === selected));
     const zone = new FocusZone({
@@ -107,11 +108,11 @@ export function createDialogService({ focus, root = document.body }) {
     let results = [];
     let timer = null;
     let token = 0;
-    const input = h('input', { class: 'value-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder });
+    const input = createTextInput({ className: 'value-input', placeholder });
     const field = h('div', { class: 'choice search-field' }, icon('search'), input);
     const list = h('div', { class: 'choice-list' });
-    const status = h('p', { class: 'muted search-status' });
-    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog search-dialog' }, h('h2', { text: title }), field, status, list));
+    const status = createHint({ className: 'search-status' });
+    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog search-dialog' }, createHeading({ text: title }), field, status, list));
     root.appendChild(overlay);
     let nodes = [];
     const rowsAt = (i) => (i === 0 ? field : nodes[i - 1]);
@@ -119,8 +120,9 @@ export function createDialogService({ focus, root = document.body }) {
     function paint() {
       while (list.firstChild) list.removeChild(list.firstChild);
       nodes = results.map((r) => {
-        if (r.create) return h('div', { class: 'choice merge-group' }, icon('add'), h('span', { text: r.name }));
-        return h('div', { class: `choice${r.group ? ' merge-group' : ''}` }, r.group ? icon('all') : null, h('span', { text: r.group ? `${r.name} (${r.count})` : r.name }));
+        if (r.create) return createChoice({ label: r.name, icon: 'add', className: 'merge-group', iconLayout: false });
+        if (r.group) return createChoice({ label: `${r.name} (${r.count})`, icon: 'all', className: 'merge-group', iconLayout: false });
+        return h('div', { class: 'choice' }, h('span', { text: r.name }));
       });
       nodes.forEach((n) => list.appendChild(n));
       status.textContent = !results.length && input.value.trim().length >= Math.max(1, minLength) ? emptyLabel : '';
@@ -184,13 +186,13 @@ export function createDialogService({ focus, root = document.body }) {
     const previous = snapshot();
     const gone = new Set();
     const named = Boolean(nameLabel); // a network cannot be renamed: its box has only the titles
-    const input = h('input', { class: 'value-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', value: name, 'aria-label': nameLabel || '' });
+    const input = createTextInput({ className: 'value-input', value: name, ariaLabel: nameLabel || '' });
     const field = h('div', { class: 'choice search-field' }, icon('edit'), input);
     const lead = named ? 1 : 0; // rows before the titles
-    const rows = items.map((item) => h('div', { class: 'choice edit-item' }, h('span', { text: item.name }), icon('remove')));
+    const rows = items.map((item) => createChoice({ label: item.name, className: 'edit-item', trailingIcon: 'remove' }));
     const list = h('div', { class: 'choice-list' }, rows);
-    const buttons = [h('button', { class: 'btn', type: 'button', text: cancelLabel }), h('button', { class: 'btn primary', type: 'button', text: saveLabel })];
-    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog search-dialog' }, h('h2', { text: title }), named ? field : null, list, h('div', { class: 'dialog-actions stacked' }, buttons)));
+    const buttons = [createButton({ label: cancelLabel }), createButton({ label: saveLabel, variant: 'primary' })];
+    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog search-dialog' }, createHeading({ text: title }), named ? field : null, list, h('div', { class: 'dialog-actions stacked' }, buttons)));
     root.appendChild(overlay);
     const total = () => lead + items.length + 2;
     const nodeAt = (i) => (i < lead ? field : i < lead + items.length ? rows[i - lead] : buttons[i - lead - items.length]);
@@ -251,7 +253,7 @@ export function createDialogService({ focus, root = document.body }) {
     const overlay = h(
       'div',
       { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' },
-      h('div', { class: 'dialog pin-dialog' }, h('h2', { text: title }), message ? h('p', { text: message }) : null, h('div', { class: 'pin-dots' }, dots), error, h('div', { class: 'pin-pad' }, nodes)),
+      h('div', { class: 'dialog pin-dialog' }, createHeading({ text: title }), message ? createHint({ text: message, muted: false }) : null, h('div', { class: 'pin-dots' }, dots), error, h('div', { class: 'pin-pad' }, nodes)),
     );
     root.appendChild(overlay);
 

@@ -1,4 +1,8 @@
 import { h } from '../dom.js';
+import { createHint } from '../atoms/hint.js';
+import { createListRow } from '../atoms/listRow.js';
+import { createButton } from '../atoms/button.js';
+import { createHeading } from '../atoms/heading.js';
 import { framedPage } from '../components/formPage.js';
 import { t } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
@@ -34,7 +38,7 @@ export function flipRange(base, ids, from, to) {
 
 /** Choose the categories to hide per media type; changes are saved 2 s after the last one and rebuild the grids without re-downloading. */
 export function createCategoriesPage(ctx, params = {}) {
-  const status = h('p', { class: 'muted search-status' });
+  const status = createHint({ className: 'search-status' });
   const list = h('div', { class: 'list categories-list' });
   let type = 'movie';
   let categories = [];
@@ -66,11 +70,11 @@ export function createCategoriesPage(ctx, params = {}) {
 
   function build(focusIndex = 0) {
     while (list.firstChild) list.removeChild(list.firstChild);
-    const typeRow = { el: h('div', { class: 'row' }, h('span', { text: t('categories.type') }), h('span', { class: 'value', text: t(TYPE_LABEL[type]) })), activate: chooseType };
+    const typeRow = { el: createListRow({ label: t('categories.type'), value: t(TYPE_LABEL[type]) }).el, activate: chooseType };
     const catRows = categories.map((c) => {
       // Eye = shown in the app, crossed-out eye = hidden (row dimmed).
       const mark = h('span', { class: 'cat-mark' });
-      const el = h('div', { class: 'row cat-row' }, mark, h('span', { class: 'cat-name', text: c.name }));
+      const { el } = createListRow({ label: c.name, lead: mark, className: 'cat-row' });
       const show = () => {
         const hidden = excluded.has(c.id);
         el.classList.toggle('hidden', hidden);
@@ -129,7 +133,7 @@ export function createCategoriesPage(ctx, params = {}) {
     ctx.notices.info(t('common.cancelled'), { key: 'multi' });
   }
 
-  const multiButton = h('button', { class: 'btn icon-only categories-multi', type: 'button', 'aria-label': t('categories.multi'), title: t('categories.multi') }, icon('checkDouble'));
+  const multiButton = createButton({ label: t('categories.multi'), icon: 'checkDouble', iconOnly: true, className: 'categories-multi', title: t('categories.multi') });
   let multiFocused = false;
   /** Focused look (white background, dark icon) when it holds the focus and for as long as the multiple selection is on. */
   const showMulti = () => multiButton.classList.toggle('focused', armed || multiFocused);
@@ -230,7 +234,7 @@ export function createCategoriesPage(ctx, params = {}) {
   }
 
   return {
-    el: framedPage(h('h1', { text: t('settings.categories') }), status, h('div', { class: 'categories-body' }, h('div', { class: 'categories-side' }, multiButton), list)),
+    el: framedPage(createHeading({ level: 1, text: t('settings.categories') }), status, h('div', { class: 'categories-body' }, h('div', { class: 'categories-side' }, multiButton), list)),
     /** Back cancels the multiple selection instead of leaving the page. */
     onBack() {
       if (!armed) return false;

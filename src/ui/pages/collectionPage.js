@@ -1,6 +1,11 @@
 import { h } from '../dom.js';
+import { createIconButton } from '../atoms/iconButton.js';
+import { createChip, createChipLabel } from '../atoms/chip.js';
+import { createHint } from '../atoms/hint.js';
+import { createHeading } from '../atoms/heading.js';
+import { createPlaceholder } from '../atoms/placeholder.js';
+import { createMetaText } from '../atoms/metaParts.js';
 import { t } from '../../i18n/index.js';
-import { icon } from '../icons.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
@@ -29,7 +34,7 @@ export function createCollectionPage(ctx, params) {
 
   const poster = h('div', { class: 'detail-poster' });
   const backdrop = h('div', { class: 'detail-backdrop' });
-  const titleEl = h('h1', { class: 'detail-title' });
+  const titleEl = createHeading({ level: 1, className: 'detail-title' });
   const metaEl = h('p', { class: 'detail-meta' });
   const actionsEl = h('div', { class: 'detail-actions' });
   const genresEl = h('div', { class: 'detail-categories' });
@@ -62,7 +67,7 @@ export function createCollectionPage(ctx, params) {
   }
 
   function createActions(buttons) {
-    const nodes = buttons.map((b) => h('button', { class: `icon-btn${b.active ? ' active' : ''}`, type: 'button', 'aria-label': b.label }, icon(b.icon)));
+    const nodes = buttons.map((b) => createIconButton({ icon: b.icon, label: b.label, active: b.active }));
     clear(actionsEl);
     nodes.forEach((n) => actionsEl.appendChild(n));
     return new FocusZone({
@@ -128,7 +133,7 @@ export function createCollectionPage(ctx, params) {
     const next = [];
     titleEl.textContent = collection.name;
     clear(metaEl);
-    metaEl.appendChild(h('span', { text: collectionCount(members.length) }));
+    metaEl.appendChild(createMetaText(collectionCount(members.length)));
     next.push({
       id: 'collectionActions',
       zone: createActions([
@@ -139,8 +144,8 @@ export function createCollectionPage(ctx, params) {
     });
     clear(genresEl);
     if (genres.length) {
-      genresEl.appendChild(h('span', { class: 'detail-label', text: t('detail.genres') }));
-      genres.forEach((g) => genresEl.appendChild(h('span', { class: 'chip', text: g.name })));
+      genresEl.appendChild(createChipLabel(t('detail.genres')));
+      genres.forEach((g) => genresEl.appendChild(createChip({ text: g.name })));
     }
     clear(itemsEl);
     if (members.length) {
@@ -166,7 +171,7 @@ export function createCollectionPage(ctx, params) {
         });
       }
     } else {
-      itemsEl.appendChild(h('p', { class: 'muted', text: t('collections.emptyCollection') }));
+      itemsEl.appendChild(createHint({ text: t('collections.emptyCollection') }));
     }
     setRows(next);
     updateImages();
@@ -179,7 +184,7 @@ export function createCollectionPage(ctx, params) {
     posterRotator.setUrls(pictures);
     posterRotator.start();
     poster.classList.toggle('empty', !pictures.length);
-    if (!pictures.length && !poster.querySelector('.card-placeholder')) poster.appendChild(h('div', { class: 'card-placeholder' }, icon('folder')));
+    if (!pictures.length && !poster.querySelector('.card-placeholder')) poster.appendChild(createPlaceholder({ icon: 'folder' }));
     if (pictures.length) {
       const placeholder = poster.querySelector('.card-placeholder');
       if (placeholder) placeholder.remove();

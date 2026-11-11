@@ -15,3 +15,6 @@ export function h(tag, attrs = {}, ...children) {
   });
   return el;
 }
+
+/** Class list from parts, the empty ones left out: cx('btn', primary && 'primary', extra) → "btn primary extra". */
+export const cx = (...parts) => parts.filter(Boolean).join(' ');

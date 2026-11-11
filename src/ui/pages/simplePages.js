@@ -1,4 +1,6 @@
 import { h } from '../dom.js';
+import { createHeading } from '../atoms/heading.js';
+import { createHint } from '../atoms/hint.js';
 import { t } from '../../i18n/index.js';
 
 export function createComingSoonPage(_ctx, params = {}) {
@@ -6,8 +8,8 @@ export function createComingSoonPage(_ctx, params = {}) {
     el: h(
       'section',
       { class: 'page' },
-      h('h1', { text: t(params.titleKey || 'common.comingSoon') }),
-      h('p', { class: 'muted', text: t('common.comingSoonText') }),
+      createHeading({ level: 1, text: t(params.titleKey || 'common.comingSoon') }),
+      createHint({ text: t('common.comingSoonText') }),
     ),
   };
 }

@@ -1,21 +1,36 @@
-// The stylesheet, one file per part of the UI. The order matters (later rules win on equal specificity): keep it.
+// The stylesheet, one file per part of the UI; atoms/ holds the styles of the atomic components (src/ui/atoms/), each one placed
+// where its rules were before. The order matters (later rules win on equal specificity): keep it.
 @use 'fonts';
 @use 'base';
+@use 'atoms/topbar-item';
 @use 'topbar';
+@use 'atoms/field';
+@use 'atoms/button';
 @use 'forms';
-@use 'lists';
+@use 'atoms/list-row';
+@use 'atoms/toggle';
+@use 'atoms/text-input';
 @use 'diagnostics';
 @use 'dialogs';
 @use 'notices';
+@use 'atoms/table-row';
+@use 'atoms/panel';
 @use 'settings';
+@use 'atoms/sidebar-item';
 @use 'browse';
 @use 'card';
+@use 'atoms/player-button';
 @use 'player';
+@use 'atoms/chip';
+@use 'atoms/icon-button';
 @use 'detail';
+@use 'atoms/select-field';
+@use 'atoms/placeholder';
+@use 'atoms/choice';
 @use 'controls';
 @use 'search';
 @use 'carousel';
-@use 'skeleton';
+@use 'atoms/skeleton';
 @use 'extras';
 @use 'screensaver';
 @use 'recent-log';

@@ -1,5 +1,8 @@
 import { h } from '../dom.js';
-import { icon } from '../icons.js';
+import { createButton } from '../atoms/button.js';
+import { createHint } from '../atoms/hint.js';
+import { createPanel, createPanelButtons } from '../atoms/panel.js';
+import { createTableRow, createTableStatus, createRowButtons } from '../atoms/tableRow.js';
 import { t, i18n } from '../../i18n/index.js';
 import { MediaType } from '../../services/mediaType.js';
 import { formatNumber, formatDateTime, formatSeconds } from '../../core/format.js';
@@ -50,9 +53,9 @@ export function describeEpg(meta, running, locale) {
 
 /** The remove + refresh buttons at the end of a table row (labels are the aria-labels). */
 function rowButtons(removeLabel, refreshLabel) {
-  const remove = h('button', { class: 'btn danger icon-only panel-button', type: 'button', 'aria-label': removeLabel, title: removeLabel }, icon('remove'));
-  const refresh = h('button', { class: 'btn primary icon-only panel-button', type: 'button', 'aria-label': refreshLabel, title: refreshLabel }, icon('refresh'));
-  return { remove, refresh, el: h('span', { class: 'row-buttons' }, remove, refresh) };
+  const remove = createButton({ label: removeLabel, icon: 'remove', variant: 'danger', iconOnly: true, className: 'panel-button', title: removeLabel });
+  const refresh = createButton({ label: refreshLabel, icon: 'refresh', variant: 'primary', iconOnly: true, className: 'panel-button', title: refreshLabel });
+  return { remove, refresh, el: createRowButtons(remove, refresh) };
 }
 
 /**
@@ -61,14 +64,13 @@ function rowButtons(removeLabel, refreshLabel) {
  */
 export function createSyncPanel(ctx) {
   const rows = TYPES.map((type) => {
-    const status = h('span', { class: 'sync-status' });
     const buttons = rowButtons(t('settings.typeRemove', { type: t(LABEL_KEY[type]) }), t('settings.typeUpdate', { type: t(LABEL_KEY[type]) }));
-    return { type, status, buttons, el: h('div', { class: 'sync-row with-buttons' }, h('span', { class: 'sync-name', text: t(LABEL_KEY[type]) }), status, buttons.el) };
+    const row = createTableRow({ name: t(LABEL_KEY[type]), buttons: buttons.el });
+    return { type, status: row.status, buttons, el: row.el };
   });
   // The programme guide of the provider: what the last download holds, with its own update / remove buttons.
-  const epgStatus = h('span', { class: 'sync-status' });
   const epgButtons = rowButtons(t('settings.epgRemove'), t('settings.epgUpdate'));
-  const epgRow = h('div', { class: 'sync-row with-buttons' }, h('span', { class: 'sync-name', text: t('operations.epg') }), epgStatus, epgButtons.el);
+  const { el: epgRow, status: epgStatus } = createTableRow({ name: t('operations.epg'), buttons: epgButtons.el });
   let epgMeta = null;
   const epgRunning = () => (ctx.operations ? ctx.operations.list().find((op) => op.id === 'epg') || null : null);
   const renderEpg = () => {
@@ -83,13 +85,11 @@ export function createSyncPanel(ctx) {
       : Promise.resolve();
   let wasEpgRunning = false;
   let stopEpg = null;
-  const engineStatus = h('span', { class: 'sync-status' });
-  const timingStatus = h('span', { class: 'sync-status' });
-  const engineRow = h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t('home.engine') }), engineStatus);
-  const timingRow = h('div', { class: 'sync-row' }, h('span', { class: 'sync-name', text: t('home.syncTiming') }), timingStatus);
-  const info = h('p', { class: 'muted sync-info' });
+  const { el: engineRow, status: engineStatus } = createTableRow({ name: t('home.engine'), status: createTableStatus() });
+  const { el: timingRow, status: timingStatus } = createTableRow({ name: t('home.syncTiming'), status: createTableStatus() });
+  const info = createHint({ className: 'sync-info' });
   const providerName = h('span', { class: 'panel-provider' });
-  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('home.catalog') }, providerName)), h('div', { class: 'sync' }, rows.map((r) => r.el), epgRow, engineRow, timingRow), info);
+  const { el } = createPanel({ title: t('home.catalog'), titleExtra: providerName, rows: [rows.map((r) => r.el), epgRow, engineRow, timingRow], after: info });
   let persisted = {};
   let providerId = null;
   let wasRunning = false;
@@ -190,11 +190,11 @@ export function describeMeta(entry, locale, ready, running = null) {
 
 /** Table with a title, icon buttons at the right of the title and text rows: `{ el, rows, buttons }`. */
 function createTable(title, buttons, rows) {
-  const status = rows.map((row) => ({ ...row, status: h('span', { class: 'sync-status' }) }));
+  const status = rows.map((row) => ({ ...row, status: createTableStatus() }));
   status.forEach((row) => {
-    row.el = h('div', { class: row.buttons ? 'sync-row with-buttons' : 'sync-row' }, h('span', { class: 'sync-name', text: row.label }), row.status, row.buttons ? row.buttons.el : null);
+    row.el = createTableRow({ name: row.label, status: row.status, buttons: row.buttons ? row.buttons.el : null }).el;
   });
-  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: title }), h('div', { class: 'panel-buttons' }, buttons)), h('div', { class: 'sync' }, status.map((r) => r.el)));
+  const { el } = createPanel({ title, aside: createPanelButtons(buttons), rows: status.map((r) => r.el) });
   return { el, rows: status };
 }
 
@@ -237,7 +237,7 @@ export function createTmdbPanel(ctx) {
 
 /** "Trakt" table: connected account and sync state; connect, remove and sync buttons (the last two only when connected). */
 export function createTraktPanel(ctx) {
-  const mk = (cls, name, label) => h('button', { class: `btn ${cls} icon-only panel-button`, type: 'button', 'aria-label': label, title: label }, icon(name));
+  const mk = (variant, name, label) => createButton({ label, icon: name, variant, iconOnly: true, className: 'panel-button', title: label });
   const connectButton = mk('primary', 'user', t('settings.traktConnect'));
   const removeButton = mk('danger', 'remove', t('settings.traktRemove'));
   const syncButton = mk('primary', 'refresh', t('settings.traktSync'));
@@ -322,11 +322,9 @@ export function deviceRows(info) {
 
 /** "Device" table: the device figures, then the downloaded catalog and the data worked out from it (sizes); the last has the buttons. */
 export function createDevicePanel(ctx) {
-  const body = h('div', { class: 'sync' });
   const buttons = rowButtons(t('settings.dbRemove'), t('settings.dbUpdate'));
-  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('settings.device') })), body);
-  const line = (label, value, withButtons = null) =>
-    h('div', { class: withButtons ? 'sync-row with-buttons' : 'sync-row' }, h('span', { class: 'sync-name', text: label }), h('span', { class: 'sync-status', text: value }), withButtons ? withButtons.el : null);
+  const { el, body } = createPanel({ title: t('settings.device') });
+  const line = (label, value, withButtons = null) => createTableRow({ name: label, statusText: value, buttons: withButtons ? withButtons.el : null }).el;
   async function refresh() {
     const rows = deviceRows(await collectDeviceInfo());
     let sizes = null;
@@ -353,8 +351,7 @@ export function createDevicePanel(ctx) {
  * `rows` are the focusable entries (the stop buttons); `onChange` is called when the list changes.
  */
 export function createOperationsPanel(ctx) {
-  const body = h('div', { class: 'sync' });
-  const el = h('div', { class: 'sync-panel' }, h('div', { class: 'panel-head' }, h('h2', { text: t('operations.title') })), body);
+  const { el, body } = createPanel({ title: t('operations.title') });
   const api = { el, rows: [], onChange: null, mount, destroy };
   let unsubscribe = null;
 
@@ -363,16 +360,9 @@ export function createOperationsPanel(ctx) {
     const list = ctx.operations.list();
     el.style.display = list.length ? '' : 'none'; // nothing runs: the table is not shown
     api.rows = list.map((op) => {
-      const stop = h('button', { class: 'btn primary icon-only panel-button op-stop', type: 'button', 'aria-label': t('operations.stop'), title: t('operations.stop') }, icon('stop'));
-      body.appendChild(
-        h(
-          'div',
-          { class: 'sync-row op-row' },
-          h('span', { class: 'sync-name', text: op.label || t(`operations.${op.id}`) }),
-          h('span', { class: 'sync-status', text: op.queued ? t('common.queued') : t('operations.since', { time: formatDateTime(op.startedAt, i18n.getLocale()) }) }),
-          stop,
-        ),
-      );
+      const stop = createButton({ label: t('operations.stop'), icon: 'stop', variant: 'primary', iconOnly: true, className: 'panel-button op-stop', title: t('operations.stop') });
+      const statusText = op.queued ? t('common.queued') : t('operations.since', { time: formatDateTime(op.startedAt, i18n.getLocale()) });
+      body.appendChild(createTableRow({ name: op.label || t(`operations.${op.id}`), statusText, buttons: stop, className: 'op-row', withButtons: false }).el);
       return { el: stop, refresh: async () => undefined, activate: async () => ctx.operations.cancel(op.id) };
     });
     if (api.onChange) api.onChange();
