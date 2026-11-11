@@ -55,6 +55,13 @@ export function createTopbar(ctx, handlers = {}) {
   let currentSection = 'home';
   let searching = false;
   let skeleton = false; // first start: logo and placeholder items, nothing to focus
+  // Back for the pointer (a trackpad, a finger): after the logo, before Home, shown only in pointer mode on a page that has one to go back to.
+  const backBtn = createTopbarItem({ label: t('common.back'), icon: 'back', iconOnly: true });
+  backBtn.classList.add('topbar-back');
+  backBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (handlers.onBack) handlers.onBack();
+  });
   let input = null;
   let field = null;
   let closeBtn = null;
@@ -65,6 +72,7 @@ export function createTopbar(ctx, handlers = {}) {
 
   const zone = new FocusZone({
     id: TOPBAR_ZONE,
+    nodes: () => nodes,
     model: new ListModel({ orientation: 'horizontal', getCount: () => (searching || skeleton ? 0 : items().length) }),
     onFocus: (i) => nodes[i] && nodes[i].classList.add('focused'),
     onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
@@ -82,6 +90,7 @@ export function createTopbar(ctx, handlers = {}) {
 
   const searchZone = new FocusZone({
     id: SEARCH_BAR_ZONE,
+    nodes: () => [field, closeBtn],
     model: new ListModel({ orientation: 'horizontal', getCount: () => 2 }),
     onFocus: (i) => (i === 0 ? field : closeBtn) && (i === 0 ? field : closeBtn).classList.add('focused'),
     onBlur: (i) => (i === 0 ? field : closeBtn) && (i === 0 ? field : closeBtn).classList.remove('focused'),
@@ -93,7 +102,7 @@ export function createTopbar(ctx, handlers = {}) {
     while (el.firstChild) el.removeChild(el.firstChild);
     nodes = [];
     let spacerAdded = false;
-    el.appendChild(createLogo());
+    el.append(createLogo(), backBtn);
     items().forEach((section) => {
       if (section.end && !spacerAdded) {
         el.appendChild(h('span', { class: 'topbar-spacer' }));
@@ -155,7 +164,7 @@ export function createTopbar(ctx, handlers = {}) {
     input.value = initial || '';
     field = h('label', { class: 'topbar-search' }, icon('search'), input);
     closeBtn = createTopbarItem({ label: t('search.close'), icon: 'close', iconOnly: true });
-    el.append(createLogo(), field, closeBtn); // the field takes the room between the logo and the clock
+    el.append(createLogo(), backBtn, field, closeBtn); // the field takes the room between the logo and the clock
     appendClock();
     input.addEventListener('input', () => {
       clearTimeout(timer);
@@ -199,6 +208,10 @@ export function createTopbar(ctx, handlers = {}) {
     },
     setVisible(visible) {
       el.style.display = visible ? '' : 'none';
+    },
+    /** A page to go back to: the pointer's Back button can show. */
+    setCanGoBack(on) {
+      el.classList.toggle('has-back', Boolean(on));
     },
     /** Leaves the given sections out of the bar (the others shift); the cursor stays on the same section when it is still there. */
     setHidden(ids) {

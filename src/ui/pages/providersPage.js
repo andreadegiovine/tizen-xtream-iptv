@@ -143,6 +143,7 @@ export function createProvidersPage(ctx, params = {}) {
 
   const zone = new FocusZone({
     id: ZONE_ID,
+    nodes: () => nodes,
     model: new GridModel({ columns: COLUMNS, getCount: () => cells.length }),
     onFocus: (i) => {
       if (!nodes[i]) return;

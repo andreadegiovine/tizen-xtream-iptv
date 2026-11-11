@@ -8,10 +8,16 @@ const DIRECTIONS = {
   [Action.RIGHT]: Dir.RIGHT,
 };
 
-/** A focusable region (topbar, grid, form...). It remembers its own index. */
+/**
+ * A focusable region (topbar, grid, form...). It remembers its own index.
+ * For the pointer (mouse, touch, Magic Remote): `nodes()` gives the element of each index (the one under the pointer becomes the focus),
+ * or `locate(target)` finds the index of an element itself (null when it is not one of the zone's).
+ */
 export class FocusZone {
-  constructor({ id, model, onFocus, onBlur, onActivate, onLongActivate = null }) {
+  constructor({ id, model, onFocus, onBlur, onActivate, onLongActivate = null, nodes = null, locate = null }) {
     this.id = id;
+    this.nodes = nodes;
+    this.locate = locate;
     this.onLongActivate = onLongActivate; // OK held down (null: a long press is a normal one)
     this.model = model;
     this.onFocus = onFocus || (() => {});
@@ -75,6 +81,43 @@ export class FocusManager {
     zone.index = zone.clamp(index === undefined ? zone.index : index);
     this.activeId = id;
     zone.onFocus(zone.index);
+    return true;
+  }
+
+  /**
+   * The zone and index of the element under the pointer (`target` or one of its ancestors), or null. The zones registered last (a dialog)
+   * come first; among several, the smallest element that holds the target wins (a card rather than the row around it).
+   */
+  locate(target) {
+    if (!target || target.nodeType !== 1) return null;
+    let best = null;
+    const zones = Array.from(this.zones.values()).reverse();
+    for (const zone of zones) {
+      if (!zone.canFocus()) continue;
+      if (zone.locate) {
+        const index = zone.locate(target);
+        if (index !== null && index !== undefined && index >= 0) return { id: zone.id, index };
+        continue;
+      }
+      if (!zone.nodes) continue;
+      const list = zone.nodes() || [];
+      for (let i = 0; i < list.length; i += 1) {
+        const node = list[i];
+        if (node && node.contains && node.contains(target) && (!best || best.node.contains(node))) best = { id: zone.id, index: i, node };
+      }
+      if (best) break; // a later (upper) zone holds it: the zones under it are not looked at
+    }
+    return best ? { id: best.id, index: best.index } : null;
+  }
+
+  /** OK on an index of a zone (a click): the focus goes there first. `long`: a long press (right click, long touch). */
+  activate(id, index, { long = false } = {}) {
+    if (!this.focus(id, index)) return false;
+    const zone = this.zones.get(id);
+    if (long) {
+      if (!zone.onLongActivate) return false;
+      zone.onLongActivate(zone.index);
+    } else zone.onActivate(zone.index);
     return true;
   }
 

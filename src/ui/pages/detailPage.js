@@ -316,6 +316,7 @@ export function createDetailPage(ctx, params) {
     if (buttons.note) actionsEl.appendChild(h('span', { class: 'detail-note', text: buttons.note }));
     const zone = new FocusZone({
       id: 'detailActions',
+      nodes: () => nodes,
       model: new ListModel({ orientation: 'horizontal', getCount: () => nodes.length }),
       onFocus: (i) => {
         nodes[i].classList.add('focused');
@@ -385,6 +386,7 @@ export function createDetailPage(ctx, params) {
     if (!links.length) return;
     const zone = new FocusZone({
       id: zoneId,
+      nodes: () => links.map((link) => link.node),
       model: new ListModel({ orientation: 'horizontal', getCount: () => links.length }),
       onFocus: (i) => {
         links[i].node.classList.add('focused');
@@ -805,6 +807,7 @@ export function createDetailPage(ctx, params) {
     nodes.forEach((node) => epgEl.appendChild(node));
     const zone = new FocusZone({
       id: 'detailEpg',
+      nodes: () => nodes,
       model: new ListModel({ orientation: 'vertical', getCount: () => nodes.length }),
       onFocus: (i) => {
         nodes[i].classList.add('focused');

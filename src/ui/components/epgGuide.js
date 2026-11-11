@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { scrollHeld } from '../scroll.js';
 import { createHint } from '../atoms/hint.js';
 import { createIconButton } from '../atoms/iconButton.js';
 import { createSkeletonBlock } from '../atoms/skeleton.js';
@@ -126,6 +127,89 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
 
   const viewWidth = () => Math.max(200, (rowsEl.clientWidth || 1600) - CHANNEL_WIDTH);
 
+  // Mouse wheel and finger: the rows (up / down) and the time axis (left / right, or Shift + wheel) move, the focus stays where it is.
+  const maxX = () => Math.max(0, xOf(end, start) - viewWidth());
+  function scrollBy(dx, rows) {
+    if (rows) {
+      first = Math.max(0, Math.min(Math.max(0, total - visible), first + rows));
+      render();
+    }
+    if (dx) x = Math.max(0, Math.min(maxX(), x + dx));
+    applyScroll();
+  }
+  let wheelRows = 0;
+  el.addEventListener(
+    'wheel',
+    (event) => {
+      if (!total) return;
+      event.preventDefault();
+      if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+        scrollBy(event.shiftKey ? event.deltaY : event.deltaX, 0);
+        return;
+      }
+      wheelRows += event.deltaY;
+      const rows = Math.trunc(wheelRows / 80); // about one row a notch of the wheel
+      if (!rows) return;
+      wheelRows -= rows * 80;
+      scrollBy(0, rows);
+    },
+    { passive: false },
+  );
+  // Dragged with the mouse (button held) or a finger, as the rows of cards: left / right moves the hours, up / down the rows. A drag is
+  // not a click: nothing opens at its end.
+  let drag = null; // { id, x, y, fromX, fromFirst, moved }
+  let dragged = false;
+  el.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || !total) return;
+    if (event.target.closest && event.target.closest('.guide-row-actions')) return; // the buttons of a selected row
+    drag = { id: event.pointerId, x: event.clientX, y: event.clientY, fromX: x, fromFirst: first, moved: false };
+    dragged = false;
+  });
+  el.addEventListener('pointermove', (event) => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const dx = drag.x - event.clientX;
+    const dy = drag.y - event.clientY;
+    if (!drag.moved) {
+      if (Math.abs(dx) + Math.abs(dy) <= 12) return;
+      drag.moved = true;
+      el.classList.add('dragging');
+      if (el.setPointerCapture) {
+        try {
+          el.setPointerCapture(event.pointerId);
+        } catch {
+          /* the pointer is already gone */
+        }
+      }
+    }
+    event.preventDefault();
+    x = Math.max(0, Math.min(maxX(), drag.fromX + dx));
+    const row = Math.max(0, Math.min(Math.max(0, total - visible), drag.fromFirst + Math.round(dy / ROW_HEIGHT)));
+    if (row !== first) {
+      first = row;
+      render();
+    }
+    applyScroll();
+  });
+  const endDrag = (event) => {
+    if (!drag || (event && event.pointerId !== drag.id)) return;
+    dragged = drag.moved;
+    drag = null;
+    el.classList.remove('dragging');
+  };
+  el.addEventListener('pointerup', endDrag);
+  el.addEventListener('pointercancel', endDrag);
+  el.addEventListener('dragstart', (event) => event.preventDefault()); // no ghost image of a logo while dragging
+  el.addEventListener(
+    'click',
+    (event) => {
+      if (!dragged) return;
+      dragged = false;
+      event.preventDefault(); // a drag, not a tap: nothing opens
+      event.stopPropagation();
+    },
+    true,
+  );
+
   function drawRuler() {
     while (ruler.firstChild) ruler.removeChild(ruler.firstChild);
     const format = getTimeFormat();
@@ -222,14 +306,15 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
       if (enrich) enrich([entry], [card]);
     } else channel.appendChild(createSkeletonBlock({ className: 'epg-channel-skeleton' }));
     const segments = segmentsOf(row);
-    const segNodes = segments.map((seg) => {
+    const segNodes = segments.map((seg, segIndex) => {
       const node = h('div', { class: `epg-prog${seg.empty ? ' empty' : ''}${seg.loading ? ' loading' : ''}${seg.programme && seg.start <= now() && seg.stop > now() ? ' live' : ''}` }, h('span', { class: `epg-prog-title${seg.loading ? ' skeleton-line' : ''}`, text: seg.loading ? '' : seg.title || noInfo() }));
+      node.setAttribute('data-seg', segIndex); // the pointer finds the programme under it (pointAt)
       node.style.left = `${xOf(seg.start, start)}px`;
       node.style.width = `${Math.max(2, xOf(seg.stop, start) - xOf(seg.start, start))}px`;
       track.appendChild(node);
       return node;
     });
-    const rowEl = h('div', { class: 'guide-row' }, channel, h('div', { class: 'epg-track-viewport' }, track));
+    const rowEl = h('div', { class: 'guide-row', 'data-row': row }, channel, h('div', { class: 'epg-track-viewport' }, track));
     rowEl.style.transform = `translateY(${(row - first) * ROW_HEIGHT}px)`;
     track.style.transform = `translateX(${-Math.round(x)}px)`;
     const node = { el: rowEl, track, segments, segNodes, entry, loaded: Boolean(entry) && !(segments[0] && segments[0].loading) };
@@ -290,14 +375,15 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
   /** Moves the focus to a row, on the programme at `focusTime`, scrolling rows and axis as needed. */
   function focusAt(row, segIndex = null) {
     focusRow = Math.max(0, Math.min(row, total - 1));
-    if (focusRow < first) first = focusRow;
-    if (focusRow >= first + visible) first = focusRow - visible + 1;
+    const keep = scrollHeld(); // the focus given by the pointer: the rows and the time axis stay where the user put them
+    if (!keep && focusRow < first) first = focusRow;
+    if (!keep && focusRow >= first + visible) first = focusRow - visible + 1;
     const segments = segmentsOf(focusRow);
     const picked = segIndex === null && pickSegment ? pickSegment(segments, now()) : -1;
     if (segIndex !== null) focusSeg = Math.max(0, Math.min(segIndex, segments.length - 1));
     else focusSeg = picked >= 0 ? picked : segmentAt(segments, Math.max(focusTime, start));
     const seg = segments[focusSeg];
-    if (seg) x = scrollFor(seg, start, x, viewWidth());
+    if (seg && !keep) x = scrollFor(seg, start, x, viewWidth());
     render();
     applyScroll();
   }
@@ -419,6 +505,34 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
       return true;
     },
     inRowMode: () => Boolean(rowMode),
+    /**
+     * The pointer over the guide: the programme (or the channel of a row) under it becomes the focus, the action buttons of a selected
+     * row too. Returns 0 (the index of the guide's zone) when the element is the guide's, null otherwise.
+     */
+    pointAt(target) {
+      if (!target || !target.closest || !el.contains(target)) return null;
+      const button = target.closest('.guide-row-actions .icon-btn');
+      if (button) {
+        const at = actionButtons.indexOf(button);
+        if (rowMode && at >= 0 && rowMode.button !== at) {
+          rowMode.button = at;
+          paintFocus();
+        }
+        return rowMode ? 0 : null;
+      }
+      const rowEl = target.closest('[data-row]');
+      if (!rowEl) return null;
+      const row = Number(rowEl.getAttribute('data-row'));
+      const segEl = target.closest('[data-seg]');
+      const seg = segEl ? Number(segEl.getAttribute('data-seg')) : null;
+      if (rowMode && row !== focusRow) rowMode = null; // another row: the selection of the old one goes
+      if (row !== focusRow || (seg !== null && seg !== focusSeg)) {
+        focusAt(row, seg);
+        const at = segmentsOf(focusRow)[focusSeg];
+        if (at) focusTime = Math.max(at.start, start);
+      }
+      return 0;
+    },
     /** The rows changed (order, removed ones): read again, focus on `row`; the selection stays when `keepRowMode`. */
     async reload({ row = focusRow, keepRowMode = false } = {}) {
       if (!keepRowMode) rowMode = null;

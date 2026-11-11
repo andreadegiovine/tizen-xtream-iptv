@@ -72,6 +72,7 @@ export function createCollectionPage(ctx, params) {
     nodes.forEach((n) => actionsEl.appendChild(n));
     return new FocusZone({
       id: 'collectionActions',
+      nodes: () => nodes,
       model: new ListModel({ orientation: 'horizontal', getCount: () => nodes.length }),
       onFocus: (i) => {
         nodes[i].classList.add('focused');

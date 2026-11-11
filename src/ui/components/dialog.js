@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { revealNearest } from '../scroll.js';
 import { createButton } from '../atoms/button.js';
 import { createChoice } from '../atoms/choice.js';
 import { createHeading } from '../atoms/heading.js';
@@ -52,6 +53,7 @@ export function createDialogService({ focus, root = document.body }) {
 
     const zone = new FocusZone({
       id: DIALOG_ZONE,
+      nodes: () => buttons,
       model: new ListModel({ orientation: 'horizontal', getCount: () => buttons.length }),
       onFocus: (i) => buttons[i].classList.add('focused'),
       onBlur: (i) => buttons[i].classList.remove('focused'),
@@ -78,10 +80,11 @@ export function createDialogService({ focus, root = document.body }) {
     const start = Math.max(0, options.findIndex((o) => o.value === selected));
     const zone = new FocusZone({
       id: DIALOG_ZONE,
+      nodes: () => nodes,
       model: new ListModel({ orientation: 'vertical', getCount: () => options.length }),
       onFocus: (i) => {
         nodes[i].classList.add('focused');
-        nodes[i].scrollIntoView({ block: 'nearest' });
+        revealNearest(nodes[i]);
       },
       onBlur: (i) => nodes[i].classList.remove('focused'),
       onActivate: (i) => close(options[i].value),
@@ -153,12 +156,13 @@ export function createDialogService({ focus, root = document.body }) {
 
     const zone = new FocusZone({
       id: DIALOG_ZONE,
+      nodes: () => Array.from({ length: 1 + results.length }, (_, i) => rowsAt(i)),
       model: new ListModel({ orientation: 'vertical', getCount: () => 1 + results.length }),
       onFocus: (i) => {
         const node = rowsAt(i);
         if (!node) return;
         node.classList.add('focused');
-        node.scrollIntoView({ block: 'nearest' });
+        revealNearest(node);
       },
       onBlur: (i) => rowsAt(i) && rowsAt(i).classList.remove('focused'),
       onActivate: (i) => {
@@ -206,10 +210,11 @@ export function createDialogService({ focus, root = document.body }) {
     });
     const zone = new FocusZone({
       id: DIALOG_ZONE,
+      nodes: () => Array.from({ length: total() }, (_, i) => nodeAt(i)),
       model: new ListModel({ orientation: 'vertical', getCount: total }),
       onFocus: (i) => {
         nodeAt(i).classList.add('focused');
-        nodeAt(i).scrollIntoView({ block: 'nearest' });
+        revealNearest(nodeAt(i));
       },
       onBlur: (i) => nodeAt(i) && nodeAt(i).classList.remove('focused'),
       onActivate: (i) => {
@@ -292,6 +297,7 @@ export function createDialogService({ focus, root = document.body }) {
 
     const zone = new FocusZone({
       id: DIALOG_ZONE,
+      nodes: () => nodes,
       model: new GridModel({ columns: 3, getCount: () => keys.length }),
       onFocus: (i) => nodes[i].classList.add('focused'),
       onBlur: (i) => nodes[i].classList.remove('focused'),

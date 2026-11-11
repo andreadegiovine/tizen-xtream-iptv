@@ -57,6 +57,7 @@ export function createCategoriesPage(ctx, params = {}) {
 
   const zone = new FocusZone({
     id: ZONE_ID,
+    nodes: () => rows.map((row) => row.el),
     model: new ListModel({ orientation: 'vertical', getCount: () => rows.length }),
     onFocus: (i) => {
       if (anchor !== null && i >= 1) preview(i);
@@ -139,6 +140,7 @@ export function createCategoriesPage(ctx, params = {}) {
   const showMulti = () => multiButton.classList.toggle('focused', armed || multiFocused);
   const multiZone = new FocusZone({
     id: MULTI_ZONE,
+    nodes: () => [multiButton],
     model: new ListModel({ orientation: 'vertical', getCount: () => 1 }),
     onFocus: () => {
       multiFocused = true;

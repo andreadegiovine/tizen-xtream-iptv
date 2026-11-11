@@ -11,7 +11,10 @@ import { GridModel, ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { isFilterEntry, filterCardMeta } from '../components/typedRows.js';
 import { favoriteFilterEntries, openFilter } from '../../services/favoriteFilters.js';
-import { ensureVisible } from '../scroll.js';
+import { ensureVisible, revealNearest } from '../scroll.js';
+
+/** The page moves because of the pointer (wheel, finger, scrollbar), not because a key moved the focus. */
+const scrollHeldByUser = () => typeof document !== 'undefined' && document.body.classList.contains('pointer-mode');
 import { listCategories, listNetworks, pageEntries, getEntry, countEntries, LIVE_ALL } from '../../services/catalogQuery.js';
 import { readGuideIndex } from '../../services/guideIndex.js';
 import { genreKey } from '../../services/epgChannels.js';
@@ -462,6 +465,7 @@ export function createBrowsePage(ctx, params = {}) {
 
   const headZone = new FocusZone({
     id: HEAD_ZONE,
+    nodes: () => headButtons().map((b) => b.el),
     model: new ListModel({ orientation: 'horizontal', getCount: () => headButtons().length }),
     onFocus: (i) => headButtons()[i] && headButtons()[i].el.classList.add('focused'),
     onBlur: (i) => headButtons()[i] && headButtons()[i].el.classList.remove('focused'),
@@ -832,6 +836,7 @@ export function createBrowsePage(ctx, params = {}) {
 
   const guideZone = new FocusZone({
     id: GUIDE_ZONE,
+    locate: (target) => (guide && guideHost.style.display !== 'none' ? guide.pointAt(target) : null),
     model: {
       getCount: () => (guide && guideHost.style.display !== 'none' ? guide.model.getCount() : 0),
       navigate: (dir, index) => guide.model.navigate(dir, index),
@@ -844,12 +849,13 @@ export function createBrowsePage(ctx, params = {}) {
 
   const catsZone = new FocusZone({
     id: CATS_ZONE,
+    nodes: () => catNodes,
     model: new ListModel({ orientation: 'vertical', getCount: () => items.length }),
     onFocus: (i) => {
       if (i !== selected) autoSidebar = false; // the user moved in the sidebar: the focus is theirs
       if (!catNodes[i]) return;
       catNodes[i].classList.add('focused');
-      catNodes[i].scrollIntoView({ block: 'nearest' });
+      revealNearest(catNodes[i]);
     },
     onBlur: (i) => catNodes[i] && catNodes[i].classList.remove('focused'),
     onActivate: (i) => {
@@ -891,6 +897,7 @@ export function createBrowsePage(ctx, params = {}) {
 
   const gridZone = new FocusZone({
     id: GRID_ZONE,
+    nodes: () => cardNodes,
     model: createGrowingGridModel({
       columns,
       getCount: () => entries.length,
@@ -1030,8 +1037,28 @@ export function createBrowsePage(ctx, params = {}) {
       });
   }
 
+  const pageEl = h('section', { class: 'page browse' }, h('div', { class: 'browse-body' }, catList, h('div', { class: 'browse-main' }, head, gridEl, guideHost, empty)));
+  // The grid scrolled with the wheel or a finger: the next cards are read and the rows far above leave, as when the focus walks down
+  // (the last row on screen stands for the focus).
+  let scrollFrame = null;
+  pageEl.addEventListener('scroll', () => {
+    if (scrollFrame !== null || !scrollHeldByUser()) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = null;
+      if (destroyed || gridEl.style.display === 'none' || !cardNodes.length) return;
+      const bottom = pageEl.getBoundingClientRect().bottom;
+      let last = keptFrom;
+      for (let i = keptFrom; i < cardNodes.length; i += columns) {
+        if (cardNodes[i].getBoundingClientRect().top >= bottom) break;
+        last = i;
+      }
+      ensureLoaded(last);
+      syncImages(last);
+    });
+  });
+
   return {
-    el: h('section', { class: 'page browse' }, h('div', { class: 'browse-body' }, catList, h('div', { class: 'browse-main' }, head, gridEl, guideHost, empty))),
+    el: pageEl,
     /** Back while a row of the guide is selected: the selection goes, the page stays. */
     onBack() {
       if (guide && guide.cancelRowMode()) return true;

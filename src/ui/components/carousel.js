@@ -2,7 +2,7 @@ import { h } from '../dom.js';
 import { createHeading } from '../atoms/heading.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
-import { ensureVisible } from '../scroll.js';
+import { ensureVisible, scrollHeld } from '../scroll.js';
 import { createCard } from './card.js';
 
 /** Cards a row shows on a 1920 px screen, and how many more are kept ready past the right edge (the rest come while scrolling). */
@@ -66,6 +66,7 @@ export function createCarousel({ id, title, items: given, onOpen, className = ''
 
   const zone = new FocusZone({
     id,
+    nodes: () => cards.map((card) => card.el),
     // The focus can move over the whole row: a card not made yet is made when the focus reaches it.
     model: new ListModel({ orientation: 'horizontal', getCount: () => (moreItems ? items.length : given.length) }),
     onFocus: (i) => {
@@ -73,13 +74,63 @@ export function createCarousel({ id, title, items: given, onOpen, className = ''
       if (!cards[i]) return;
       const node = cards[i].el;
       node.classList.add('focused');
-      track.scrollLeft = Math.max(0, node.offsetLeft - 48);
+      if (!scrollHeld()) track.scrollLeft = Math.max(0, node.offsetLeft - 48); // the pointer never moves the row under it
       ensureVisible(el, { first: revealTop }); // the first row also brings the page heading back into view
     },
     onBlur: (i) => cards[i] && cards[i].el.classList.remove('focused'),
     onActivate: (i) => onOpen && onOpen((moreItems ? items : given)[i]),
   });
   zone.index = Math.max(0, Math.min(startIndex, (moreItems ? items : given).length - 1)); // where the focus lands when the row is reached
+  // The row scrolled with the wheel or a finger (pointer mode): the next cards are made before its end is reached.
+  track.addEventListener('scroll', () => {
+    if (track.scrollLeft + track.clientWidth > track.scrollWidth - 600) fill(cards.length + VISIBLE_CARDS);
+  });
+  // Dragged sideways with the mouse (button held) or a finger: the row follows the pointer. A drag is not a click: the card under it does
+  // not open. Up / down stays the page's own scroll (touch-action: pan-y).
+  let drag = null; // { id, x, from, moved }
+  let dragged = false;
+  track.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    drag = { id: event.pointerId, x: event.clientX, from: track.scrollLeft, moved: false };
+    dragged = false;
+  });
+  track.addEventListener('pointermove', (event) => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const dx = event.clientX - drag.x;
+    if (!drag.moved) {
+      if (Math.abs(dx) < 10) return;
+      drag.moved = true;
+      track.classList.add('dragging');
+      if (track.setPointerCapture) {
+        try {
+          track.setPointerCapture(event.pointerId);
+        } catch {
+          /* the pointer is already gone */
+        }
+      }
+    }
+    event.preventDefault();
+    track.scrollLeft = drag.from - dx;
+  });
+  const endDrag = (event) => {
+    if (!drag || (event && event.pointerId !== drag.id)) return;
+    dragged = drag.moved;
+    drag = null;
+    track.classList.remove('dragging');
+  };
+  track.addEventListener('pointerup', endDrag);
+  track.addEventListener('pointercancel', endDrag);
+  track.addEventListener(
+    'click',
+    (event) => {
+      if (!dragged) return;
+      dragged = false;
+      event.preventDefault(); // the end of a drag: no card opens
+      event.stopPropagation();
+    },
+    true,
+  );
+  track.addEventListener('dragstart', (event) => event.preventDefault()); // no ghost image of a poster while dragging
   fill(VISIBLE_CARDS + AHEAD_CARDS);
   return { el, zone, cards, items, fill };
 }

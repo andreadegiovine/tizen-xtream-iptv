@@ -87,6 +87,7 @@ export function createDiagnosticsPage(ctx) {
   };
   const zone = new FocusZone({
     id: ZONE_ID,
+    nodes: () => focusables,
     model,
     onFocus: (i) => {
       focusables[i].classList.add('focused');

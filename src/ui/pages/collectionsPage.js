@@ -7,7 +7,7 @@ import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel, ListModel } from '../focus/models.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
 import { createCard } from '../components/card.js';
-import { ensureVisible } from '../scroll.js';
+import { ensureVisible, revealNearest } from '../scroll.js';
 import { SIDEBAR_ICON, columnsFor } from './browsePage.js';
 import { getEntry, entryGenres } from '../../services/catalogQuery.js';
 import { collectionGenres, collectionImages, collectionKey, presentKeys, unionGenres } from '../../services/collections.js';
@@ -170,6 +170,7 @@ export function createCollectionsPage(ctx, params = {}) {
   const headButtons = () => (pinState ? [{ el: pinBtn, run: pinState.run }] : []);
   const headZone = new FocusZone({
     id: HEAD_ZONE,
+    nodes: () => headButtons().map((b) => b.el),
     model: new ListModel({ orientation: 'horizontal', getCount: () => headButtons().length }),
     onFocus: (i) => headButtons()[i] && headButtons()[i].el.classList.add('focused'),
     onBlur: (i) => headButtons()[i] && headButtons()[i].el.classList.remove('focused'),
@@ -178,11 +179,12 @@ export function createCollectionsPage(ctx, params = {}) {
 
   const catsZone = new FocusZone({
     id: CATS_ZONE,
+    nodes: () => catNodes,
     model: new ListModel({ orientation: 'vertical', getCount: () => items.length }),
     onFocus: (i) => {
       if (!catNodes[i]) return;
       catNodes[i].classList.add('focused');
-      catNodes[i].scrollIntoView({ block: 'nearest' });
+      revealNearest(catNodes[i]);
     },
     onBlur: (i) => catNodes[i] && catNodes[i].classList.remove('focused'),
     onActivate: (i) => {
@@ -202,6 +204,7 @@ export function createCollectionsPage(ctx, params = {}) {
 
   const gridZone = new FocusZone({
     id: GRID_ZONE,
+    nodes: () => cardNodes,
     model: new GridModel({ columns, getCount: () => shown.length }),
     onFocus: (i) => {
       if (!cardNodes[i]) return;

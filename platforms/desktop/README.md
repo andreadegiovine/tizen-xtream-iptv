@@ -54,7 +54,12 @@ Then add your provider (see the [main README](../../README.md#first-steps)).
 | `F11` | Toggle full screen (the player also has a full-screen button) |
 | `F12` | Developer tools |
 
-The mouse works only where the interface already provides for it (the player progress bar). Only one instance of the app runs at a time.
+**Mouse:** the element under the pointer gets the focus (the page does not move under it), a click is OK and a right click is the long
+press of OK (row actions of the guide). The wheel scrolls pages, rows of cards (Shift + wheel, a trackpad, or dragged with the button held) and the guide (rows; Shift
+for the hours; or dragged with the button held). Back: the mouse's back button, a click outside a dialog, or the arrow after the logo (shown while the mouse is in use).
+In the player, moving the mouse shows the controls and a click on the picture hides them. A key turns the pointer look off.
+
+Only one instance of the app runs at a time.
 
 ## Notes
 

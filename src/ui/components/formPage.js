@@ -61,6 +61,7 @@ export function createForm({ id, focus, fields: specs, actions }) {
   const el = h('div', { class: 'form' }, fields.map((f) => f.root), status, h('div', { class: 'form-actions' }, actionButtons));
   const zone = new FocusZone({
     id,
+    nodes: () => nodes,
     model: formModel({ fieldCount: fields.length, actionCount: actions.length, clearable: true }),
     onFocus: (i) => {
       nodes[i].classList.add('focused');

@@ -64,6 +64,7 @@ export function createNetworkPage(ctx, params) {
     nodes.forEach((n) => actionsEl.appendChild(n));
     return new FocusZone({
       id: 'networkActions',
+      nodes: () => nodes,
       model: new ListModel({ orientation: 'horizontal', getCount: () => nodes.length }),
       onFocus: (i) => {
         nodes[i].classList.add('focused');

@@ -53,6 +53,7 @@ import { faCircleCheck } from '@fortawesome/free-solid-svg-icons/faCircleCheck';
 import { faThumbtack } from '@fortawesome/free-solid-svg-icons/faThumbtack';
 import { faLock } from '@fortawesome/free-solid-svg-icons/faLock';
 import { faDeleteLeft } from '@fortawesome/free-solid-svg-icons/faDeleteLeft';
+import { faArrowLeft } from '@fortawesome/free-solid-svg-icons/faArrowLeft';
 
 // Font Awesome Free (CC BY 4.0 / SIL OFL): only the icons listed here end up in the bundle.
 // They are inlined as SVG, so there are no font files to ship or load on the TV.
@@ -114,6 +115,7 @@ const ICONS = {
   pin: faThumbtack,
   lock: faLock,
   backspace: faDeleteLeft,
+  back: faArrowLeft,
 };
 
 export const iconNames = Object.keys(ICONS);

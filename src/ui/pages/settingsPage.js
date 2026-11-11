@@ -530,6 +530,7 @@ export function createSettingsPage(ctx) {
   let focusedEl = null;
   const zone = new FocusZone({
     id: ZONE_ID,
+    nodes: () => all().map((row) => row.el),
     model: linesModel(() => all()),
     onFocus: (i) => {
       const row = all()[i];

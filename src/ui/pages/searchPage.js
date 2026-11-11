@@ -77,6 +77,7 @@ export function createSearchPage(ctx, params = {}) {
 
   const recentZone = new FocusZone({
     id: RECENT_ZONE,
+    nodes: () => recentNodes,
     model: new ListModel({ orientation: 'vertical', getCount: () => recent.length }),
     onFocus: (i) => {
       if (!recentNodes[i]) return;

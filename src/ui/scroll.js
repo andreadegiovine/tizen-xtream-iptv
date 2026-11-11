@@ -11,8 +11,29 @@ export function computeScrollTop({ elTop, elBottom, viewTop, viewBottom, scrollT
   return scrollTop;
 }
 
+let held = 0;
+/**
+ * Runs `fn` with the scroll held: the focus given by the pointer (an element under the mouse, a tap) never moves the page under it, the
+ * user scrolls it themselves.
+ */
+export function withoutScroll(fn) {
+  held += 1;
+  try {
+    return fn();
+  } finally {
+    held -= 1;
+  }
+}
+export const scrollHeld = () => held > 0;
+
+/** Brings an element of a list into view (the nearest edge), unless the pointer gave the focus. */
+export function revealNearest(node) {
+  if (!held && node && node.scrollIntoView) node.scrollIntoView({ block: 'nearest' });
+}
+
 /** Scrolls the closest `.page` so that `el` is fully visible. `first: true` also reveals the page heading. */
 export function ensureVisible(el, { margin = 32, first = false } = {}) {
+  if (held) return;
   const page = el && el.closest ? el.closest('.page') : null;
   if (!page) return;
   if (first) {

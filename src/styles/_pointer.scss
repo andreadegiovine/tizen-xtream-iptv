@@ -1,0 +1,82 @@
+// Mouse, touch and Magic Remote (src/ui/pointer.js): <body> has `pointer-mode` while the pointer is in use; a key turns it off.
+@use 'tokens' as *;
+
+// Back of the top bar (after the logo, before Home): only with the pointer, on a page with one to go back to.
+.topbar-back {
+  display: none;
+}
+
+.pointer-mode {
+  .topbar.has-back .topbar-back {
+    display: flex;
+  }
+
+  // It is not one of the bar's focus stops: under the pointer it looks like a focused entry.
+  .topbar-back:hover {
+    background: $text;
+    color: $bg;
+    transform: scale(#{$focus-scale});
+  }
+
+  // What reacts to a click shows the hand.
+  .card,
+  .btn,
+  .icon-btn,
+  .player-btn,
+  .chip.link,
+  .choice,
+  .list .row,
+  .browse-cat,
+  .topbar-item,
+  .epg-prog,
+  .epg-channel,
+  .field,
+  .select-field,
+  .pin-key,
+  .dialog-backdrop,
+  .notice {
+    cursor: pointer;
+  }
+
+  .dialog {
+    cursor: default;
+  }
+
+  // Rows of cards scroll sideways with the wheel (Shift / trackpad), or dragged with the mouse or a finger (carousel.js); no visible bar.
+  .carousel-track {
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    &.dragging {
+      cursor: grabbing;
+
+      .card {
+        cursor: grabbing;
+      }
+    }
+  }
+
+  .epg-guide.dragging {
+    cursor: grabbing;
+
+    .epg-prog,
+    .epg-channel {
+      cursor: grabbing;
+    }
+  }
+}
+
+// A row of cards is dragged sideways by the app (mouse or finger, also before pointer mode is on): the browser keeps only the vertical
+// scroll of the page.
+.carousel-track {
+  touch-action: pan-y;
+}
+
+// The guide moves its rows and hours itself (wheel, mouse, finger): the browser must not scroll or zoom it.
+.epg-body {
+  touch-action: none;
+}

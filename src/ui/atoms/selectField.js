@@ -14,6 +14,7 @@ export function createSelectField({ id, label, text, onOpen }) {
   const el = h('div', { class: 'select-field' }, label ? h('span', { class: 'field-label', text: label }) : null, box);
   const zone = new FocusZone({
     id,
+    nodes: () => [el],
     model: new ListModel({ orientation: 'vertical', getCount: () => 1 }),
     onFocus: () => {
       el.classList.add('focused');

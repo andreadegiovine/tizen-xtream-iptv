@@ -1,7 +1,8 @@
 import './styles/main.scss';
 import { i18n, t, detectLocale } from './i18n/index.js';
 import { openAppDb } from './db/appDb.js';
-import { InputService, Action } from './core/input.js';
+import { InputService, Action, isTextEditing } from './core/input.js';
+import { createPointer } from './ui/pointer.js';
 import { log } from './core/logger.js';
 import { providerHiddenSections } from './services/providerTypes.js';
 import { visibleFavorites } from './services/favoriteEntries.js';
@@ -383,6 +384,7 @@ async function boot() {
   };
 
   const topbar = createTopbar(ctx, {
+    onBack: () => handleAction(Action.BACK), // the pointer's Back button
     onOpen: () => {
       // The search icon shows the search page at once, with the last searches, and loads the index now instead of last.
       ctx.search.warm().catch(() => undefined);
@@ -453,6 +455,7 @@ async function boot() {
       topbar.syncSearchLinks();
       topbar.setSkeleton(entry.name === 'providerSetup' && Boolean(entry.params.firstRun));
       topbar.setVisible(entry.name !== 'player');
+      topbar.setCanGoBack(router.depth > 1);
       if (ctx.notices) ctx.notices.setPlayback(entry.name === 'player');
       if (ctx.screensaver) ctx.screensaver.setSuspended(entry.name === 'player'); // never over a video
       topbar.setCurrentSection(section);
@@ -621,7 +624,7 @@ async function boot() {
 
   const input = new InputService(document, { holdsEnter: () => Boolean(focus.active && focus.active.onLongActivate) });
   input.registerPlatformKeys();
-  input.onAction((action) => {
+  const handleAction = (action) => {
     if (action === Action.BACK) {
       // An open dialog or search closes first; then the page may use Back for itself (a grid that is not the main one, the player's controls).
       const overlay = dialogs.isOpen() || topbar.isSearching();
@@ -632,8 +635,12 @@ async function boot() {
     // A page may own some keys (the player owns every key except Back).
     if (router.page && router.page.onAction && router.page.onAction(action)) return;
     focus.handle(action);
-  });
+  };
+  input.onAction(handleAction);
   input.start();
+  // Mouse, touch, Magic Remote: the same focus as the keys (the element under the pointer), a click is OK, Back from a mouse button or
+  // a click outside a dialog.
+  createPointer({ focus, onBack: () => handleAction(Action.BACK), isTextEditing: () => isTextEditing(document) });
 
   log.info('Xtream IPTV started');
   // History and progress that could not be sent last time, then what was watched only here.

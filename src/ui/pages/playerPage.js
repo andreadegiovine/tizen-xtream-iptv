@@ -184,15 +184,18 @@ export function createPlayerPage(ctx, params) {
     placeSubtitle();
     clearTimeout(hideTimer);
     // Without a key press for a few seconds everything fades out, the button focus included.
-    hideTimer = setTimeout(() => {
-      focusMode = false;
-      barFocus = false;
-      if (scrub !== null) endScrub(false);
-      paintFocus();
-      controls.classList.remove('visible');
-      top.classList.remove('visible');
-      placeSubtitle();
-    }, CONTROLS_MS);
+    hideTimer = setTimeout(hideControls, CONTROLS_MS);
+  }
+
+  function hideControls() {
+    clearTimeout(hideTimer);
+    focusMode = false;
+    barFocus = false;
+    if (scrub !== null) endScrub(false);
+    paintFocus();
+    controls.classList.remove('visible');
+    top.classList.remove('visible');
+    placeSubtitle();
   }
 
   /** " · termina alle 23:34": when it would end if it keeps playing from `position` (the clock format of the top bar). */
@@ -283,20 +286,56 @@ export function createPlayerPage(ctx, params) {
     const rect = bar.getBoundingClientRect();
     return positionFromPointer(event.clientX, rect.left, rect.width, lastState.duration);
   };
-  seek.addEventListener('mousedown', (event) => {
+  // Pointer events: the mouse, a finger and the Magic Remote alike.
+  seek.addEventListener('pointerdown', (event) => {
     if (!(lastState.duration > 0)) return;
     event.preventDefault();
     setScrub(pointerPosition(event));
     showControls();
-    const move = (e) => setScrub(pointerPosition(e));
+    const move = (e) => {
+      setScrub(pointerPosition(e));
+      showControls();
+    };
     const up = (e) => {
-      document.removeEventListener('mousemove', move);
-      document.removeEventListener('mouseup', up);
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      document.removeEventListener('pointercancel', up);
       setScrub(pointerPosition(e));
       endScrub(true);
     };
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', up);
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    document.addEventListener('pointercancel', up);
+  });
+  seek.addEventListener('click', (event) => event.preventDefault()); // the drag above did it: no other click handling
+
+  // Mouse, touch: moving over the player shows the controls; the button under the pointer gets the focus, a click runs it; a click (tap)
+  // elsewhere shows the controls, or hides them when they are shown.
+  const pointerOn = () => typeof document !== 'undefined' && document.body.classList.contains('pointer-mode');
+  const focusButton = (def) => {
+    focusMode = true;
+    barFocus = false;
+    focusIndex = Math.max(0, shown().indexOf(def));
+    paintFocus();
+    showControls();
+  };
+  buttonDefs.forEach((def) => {
+    def.el.addEventListener('mouseenter', () => {
+      if (pointerOn()) focusButton(def);
+    });
+    def.el.addEventListener('click', (event) => {
+      event.preventDefault();
+      focusButton(def);
+      def.run();
+    });
+  });
+  el.addEventListener('mousemove', () => {
+    if (pointerOn()) showControls();
+  });
+  el.addEventListener('click', (event) => {
+    if (event.defaultPrevented || (event.target.closest && event.target.closest('.player-btn, .player-seek'))) return;
+    if (controls.classList.contains('visible')) hideControls();
+    else showControls();
   });
 
   const shown = () => buttonDefs.filter((d) => !d.hidden);
