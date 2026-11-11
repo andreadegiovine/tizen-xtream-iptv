@@ -92,9 +92,10 @@ window.addEventListener('error', (event) => log.error('Uncaught error', event.me
 
 /**
  * Checks version.json in the background, once the app is up (the start never waits for the network). A newer build this package can run
- * is downloaded and used from the next start (the loader in index.html picks it); a newer version that needs a new package: a notice.
+ * is downloaded and used from the next start (the loader in index.html picks it), and `askRestart(version)` offers to restart now;
+ * a newer version that needs a new package: a notice.
  */
-async function updateInBackground(notices) {
+async function updateInBackground(notices, askRestart) {
   const versions = runningVersions();
   log.info(`App ${versions.bundle || APP_VERSION} (package ${versions.shell || APP_VERSION})`);
   // Only the "_autoupdate" packages (Tizen, webOS) update themselves, each from the online build of the same variant.
@@ -115,10 +116,30 @@ async function updateInBackground(notices) {
   try {
     await installUpdate(update);
     log.info(`Update ${update.version} downloaded: used from the next start`);
-    notices.show({ type: 'info', message: t('update.ready', { version: update.version }), key: 'update' });
   } catch (err) {
     log.warn('Update failed', err && err.message);
+    return;
   }
+  if (askRestart) await askRestart(update.version);
+  else notices.show({ type: 'info', message: t('update.ready', { version: update.version }), key: 'update' });
+}
+
+/**
+ * The dialog of a downloaded update: "Restart now" reloads the app (the loader starts the new build), "Stay" keeps this one until the next
+ * start (with the usual notice). It waits until no other dialog or search is open (one dialog at a time).
+ */
+function restartDialog({ dialogs, isBusy, notices }) {
+  return async (version) => {
+    while (isBusy()) await new Promise((resolve) => setTimeout(resolve, 2000));
+    const now = await dialogs.confirm({
+      title: t('update.dialogTitle'),
+      message: t('update.dialogMessage', { version }),
+      confirmLabel: t('update.restartNow'),
+      cancelLabel: t('update.stay'),
+    });
+    if (now) window.location.reload();
+    else notices.show({ type: 'info', message: t('update.ready', { version }), key: 'update' });
+  };
 }
 
 async function boot() {
@@ -690,7 +711,7 @@ async function boot() {
   // A build loaded online reads them sooner (the network may drop later).
   setTimeout(() => preloadPages([LAZY_PAGES.detail, LAZY_PAGES.player, LAZY_PAGES.settings, LAZY_PAGES.diagnostics]), window.__XI_BASE__ ? 2000 : 15000);
   // A newer build is looked for once the first page is up (a few seconds later: the start-up work goes first).
-  setTimeout(() => updateInBackground(notices).catch((err) => log.warn('Update failed', err && err.message)), 3000);
+  setTimeout(() => updateInBackground(notices, restartDialog({ dialogs, notices, isBusy: () => dialogs.isOpen() || topbar.isSearching() })).catch((err) => log.warn('Update failed', err && err.message)), 3000);
   // The parental PIN is set the first time the app opens (asked again at the next start if it was skipped).
   setTimeout(() => {
     ctx.parental
