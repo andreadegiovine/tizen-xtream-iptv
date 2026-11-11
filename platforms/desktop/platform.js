@@ -4,6 +4,7 @@
 import { createHtml5Engine } from '../../src/services/playerEngines.js';
 import { youtubeUrl } from '../../src/services/trailer.js';
 import { Action } from '../../src/core/actions.js';
+import { createDesktopAlerts } from './alerts.js';
 
 /** Keyboard media keys and Space, besides the common keys (arrows, Enter, Esc / Backspace = Back, PageUp / PageDown = channel). */
 export const DESKTOP_KEY_CODES = Object.freeze({
@@ -18,6 +19,19 @@ export const DESKTOP_KEY_CODES = Object.freeze({
 export function electronVersion(userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '') {
   const match = /Electron\/([\d.]+)/.exec(String(userAgent));
   return match ? match[1] : null;
+}
+
+/** The alerts of scheduled viewing: in the desktop app only (a plain browser would ask for its own permission). */
+function desktopAlerts() {
+  if (typeof window === 'undefined' || !window.xtreamDesktop || typeof window.Notification !== 'function') return null;
+  return createDesktopAlerts({
+    Notification: window.Notification,
+    setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+    clearTimeout: (id) => window.clearTimeout(id),
+    doc: document,
+    now: () => Date.now(),
+    show: () => (window.xtreamDesktop.show ? window.xtreamDesktop.show() : Promise.resolve()).catch(() => undefined),
+  });
 }
 
 export default {
@@ -50,6 +64,7 @@ export default {
     window.open(youtubeUrl(videoId), '_blank');
     return true;
   },
+  alerts: desktopAlerts(),
   runtimeChecks() {
     const version = electronVersion();
     return [{ id: 'electron', status: version ? 'ok' : 'warn', detail: version ? `Electron ${version}` : 'not running inside the desktop app' }];

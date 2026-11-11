@@ -47,7 +47,8 @@ still being tested on real devices.
 
 **Live TV**
 - The programme on air on every channel card, the next 24 hours on the channel page, a full grid guide and scheduled viewing that
-  opens the channel when a programme starts.
+  opens the channel when a programme starts, with an alert of the system when the app is in the background or closed (Android TV /
+  Fire TV and desktop notifications; on Samsung TVs the app starts on the channel).
 - Channels in several qualities grouped into one card, channels of the same network (Rai, Sky, Dazn...) collected together.
 - Genres from the guide's categories (Sport, News, Movies...) in the sidebar: each opens the guide with only the programmes of that genre; they can be pinned or added to the favorites.
 - The guide is downloaded once a day after the rest of the start-up work; a custom XMLTV guide can replace the provider's.

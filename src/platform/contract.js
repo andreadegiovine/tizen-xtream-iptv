@@ -19,6 +19,14 @@
  *   display(env)              Promise of the panel size { width, height } or null
  *   memory(env)               device RAM { used, total } (bytes) or null
  *   networkType(env)          Promise of the connection type ('WIFI', 'ETHERNET', 'NONE'...) or null
+ *   alerts                    the system's alerts of scheduled viewing (an object, or null where there are none: webOS, a browser),
+ *                             used by src/services/scheduleAlerts.js:
+ *                               whileHidden   true: set only while the app is hidden (the system shows / launches them)
+ *                               arm(list)     Promise: replaces the alerts with [{ id, time (ms), title (the app's name), body, scheduleId }]
+ *                               disarm()      Promise: removes them
+ *                               onOpen(fn)    fn(scheduleId, action) when the user opens one (or the app is started by one):
+ *                                             action 'watch' (a tap, "Watch programme") or 'cancel' ("Cancel")
+ *                               prepare({ confirm })  Promise: asks the permissions (the first time a programme is scheduled)
  */
 export const PLATFORM_API = Object.freeze([
   'keyCodes',
@@ -34,6 +42,7 @@ export const PLATFORM_API = Object.freeze([
   'display',
   'memory',
   'networkType',
+  'alerts',
 ]);
 
 /** Player lab of a platform without one: it only says so. */
@@ -73,6 +82,7 @@ export function withDefaults(adapter, { createDefaultEngine } = {}) {
     display: async () => null,
     memory: () => null,
     networkType: async () => null,
+    alerts: null,
   };
   const out = { ...base };
   Object.keys(adapter || {}).forEach((key) => {
@@ -89,8 +99,9 @@ export function contractErrors(adapter) {
   PLATFORM_API.forEach((key) => {
     const value = adapter[key];
     if (value === undefined || value === null) return;
-    if (key === 'keyCodes') {
+    if (key === 'keyCodes' || key === 'alerts') {
       if (typeof value !== 'object') errors.push(key);
+      else if (key === 'alerts' && ['arm', 'disarm'].some((fn) => typeof value[fn] !== 'function')) errors.push(key);
     } else if (typeof value !== 'function') errors.push(key);
   });
   Object.keys(adapter).forEach((key) => {

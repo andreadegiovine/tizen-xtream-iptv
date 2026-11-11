@@ -74,6 +74,7 @@ All entries are optional: missing ones get the behavior of a browser.
 | `createDiagnosticPlayer()` | player lab of Diagnostics | `avplaySpike` |
 | `runtimeChecks()` | extra rows in the Diagnostics checks | tizen, webapis, AVPlay |
 | `display / memory / networkType` | system data for the Device table | `tizen.systeminfo` |
+| `alerts` | scheduled viewing outside the app (an object: `whileHidden`, `arm`, `disarm`, `onOpen`, `prepare`; see `src/services/scheduleAlerts.js`); null: only inside the app (webOS, browser) | Alarm API: starts the app on the channel (`platforms/tizen/alerts.js`) |
 
 ## Release (done: Tizen, webOS, desktop, Android)
 
@@ -217,6 +218,22 @@ Several providers can be configured; what the user builds is not tied to one of 
 - Already global: watch history, Trakt, TMDB metadata, settings, search history, PIN.
 - **Per provider on purpose:** hidden categories, manual Live merges / network links, scheduled viewings, the catalog.
 - Collections and favorites count only the titles the active provider carries.
+
+## Scheduled viewing alerts (patch 160)
+
+A scheduled programme opens its channel while the app is open (`main.js`); outside the app the platform's `alerts` take over, set on the
+device (no push service, no server). Checked against the official documentation; none of it tried on a device yet.
+
+| Platform | Alert | Opening it | Permissions |
+| --- | --- | --- | --- |
+| Android TV / Fire TV | system notification at the time the channel would open (`@capacitor/local-notifications` 8.3.1, AlarmManager, set again after a reboot); channel `schedule` with high importance: heads-up on Fire TV, which shows the standard Android notifications (Amazon); Android TV shows notifications of other apps very little | no title (the system shows the app's name), `"<programme>" is about to start`; buttons "Cancel" (removes the scheduled viewing) and "Watch programme"; a tap starts / brings the app and opens the channel | Android 13+: notifications; Android 12+: "Alarms & reminders" for an exact time (otherwise inexact, may come late), offered with a dialog: `TvHost.openExactAlarmSettings` opens the screen and fails cleanly where a TV has none (the plugin's own method would crash the app there); alerts marked exact only while allowed, or the plugin's `schedule` opens that screen itself |
+| Samsung Tizen | an alarm (Alarm API, mandatory on TV, public privilege `alarm`) that starts the app with an app control; no notification exists for TV apps | the app comes to the front on the channel (`appcontrol` event, `reload="disable"` in config.xml; or `getRequestedAppControl()` at start) | none at run time |
+| Desktop | notification of the system (page `Notification` API, native in Electron) while the app runs, minimized or behind other windows; skipped while the window is in use | title "Xtream IPTV" (`app.name`, required), same body, no buttons (only from a service worker, or Electron's own on macOS); a click restores the window (`window:show`) and opens the channel | Electron grants it; Windows needs the AppUserModelID (`setAppUserModelId`, the installer's one) |
+| LG webOS | none: no notification or scheduled launch for third-party web apps was found in the public documentation | — | — |
+
+When they are set: Android and Tizen only while the app is hidden or when it exits (where the app is in use its own notice and opening
+take over, so there are no duplicates); desktop always, skipping the ones that come while the window is in use. The first sync at start
+removes the alerts left from the last session while the app is in use.
 
 ## Open issues
 

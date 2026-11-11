@@ -6,6 +6,8 @@ import { youtubeUrl } from '../../src/services/trailer.js';
 import { Action } from '../../src/core/actions.js';
 import { log } from '../../src/core/logger.js';
 import { createExoEngine } from './exoEngine.js';
+import { createAndroidAlerts } from './alerts.js';
+import { t } from '../../src/i18n/index.js';
 
 /** Keys sent by MainActivity (RemoteKeys.java): 10000 + the Android key code. D-pad and OK arrive as arrows and Enter. */
 export const ANDROID_KEY_OFFSET = 10000;
@@ -37,6 +39,17 @@ export function dispatchRemoteKey(keyCode, target = typeof document !== 'undefin
   Object.defineProperty(event, 'keyCode', { get: () => keyCode });
   target.dispatchEvent(event);
 }
+
+/** Texts of the alerts, read when they are needed (the language may change). */
+const alertTexts = () => ({
+  channelName: t('schedule.alertChannel'),
+  cancel: t('schedule.alertCancel'),
+  watch: t('schedule.alertWatch'),
+  exactTitle: t('schedule.exactTitle'),
+  exactMessage: t('schedule.exactMessage'),
+  exactConfirm: t('schedule.exactConfirm'),
+  exactCancel: t('schedule.exactCancel'),
+});
 
 let info = null; // the device's facts, read once (TvHost.info)
 const readInfo = () => info || (info = host('info').catch(() => null));
@@ -71,5 +84,7 @@ export default {
     const inApp = Boolean(capacitor());
     return [{ id: 'android', status: inApp ? 'ok' : 'warn', detail: inApp ? 'Android app (Capacitor)' : 'not running inside the Android app' }];
   },
+  // Scheduled viewing alerts: notifications of the system (only inside the Android app).
+  alerts: capacitor() ? createAndroidAlerts(capacitor(), { texts: alertTexts }) : null,
   display: () => readInfo().then((facts) => (facts && facts.width ? { width: facts.width, height: facts.height } : null)),
 };

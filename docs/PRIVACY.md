@@ -15,6 +15,11 @@ Everything stays on the device that runs the app:
 
 Nothing of this is sent to the developer, who runs no server that receives data from the app.
 
+The alerts of scheduled viewing are set on the device itself (Android and desktop notifications, an alarm of the Samsung TV that starts
+the app): the system keeps the programme title and time until the alert comes; no push service is used. On Android the app
+asks for the notification permission (Android 13 and later) and, where needed, for "Alarms & reminders", the first time a programme is
+scheduled.
+
 ## Who the app talks to
 
 - **The user's IPTV provider**, at the addresses the user typed: to read the catalog and the guide and to play the streams.

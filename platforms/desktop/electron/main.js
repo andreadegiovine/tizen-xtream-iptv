@@ -95,6 +95,20 @@ ipcMain.handle('window:fullscreen', (event, toggle) => {
   return win.isFullScreen();
 });
 
+// A scheduled viewing notification was clicked (preload.js): the window comes to the front.
+ipcMain.handle('window:show', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return false;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  return true;
+});
+
+// Windows shows the notifications of an app only under its AppUserModelID: the one of the installer's Start menu shortcut (electron-builder
+// uses the appId of electron-builder.json).
+if (process.platform === 'win32') app.setAppUserModelId('com.xtrmiptv.desktop');
+
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => {

@@ -841,6 +841,8 @@ export function createDetailPage(ctx, params) {
       if (value === 'add') {
         await ctx.schedules.add(item);
         ctx.notices.success(t('schedule.added'), { key: 'schedule' });
+        // The first time: the permissions of the system's alerts (notifications, exact alarms), where the platform has them.
+        if (ctx.scheduleAlerts) await ctx.scheduleAlerts.prepare();
       } else {
         await ctx.schedules.remove(item);
         ctx.notices.info(t('schedule.removed'), { key: 'schedule' });

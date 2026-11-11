@@ -7,6 +7,7 @@ import { createYouTubeEngine } from './youtubeEngine.js';
 import { TIZEN_KEY_CODES, registerTizenKeys } from './keys.js';
 import { tizenDisplay, tizenMemory, tizenNetwork } from './systemInfo.js';
 import { log } from '../../src/core/logger.js';
+import { createTizenAlerts } from './alerts.js';
 
 const YOUTUBE_APP_ID = '111299001912'; // the YouTube app of Samsung TVs
 
@@ -43,6 +44,8 @@ export default {
       return false;
     }
   },
+  // Scheduled viewing: an alarm starts the app at the time of the channel (only on the TV).
+  alerts: hasTizen() && window.tizen.alarm ? createTizenAlerts(window.tizen, window) : null,
   createDiagnosticPlayer: createAvPlaySpike,
   runtimeChecks() {
     const row = (id, good, yes, no) => ({ id, status: good ? 'ok' : 'warn', detail: good ? yes : no });

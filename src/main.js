@@ -30,6 +30,7 @@ import { createCatalogWorker } from './services/createCatalogWorker.js';
 import { startRebuild } from './services/catalogRebuild.js';
 import { createJobQueue } from './services/jobQueue.js';
 import { createScheduledViewing } from './services/scheduledViewing.js';
+import { createScheduleAlerts } from './services/scheduleAlerts.js';
 import { createEpgService } from './services/epgService.js';
 import { createEpgWorker } from './services/createEpgWorker.js';
 import { createTmdbClient } from './services/tmdbClient.js';
@@ -242,15 +243,25 @@ async function boot() {
       ctx.notices.info(t('schedule.startingSoon', { title: s.title, channel: s.entryName }), { key: 'schedule' });
     }
     for (const s of due.start) {
-      await ctx.schedules.markStarted(s); // stays in "Scheduled" until the programme ends
-      const current = await active.get();
-      if (!current || current.provider.id !== s.providerId) continue;
-      const entry = await getEntry(current.db, s.entryKey);
-      if (!entry) continue;
-      log.info(`Scheduled viewing: ${s.title} on ${entry.name}`);
-      ctx.router.push('player', { type: 'live', entryKey: entry.key, title: entry.name, icon: entry.icon, playlist: [{ id: entry.defaultId, ext: '', title: '' }], index: 0, epgChannelId: entry.epgChannelId, section: 'live' });
-      break; // one channel at a time
+      if (await startScheduled(s)) break; // one channel at a time
     }
+  };
+  /** Opens the channel of a scheduled programme (once: it stays in "Scheduled" until it ends); true when it was opened. */
+  async function startScheduled(s) {
+    await ctx.schedules.markStarted(s);
+    const current = await active.get();
+    if (!current || current.provider.id !== s.providerId) return false;
+    const entry = await getEntry(current.db, s.entryKey);
+    if (!entry) return false;
+    log.info(`Scheduled viewing: ${s.title} on ${entry.name}`);
+    ctx.router.push('player', { type: 'live', entryKey: entry.key, title: entry.name, icon: entry.icon, playlist: [{ id: entry.defaultId, ext: '', title: '' }], index: 0, epgChannelId: entry.epgChannelId, section: 'live' });
+    return true;
+  }
+  /** An alert of the system was opened (or started the app): its channel, unless the app opened it already or the programme ended. */
+  ctx.openScheduled = async (id) => {
+    const s = (await ctx.schedules.list()).find((item) => item.id === id);
+    if (!s || s.started) return;
+    await startScheduled(s);
   };
   // A timer to the next thing due (none while nothing is scheduled); at most a minute, so a TV that slept or a clock that moved is caught up.
   let scheduleTimer = null;
@@ -274,6 +285,10 @@ async function boot() {
   };
   ctx.schedules.onChange(() => planSchedules());
   planSchedules();
+  // Back in the app (its timers may have been slowed down or stopped while hidden): what is due now, at once.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') planSchedules();
+  });
   // What Settings asks (updates, rebuilds) runs one job at a time, after any catalog / genre / TMDB work already running.
   const EXCLUSIVE = ['catalog', 'tmdb', 'genres', 'rebuild'];
   ctx.jobs = createJobQueue({
@@ -634,7 +649,11 @@ async function boot() {
     router,
     getSection: sectionForEntry,
     goHome: () => router.reset('home', { section: 'home', focusTopbar: true }),
-    requestExit: () => platform.exit(),
+    // The alerts of scheduled viewing are set before the app closes (a TV app that exits is not hidden first).
+    requestExit: () => {
+      const exit = () => platform.exit();
+      (ctx.scheduleAlerts ? ctx.scheduleAlerts.beforeExit() : Promise.resolve()).then(exit, exit);
+    },
     texts: () => ({
       title: t('exit.title'),
       message: t('exit.message'),
@@ -672,6 +691,27 @@ async function boot() {
   // The changes still waiting for Trakt (an error that may go through later: 429, 5xx, no network) go out at every check too.
   setInterval(() => queue.add({ name: 'trakt', priority: Priority.TRAKT, run: () => ctx.trakt.flush().then(() => ctx.watch.syncIfChanged()).catch(() => undefined) }), 15 * 60 * 1000);
   const [hasProvider] = await Promise.all([providers.getActive(), keysReady, navCountsReady]);
+  // Scheduled viewing outside the app: the system's alerts (notifications, or an alarm that starts the app on a Samsung TV), set while the
+  // app is hidden or closed; opening one opens the channel (once the first page is up). Permissions: asked when a programme is scheduled.
+  const startOpened = [];
+  let pagesReady = false;
+  // "Watch programme" (or a tap) opens the channel; "Cancel" removes the scheduled viewing.
+  const openedAlert = (id, action) => {
+    const done = action === 'cancel' ? ctx.schedules.remove(id).then(() => ctx.notices.info(t('schedule.removed'), { key: 'schedule' })) : ctx.openScheduled(id);
+    done.catch((err) => log.warn('Scheduled viewing failed', err && err.message));
+  };
+  ctx.scheduleAlerts = createScheduleAlerts({
+    alerts: platform.alerts,
+    schedules: ctx.schedules,
+    db,
+    log,
+    texts: (s) => ({ title: t('app.name'), body: t('schedule.alertBody', { title: s.title }) }),
+    confirm: (options) => dialogs.confirm(options),
+    onOpen: (id, action) => {
+      if (!pagesReady) startOpened.push([id, action]);
+      else openedAlert(id, action);
+    },
+  });
   if (hasProvider) await ctx.refreshAdult();
   if (hasProvider) {
     router.reset('home', { section: 'home' });
@@ -708,6 +748,9 @@ async function boot() {
   } else {
     router.reset('providerSetup', { firstRun: true });
   }
+  pagesReady = true;
+  startOpened.splice(0).forEach(([id, action]) => openedAlert(id, action));
+  ctx.scheduleAlerts.sync();
   // The code of the other pages is read once the start-up work is done (the first opening is then as quick as the others).
   // A build loaded online reads them sooner (the network may drop later).
   setTimeout(() => preloadPages([LAZY_PAGES.detail, LAZY_PAGES.player, LAZY_PAGES.settings, LAZY_PAGES.diagnostics]), window.__XI_BASE__ ? 2000 : 15000);
