@@ -6,8 +6,7 @@ import { createPointer } from './ui/pointer.js';
 import { log } from './core/logger.js';
 import { providerHiddenSections } from './services/providerTypes.js';
 import { visibleFavorites } from './services/favoriteEntries.js';
-import { checkForUpdate, installUpdate, forgetUpdate, runningVersions } from './services/updates.js';
-import { APP_VERSION, IS_DEV } from './core/env.js';
+import { forgetUpdate, runningVersions } from './services/updates.js';
 import { FocusManager } from './ui/focus/FocusManager.js';
 import { Router } from './ui/router.js';
 import { createBackgroundQueue, Priority } from './services/backgroundQueue.js';
@@ -97,57 +96,8 @@ window.addEventListener('unhandledrejection', (event) => log.error('Unhandled re
 window.addEventListener('error', (event) => log.error('Uncaught error', event.message));
 
 
-/**
- * Checks version.json in the background, once the app is up (the start never waits for the network). A newer build this package can run
- * is downloaded and used from the next start (the loader in index.html picks it), and `askRestart(version)` offers to restart now;
- * a newer version that needs a new package: a notice.
- */
-async function updateInBackground(notices, askRestart) {
-  const versions = runningVersions();
-  log.info(`App ${versions.bundle || APP_VERSION} (package ${versions.shell || APP_VERSION})`);
-  // Only the "_autoupdate" packages (Tizen, webOS) update themselves, each from the online build of the same variant.
-  if (IS_DEV || !versions.shell || typeof __AUTOUPDATE__ === 'undefined' || !__AUTOUPDATE__) return;
-  let update = null;
-  try {
-    update = await checkForUpdate({ platform: __UPDATE_CHANNEL__, running: versions.bundle || APP_VERSION, shell: versions.shell, timeoutMs: 20000 });
-  } catch (err) {
-    log.warn('Update check failed', err && err.message);
-    return;
-  }
-  if (!update) return;
-  if (update.needsPackage) {
-    log.info(`Version ${update.version} needs a new package`);
-    notices.show({ type: 'info', message: t('update.needsPackage', { version: update.version }), permanent: true, key: 'update' });
-    return;
-  }
-  try {
-    await installUpdate(update);
-    log.info(`Update ${update.version} downloaded: used from the next start`);
-  } catch (err) {
-    log.warn('Update failed', err && err.message);
-    return;
-  }
-  if (askRestart) await askRestart(update.version);
-  else notices.show({ type: 'info', message: t('update.ready', { version: update.version }), key: 'update' });
-}
-
-/**
- * The dialog of a downloaded update: "Restart now" reloads the app (the loader starts the new build), "Stay" keeps this one until the next
- * start (with the usual notice). It waits until no other dialog or search is open (one dialog at a time).
- */
-function restartDialog({ dialogs, isBusy, notices }) {
-  return async (version) => {
-    while (isBusy()) await new Promise((resolve) => setTimeout(resolve, 2000));
-    const now = await dialogs.confirm({
-      title: t('update.dialogTitle'),
-      message: t('update.dialogMessage', { version }),
-      confirmLabel: t('update.restartNow'),
-      cancelLabel: t('update.stay'),
-    });
-    if (now) window.location.reload();
-    else notices.show({ type: 'info', message: t('update.ready', { version }), key: 'update' });
-  };
-}
+import { updateInBackground, restartDialog } from './app/updates.js';
+import { startInAppScheduling } from './app/scheduling.js';
 
 async function boot() {
   const db = await openAppDb();
@@ -249,63 +199,9 @@ async function boot() {
   ctx.tmdb = tmdb;
   ctx.operations = createOperations();
   ctx.syncLog = createSyncLog({ db, operations: ctx.operations });
-  // Scheduled viewing: a notice NOTICE_MS before, then the channel starts LEAD_MS before the programme (while the app is open); the
-  // programme leaves the list when it ends.
+  // Scheduled viewing inside the app (app/scheduling.js): the notice, then the channel, while the app is open.
   ctx.schedules = createScheduledViewing({ db });
-  const runSchedules = async () => {
-    await ctx.schedules.prune(); // ended programmes leave "Scheduled"
-    const due = await ctx.schedules.due();
-    for (const s of due.notice) {
-      await ctx.schedules.markNoticed(s);
-      ctx.notices.info(t('schedule.startingSoon', { title: s.title, channel: s.entryName }), { key: 'schedule' });
-    }
-    for (const s of due.start) {
-      if (await startScheduled(s)) break; // one channel at a time
-    }
-  };
-  /** Opens the channel of a scheduled programme (once: it stays in "Scheduled" until it ends); true when it was opened. */
-  async function startScheduled(s) {
-    await ctx.schedules.markStarted(s);
-    const current = await active.get();
-    if (!current || current.provider.id !== s.providerId) return false;
-    const entry = await getEntry(current.db, s.entryKey);
-    if (!entry) return false;
-    log.info(`Scheduled viewing: ${s.title} on ${entry.name}`);
-    ctx.router.push('player', { type: 'live', entryKey: entry.key, title: entry.name, icon: entry.icon, playlist: [{ id: entry.defaultId, ext: '', title: '' }], index: 0, epgChannelId: entry.epgChannelId, section: 'live' });
-    return true;
-  }
-  /** An alert of the system was opened (or started the app): its channel, unless the app opened it already or the programme ended. */
-  ctx.openScheduled = async (id) => {
-    const s = (await ctx.schedules.list()).find((item) => item.id === id);
-    if (!s || s.started) return;
-    await startScheduled(s);
-  };
-  // A timer to the next thing due (none while nothing is scheduled); at most a minute, so a TV that slept or a clock that moved is caught up.
-  let scheduleTimer = null;
-  let scheduleRunning = false;
-  const planSchedules = async () => {
-    clearTimeout(scheduleTimer);
-    scheduleTimer = null;
-    const at = await ctx.schedules.nextAt().catch(() => null);
-    if (at === null || scheduleRunning) return;
-    scheduleTimer = setTimeout(async () => {
-      scheduleRunning = true;
-      try {
-        await runSchedules();
-      } catch (err) {
-        log.warn('Scheduled viewing failed', err && err.message);
-      } finally {
-        scheduleRunning = false;
-        planSchedules();
-      }
-    }, Math.min(60000, Math.max(1000, at - Date.now() + 50)));
-  };
-  ctx.schedules.onChange(() => planSchedules());
-  planSchedules();
-  // Back in the app (its timers may have been slowed down or stopped while hidden): what is due now, at once.
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') planSchedules();
-  });
+  ctx.openScheduled = startInAppScheduling({ ctx, active }).openScheduled;
   // What Settings asks (updates, rebuilds) runs one job at a time, after any catalog / genre / TMDB work already running.
   const EXCLUSIVE = ['catalog', 'tmdb', 'genres', 'rebuild'];
   ctx.jobs = createJobQueue({
