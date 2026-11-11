@@ -160,7 +160,7 @@ export function createTopbar(ctx, handlers = {}) {
 
   function renderSearch(initial) {
     while (el.firstChild) el.removeChild(el.firstChild);
-    input = createTextInput({ placeholder: t('search.placeholder') });
+    input = createTextInput({ placeholder: t('search.placeholder'), enterkeyhint: 'search' });
     input.value = initial || '';
     field = h('label', { class: 'topbar-search' }, icon('search'), input);
     closeBtn = createTopbarItem({ label: t('search.close'), icon: 'close', iconOnly: true });

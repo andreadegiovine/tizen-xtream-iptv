@@ -49,14 +49,14 @@ export function formModel({ fieldCount, actionCount, clearable = false }) {
 /**
  * A form: `fields` (specs of createField: { label, type... }) one under the other, a status line, then `actions`
  * ([{ label, primary, run }]) side by side. Enter / Done in a field moves to the next one (the last one moves to the first
- * action). Returns { el, zone, status, fields (the created fields), actionButtons } — the page registers `zone` with `focus`
+ * action); leaving a field otherwise keeps what was typed (the form is saved by its action). Returns { el, zone, status, fields (the created fields), actionButtons } — the page registers `zone` with `focus`
  * and puts `el` where it wants.
  */
 export function createForm({ id, focus, fields: specs, actions }) {
   const status = h('div', { class: 'status', role: 'status' });
   const actionButtons = actions.map((a) => createButton({ label: a.label, variant: a.primary ? 'primary' : '' }));
   const total = specs.length + actions.length;
-  const fields = specs.map((spec, i) => createField({ ...spec, onSubmit: () => focus.focus(id, Math.min(i + 1, total - 1)), onClear: () => undefined }));
+  const fields = specs.map((spec, i) => createField({ ...spec, onSubmit: () => focus.focus(id, Math.min(i + 1, total - 1)), onLeave: () => undefined, onClear: () => undefined }));
   const nodes = fields.map((f) => f.el).concat(actionButtons, fields.map((f) => f.clearEl));
   const el = h('div', { class: 'form' }, fields.map((f) => f.root), status, h('div', { class: 'form-actions' }, actionButtons));
   const zone = new FocusZone({
