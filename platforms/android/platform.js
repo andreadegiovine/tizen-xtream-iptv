@@ -33,8 +33,11 @@ const host = (method, options = {}) => {
 };
 
 /** The key the activity sends, as a keydown the input service reads like any other (event.keyCode). */
-export function dispatchRemoteKey(keyCode, target = typeof document !== 'undefined' ? document : null) {
-  if (!target) return;
+export function dispatchRemoteKey(keyCode, doc = typeof document !== 'undefined' ? document : null) {
+  if (!doc) return;
+  // A text field being typed in gets the key first (Back cancels the typing there), then the document as usual.
+  const active = doc.activeElement;
+  const target = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') ? active : doc;
   const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true });
   Object.defineProperty(event, 'keyCode', { get: () => keyCode });
   target.dispatchEvent(event);

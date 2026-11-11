@@ -126,6 +126,7 @@ export async function enrichType({
   maxFailures = MAX_FAILURES,
   rebuildEvery = REBUILD_EVERY,
   makeTmdb = (key) => createTmdbClient({ getApiKey: () => key }),
+  ask = true, // false: only what is known is applied (the learned data was forgotten: the ids it gave go), nothing is asked
 }) {
   const result = { asked: 0, found: 0, searched: 0, matched: 0, changed: 0 };
   if (!ENRICHABLE.includes(type)) return result;
@@ -156,6 +157,7 @@ export async function enrichType({
   result.changed += updated.length;
   await flush(true);
 
+  if (!ask) return result;
   // 2. What still has no TMDB id: the details, then the title search.
   const t = now();
   const needsInfo = (item) => {

@@ -268,11 +268,20 @@ export function createSettingsPage(ctx) {
     ctx.notices.success(t('notice.removed'));
     tmdbPanel.refresh().catch(() => undefined);
   }
+  async function removeTitleInfo() {
+    if (!ctx.titleInfo || !(await confirmRemove(t('settings.infoRemove'), t('settings.infoRemoveConfirm')))) return;
+    ctx.titleInfo.run({ forget: true });
+  }
   const tmdbRows = [
     rowOf(tmdbPanel.tmdbButtons.refresh, async () => queueJob('tmdb', t('operations.tmdb'), () => runMetadata(['tmdb']))),
     rowOf(tmdbPanel.tmdbButtons.remove, removeMetadata, 'left'),
     rowOf(tmdbPanel.genreButtons.refresh, async () => queueJob('genres', t('operations.genres'), () => runMetadata(['genres']))),
     rowOf(tmdbPanel.genreButtons.remove, removeGenres, 'left'),
+    // Title details (titles listed without a TMDB id): ask again now (the ones due), or forget what was learned (the ids it gave go).
+    rowOf(tmdbPanel.infoButtons.refresh, async () => {
+      if (ctx.titleInfo) ctx.titleInfo.run();
+    }),
+    rowOf(tmdbPanel.infoButtons.remove, removeTitleInfo, 'left'),
   ];
   const dbUpdateRow = {
     el: devicePanel.updateButton,
@@ -317,8 +326,8 @@ export function createSettingsPage(ctx) {
   const traktSyncRow = { el: traktPanel.syncButton, refresh: async () => undefined, activate: syncTrakt };
   const traktRemoveRow = { secondary: 'left', el: traktPanel.removeButton, refresh: async () => undefined, activate: removeTrakt };
   const tmdbTokenRow = textRow({ ctx, label: t('settings.tmdbKey'), field: 'tmdbKey' });
-  // Titles without a TMDB id in the lists and in their details: looked for on TMDB by title during the scan (conservative match). Switching
-  // it on or off scans the catalog again (movies and series: the lists are not downloaded again when fresh).
+  // Titles without a TMDB id in the lists and in their details: looked for on TMDB by title (conservative match). Switching it on or off
+  // runs the title details again (the ids found by title are added or taken back).
   const titleSearchValue = createToggle();
   const titleSearchRow = {
     el: createListRow({ label: t('settings.tmdbTitleSearch'), valueEl: titleSearchValue }).el,
@@ -328,7 +337,7 @@ export function createSettingsPage(ctx) {
       const next = await ctx.settings.update({ tmdbTitleSearch: !s.tmdbTitleSearch });
       setToggle(titleSearchValue, next.tmdbTitleSearch);
       ctx.notices.success(t('notice.saved'), { key: 'setting' });
-      queueJob('catalog:titles', t('operations.catalog'), () => ctx.catalog.start({ types: ['movie', 'series'] }));
+      if (ctx.titleInfo) ctx.titleInfo.run();
     },
   };
   const traktIdRow = textRow({ ctx, label: t('settings.traktId'), field: 'traktId' });

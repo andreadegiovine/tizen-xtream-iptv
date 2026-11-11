@@ -189,8 +189,7 @@ export class CatalogSyncService {
       if (message.mediaType) {
         this.state.types[message.mediaType] = { ...message };
         const m = message.meta;
-        if (message.phase === 'enrich' && message.done === 0) log.info(`Catalog ${message.mediaType}: reading the details of ${message.total} titles listed without a TMDB id`);
-        else if (message.phase === 'done' && m) log.info(`Catalog ${message.mediaType}: ${m.itemCount} items, ${m.entryCount} entries, ${m.categoryCount} categories, ${m.changes === undefined ? "?" : m.changes} rows changed; fetch ${m.fetchMs} ms, write ${m.writeMs} ms, total ${m.durationMs} ms`);
+        if (message.phase === 'done' && m) log.info(`Catalog ${message.mediaType}: ${m.itemCount} items, ${m.entryCount} entries, ${m.categoryCount} categories, ${m.changes === undefined ? "?" : m.changes} rows changed; fetch ${m.fetchMs} ms, write ${m.writeMs} ms, total ${m.durationMs} ms`);
         else if (message.phase === 'error') log.warn(`Catalog ${message.mediaType} failed: ${message.code || ''} ${message.message || ''}`);
       } else if (message.phase === 'error') this.state.error = { code: message.code, message: message.message };
     }

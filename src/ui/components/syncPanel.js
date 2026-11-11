@@ -17,8 +17,8 @@ const ACTIVE_PHASES = new Set(['queued', 'categories', 'download', 'write', 'ent
 export function describeType(state, meta, locale) {
   const phase = (state && state.phase) || 'idle';
   if (phase === 'error') return t(`error.${state.code}`);
-  if (phase === 'write' || phase === 'enrich') {
-    return t(`home.phase.${phase}`, { done: formatNumber(state.done, locale), total: formatNumber(state.total, locale) });
+  if (phase === 'write') {
+    return t('home.phase.write', { done: formatNumber(state.done, locale), total: formatNumber(state.total, locale) });
   }
   if (phase === 'queued') return t('common.queued');
   if (phase === 'retry') return t('home.phase.retry', { attempt: state.attempt, attempts: state.attempts });
@@ -203,10 +203,13 @@ export function createTmdbPanel(ctx) {
   const ready = () => Boolean(ctx.tmdb && ctx.tmdb.enabled);
   const tmdbButtons = rowButtons(t('settings.metaRemove'), t('settings.metaUpdate'));
   const genreButtons = rowButtons(t('settings.genresRemove'), t('settings.genresUpdate'));
+  const infoButtons = rowButtons(t('settings.infoRemove'), t('settings.infoUpdate'));
   const table = createTable(t('tmdb.title'), [], [
     { name: 'tmdb', label: t('tmdb.download'), buttons: tmdbButtons },
     { name: 'genres', label: t('detail.genres'), buttons: genreButtons },
+    { name: 'info', label: t('tmdb.info'), buttons: infoButtons },
   ]);
+  const TYPE_LABEL = { movie: 'nav.movies', series: 'nav.series' };
 
   async function refresh() {
     const log = await ctx.syncLog.get();
@@ -214,23 +217,58 @@ export function createTmdbPanel(ctx) {
     const active = new Map(ctx.operations.list().map((op) => [op.id, op]));
     for (const row of table.rows) {
       row.status.classList.toggle('in-progress', active.has(row.name));
+      if (row.name === 'info') {
+        row.status.textContent = await describeInfo(log.info, locale, active.get('info'));
+        continue;
+      }
       const text = describeMeta(log[row.name], locale, row.name === 'genres' || ready(), active.get(row.name));
       row.status.textContent = row.name === 'tmdb' && ready() ? `${formatNumber(await ctx.tmdb.countMeta(), locale)} ${t('tmdb.count').toLowerCase()} · ${text}` : text;
     }
   }
+  /**
+   * The title details row: while it runs, how far each type is ("Movies 120 / 3,000"); otherwise the last run and, per type, how many
+   * titles were asked and how many got a TMDB id (from the details, from the title search).
+   */
+  async function describeInfo(entry, locale, running) {
+    const info = ctx.titleInfo;
+    if (!info) return t('settings.notConfigured');
+    if (running && !running.queued) {
+      const parts = Object.keys(info.progress).map((type) => t('tmdb.infoProgress', { type: t(TYPE_LABEL[type] || type), done: formatNumber(info.progress[type].done, locale), total: formatNumber(info.progress[type].total, locale) }));
+      return parts.length ? parts.join(' · ') : describeMeta(entry, locale, true, running);
+    }
+    const byType = await info.read().catch(() => ({}));
+    const parts = ['movie', 'series']
+      .filter((type) => byType[type] && (byType[type].asked || byType[type].searched))
+      .map((type) => t('tmdb.infoDone', { type: t(TYPE_LABEL[type]), asked: formatNumber(byType[type].asked, locale), found: formatNumber(byType[type].found + byType[type].matched, locale) }));
+    return [describeMeta(entry, locale, true, running)].concat(parts).join(' · ');
+  }
   let unsubscribe = null;
+  let unsubscribeInfo = null;
+  let progressFrame = null;
   return {
     el: table.el,
-    /** { remove, refresh } of the metadata download row and of the genre search row. */
+    /** { remove, refresh } of the metadata download row, of the genre search row and of the title details row. */
     tmdbButtons,
     genreButtons,
+    infoButtons,
     refresh,
     /** Follows the operations: a row says "running since…" while it works and shows the new result when it ends. */
     mount() {
       unsubscribe = ctx.operations.onChange(() => refresh().catch(() => undefined));
+      // The title details tell how far they are: the row follows (at most twice a second).
+      if (ctx.titleInfo)
+        unsubscribeInfo = ctx.titleInfo.onProgress(() => {
+          if (progressFrame) return;
+          progressFrame = setTimeout(() => {
+            progressFrame = null;
+            refresh().catch(() => undefined);
+          }, 500);
+        });
     },
     destroy() {
       if (unsubscribe) unsubscribe();
+      if (unsubscribeInfo) unsubscribeInfo();
+      clearTimeout(progressFrame);
     },
   };
 }

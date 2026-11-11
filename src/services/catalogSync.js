@@ -19,7 +19,7 @@ import { projectItem } from './itemProjector.js';
 import { buildEntries, buildEntryCategoryRows, buildEntryGenreRows } from './grouping.js';
 import { LIVE_LAYOUT, DEFAULT_GROUPING, groupLiveItems, annotateGroupKeys, buildLiveAllRows, cleanChannelNames, compileTerms } from './liveGrouping.js';
 import { buildNetworks, annotateNetworkKeys, networkCounts } from './liveNetworks.js';
-import { ENRICHABLE, applyEnrichment, enrichType } from './catalogEnrich.js';
+import { applyEnrichment } from './catalogEnrich.js';
 
 export const LIST_TTL_MS = 12 * 60 * 60 * 1000;
 export const BATCH_SIZE = 2000;
@@ -364,62 +364,25 @@ export async function syncType({
 }
 
 /** Syncs several media types in order. A failing type does not stop the others, except auth/abort errors. */
-export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, cleanTitles = true, grouping = DEFAULT_GROUPING, force = false, rewrite = false, signal, emit = () => {}, gate, now = Date.now, retryDelays, search = null, enrich = true }) {
+export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, cleanTitles = true, grouping = DEFAULT_GROUPING, force = false, rewrite = false, signal, emit = () => {}, gate, now = Date.now, retryDelays, search = null }) {
   const results = [];
-  const last = {}; // the last progress of each type: shown again once its enrichment is over
   for (const type of types) {
     try {
       throwIfAborted(signal);
       const stored = await getSyncMeta(db, type);
       const oldLayout = type === MediaType.LIVE && stored && stored.layout !== LIVE_LAYOUT; // lists of an older layout are downloaded again once
       if (!force && !oldLayout && !shouldSync(stored, now())) {
-        last[type] = { event: 'progress', mediaType: type, phase: 'skipped' };
-        emit(last[type]);
+        emit({ event: 'progress', mediaType: type, phase: 'skipped' });
         results.push({ type, skipped: true });
         continue;
       }
       const meta = await syncType({ db, client, type, excludedCategories: excluded[type] || new Set(), cleanTitles, grouping, signal, emit, gate, now, retryDelays, full: rewrite, search });
-      last[type] = { event: 'progress', mediaType: type, phase: 'done', done: meta.itemCount, total: meta.itemCount, meta };
       results.push({ type, meta });
     } catch (err) {
       const error = toAppError(err);
       emit({ event: 'progress', mediaType: type, phase: 'error', code: error.code, message: error.message });
       results.push({ type, error: error.code });
       if (error.code === ErrorCode.ABORTED || error.severity === Severity.BLOCKING) break;
-    }
-  }
-  // Once every list is usable: the titles listed without a TMDB id (details, then the optional title search). Also when a list was not
-  // due (a scan cut short goes on, a title search switched on or off applies).
-  if (enrich) {
-    for (const result of results) {
-      if (!ENRICHABLE.includes(result.type) || result.error || (signal && signal.aborted)) continue;
-      const type = result.type;
-      let shown = false; // the enrichment showed its progress: the last state of the type is shown again afterwards
-      try {
-        const counts = await enrichType({
-          db,
-          client,
-          type,
-          search,
-          signal,
-          gate,
-          now,
-          progress: ({ done, total }) => {
-            shown = true;
-            emit({ event: 'progress', mediaType: type, phase: 'enrich', done, total });
-          },
-          log: (message) => emit({ event: 'info', message }),
-          rebuild: () => rebuildEntries({ db, type, excludedCategories: excluded[type] || new Set(), cleanTitles, grouping }),
-        });
-        if (counts.asked || counts.searched || counts.changed) {
-          emit({ event: 'info', message: `Catalog ${type}: details of ${counts.asked} titles (${counts.found} TMDB ids), ${counts.searched} searched on TMDB (${counts.matched} found), ${counts.changed} titles updated` });
-          result.enriched = counts;
-        }
-      } catch (err) {
-        const error = toAppError(err);
-        emit({ event: 'info', message: `Catalog ${type}: details stopped (${error.code} ${error.message})` });
-      }
-      if (shown && last[type]) emit(last[type]);
     }
   }
   return results;
@@ -429,7 +392,7 @@ export async function runSync({ db, client, types = SYNC_ORDER, excluded = {}, c
  * Entry point shared by the Web Worker and the main-thread fallback:
  * opens the provider database, checks the account, syncs, and always ends with a `done` event.
  */
-export async function runSyncForProvider({ provider, types, excluded, cleanTitles = true, grouping = DEFAULT_GROUPING, force, rewrite = false, signal, emit = () => {}, gate, openDb = openProviderDb, makeClient, search = null, enrich = true }) {
+export async function runSyncForProvider({ provider, types, excluded, cleanTitles = true, grouping = DEFAULT_GROUPING, force, rewrite = false, signal, emit = () => {}, gate, openDb = openProviderDb, makeClient, search = null }) {
   let db = null;
   let results = [];
   let failure = null;
@@ -439,7 +402,7 @@ export async function runSyncForProvider({ provider, types, excluded, cleanTitle
     const auth = await client.authenticate();
     emit({ event: 'account', expiresAt: (auth && auth.user && auth.user.expiresAt) || null });
     db = await openDb(provider.id);
-    results = await runSync({ db, client, types, excluded, cleanTitles, grouping, force, rewrite, signal, emit, gate, search, enrich });
+    results = await runSync({ db, client, types, excluded, cleanTitles, grouping, force, rewrite, signal, emit, gate, search });
   } catch (err) {
     const error = toAppError(err);
     failure = { code: error.code, message: error.message };

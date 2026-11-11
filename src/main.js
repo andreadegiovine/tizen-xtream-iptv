@@ -54,6 +54,8 @@ import { continueWatching } from './services/continueWatching.js';
 import { isEmptySeries, markUnavailable } from './services/unavailable.js';
 import { createGenreIndex } from './services/genreIndex.js';
 import { createGenreWorker } from './services/createGenreWorker.js';
+import { createTitleInfoWorker } from './services/createTitleInfoWorker.js';
+import { createTitleInfo } from './services/titleInfo.js';
 import { createSuggestionsService } from './services/suggestions.js';
 import { createSuggestionsPage } from './ui/pages/suggestionsPage.js';
 import { createFavoritesPage } from './ui/pages/favoritesPage.js';
@@ -343,6 +345,22 @@ async function boot() {
     createWorker: createGenreWorker,
     isBusy: () => Boolean(catalog.getState().running || (router.current && router.current.name === 'player')),
   });
+  // The details of the titles listed without a TMDB id (and the optional search by title), in their own worker after each catalog scan;
+  // titles that got an id: caches and pages read again, then the TMDB download and genres for them.
+  ctx.titleInfo = createTitleInfo({
+    active,
+    settings,
+    syncLog: ctx.syncLog,
+    createWorker: createTitleInfoWorker,
+    getSearch: () => catalog.getTitleSearch(),
+    getCleanTitles: async () => (await settings.get()).cleanTitles,
+    getGrouping: (providerId) => liveGrouping.config(providerId),
+    isBusy: () => Boolean(catalog.getState().running || (router.current && router.current.name === 'player')),
+    onChanged: () => {
+      ctx.catalogChanged();
+      queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) });
+    },
+  });
   ctx.suggestions = createSuggestionsService({ active, watch: ctx.watch, tmdb, trakt: ctx.trakt, getSource: async () => (await settings.get()).suggestionSource });
   ctx.meta = { forEntry: (entry) => tmdb.forEntry(entry) };
   const epg = createEpgService({ active, providers, createWorker: createEpgWorker, operations: ctx.operations, customUrl: () => ctx.settings.get().then((s) => s.customEpgUrl),
@@ -510,7 +528,9 @@ async function boot() {
       ctx.refreshTopbar().catch(() => undefined);
       // Pages with their own zone take focus in mount(). When the user switched section from the bar,
       // or the page has no zone, the focus stays on (or returns to) the bar, on the current section.
-      if (entry.params.focusTopbar || !focus.active) focus.focus(TOPBAR_ZONE, topbar.indexOfSection(section));
+      // A page with a sidebar opened from the bar puts the focus on its sidebar itself (once it is drawn).
+      const ownsBarFocus = entry.name === 'browse';
+      if ((entry.params.focusTopbar && !ownsBarFocus) || !focus.active) focus.focus(TOPBAR_ZONE, topbar.indexOfSection(section));
     },
   });
   ctx.router = router;
@@ -602,6 +622,7 @@ async function boot() {
       ctx.refreshAdult();
       queue.add({ name: 'share-keys', priority: Priority.METADATA, run: () => ctx.shareKeys().catch(() => undefined) });
       queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) }); // the genre worker finds genres the lists did not carry
+      ctx.titleInfo.run(); // titles listed without a TMDB id: their details, in their own worker (not in the queue: it can take long)
       queueEpg(); // a provider added or changed: its guide after the rest
     }
     wasSyncing = state.running;

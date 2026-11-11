@@ -3,6 +3,10 @@ import { openProviderDb } from '../../src/db/providerDb.js';
 import { dbGet, dbGetAllRange } from '../../src/core/idb.js';
 import { runSync, retryPolicy, rebuildEntries } from '../../src/services/catalogSync.js';
 import { readInfo, enrichItem, enrichType, RECHECK_MS } from '../../src/services/catalogEnrich.js';
+import { runTitleInfoForProvider, readTitleInfo } from '../../src/services/titleInfo.js';
+
+/** The title details worker's run on the provider database of the test. */
+const details = (db, client, extra = {}) => runTitleInfoForProvider({ provider: { id: db.name.replace(/^provider_/, '') }, makeClient: () => client, ...extra });
 
 retryPolicy.delays = [];
 let counter = 0;
@@ -49,6 +53,10 @@ test('the scan reads the details of the titles listed without a TMDB id, keeps t
   const list = [movie(1, 'Matrix (1999) [FHD]'), movie(2, 'Matrix (1999) [IT]'), movie(3, 'Heat', { tmdb: '949' }), movie(4, 'Unknown')];
   const client = makeClient(list, { 1: { info: { tmdb_id: '603' } }, 2: { info: { tmdb: '603', rating: '8' } } });
   await runSync({ db, client, types: ['movie'] });
+  expect(client.getVodInfo).not.toHaveBeenCalled(); // the scan itself asks nothing: the title details run in their own worker
+  const outcome = await details(db, client);
+  expect(outcome.byType.movie).toMatchObject({ asked: 3, found: 2 });
+  expect((await readTitleInfo(db.name.replace(/^provider_/, ''))).movie).toMatchObject({ asked: 3, found: 2 });
   expect(client.getVodInfo.mock.calls.map((c) => c[0]).sort()).toEqual([1, 2, 4]); // not the one the list has an id for
   const stored = await items(db);
   expect(stored.find((i) => i.id === 1)).toMatchObject({ tmdbId: 603, tmdbFrom: 'info' });
@@ -59,14 +67,22 @@ test('the scan reads the details of the titles listed without a TMDB id, keeps t
   // The next scan (the list downloaded again): nothing asked again, the ids applied before writing (no change).
   client.getVodInfo.mockClear();
   const again = await runSync({ db, client, types: ['movie'], force: true });
+  await details(db, client);
   expect(client.getVodInfo).not.toHaveBeenCalled();
   expect(again[0].meta.changes).toBe(0);
   expect((await items(db)).find((i) => i.id === 1).tmdbId).toBe(603);
 
   // A month later the title without an id is asked again.
   client.getVodInfo.mockClear();
-  await runSync({ db, client, types: ['movie'], now: () => Date.now() + RECHECK_MS + 1000 });
+  await details(db, client, { now: () => Date.now() + RECHECK_MS + 1000 });
   expect(client.getVodInfo.mock.calls.map((c) => c[0])).toEqual([4]);
+
+  // Forgotten: the ids the details gave go, nothing is asked.
+  client.getVodInfo.mockClear();
+  await details(db, client, { mode: 'forget' });
+  expect(client.getVodInfo).not.toHaveBeenCalled();
+  expect((await items(db)).find((i) => i.id === 1).tmdbId).toBeNull();
+  expect((await items(db)).find((i) => i.id === 3).tmdbId).toBe(949); // the list's own
   db.close();
 });
 
@@ -76,7 +92,8 @@ test('failures in a row stop the details for this scan; a playlist (no details) 
   const infos = Object.fromEntries(list.map((row) => [row.stream_id, new Error('429')]));
   const client = makeClient(list, infos);
   const messages = [];
-  await runSync({ db, client, types: ['movie'], emit: (e) => e.event === 'info' && messages.push(e.message) });
+  await runSync({ db, client, types: ['movie'] });
+  await details(db, client, { emit: (e) => e.event === 'info' && messages.push(e.message) });
   expect(client.getVodInfo.mock.calls.length).toBeLessThan(12);
   expect(messages.some((m) => /stopped after/.test(m))).toBe(true);
   expect(await dbGet(db, 'enrich', 'movie:12')).toBeUndefined(); // asked again next time
@@ -84,6 +101,7 @@ test('failures in a row stop the details for this scan; a playlist (no details) 
   const playlist = { ...makeClient(list), detailsInLists: true };
   const other = await newDb();
   await runSync({ db: other, client: playlist, types: ['movie'] });
+  await details(other, playlist);
   expect(playlist.getVodInfo).not.toHaveBeenCalled();
   db.close();
   other.close();
@@ -93,7 +111,7 @@ test('title search: only for titles the details have no id for, conservative, un
   const db = await newDb();
   const list = [movie(1, 'IT - Heat (1995)'), movie(2, 'Same Name')];
   const client = makeClient(list);
-  await runSync({ db, client, types: ['movie'], enrich: false });
+  await runSync({ db, client, types: ['movie'] });
   const search = jest.fn(async (type, title) =>
     title === 'Heat'
       ? { results: [{ id: 949, title: 'Heat', original_title: 'Heat', release_date: '1995-12-15' }, { id: 1, title: 'Heat', release_date: '1986-01-01' }] }
@@ -124,7 +142,7 @@ test('title search again: nothing found and a month gone by, or the title in the
     ...makeClient([]),
     getStreams: jest.fn(async (type) => (type === 'movie' ? list.map((row) => ({ ...row })) : [])),
   };
-  await runSync({ db, client, types: ['movie'], enrich: false });
+  await runSync({ db, client, types: ['movie'] });
   const known = { 'Old Name': [{ id: 50, title: 'Old Name', release_date: '2010-01-01' }], 'New Name': [{ id: 60, title: 'New Name', release_date: '2010-01-01' }] };
   const search = jest.fn(async (type, title) => ({ results: known[title] || [] }));
   const rebuild = () => rebuildEntries({ db, type: 'movie' });
@@ -143,9 +161,40 @@ test('title search again: nothing found and a month gone by, or the title in the
   // The provider renames a title: searched again at once, the new answer replaces the old one.
   search.mockClear();
   list = [movie(1, 'Rare Film (2004)'), movie(2, 'New Name (2010)')];
-  await runSync({ db, client, types: ['movie'], force: true, enrich: false });
+  await runSync({ db, client, types: ['movie'], force: true });
   await enrichType(opts);
   expect(search.mock.calls.map((c) => c[1])).toEqual(['New Name']);
   expect((await items(db)).find((i) => i.id === 2)).toMatchObject({ tmdbId: 60, tmdbFrom: 'search' });
   db.close();
+});
+
+test('createTitleInfo: one run at a time (another asked meanwhile runs after), listed as the "info" operation, titles changed reported', async () => {
+  const { createTitleInfo } = await import('../../src/services/titleInfo.js');
+  const { createOperations } = await import('../../src/services/operations.js');
+  const db = await newDb();
+  const id = db.name.replace(/^provider_/, '');
+  const client = makeClient([movie(1, 'Matrix'), movie(2, 'Heat')], { 1: { info: { tmdb_id: '603' } } });
+  await runSync({ db, client, types: ['movie'] });
+  db.close();
+  const operations = createOperations();
+  const seen = [];
+  operations.onChange(() => seen.push(operations.list().map((op) => op.id).join(',')));
+  const tracked = [];
+  const syncLog = { track: async (name, job, options) => { tracked.push(name); const end = operations.start(name, { cancel: options.cancel }); try { return await job(); } finally { end(); } } };
+  const onChanged = jest.fn();
+  const service = createTitleInfo({
+    active: { get: async () => ({ provider: { id, type: 'xtream' } }) },
+    settings: { getExcluded: async () => new Set() },
+    syncLog,
+    onChanged,
+  });
+  jest.spyOn(await import('../../src/services/providerTypes.js'), 'createProviderClient').mockReturnValue(client);
+  const first = service.run();
+  service.run(); // asked while running: once more afterwards
+  await first;
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(tracked).toEqual(['info', 'info']);
+  expect(seen).toContain('info');
+  expect(onChanged).toHaveBeenCalledTimes(1); // the second run changed nothing
+  expect(client.getVodInfo).toHaveBeenCalledTimes(2); // each title once
 });

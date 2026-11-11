@@ -226,6 +226,8 @@ export function createBrowsePage(ctx, params = {}) {
       }
       return node;
     });
+    // Drawn again while the focus is in the sidebar (the genres or counts arrived): the focused entry stays marked.
+    if (ctx.focus.activeId === CATS_ZONE && catNodes[catsZone.index]) catNodes[catsZone.index].classList.add('focused');
     revealCurrent();
   }
 
@@ -1009,7 +1011,12 @@ export function createBrowsePage(ctx, params = {}) {
     // Land in the grid when there is something to browse, otherwise on the sidebar (a section that became empty, like Continue
     // watching after its last title was marked as seen).
     if (back && back.guide) guideState = back.guide;
-    if (back && back.zone === CATS_ZONE) ctx.focus.focus(CATS_ZONE, selected);
+    // Opened from the top bar: the focus goes to the sidebar (its entry of the page), the user then enters the grid or the guide.
+    const fromBar = !back && Boolean(params.focusTopbar);
+    if (fromBar) {
+      if (items[selected] && isGuideKind(items[selected].kind) && guide && guideState) guide.restore(guideState);
+      ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
+    } else if (back && back.zone === CATS_ZONE) ctx.focus.focus(CATS_ZONE, selected);
     else if (items[selected] && isGuideKind(items[selected].kind)) {
       if (guide && guideState) guide.restore(guideState);
       if (!ctx.focus.focus(GUIDE_ZONE, 0)) {
@@ -1060,9 +1067,15 @@ export function createBrowsePage(ctx, params = {}) {
 
   return {
     el: pageEl,
-    /** Back while a row of the guide is selected: the selection goes, the page stays. */
+    /** Back: a selected row of the guide lets go; from the grid / guide the focus goes to the sidebar; then the main entry; then the page is left. */
     onBack() {
       if (guide && guide.cancelRowMode()) return true;
+      // From the grid, the guide or the head: Back goes to the sidebar first (on the page's entry), the page is left from there.
+      const inPage = ctx.focus.activeId === GRID_ZONE || ctx.focus.activeId === GUIDE_ZONE || ctx.focus.activeId === HEAD_ZONE;
+      if (inPage && catNodes.length) {
+        ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
+        return true;
+      }
       // On another grid (a category, a genre, a network...) Back first goes to the main one, the page is left from there.
       const main = mainIndex();
       if (main < 0 || selected === main || !catNodes.length) return false;
