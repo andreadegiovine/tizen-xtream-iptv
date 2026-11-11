@@ -4,10 +4,10 @@ import { h } from '../dom.js';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /** QR code of `text` as an inline SVG (dark modules on a white square with a quiet zone), or null when it does not fit. */
-export function createQrSvg(text, { margin = 2 } = {}) {
+export function createQrSvg(text, { margin = 2, correction = 'M' } = {}) {
   let qr;
   try {
-    qr = qrcode(0, 'M');
+    qr = qrcode(0, correction);
     qr.addData(String(text));
     qr.make();
   } catch {

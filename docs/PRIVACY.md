@@ -29,6 +29,8 @@ scheduled.
 - **YouTube**, only when the user plays a trailer.
 - **GitHub Pages** (andreadegiovine.github.io), only in the "autoupdate" packages distributed outside the TV stores: to check for and download a newer version of the app. The store packages never contact it.
 
+- **Diagnostics › Share the logs**, only when the user asks: the newest log lines (credentials masked) are put in a QR code; the phone that scans it opens a page on GitHub Pages and decodes them there. The logs travel after the `#` of the link, which a browser never sends to the server: GitHub receives only the request for the page.
+
 Each service handles the data it receives under its own privacy policy.
 
 ## Deleting the data

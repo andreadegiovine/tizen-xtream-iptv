@@ -3,7 +3,10 @@ import { createGate } from '../core/gate.js';
 import { log } from '../core/logger.js';
 import { openProviderDb } from '../db/providerDb.js';
 import { MediaType } from './mediaType.js';
-import { SYNC_ORDER, runSyncForProvider, getSyncStatus } from './catalogSync.js';
+import { SYNC_ORDER, getSyncStatus } from './syncMeta.js';
+
+/** The sync on the main thread (when no worker can be made): its code is loaded only then, not with the start-up bundle. */
+const runSyncForProvider = (args) => import(/* webpackChunkName: "catalog-local" */ './catalogSync.js').then((m) => m.runSyncForProvider(args));
 
 const emptyState = () => ({
   running: false,

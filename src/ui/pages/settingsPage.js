@@ -27,13 +27,15 @@ import { rebuildLive } from '../../services/rebuildLive.js';
 import { parseTerms, termsText } from '../../services/liveGrouping.js';
 import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from '../../services/liveNetworks.js';
 import { createField } from '../atoms/field.js';
-import { framedPage } from '../components/formPage.js';
+import { createSidebarItem } from '../atoms/sidebarItem.js';
+import { ListModel } from '../focus/models.js';
 import { runningVersions, lastCheck } from '../../services/updates.js';
 import { providerMediaTypes } from '../../services/providerTypes.js';
 import { APP_VERSION } from '../../core/env.js';
 import { formatDateTime } from '../../core/format.js';
 
 const ZONE_ID = 'settings';
+const NAV_ZONE = 'settingsNav';
 
 /** An editable text value (API keys) as a Field. OK opens the on-screen keyboard; Done saves. */
 export function textRow({ label, field, secret = false, ctx }) {
@@ -476,6 +478,15 @@ export function createSettingsPage(ctx) {
       window.location.reload();
     },
   });
+  // Under the title of the overview, small: the version running; the packages that update themselves add when version.json last answered.
+  function versionEl() {
+    const versions = runningVersions();
+    const checked = lastCheck();
+    const version = versions.bundle || APP_VERSION;
+    const autoupdate = typeof __AUTOUPDATE__ !== 'undefined' && __AUTOUPDATE__;
+    const text = !autoupdate ? `v${version}` : checked ? t('settings.versionLine', { version, time: formatDateTime(checked, i18n.getLocale()) }) : t('settings.versionNever', { version });
+    return createHint({ text, className: 'settings-version', muted: false });
+  }
   // Preferences in sections, in the order of the page. `list`: rows of the usual list; `fields`: text fields (with their reset buttons).
   const sections = [
     {
@@ -507,18 +518,59 @@ export function createSettingsPage(ctx) {
   ];
   // A section is a list of rows and / or text fields, or `parts` of both in the order given.
   const partsOf = (section) => section.parts || [{ list: section.list, fields: section.fields }];
-  const prefs = sections.flatMap((section) => partsOf(section).flatMap((part) => (part.list || []).concat(part.fields || [])));
-  const prefsBlocks = sections.flatMap((section) => [
-    createHeading({ text: t(section.titleKey), className: 'prefs-title' }),
-    ...partsOf(section).flatMap((part) => [
+  // Under the title: one box per optional service that is off (TMDB, Trakt, OpenSubtitles), saying what it adds. A box goes away as soon
+  // as its key is typed (or the Trakt account connected).
+  const promos = (() => {
+    const el = h('div', { class: 'service-promos' });
+    const boxes = ['tmdb', 'trakt', 'opensubtitles'].map((id) => {
+      const box = h('div', { class: `service-promo ${id}` }, createHeading({ level: 3, text: t(`settings.promo.${id}.title`) }), createHint({ text: t(`settings.promo.${id}.text`), muted: false }));
+      el.appendChild(box);
+      return { id, box };
+    });
+    const refresh = async () => {
+      const keys = ctx.apiKeys.get();
+      const traktOn = ctx.trakt && ctx.trakt.isConnected ? await ctx.trakt.isConnected().catch(() => false) : false;
+      const on = { tmdb: Boolean(keys.tmdbKey), trakt: traktOn, opensubtitles: Boolean(keys.openSubtitlesKey) };
+      boxes.forEach(({ id, box }) => {
+        box.style.display = on[id] ? 'none' : '';
+      });
+      el.style.display = boxes.some(({ id }) => !on[id]) ? '' : 'none';
+    };
+    return { el, refresh };
+  })();
+  const blocksOf = (section) =>
+    partsOf(section).flatMap((part) => [
       part.list ? h('div', { class: 'list' }, part.list.map((r) => r.el)) : null,
       part.fields ? h('div', { class: 'fields' }, part.fields.filter((r) => !r.secondary).map((r) => r.root)) : null,
-    ]),
-  ]);
-  // Focus order follows the page: catalog, TMDB, Trakt, preferences.
-  const rows = [...catalogRows, ...tmdbRows, tmdbTokenRow, tmdbTokenRow.clearRow, titleSearchRow, traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktIdRow.clearRow, traktSecretRow, traktSecretRow.clearRow, openSubtitlesRow, openSubtitlesRow.clearRow, dbUpdateRow, dbRemoveRow, ...prefs];
-  // The Trakt sync / remove buttons exist only while an account is connected.
-  const visibleRows = () => rows.filter((row) => row.el.style.display !== 'none');
+    ]);
+  const rowsOf = (section) => partsOf(section).flatMap((part) => (part.list || []).concat(part.fields || []));
+  // The sub-pages of the sidebar: the overview (operations, catalog, device), each service, each group of preferences. Each has its
+  // blocks (shown only while it is the current one) and its rows (the focus walks them in this order).
+  const SECTION_ICON = { 'settings.section.general': 'settings', 'settings.section.vod': 'movie', 'settings.section.live': 'network', 'settings.section.networks': 'group', 'settings.section.advanced': 'warning' };
+  const subpages = [
+    { id: 'overview', icon: 'home', label: t('settings.page.overview'), blocks: [versionEl(), promos.el, opsPanel.el, panel.el, devicePanel.el], rows: [...catalogRows, dbUpdateRow, dbRemoveRow], ops: true },
+    { id: 'tmdb', icon: 'info', label: 'TMDB', blocks: [tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), h('div', { class: 'list' }, titleSearchRow.el)], rows: [...tmdbRows, tmdbTokenRow, tmdbTokenRow.clearRow, titleSearchRow] },
+    { id: 'trakt', icon: 'user', label: 'Trakt', blocks: [traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root)], rows: [traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktIdRow.clearRow, traktSecretRow, traktSecretRow.clearRow] },
+    { id: 'opensubtitles', icon: 'subtitles', label: 'OpenSubtitles', blocks: [h('div', { class: 'fields' }, openSubtitlesRow.root)], rows: [openSubtitlesRow, openSubtitlesRow.clearRow] },
+    ...sections.map((section) => ({ id: section.titleKey, icon: SECTION_ICON[section.titleKey] || 'settings', label: t(section.titleKey), blocks: blocksOf(section), rows: rowsOf(section) })),
+  ];
+  let current = 0; // the sub-page on screen
+  const pageTitle = createHeading({ level: 1, text: subpages[0].label, className: 'settings-title' });
+  const sections_ = subpages.map((sub) => h('div', { class: 'settings-subpage', style: 'display:none' }, sub.blocks));
+  const navItems = subpages.map((sub) => createSidebarItem({ name: sub.label, icon: sub.icon }));
+  const nav = h('div', { class: 'browse-cats settings-nav' }, navItems);
+  function showSubpage(i) {
+    current = i;
+    sections_.forEach((el, n) => {
+      el.style.display = n === i ? '' : 'none';
+    });
+    navItems.forEach((el, n) => el.classList.toggle('current', n === i));
+    pageTitle.textContent = subpages[i].label;
+    if (body.parentNode) body.parentNode.scrollTop = 0;
+  }
+  const rows = subpages.flatMap((sub) => sub.rows);
+  // The rows of the sub-page on screen (the Trakt sync / remove buttons exist only while an account is connected).
+  const visibleRows = () => subpages[current].rows.filter((row) => row.el.style.display !== 'none');
   rows.forEach((row) => row.refresh());
 
   // Stop buttons of the running operations come first, then the fixed rows; the list changes while the page is open.
@@ -549,7 +601,7 @@ export function createSettingsPage(ctx) {
       return { type: 'exit', dir };
     },
   });
-  const all = () => opsPanel.rows.concat(visibleRows());
+  const all = () => (subpages[current].ops ? opsPanel.rows : []).concat(visibleRows());
   let focusedEl = null;
   const zone = new FocusZone({
     id: ZONE_ID,
@@ -577,37 +629,31 @@ export function createSettingsPage(ctx) {
     ctx.focus.focus(ZONE_ID, same >= 0 ? same : Math.min(opsPanel.rows.length, rowsNow.length - 1));
   };
 
-  // Under the title: one box per optional service that is off (TMDB, Trakt, OpenSubtitles), saying what it adds. A box goes away as soon
-  // as its key is typed (or the Trakt account connected).
-  const promos = (() => {
-    const el = h('div', { class: 'service-promos' });
-    const boxes = ['tmdb', 'trakt', 'opensubtitles'].map((id) => {
-      const box = h('div', { class: `service-promo ${id}` }, createHeading({ level: 3, text: t(`settings.promo.${id}.title`) }), createHint({ text: t(`settings.promo.${id}.text`), muted: false }));
-      el.appendChild(box);
-      return { id, box };
-    });
-    const refresh = async () => {
-      const keys = ctx.apiKeys.get();
-      const traktOn = ctx.trakt && ctx.trakt.isConnected ? await ctx.trakt.isConnected().catch(() => false) : false;
-      const on = { tmdb: Boolean(keys.tmdbKey), trakt: traktOn, opensubtitles: Boolean(keys.openSubtitlesKey) };
-      boxes.forEach(({ id, box }) => {
-        box.style.display = on[id] ? 'none' : '';
-      });
-      el.style.display = boxes.some(({ id }) => !on[id]) ? '' : 'none';
-    };
-    return { el, refresh };
-  })();
 
-  // Under the title, small: the version running; the packages that update themselves add when version.json last answered.
-  const versions = runningVersions();
-  const checked = lastCheck();
-  const version = versions.bundle || APP_VERSION;
-  const autoupdate = typeof __AUTOUPDATE__ !== 'undefined' && __AUTOUPDATE__;
-  const versionText = !autoupdate ? `v${version}` : checked ? t('settings.versionLine', { version, time: formatDateTime(checked, i18n.getLocale()) }) : t('settings.versionNever', { version });
-  const versionEl = createHint({ text: versionText, className: 'settings-version', muted: false });
+  // The sidebar: moving on it shows its sub-page at once; Right / OK enter it.
+  const navZone = new FocusZone({
+    id: NAV_ZONE,
+    nodes: () => navItems,
+    model: new ListModel({ orientation: 'vertical', getCount: () => navItems.length }),
+    onFocus: (i) => {
+      navItems[i].classList.add('focused');
+      if (i !== current) showSubpage(i);
+    },
+    onBlur: (i) => navItems[i] && navItems[i].classList.remove('focused'),
+    onActivate: () => ctx.focus.focus(ZONE_ID, subpages[current].ops ? opsPanel.rows.length : 0),
+  });
+  let restored = null;
+  const body = h('div', { class: 'settings-main' }, pageTitle, sections_);
+  const page = h('section', { class: 'page browse settings-page' }, h('div', { class: 'browse-body' }, nav, body));
 
   return {
-    el: framedPage(createHeading({ level: 1, text: t('nav.settings'), className: 'settings-title' }), versionEl, promos.el, opsPanel.el, panel.el, tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), h('div', { class: 'list' }, titleSearchRow.el), traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root), createHeading({ text: 'OpenSubtitles', className: 'prefs-title' }), h('div', { class: 'fields' }, openSubtitlesRow.root), devicePanel.el, prefsBlocks),
+    el: page,
+    /** Back from the rows goes to the sidebar first; from the sidebar the page is left. */
+    onBack() {
+      if (ctx.focus.activeId !== ZONE_ID) return false;
+      ctx.focus.focus(NAV_ZONE, current);
+      return true;
+    },
     mount() {
       opsPanel.mount();
       tmdbPanel.mount();
@@ -632,9 +678,15 @@ export function createSettingsPage(ctx) {
       traktPanel.refresh().catch(() => undefined);
       devicePanel.refresh().catch(() => undefined);
       ctx.focus.register(zone);
+      ctx.focus.register(navZone);
       ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
-      ctx.focus.link(TOPBAR_ZONE, 'down', ZONE_ID);
-      ctx.focus.focus(ZONE_ID, opsPanel.rows.length); // never on a stop button by accident
+      ctx.focus.link(ZONE_ID, 'left', NAV_ZONE);
+      ctx.focus.link(NAV_ZONE, 'up', TOPBAR_ZONE);
+      ctx.focus.link(NAV_ZONE, 'right', ZONE_ID);
+      ctx.focus.link(TOPBAR_ZONE, 'down', NAV_ZONE);
+      showSubpage(restored ? restored.page || 0 : 0);
+      if (restored && restored.zone === ZONE_ID) ctx.focus.focus(ZONE_ID, restored.index);
+      else ctx.focus.focus(NAV_ZONE, current); // the sidebar first, as the other pages with one
     },
     destroy() {
       opsPanel.destroy();
@@ -642,10 +694,15 @@ export function createSettingsPage(ctx) {
       traktPanel.destroy();
       panel.destroy();
       ctx.focus.unregister(ZONE_ID);
+      ctx.focus.unregister(NAV_ZONE);
     },
-    saveState: () => ({ index: zone.index }),
+    saveState: () => ({ page: current, zone: ctx.focus.activeId, index: zone.index }),
     restoreState(state) {
-      ctx.focus.focus(ZONE_ID, state.index);
+      restored = state || null;
+      if (!restored) return;
+      showSubpage(restored.page || 0);
+      if (restored.zone === ZONE_ID) ctx.focus.focus(ZONE_ID, restored.index);
+      else ctx.focus.focus(NAV_ZONE, current);
     },
   };
 }

@@ -29,6 +29,9 @@ export function createSkeletonCard() {
   return h('div', { class: 'card skeleton-card' }, h('div', { class: 'card-poster loading' }), createSkeletonLine({ className: 'card-title' }), createSkeletonLine({ className: 'card-meta short' }));
 }
 
+/** The icon of a card without a picture, per media type. */
+const TYPE_ICON = { movie: 'movie', series: 'series', live: 'network' };
+
 export const formatRating = (rating) => (Number(rating) > 0 ? Number(rating).toFixed(1) : '');
 
 /**
@@ -50,6 +53,8 @@ export function createCard(entry, type, meta = {}) {
   const locked = Boolean(entry && isAdultEntry(entry));
   if (locked) poster.appendChild(createPlaceholder({ icon: 'lock', className: 'locked' }));
   else if (meta.placeholder) poster.appendChild(createPlaceholder({ icon: meta.placeholder }));
+  // No picture (yet, or none at all): the icon of the media type on the poster's background, as the genre cards have; a picture covers it.
+  else if (TYPE_ICON[type]) poster.appendChild(createPlaceholder({ icon: TYPE_ICON[type], className: 'media-type' }));
   poster.append(badges, statusBadge, bar);
   const el = h('div', { class: `card ${type}${meta.square ? ' square' : ''}` }, poster, title, sub); // `square`: the logo box of Live TV channels
   const state = { year: entry.year, seasons: null, episodes: null, tag: '', subtitle: '', count: null, countLoading: false };
@@ -67,11 +72,17 @@ export function createCard(entry, type, meta = {}) {
       const node = h('img', { alt: '', referrerpolicy: 'no-referrer' });
       img = node;
       const done = () => poster.classList.remove('loading');
-      node.addEventListener('load', done);
+      node.addEventListener('load', () => {
+        done();
+        if (img === node) poster.classList.add('has-picture'); // the media type icon goes (a channel logo leaves room around it)
+      });
       // The picture may fail after the card let it go (release(): `img` is null, or already another one): only this <img> goes.
       node.addEventListener('error', () => {
         node.remove();
-        if (img === node) img = null;
+        if (img === node) {
+          img = null;
+          poster.classList.remove('has-picture');
+        }
         done();
       });
       poster.insertBefore(img, badges);
@@ -164,6 +175,7 @@ export function createCard(entry, type, meta = {}) {
     released = true;
     img.remove();
     img = null;
+    poster.classList.remove('has-picture');
     poster.classList.add('loading'); // the skeleton until restore() has the picture again
   }
 

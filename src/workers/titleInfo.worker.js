@@ -1,6 +1,6 @@
 /* Title details worker: reads the details of the titles listed without a TMDB id (and, when asked, looks them up on TMDB by title) and
- * keeps what they give, a few at a time, without touching the UI thread. The logic is in services/titleInfo.js. */
-import { runTitleInfoForProvider } from '../services/titleInfo.js';
+ * keeps what they give, a few at a time, without touching the UI thread. The logic is in services/titleInfoRun.js. */
+import { runTitleInfoForProvider } from '../services/titleInfoRun.js';
 import { createGate } from '../core/gate.js';
 
 const gate = createGate();

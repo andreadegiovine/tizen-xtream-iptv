@@ -2,7 +2,8 @@ import { dbGetAllKeys, dbDeleteMany, dbGetAll, dbPutMany, dbDelete } from '../co
 import { buildEntryGenreRows } from './grouping.js';
 import { bumpGenresRev } from './derivedStore.js';
 import { listGenres, genreEntryKeys, genreCounts } from './catalogQuery.js';
-import { runGenreBackfillForProvider } from './genreBackfill.js';
+/** The genre work on the main thread (no worker): its code is loaded only then. */
+const runGenreBackfillForProvider = (args) => import(/* webpackChunkName: "genres-local" */ './genreBackfill.js').then((m) => m.runGenreBackfillForProvider(args));
 import { createGate } from '../core/gate.js';
 import { log } from '../core/logger.js';
 

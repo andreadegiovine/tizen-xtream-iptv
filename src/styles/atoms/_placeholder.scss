@@ -17,3 +17,13 @@
     height: 56px;
   }
 }
+
+// The media type of a card without a picture (film, series, channel), like the icon of the genre cards: gone once a picture is shown.
+.card-placeholder.media-type .icon {
+  width: 72px;
+  height: 72px;
+}
+
+.has-picture > .card-placeholder.media-type {
+  display: none;
+}

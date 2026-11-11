@@ -117,3 +117,29 @@
     color: inherit;
   }
 }
+
+// Settings: the sidebar of the sub-pages (the browse pages' one) and the current sub-page at its right, stretched like the framed pages.
+.page.settings-page {
+  padding-bottom: $gutter * 2;
+
+  .settings-main {
+    flex: 1;
+    min-width: 0;
+    max-width: 1400px;
+    padding-top: $page-top;
+  }
+
+  .settings-title {
+    margin-bottom: 12px;
+  }
+
+  .sync,
+  .list .row,
+  .form {
+    width: 100%;
+  }
+
+  .settings-subpage > :first-child {
+    margin-top: 0;
+  }
+}

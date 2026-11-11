@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Xtream IPTV logs</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; padding: 16px; font: 15px/1.45 system-ui, -apple-system, sans-serif; background: #111; color: #eee; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  p { margin: 0 0 12px; color: #aaa; }
+  button { font: inherit; padding: 10px 16px; border: 0; border-radius: 8px; background: #e50914; color: #fff; margin-bottom: 12px; }
+  pre { white-space: pre-wrap; word-break: break-word; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: #1c1c1e; padding: 12px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<h1>Xtream IPTV · logs</h1>
+<p>The newest lines of the log shared by the app (Settings › Diagnostics). They are decoded on this phone: the part of the address after "#" is never sent to a server.</p>
+<button id="copy" type="button">Copy</button>
+<pre id="out">No logs in this link.</pre>
+<script>
+/*__DECOMPRESS__*/
+(function () {
+  var out = document.getElementById('out');
+  var data = location.hash.slice(1);
+  if (data) {
+    try {
+      out.textContent = decompressText(data);
+    } catch (err) {
+      out.textContent = 'The link is damaged: scan the QR code again.';
+    }
+  }
+  document.getElementById('copy').addEventListener('click', function () {
+    if (navigator.clipboard) navigator.clipboard.writeText(out.textContent);
+  });
+})();
+</script>
+</body>
+</html>

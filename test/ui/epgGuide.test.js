@@ -55,7 +55,7 @@ test('Up / Down keep the time, Left / Right go from programme to programme, Left
   g.model.navigate('down');
   expect(focusedTitle()).toBe('Match'); // same time on the next channel
   g.model.navigate('down');
-  expect(focusedTitle()).toBe('No information'); // a channel without guide is one segment
+  expect(focusedTitle()).toBe(''); // a channel without guide is one segment, an empty cell
   g.activate();
   expect(opened).toEqual([['live:3', 2]]);
   g.model.navigate('up');

@@ -20,11 +20,11 @@ import { buildEntries, buildEntryCategoryRows, buildEntryGenreRows } from './gro
 import { LIVE_LAYOUT, DEFAULT_GROUPING, groupLiveItems, annotateGroupKeys, buildLiveAllRows, cleanChannelNames, compileTerms } from './liveGrouping.js';
 import { buildNetworks, annotateNetworkKeys, networkCounts } from './liveNetworks.js';
 import { applyEnrichment } from './catalogEnrich.js';
+import { SYNC_ORDER, syncMetaKey as metaKey, getSyncMeta, getSyncStatus } from './syncMeta.js';
 
 export const LIST_TTL_MS = 12 * 60 * 60 * 1000;
 export const BATCH_SIZE = 2000;
-// Progressive order: whatever finishes first becomes usable first.
-export const SYNC_ORDER = [MediaType.MOVIE, MediaType.SERIES, MediaType.LIVE];
+export { SYNC_ORDER, getSyncMeta, getSyncStatus };
 
 /** Pauses (ms) before the two new attempts at a download that failed or came back empty: each one longer. Tests set it to zero. */
 export const retryPolicy = { delays: [3000, 8000] };
@@ -72,7 +72,6 @@ async function loadWithRetries(load, { delays = retryPolicy.delays, signal, gate
   }
 }
 
-const metaKey = (type) => `sync:${type}`;
 /** Meta row with how the Live networks were found (read by the Diagnostics page). */
 export const NETWORK_REPORT_KEY = 'networkReport';
 
@@ -103,16 +102,6 @@ function buildLiveComposites(entries, items, excludedCategories, grouping) {
 export async function markStale(db, type) {
   const meta = await getSyncMeta(db, type);
   if (meta) await dbPut(db, 'meta', { ...meta, lastSync: 0 });
-}
-
-export function getSyncMeta(db, type) {
-  return dbGet(db, 'meta', metaKey(type));
-}
-
-export async function getSyncStatus(db) {
-  const status = {};
-  for (const type of SYNC_ORDER) status[type] = (await getSyncMeta(db, type)) || null;
-  return status;
 }
 
 function throwIfAborted(signal) {

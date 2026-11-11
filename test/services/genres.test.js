@@ -43,17 +43,18 @@ describe('genre index', () => {
     expect(await again).toBe(0);
     expect(calls).toBe(2); // with a TMDB key only the TMDB phase runs (no provider genre search): once, then again after the restart
   });
-  test('the provider is asked one title at a time with a pause, and at most the daily limit', async () => {
+  test('the provider is asked at an adaptive pace, without a daily cap; failures in a row stop the run (tried again next time)', async () => {
     const { db } = await setup([item(1, ''), item(2, ''), item(3, '')]);
     const xtream = fakeXtream({ 1: 'Dramma', 2: 'Azione', 3: 'Horror' });
-    const waits = [];
-    const day = Date.UTC(2026, 10, 5, 12);
-    const done = await runGenreBackfill({ db, xtream, tmdb: null, language: 'it', dailyLimit: 2, wait: async (ms) => waits.push(ms), now: () => day });
-    expect(done).toBe(2);
-    expect(xtream.getVodInfo).toHaveBeenCalledTimes(2);
-    expect(waits).toEqual([1000]); // a pause between two requests, none before the first
-    expect(await runGenreBackfill({ db, xtream, tmdb: null, language: 'it', dailyLimit: 2, wait: async () => undefined, now: () => day })).toBe(0); // today's are used
-    expect(await runGenreBackfill({ db, xtream, tmdb: null, language: 'it', dailyLimit: 2, wait: async () => undefined, now: () => day + 86400000 })).toBe(1); // the next day
+    expect(await runGenreBackfill({ db, xtream, tmdb: null, language: 'it' })).toBe(3);
+    expect(xtream.getVodInfo).toHaveBeenCalledTimes(3);
+    const other = await setup(Array.from({ length: 12 }, (_, i) => item(i + 1, '')));
+    const failing = { getVodInfo: jest.fn(async () => { throw new Error('429'); }), getSeriesInfo: jest.fn() };
+    const messages = [];
+    const instant = { run: (fn) => fn() };
+    expect(await runGenreBackfill({ db: other.db, xtream: failing, tmdb: null, language: 'it', pace: instant, concurrency: 1, emit: (m) => messages.push(m.message) })).toBe(0);
+    expect(failing.getVodInfo).toHaveBeenCalledTimes(8);
+    expect(messages.some((m) => /failed 8 times/.test(m || ''))).toBe(true);
   });
   const fakeTmdb = (genresById) => ({ enabled: true, details: jest.fn(async (type, id) => ({ genres: (genresById[id] || []).map((name) => ({ name })) })) });
   const fakeXtream = (genreById) => ({ getVodInfo: jest.fn(async (id) => ({ info: { genre: genreById[id] || '' } })), getSeriesInfo: jest.fn() });

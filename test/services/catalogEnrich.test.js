@@ -3,10 +3,12 @@ import { openProviderDb } from '../../src/db/providerDb.js';
 import { dbGet, dbGetAllRange } from '../../src/core/idb.js';
 import { runSync, retryPolicy, rebuildEntries } from '../../src/services/catalogSync.js';
 import { readInfo, enrichItem, enrichType, RECHECK_MS } from '../../src/services/catalogEnrich.js';
-import { runTitleInfoForProvider, readTitleInfo } from '../../src/services/titleInfo.js';
+import { readTitleInfo } from '../../src/services/titleInfo.js';
+import { runTitleInfoForProvider } from '../../src/services/titleInfoRun.js';
 
 /** The title details worker's run on the provider database of the test. */
-const details = (db, client, extra = {}) => runTitleInfoForProvider({ provider: { id: db.name.replace(/^provider_/, '') }, makeClient: () => client, ...extra });
+const instant = { run: (fn) => fn() };
+const details = (db, client, extra = {}) => runTitleInfoForProvider({ provider: { id: db.name.replace(/^provider_/, '') }, makeClient: () => client, paces: { providerPace: instant, tmdbPace: instant }, ...extra });
 
 retryPolicy.delays = [];
 let counter = 0;

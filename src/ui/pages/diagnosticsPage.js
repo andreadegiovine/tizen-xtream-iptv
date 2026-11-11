@@ -7,8 +7,12 @@ import { t } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { Dir, ListModel } from '../focus/models.js';
 import { runDiagnostics } from '../../services/diagnostics.js';
-import { platform } from '../../platform/index.js';
 import { log } from '../../core/logger.js';
+import { buildLogLink } from '../../services/logShare.js';
+import { createQrSvg } from '../components/codePrompt.js';
+import { platform } from '../../platform/index.js';
+import { APP_VERSION } from '../../core/env.js';
+import { runningVersions } from '../../services/updates.js';
 import { ensureVisible } from '../scroll.js';
 import { dbGet } from '../../core/idb.js';
 import { NETWORK_REPORT_KEY } from '../../services/catalogSync.js';
@@ -36,12 +40,23 @@ export function createDiagnosticsPage(ctx) {
   // How the Live networks were found (saved by the last Live sync): what was grouped, why, and what was left out.
   const reportButton = createButton({ label: t('diag.networks') });
   const reportBox = h('pre', { class: 'diag-log' });
-  const focusables = [runButton, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el), reportButton, logBox];
+  // Under the log: its newest lines in a QR code (compressed), to read them on a phone and send them with a report.
+  const shareButton = createButton({ label: t('diag.shareLogs'), icon: 'info' });
+  const focusables = [runButton, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el), reportButton, logBox, shareButton];
   const FIRST_MODE = 5;
   const REPORT = FIRST_MODE + modeButtons.length;
 
   // The log box scrolls by itself: Up / Down on it move through the whole log, and leave it only at its ends.
-  const LOG_INDEX = focusables.length - 1;
+  const LOG_INDEX = focusables.length - 2;
+  const SHARE_INDEX = focusables.length - 1;
+  function shareLogs() {
+    const versions = runningVersions();
+    const header = `Xtream IPTV ${versions.bundle || APP_VERSION} · ${platform.id} · ${navigator.userAgent}`;
+    const { url, lines } = buildLogLink(log.entries(), { header });
+    const qr = createQrSvg(url, { correction: 'L' });
+    const content = h('div', { class: 'code-prompt log-qr' }, qr ? h('div', { class: 'code-qr' }, qr) : null, h('p', { class: 'code-text', text: t('diag.shareLogsText', { lines }) }));
+    ctx.dialogs.confirm({ title: t('diag.shareLogs'), content, confirmLabel: t('common.close'), cancelLabel: null });
+  }
   const atEnd = () => logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 4;
   function renderLog() {
     const follow = atEnd(); // staying at the bottom keeps showing the newest lines
@@ -98,6 +113,7 @@ export function createDiagnosticsPage(ctx) {
       if (i === 0) run();
       else if (i === 1) urlInput.focus();
       else if (i === REPORT) showReport();
+      else if (i === SHARE_INDEX) shareLogs();
       else if (i === 4) {
         const tracks = spike.textTracks();
         labTrack = tracks.length ? (labTrack + 1) % tracks.length : 0;
@@ -124,6 +140,7 @@ export function createDiagnosticsPage(ctx) {
       h('div', { class: 'form' }, runButton, results, urlRow, playButton, stopButton, trackButton, ...modeButtons.map((b) => b.el), reportButton, reportBox),
       createHeading({ text: t('diag.logs'), className: 'prefs-title' }),
       logBox,
+      h('div', { class: 'form diag-share' }, shareButton),
     ),
     mount() {
       ctx.focus.register(zone);

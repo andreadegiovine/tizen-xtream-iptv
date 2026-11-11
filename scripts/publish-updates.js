@@ -28,6 +28,19 @@ const compare = (a, b) => {
   return 0;
 };
 
+/**
+ * site/logs.html, the page that shows the logs shared by a QR code (src/services/logShare.js), with the decoder of src/core/lzw.js
+ * inlined (the same code that compressed them).
+ */
+function logsPage() {
+  const template = fs.readFileSync(path.join(__dirname, '..', 'site', 'logs.html'), 'utf8');
+  const lzw = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'lzw.js'), 'utf8').replace(/^export /gm, '');
+  return template.replace('/*__DECOMPRESS__*/', lzw);
+}
+function writeLogsPage(pagesDir) {
+  fs.writeFileSync(path.join(pagesDir, 'logs.html'), logsPage());
+}
+
 function main() {
   const [pagesDir, version, ...builds] = process.argv.slice(2);
   if (!pagesDir || !/^\d+\.\d+\.\d+$/.test(version || '') || !builds.length) {
@@ -54,7 +67,9 @@ function main() {
   // Older versions beyond the last KEEP are removed (an app still on one of them updates to the latest).
   const all = fs.existsSync(path.join(pagesDir, 'bundles')) ? fs.readdirSync(path.join(pagesDir, 'bundles')).filter((v) => /^\d+\.\d+\.\d+$/.test(v)) : [];
   all.sort(compare).slice(0, Math.max(0, all.length - KEEP)).forEach((old) => fs.rmSync(path.join(pagesDir, 'bundles', old), { recursive: true, force: true }));
+  writeLogsPage(pagesDir);
   console.log(`version.json → ${version} (${Object.keys(platforms).join(', ')}), min package ${minShell}`);
 }
 
-main();
+if (require.main === module) main();
+module.exports = { logsPage };

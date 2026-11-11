@@ -40,10 +40,9 @@ export function createDialogService({ focus, root = document.body }) {
   function confirm({ title, message, content = null, confirmLabel, cancelLabel }) {
     if (current) return current.promise;
     const previous = snapshot();
-    const buttons = [
-      createButton({ label: cancelLabel }),
-      createButton({ label: confirmLabel, variant: 'primary' }),
-    ];
+    // `cancelLabel` null: one button only (a dialog that shows something and closes).
+    const okButton = createButton({ label: confirmLabel, variant: 'primary' });
+    const buttons = cancelLabel === null ? [okButton] : [createButton({ label: cancelLabel }), okButton];
     const overlay = h(
       'div',
       { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' },
@@ -57,7 +56,7 @@ export function createDialogService({ focus, root = document.body }) {
       model: new ListModel({ orientation: 'horizontal', getCount: () => buttons.length }),
       onFocus: (i) => buttons[i].classList.add('focused'),
       onBlur: (i) => buttons[i].classList.remove('focused'),
-      onActivate: (i) => close(i === 1),
+      onActivate: (i) => close(buttons[i] === okButton),
     });
     focus.register(zone);
     const promise = new Promise((resolve) => {

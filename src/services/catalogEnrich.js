@@ -4,6 +4,7 @@ import { readTmdbId, readRating, readYear } from './itemProjector.js';
 import { normalizeTitle } from './titleNormalizer.js';
 import { pickMatch } from './tmdbService.js';
 import { createTmdbClient } from './tmdbClient.js';
+import { createPacer } from './pacer.js';
 
 /**
  * Titles the provider lists without a TMDB id (some providers give it only in the details of a title): during the catalog scan the
@@ -17,8 +18,12 @@ import { createTmdbClient } from './tmdbClient.js';
  * title found by an old name is searched again as well).
  */
 export const RECHECK_MS = 30 * 24 * 3600 * 1000;
-/** Details asked at the same time (a provider limits or blocks clients that send too many at once). */
-export const INFO_CONCURRENCY = 3;
+/**
+ * At most this many details asked at the same time: the adaptive pace (pacer.js) starts lower and grows while the provider answers well,
+ * and slows down (fewer at a time, a pause) as soon as it fails or slows down: the titles are done as fast as the provider takes it.
+ */
+export const INFO_CONCURRENCY = 8;
+const TMDB_CONCURRENCY = 10; // TMDB takes about 40 requests a second
 /** Failures in a row after which the details are not asked any more in this scan (network down, provider limiting us). */
 export const MAX_FAILURES = 8;
 /** The entries are worked out again every this many titles learned (the grids improve while a long scan goes on). */
@@ -126,6 +131,8 @@ export async function enrichType({
   maxFailures = MAX_FAILURES,
   rebuildEvery = REBUILD_EVERY,
   makeTmdb = (key) => createTmdbClient({ getApiKey: () => key }),
+  providerPace = createPacer({ max: concurrency, start: 2 }),
+  tmdbPace = createPacer({ max: TMDB_CONCURRENCY, start: 4 }),
   ask = true, // false: only what is known is applied (the learned data was forgotten: the ids it gave go), nothing is asked
 }) {
   const result = { asked: 0, found: 0, searched: 0, matched: 0, changed: 0 };
@@ -204,7 +211,7 @@ export async function enrichType({
       if (!infoOff && needsInfo(item)) {
         try {
           result.asked += 1;
-          const raw = type === MediaType.SERIES ? await client.getSeriesInfo(item.id) : await client.getVodInfo(item.id);
+          const raw = await providerPace.run(() => (type === MediaType.SERIES ? client.getSeriesInfo(item.id) : client.getVodInfo(item.id)));
           const info = readInfo(raw);
           failures = 0;
           record = { ...record, ...info, tmdbId: info.tmdbId || null, source: info.tmdbId ? 'info' : null, checkedAt: now() };
@@ -221,7 +228,7 @@ export async function enrichType({
         try {
           result.searched += 1;
           const query = searchQuery(item, record);
-          const data = await tmdb.search(type, query.title, query.year, search.language);
+          const data = await tmdbPace.run(() => tmdb.search(type, query.title, query.year, search.language));
           const id = pickMatch(type, data && data.results, query.title, query.year);
           // A new answer replaces the one of an older name (found or not); the id of the details is never replaced.
           const base = record.source === 'search' ? { ...record, tmdbId: null, source: null } : record;

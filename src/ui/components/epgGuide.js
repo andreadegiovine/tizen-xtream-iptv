@@ -85,7 +85,7 @@ export function scrollFor(segment, start, x, width) {
  *
  * `loadRows(offset, limit)` → { entries }, `countRows()` → number, `programmes(channelIds, from, to)` → Map(channelId → list),
  * `onOpen(entry, row, programme)` (the focused programme, null on a hole), `getTimeFormat()` → '24h' | '12h' | 'auto'. `emptyText`: what
- * a hole of the guide says. `pickSegment(segments, now)` → index or -1: the programme a row focuses when reached with Up / Down (by
+ * a hole of the guide says (nothing by default). `pickSegment(segments, now)` → index or -1: the programme a row focuses when reached with Up / Down (by
  * default the one at the time the focus was on). `programmesOnly`: Left / Right skip the holes, only programmes take the focus.
  * OK held on a row selects it (channel and programmes) and shows `rowActions` ({ id, icon, label }, left to right) at its right:
  * Left / Right move between them, OK runs `onRowAction(id, entry, row)`, Back (`cancelRowMode()`) gives the normal focus back.
@@ -123,7 +123,8 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
   let rowNodes = new Map(); // row → { el, track, segments, segNodes }
   let clock = null;
   let rowMode = null; // { button } while a row is selected (OK held)
-  const noInfo = () => (emptyText === null ? t('epg.noInfo') : emptyText);
+  // A stretch without programmes is an empty cell (it said "No information" in every row: noise, cut at the right edge).
+  const noInfo = () => emptyText || '';
 
   const viewWidth = () => Math.max(200, (rowsEl.clientWidth || 1600) - CHANNEL_WIDTH);
 

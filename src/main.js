@@ -27,7 +27,7 @@ import { createComingSoonPage } from './ui/pages/simplePages.js';
 import { createHomePage } from './ui/pages/homePage.js';
 import { CatalogSyncService } from './services/catalogSyncService.js';
 import { createCatalogWorker } from './services/createCatalogWorker.js';
-import { startRebuild } from './services/catalogRebuild.js';
+import { startRebuild } from './services/startRebuild.js';
 import { createJobQueue } from './services/jobQueue.js';
 import { createScheduledViewing } from './services/scheduledViewing.js';
 import { createScheduleAlerts } from './services/scheduleAlerts.js';
@@ -62,18 +62,12 @@ import { createFavoritesPage } from './ui/pages/favoritesPage.js';
 import { createFavoritesService } from './services/favorites.js';
 import { createCollectionsService } from './services/collections.js';
 import { createNavCounts } from './services/navCounts.js';
-import { createCollectionsPage } from './ui/pages/collectionsPage.js';
-import { createCollectionPage } from './ui/pages/collectionPage.js';
-import { createNetworkPage } from './ui/pages/networkPage.js';
 import { createPinsService } from './services/pins.js';
 import { createCreditsStore } from './services/creditsStore.js';
 import { createGuideLayoutStore } from './services/guideLayout.js';
 import { portableKeyFor } from './services/shareKeys.js';
 import { createSearchPage } from './ui/pages/searchPage.js';
-import { createBrowsePage } from './ui/pages/browsePage.js';
-import { createProvidersPage } from './ui/pages/providersPage.js';
 import { createProviderSetupPage } from './ui/pages/providerSetupPage.js';
-import { createCategoriesPage } from './ui/pages/categoriesPage.js';
 import { createTraktClient } from './services/traktClient.js';
 import { createOpenSubtitles } from './services/openSubtitles.js';
 import { createTraktService, createWatchState } from './services/traktService.js';
@@ -86,7 +80,16 @@ const LAZY_PAGES = {
   player: () => import(/* webpackChunkName: "page-player" */ './ui/pages/playerPage.js').then((m) => m.createPlayerPage),
   settings: () => import(/* webpackChunkName: "page-settings" */ './ui/pages/settingsPage.js').then((m) => m.createSettingsPage),
   diagnostics: () => import(/* webpackChunkName: "page-diagnostics" */ './ui/pages/diagnosticsPage.js').then((m) => m.createDiagnosticsPage),
+  // Not needed to start (Home, the setup and the search are): read after the start-up work, or when first opened.
+  browse: () => import(/* webpackChunkName: "page-browse" */ './ui/pages/browsePage.js').then((m) => m.createBrowsePage),
+  collections: () => import(/* webpackChunkName: "page-collections" */ './ui/pages/collectionsPage.js').then((m) => m.createCollectionsPage),
+  collection: () => import(/* webpackChunkName: "page-collection" */ './ui/pages/collectionPage.js').then((m) => m.createCollectionPage),
+  network: () => import(/* webpackChunkName: "page-network" */ './ui/pages/networkPage.js').then((m) => m.createNetworkPage),
+  providers: () => import(/* webpackChunkName: "page-providers" */ './ui/pages/providersPage.js').then((m) => m.createProvidersPage),
+  categories: () => import(/* webpackChunkName: "page-categories" */ './ui/pages/categoriesPage.js').then((m) => m.createCategoriesPage),
 };
+/** A page whose code is read when it is first opened (see LAZY_PAGES). */
+const lazy = (name, ctx, params) => createLazyPage(LAZY_PAGES[name], (create) => create(ctx, params), { errorText: t('error.UNKNOWN') });
 import { applyTextSize } from './core/textSize.js';
 
 // Last line of defence: log (credentials are masked by the logger) instead of dying silently.
@@ -501,16 +504,16 @@ async function boot() {
       search: (params) => createSearchPage(ctx, params),
       suggestions: () => createSuggestionsPage(ctx),
       favorites: () => createFavoritesPage(ctx),
-      collections: (params) => createCollectionsPage(ctx, params),
-      collection: (params) => createCollectionPage(ctx, params),
-      network: (params) => createNetworkPage(ctx, params),
+      collections: (params) => lazy('collections', ctx, params),
+      collection: (params) => lazy('collection', ctx, params),
+      network: (params) => lazy('network', ctx, params),
       detail: (params) => createLazyPage(LAZY_PAGES.detail, (create) => create(ctx, params), { errorText: t('error.UNKNOWN') }),
       player: (params) => createLazyPage(LAZY_PAGES.player, (create) => create(ctx, params), { errorText: t('error.UNKNOWN') }),
-      browse: (params) => createBrowsePage(ctx, params),
-      providers: (params) => createProvidersPage(ctx, params),
+      browse: (params) => lazy('browse', ctx, params),
+      providers: (params) => lazy('providers', ctx, params),
       providerSetup: (params) => createProviderSetupPage(ctx, params),
       settings: () => createLazyPage(LAZY_PAGES.settings, (create) => create(ctx), { errorText: t('error.UNKNOWN') }),
-      categories: () => createCategoriesPage(ctx),
+      categories: () => lazy('categories', ctx),
       diagnostics: () => createLazyPage(LAZY_PAGES.diagnostics, (create) => create(ctx), { errorText: t('error.UNKNOWN') }),
     },
     onChange: (entry, page) => {
@@ -529,7 +532,7 @@ async function boot() {
       // Pages with their own zone take focus in mount(). When the user switched section from the bar,
       // or the page has no zone, the focus stays on (or returns to) the bar, on the current section.
       // A page with a sidebar opened from the bar puts the focus on its sidebar itself (once it is drawn).
-      const ownsBarFocus = entry.name === 'browse';
+      const ownsBarFocus = entry.name === 'browse' || entry.name === 'settings';
       if ((entry.params.focusTopbar && !ownsBarFocus) || !focus.active) focus.focus(TOPBAR_ZONE, topbar.indexOfSection(section));
     },
   });
@@ -798,7 +801,8 @@ async function boot() {
   ctx.scheduleAlerts.sync();
   // The code of the other pages is read once the start-up work is done (the first opening is then as quick as the others).
   // A build loaded online reads them sooner (the network may drop later).
-  setTimeout(() => preloadPages([LAZY_PAGES.detail, LAZY_PAGES.player, LAZY_PAGES.settings, LAZY_PAGES.diagnostics]), window.__XI_BASE__ ? 2000 : 15000);
+  // The section pages first (the top bar opens them), then the others.
+  setTimeout(() => preloadPages([LAZY_PAGES.browse, LAZY_PAGES.detail, LAZY_PAGES.player, LAZY_PAGES.settings, LAZY_PAGES.collections, LAZY_PAGES.collection, LAZY_PAGES.network, LAZY_PAGES.providers, LAZY_PAGES.categories, LAZY_PAGES.diagnostics]), window.__XI_BASE__ ? 2000 : 15000);
   // A newer build is looked for once the first page is up (a few seconds later: the start-up work goes first).
   setTimeout(() => updateInBackground(notices, restartDialog({ dialogs, notices, isBusy: () => dialogs.isOpen() || topbar.isSearching() })).catch((err) => log.warn('Update failed', err && err.message)), 3000);
   // The parental PIN is set the first time the app opens (asked again at the next start if it was skipped).

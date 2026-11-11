@@ -1,4 +1,6 @@
 import { faHouse } from '@fortawesome/free-solid-svg-icons/faHouse';
+import { faFilm } from '@fortawesome/free-solid-svg-icons/faFilm';
+import { faTv } from '@fortawesome/free-solid-svg-icons/faTv';
 import { faArrowUp } from '@fortawesome/free-solid-svg-icons/faArrowUp';
 import { faArrowDown } from '@fortawesome/free-solid-svg-icons/faArrowDown';
 import { faCalendarPlus } from '@fortawesome/free-solid-svg-icons/faCalendarPlus';
@@ -116,6 +118,8 @@ const ICONS = {
   lock: faLock,
   backspace: faDeleteLeft,
   back: faArrowLeft,
+  movie: faFilm, // the picture missing on a card: its media type
+  series: faTv,
 };
 
 export const iconNames = Object.keys(ICONS);
