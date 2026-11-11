@@ -54,6 +54,11 @@ h2 {
   height: $topbar-height;
   z-index: 1;
   position: relative;
+  pointer-events: none; // the box alone (the bar hidden: the player) must not take the clicks and taps of what is under it
+
+  > * {
+    pointer-events: auto;
+  }
 }
 
 #content {

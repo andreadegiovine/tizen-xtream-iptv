@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { icon as iconNode } from '../icons.js';
 import { createPlayerButton, setPlayerButtonIcon } from '../atoms/playerButton.js';
 import { t, i18n } from '../../i18n/index.js';
 import { Action } from '../../core/input.js';
@@ -146,7 +147,9 @@ export function createPlayerPage(ctx, params) {
   const buttonEl = (id) => (buttonDefs.find((d) => d.id === id) || {}).el;
   // Full-width progress bar, then one row: previous episode, back 30 s, play/pause, forward 30 s, next episode and the time on the left, aspect ratio and subtitles on the right.
   const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('prevEpisode'), buttonEl('back30'), buttonEl('toggle'), buttonEl('forward30'), buttonEl('nextEpisode'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
-  const top = h('div', { class: 'player-top' }, titleEl, nowEl);
+  // Back for the pointer (a finger, a mouse): before the title, shown only in pointer mode (the remote has its own Back key).
+  const backEl = h('button', { class: 'player-back', type: 'button', 'aria-label': t('common.back') }, iconNode('back'));
+  const top = h('div', { class: 'player-top' }, h('div', { class: 'player-heading' }, backEl, h('div', { class: 'player-heading-text' }, titleEl, nowEl)));
   const controls = h('div', { class: 'player-controls' }, ...(isLive ? [] : [seek]), row);
   const el = h('section', { class: 'player' }, top, controls, statusEl, subtitleEl);
 
@@ -292,22 +295,39 @@ export function createPlayerPage(ctx, params) {
   seek.addEventListener('pointerdown', (event) => {
     if (!(lastState.duration > 0)) return;
     event.preventDefault();
+    // The moves of this pointer stay with the bar (a finger that leaves it keeps dragging); `touch-action: none` in the stylesheet keeps
+    // the browser from taking a drag for a scroll and cancelling it.
+    if (seek.setPointerCapture && event.pointerId !== undefined) {
+      try {
+        seek.setPointerCapture(event.pointerId);
+      } catch {
+        /* not capturable: the document listeners below still follow it */
+      }
+    }
     setScrub(pointerPosition(event));
     showControls();
     const move = (e) => {
       setScrub(pointerPosition(e));
       showControls();
     };
-    const up = (e) => {
+    const done = () => {
       document.removeEventListener('pointermove', move);
       document.removeEventListener('pointerup', up);
-      document.removeEventListener('pointercancel', up);
+      document.removeEventListener('pointercancel', cancel);
+    };
+    const up = (e) => {
+      done();
       setScrub(pointerPosition(e));
+      endScrub(true);
+    };
+    // A cancelled drag has no position (its x reads 0: the video would start again from the beginning): the last one of the drag is kept.
+    const cancel = () => {
+      done();
       endScrub(true);
     };
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', up);
-    document.addEventListener('pointercancel', up);
+    document.addEventListener('pointercancel', cancel);
   });
   seek.addEventListener('click', (event) => event.preventDefault()); // the drag above did it: no other click handling
 
@@ -331,11 +351,21 @@ export function createPlayerPage(ctx, params) {
       def.run();
     });
   });
-  el.addEventListener('mousemove', () => {
+  backEl.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (focusMode) exitFocus(); // (otherwise Back would only leave the buttons)
+    if (ctx.back) ctx.back();
+  });
+  // Only a mouse (or the Magic Remote) moving shows the controls: a tap sends a mouse move too, just before its click, which would show
+  // them and let the click hide them at once.
+  el.addEventListener('pointermove', (event) => {
+    if (event.pointerType === 'touch') return;
     if (pointerOn()) showControls();
   });
+  // A tap (or a click) where there is no button: the controls show, or hide when they are shown. Hidden controls are not touchable
+  // (`pointer-events: none`), so the first tap on the bar or a button only shows them.
   el.addEventListener('click', (event) => {
-    if (event.defaultPrevented || (event.target.closest && event.target.closest('.player-btn, .player-seek'))) return;
+    if (event.defaultPrevented || (event.target.closest && event.target.closest('.player-btn, .player-seek, .player-back'))) return;
     if (controls.classList.contains('visible')) hideControls();
     else showControls();
   });

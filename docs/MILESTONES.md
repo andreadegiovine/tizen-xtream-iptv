@@ -771,3 +771,9 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 
 ### Patch 158 — Update downloaded: restart now or stay
 - When an automatic update (the "_autoupdate" packages) has been downloaded, a dialog like the exit one shows the new version with "Restart now" (the app reloads and the loader starts the new build) and "Stay" (the new build is used at the next start, with the usual notice). It waits until no other dialog or the search is open. Not verified on the TV.
+
+### Patch 159 — Player with a finger and a mouse: tap, drag on the bar, Back
+- A tap on the video shows the controls again (a second one hides them): the mouse move a tap also sends no longer shows them just before its click hid them; only a real mouse (or the Magic Remote) moving shows them. Hidden controls cannot be touched, so the first tap on the bar or a button only shows them.
+- Dragging the progress pointer with a finger no longer starts the video again from the beginning: the browser cancelled the drag (it took it for a scroll) and its cancel, which has no position, was read as 0. The bar is now `touch-action: none` with pointer capture, and a cancelled drag keeps its last position.
+- A Back button before the title (pointer mode only, same look as the player's buttons). The top bar's empty box no longer takes the clicks and taps of the top of the player (it covered the title area on every platform).
+- Checked in Chromium with the mouse and touch events. Not verified on a tablet or on the TV.

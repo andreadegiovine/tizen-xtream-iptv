@@ -659,6 +659,7 @@ async function boot() {
   };
   input.onAction(handleAction);
   input.start();
+  ctx.back = () => handleAction(Action.BACK); // a page's own Back button for the pointer (the player's)
   // Mouse, touch, Magic Remote: the same focus as the keys (the element under the pointer), a click is OK, Back from a mouse button or
   // a click outside a dialog.
   createPointer({ focus, onBack: () => handleAction(Action.BACK), isTextEditing: () => isTextEditing(document) });

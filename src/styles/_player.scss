@@ -20,9 +20,11 @@
     background: linear-gradient(to bottom, $shade-strong, rgba($black, 0));
     opacity: 0;
     transition: opacity 0.2s;
+    pointer-events: none; // hidden: a tap only shows them (the player's click)
 
     &.visible {
       opacity: 1;
+      pointer-events: auto;
     }
   }
 
@@ -35,9 +37,49 @@
     background: linear-gradient(to top, $shade-strong, rgba($black, 0));
     opacity: 0;
     transition: opacity 0.2s;
+    pointer-events: none; // hidden: a tap only shows them (the player's click)
 
     &.visible {
       opacity: 1;
+      pointer-events: auto;
+    }
+  }
+
+  // Back (pointer mode only) before the title and the programme.
+  .player-heading {
+    display: flex;
+    align-items: center;
+  }
+
+  .player-heading-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  // Same look as the buttons of the controls (atoms/_player-button.scss): framed while the pointer is on it.
+  .player-back {
+    display: none;
+    flex: none;
+    width: 80px;
+    height: 64px;
+    margin-right: 24px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: $text;
+    cursor: pointer;
+    transition: transform 0.12s ease-out;
+
+    .icon {
+      width: 30px;
+      height: 30px;
+    }
+
+    &:hover {
+      border-color: $text;
+      background: rgba($text, 0.18);
+      transform: scale(1.1);
     }
   }
 
@@ -66,6 +108,7 @@
   // Full-width progress bar: tall hit area (pointer), no frame; the D-pad focus sits on the knob.
   .player-seek {
     padding: 22px 0;
+    touch-action: none; // a drag on the bar is a seek, never a scroll the browser would cancel it for
     margin-bottom: 8px;
     cursor: pointer;
 
@@ -123,6 +166,7 @@
 
     &.visible {
       opacity: 1;
+      pointer-events: auto;
     }
   }
 
@@ -163,6 +207,7 @@
 
     &.visible {
       opacity: 1;
+      pointer-events: auto;
     }
   }
 
@@ -183,4 +228,10 @@
       display: block;
     }
   }
+}
+
+body.pointer-mode .player .player-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
