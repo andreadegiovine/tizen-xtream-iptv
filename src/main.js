@@ -31,6 +31,7 @@ import { startRebuild } from './services/catalogRebuild.js';
 import { createJobQueue } from './services/jobQueue.js';
 import { createScheduledViewing } from './services/scheduledViewing.js';
 import { createScheduleAlerts } from './services/scheduleAlerts.js';
+import { kvGet, kvSet } from './db/kv.js';
 import { createEpgService } from './services/epgService.js';
 import { createEpgWorker } from './services/createEpgWorker.js';
 import { createTmdbClient } from './services/tmdbClient.js';
@@ -718,7 +719,19 @@ async function boot() {
     showSubscriptionNotice(notices, hasProvider);
     // Stale-while-revalidate: the cached catalog is usable at once, lists older than 12 h refresh in background.
     catalog.start();
-    queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) });
+    queue.add({
+      name: 'genres',
+      priority: Priority.METADATA,
+      run: async () => {
+        // Once: titles saved in another script before they were localized are downloaded again by this run (patch 161).
+        if (!(await kvGet(db, 'tmdbTitlesLocalized', false).catch(() => true))) {
+          const count = await tmdb.expireUnreadableTitles().catch(() => 0);
+          if (count) log.info(`TMDB: ${count} titles in another script to download again`);
+          await kvSet(db, 'tmdbTitlesLocalized', true).catch(() => undefined);
+        }
+        await ctx.genres.backfill().catch(() => undefined);
+      },
+    });
     // The series of "continue watching" the provider no longer serves (details without episodes) leave the catalog (details cached a day).
     queue.add({
       name: 'unavailable',

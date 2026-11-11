@@ -1,4 +1,4 @@
-import { dbGet, dbPut, dbClear, dbGetAllKeys } from '../core/idb.js';
+import { dbGet, dbPut, dbClear, dbGetAllKeys, dbGetAll } from '../core/idb.js';
 import { makeSearchKey } from './titleNormalizer.js';
 import { posterUrl } from './tmdbClient.js';
 
@@ -10,6 +10,9 @@ export const RECOMMENDATIONS_TTL_MS = 24 * 3600 * 1000;
 export const metaKey = (type, tmdbId, language) => `meta:${type}:${tmdbId}:${language}`;
 
 const yearOf = (date) => Number.parseInt(String(date || '').slice(0, 4), 10) || null;
+
+/** A title in a script an Italian or English reader cannot read (Greek, Cyrillic, Hebrew, Arabic, Thai, Japanese, Chinese, Korean). */
+export const UNREADABLE_TITLE = /[\u0370-\u03FF\u0400-\u04FF\u0590-\u06FF\u0E00-\u0E7F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]/;
 
 /** YouTube key of the best trailer: the UI language first, then English, then any; trailers before teasers. */
 export function trailerKeyOf(videos, language = '') {
@@ -240,6 +243,18 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
     /** How many titles have their metadata downloaded (all languages). */
     async countMeta() {
       return (await dbGetAllKeys(db, 'tmdb', { range: IDBKeyRange.bound('meta:', 'meta:\uffff') })).length;
+    },
+    /**
+     * The metadata saved before the titles were localized (patch 161) with a title in another script: marked expired, so the background
+     * download fetches them again (kept until then, offline too). Resolves with how many.
+     */
+    async expireUnreadableTitles() {
+      const records = (await dbGetAll(db, 'tmdb')).filter((r) => r && String(r.key).indexOf('meta:') === 0 && r.value && UNREADABLE_TITLE.test(r.value.title || ''));
+      for (const record of records) {
+        await dbPut(db, 'tmdb', { ...record, expiresAt: 0 });
+        memory.delete(record.key);
+      }
+      return records.length;
     },
     /** Forgets every cached answer (metadata, matches, genres, recommendations). */
     async clearAll() {
