@@ -875,3 +875,9 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - Live player: play after a pause goes on from where it stopped; "Back to live" (fast forward icon) appears next to play / pause and opens the stream again at now.
 - Tests: Trakt playback matching and removal, watch-state rewind, bar entry of the page on screen, episode placeholder, button with icon and label, notice timing, live pause / Back to live. Browser checks with the mock: same page kept from the bar, Rewind (buttons, note, focus on Play, point at 0), the add provider button. Not verified on the TV.
 
+### Patch 173 — Audio tracks: the language of the app, tracks listed late, desktop
+- The first time a stream has two or more audio tracks and the one playing is not in the language of the app, the track in that language is chosen (no new preference; `preferredAudioTrack` / `isLanguage` match "it", "ita", "it-IT", "Italian", "italiano"…); the file's default stays when it has none. The user's choice is never overridden; every new stream starts again from its default.
+- The tracks are looked at again every 5 s for the first minute of a stream, not only at the start: the Audio button (and Subtitles on live channels) appears for streams that list them late.
+- Desktop: the window enables Chromium's `AudioVideoTracks` feature (`webPreferences.enableBlinkFeatures`), so `video.audioTracks` exists: checked in Chromium with a WebM with two audio tracks (absent without it, listed and switched with it). Streams played through the demuxer (TS) still offer one audio track. webOS: unchanged, it depends on what the TV's web engine exposes.
+- Tests: language matching and track choice, a stream that lists its audio late with the app language chosen once. Not verified on the TV.
+

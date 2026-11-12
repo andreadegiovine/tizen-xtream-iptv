@@ -144,3 +144,30 @@ test('live: Subtitles only when the stream carries subtitle tracks; play after a
   expect(page.el.querySelector('.player-btn.focused').getAttribute('aria-label')).toBe('Pause');
   page.destroy();
 });
+
+test('audio listed late: looked at again after the start; the language of the app is chosen once, a choice of the user stays', async () => {
+  const { page, engine } = await setup();
+  let tracks = [];
+  engine.getAudioTracks = () => tracks;
+  engine.setAudioTrack = jest.fn((index) => { tracks = tracks.map((track) => ({ ...track, current: track.index === index })); });
+  engine.handlers.onPrepared();
+  engine.handlers.onBufferingDone();
+  await wait();
+  expect(visible(page)).not.toContain('Audio');
+  // The stream lists its audio later (an HLS audio group): seen at the next look; the app speaks English: the English one is chosen.
+  tracks = [{ index: 0, language: 'ita', current: true }, { index: 1, language: 'eng', current: false }];
+  const realNow = Date.now;
+  const start = realNow();
+  Date.now = () => start + 6000;
+  await wait(700);
+  expect(visible(page)).toContain('Audio');
+  expect(engine.setAudioTrack).toHaveBeenCalledWith(1);
+  // The user goes back to Italian: the next looks leave it.
+  engine.setAudioTrack(0);
+  Date.now = () => start + 12000;
+  await wait(700);
+  expect(engine.setAudioTrack).toHaveBeenCalledTimes(2);
+  expect(tracks.find((track) => track.current).language).toBe('ita');
+  Date.now = realNow;
+  page.destroy();
+});

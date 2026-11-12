@@ -197,6 +197,37 @@ export function cleanSubtitle(text) {
     .trim();
 }
 
+/** Other spellings of a language a stream may carry (ISO 639-2/B and /T, the English and own names). */
+const LANGUAGE_ALIASES = {
+  it: ['ita', 'italian', 'italiano'],
+  en: ['eng', 'english'],
+  es: ['spa', 'spanish', 'español', 'espanol'],
+  fr: ['fre', 'fra', 'french', 'français', 'francais'],
+  de: ['ger', 'deu', 'german', 'deutsch'],
+  pt: ['por', 'portuguese', 'português', 'portugues'],
+};
+
+/** True when a track's language (a code or a name, any case, possibly with a region: "it-IT", "ita") is the language `locale`. */
+export function isLanguage(code, locale) {
+  const base = String(locale || '').toLowerCase().split(/[-_]/)[0];
+  const value = String(code || '').toLowerCase().trim();
+  if (!base || !value) return false;
+  const head = value.split(/[-_]/)[0];
+  return head === base || (LANGUAGE_ALIASES[base] || []).indexOf(head) >= 0 || (LANGUAGE_ALIASES[base] || []).indexOf(value) >= 0;
+}
+
+/**
+ * The audio track to switch to so that the language of the app is heard: the index of the first track in that language, or null when the
+ * track playing already is in it, or none is (the file's default stays).
+ */
+export function preferredAudioTrack(tracks, locale) {
+  if (!tracks || tracks.length < 2) return null;
+  const current = tracks.find((track) => track.current);
+  if (current && isLanguage(current.language, locale)) return null;
+  const match = tracks.find((track) => isLanguage(track.language, locale));
+  return match ? match.index : null;
+}
+
 /** Name shown in the subtitle list; `position` (1-based) names tracks that carry no language. */
 export function subtitleLabel(track, position, fallback) {
   const code = String(track.language || '').toLowerCase();

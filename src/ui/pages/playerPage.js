@@ -6,7 +6,7 @@ import { t, i18n } from '../../i18n/index.js';
 import { Action } from '../../core/input.js';
 import { log } from '../../core/logger.js';
 import { platform } from '../../platform/index.js';
-import { createPlayerController, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer } from '../../services/playerController.js';
+import { createPlayerController, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer, preferredAudioTrack } from '../../services/playerController.js';
 import { ASPECT_MODES } from '../../services/playerEngines.js';
 import { youtubeStreamUrl } from '../../services/trailer.js';
 import { formatClockTime } from '../../core/clock.js';
@@ -59,6 +59,12 @@ export function createPlayerPage(ctx, params) {
   let streamUrl = ''; // the address being played (its hash finds the subtitles made for that file)
   let audioTrack = null; // null = the file's default
   let appliedFor = 0; // load token the aspect mode was last applied to
+  // The tracks of a stream are looked at again for a while after it starts: some (HLS audio groups, DVB subtitles) are listed late.
+  const TRACK_CHECK_MS = 5000;
+  const TRACK_CHECK_FOR_MS = 60000;
+  let trackCheckAt = 0;
+  let trackCheckUntil = 0;
+  let audioPicked = false; // the audio of this stream was chosen (by the user, or the language of the app once)
   let focusMode = false; // the D-pad moves over the controls (progress pointer + buttons) instead of seeking
   let barFocus = false; // focus on the progress pointer (otherwise on a button)
   let focusIndex = 0;
@@ -452,6 +458,30 @@ export function createPlayerPage(ctx, params) {
     else ctx.notices.info(text, { scope: 'playback', key: 'aspect' });
   }
 
+  /**
+   * The tracks of the stream playing: Audio shows with two or more (the first time, the one in the language of the app is chosen, when
+   * the file has one and plays another), Subtitles of a live channel with one or more. Looked at again every TRACK_CHECK_MS for a while.
+   */
+  function checkTracks() {
+    trackCheckAt = Date.now() + TRACK_CHECK_MS;
+    try {
+      const tracks = engine.getAudioTracks ? engine.getAudioTracks() : [];
+      setAudioVisible(tracks.length > 1);
+      if (tracks.length > 1 && !audioPicked) {
+        audioPicked = true;
+        const pick = preferredAudioTrack(tracks, i18n.getLocale());
+        if (pick !== null && engine.setAudioTrack) {
+          audioTrack = pick;
+          engine.setAudioTrack(pick);
+          log.info('Audio track in the language of the app', pick);
+        }
+      }
+      if (isLive) setVisible('subtitles', Boolean(engine.getSubtitleTracks && engine.getSubtitleTracks().length));
+    } catch (err) {
+      log.warn('Track check failed', err && err.message);
+    }
+  }
+
   async function openAudio() {
     const tracks = engine.getAudioTracks ? engine.getAudioTracks() : [];
     if (tracks.length < 2) {
@@ -463,6 +493,7 @@ export function createPlayerPage(ctx, params) {
     const value = await ctx.dialogs.choose({ title: t('player.audio'), options, selected: audioTrack === null ? now.index : audioTrack });
     if (value === null || destroyed) return;
     audioTrack = value;
+    audioPicked = true;
     showControls();
     const chosen = options.find((o) => o.value === value);
     ctx.notices.info(`${t('player.audio')}: ${chosen ? chosen.label : ''}`, { scope: 'playback', key: 'track' });
@@ -500,14 +531,15 @@ export function createPlayerPage(ctx, params) {
     if (state.status === 'playing' && appliedFor !== loadToken) {
       appliedFor = loadToken;
       if (engine.setAspect && aspect !== 'fit') engine.setAspect(aspect);
-      if (engine.getAudioTracks) setAudioVisible(engine.getAudioTracks().length > 1);
-      if (isLive) setVisible('subtitles', Boolean(engine.getSubtitleTracks && engine.getSubtitleTracks().length));
+      trackCheckUntil = Date.now() + TRACK_CHECK_FOR_MS;
+      checkTracks();
       if (resumePaused) {
         // Back in the app after it was hidden while paused: paused again on the first picture.
         resumePaused = false;
         controller.togglePause();
       }
     }
+    if (state.status === 'playing' && Date.now() >= trackCheckAt && Date.now() < trackCheckUntil) checkTracks();
     if ((state.status === 'paused' || state.status === 'error' || state.status === 'recovering') && state.status !== lastStatus) showControls();
     if (state.status === 'error' && lastStatus !== 'error') showPlayerError(`${t('error.PLAYER')} ${state.error || ''}`.trim());
     else if (state.status === 'playing') closePlayerError();
@@ -573,6 +605,8 @@ export function createPlayerPage(ctx, params) {
     nextOffered = false;
     subtitles.reset();
     audioTrack = null;
+    audioPicked = false;
+    trackCheckUntil = 0;
     setAudioVisible(false);
     setVisible('goLive', false); // opened again: live
     titleEl.textContent = [title, current().title].filter(Boolean).join(' · ');

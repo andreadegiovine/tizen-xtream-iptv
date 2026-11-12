@@ -41,7 +41,8 @@ function createWindow() {
     backgroundColor: '#0c0c12',
     autoHideMenuBar: true,
     icon: path.join(ROOT, 'icon.png'),
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: false },
+    // AudioVideoTracks: `video.audioTracks` (off by default in Chromium), so the player lists the audio tracks of a file and switches them.
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: false, enableBlinkFeatures: 'AudioVideoTracks' },
   });
   win.removeMenu();
   // The interface is drawn for 1920x1080: the zoom makes it fit the window (and the screen in full screen).
