@@ -4,6 +4,7 @@ import { createSkeletonLine } from '../atoms/skeleton.js';
 import { createListRow } from '../atoms/listRow.js';
 import { t, i18n } from '../../i18n/index.js';
 import { createTypedRows } from '../components/typedRows.js';
+import { SEARCH_BAR_ZONE } from '../components/topbar.js';
 import { createSkeletonCard } from '../components/card.js';
 import { collectionEntry } from '../../services/collections.js';
 import { getEntry } from '../../services/catalogQuery.js';
@@ -120,6 +121,8 @@ export function createSearchPage(ctx, params = {}) {
       recentRegistered = true;
     }
     if (ctx.linkSearchDown) ctx.linkSearchDown(RECENT_ZONE);
+    // Up from the first recent search: the field again, without opening the keyboard (OK on it opens it).
+    ctx.focus.link(RECENT_ZONE, 'up', SEARCH_BAR_ZONE);
   }
 
   /** Collections whose name matches, as card entries (shown first, in their own carousel). */

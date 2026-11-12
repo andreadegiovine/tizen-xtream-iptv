@@ -125,7 +125,7 @@ export function createProviderSetupPage(ctx, params = {}) {
         ctx.catalog.start({ force: true });
         ctx.notices.success(t('notice.added'), { key: 'provider' });
         if (!destroyed) {
-          if (params.firstRun) ctx.router.reset('home', { section: 'home' });
+          if (params.firstRun) ctx.router.reset('home', { section: 'home', focusTopbar: true }); // as at every start: Home of the bar
           else ctx.router.reset('providers', { section: 'provider' });
         }
       }

@@ -851,3 +851,8 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - Settings › Advanced: "Check for updates" first (only in the packages that update themselves, the store ones never contact the update site): looks at version.json now, downloads a newer build and shows the restart dialog; otherwise says this is the latest version, that a new package is needed, or that the check failed (`checkUpdates` in `src/app/updates.js`, shared with the check at start).
 - Home: a card built again (the page coming back from a title) shows a picture already seen in this session at once, from the browser's cache, without the loading skeleton: the whole first row no longer sweeps and reloads its posters on Back (`markShown` / `wasShown` in `src/ui/lazyImage.js`).
 - Tests: `test/app/checkUpdates.test.js`; browser checks with the mock (search Back / Up / x, recent searches, settings version, posters on Back: no sweep) and the other scripts pass. Not verified on the TV.
+
+### Patch 170 — Start on Home of the bar; Up from the first recent search to the field
+- At start (and after the first provider setup) the focus is on Home of the top bar, no longer on the first card of Home's first row (Home opened with `focusTopbar`); OK on Home of the bar still lands on the first card.
+- Search: Up from the first of the recent searches goes back to the field without opening the keyboard (OK on the field opens it); the results still keep the focus (Back to the field).
+- Browser checks with the mock: the focus at start and after the setup, Up from the recent searches (field focused, keyboard closed), plus the navigation, mouse, settings and cards scripts. Not verified on the TV.

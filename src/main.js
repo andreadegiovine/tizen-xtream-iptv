@@ -661,7 +661,7 @@ async function boot() {
   });
   if (hasProvider) await ctx.refreshAdult();
   if (hasProvider) {
-    router.reset('home', { section: 'home' });
+    router.reset('home', { section: 'home', focusTopbar: true }); // at start the focus is on Home of the bar
     showSubscriptionNotice(notices, hasProvider);
     // Stale-while-revalidate: the cached catalog is usable at once, lists older than 12 h refresh in background.
     catalog.start();
