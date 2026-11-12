@@ -191,6 +191,29 @@ test('another app in front: the video stops; back in the app it starts again', a
   delete document.hidden;
 });
 
+test('another app in front while paused: back in the app it is paused again on the first picture', async () => {
+  const s = setup({ fetch: async () => null });
+  await wait();
+  s.start();
+  await wait(50);
+  s.page.onAction(Action.PLAY_PAUSE); // paused
+  expect(s.engine.pause).toHaveBeenCalledTimes(1);
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+  document.dispatchEvent(new Event('visibilitychange'));
+  await wait(50);
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+  document.dispatchEvent(new Event('visibilitychange'));
+  await wait(50);
+  expect(s.engine.start).toHaveBeenCalledTimes(2);
+  expect(s.engine.pause).toHaveBeenCalledTimes(1); // not before it plays
+  s.start();
+  await wait(50);
+  expect(s.engine.pause).toHaveBeenCalledTimes(2); // paused again
+  expect(s.page.el.querySelector('.player-status').textContent).toBe('Paused');
+  s.page.destroy();
+  delete document.hidden;
+});
+
 test('an MP4 with tx3g tracks: the app reads them and draws the chosen one', async () => {
   const fs = require('fs');
   const path = require('path');

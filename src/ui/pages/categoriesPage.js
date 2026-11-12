@@ -133,7 +133,7 @@ export function createCategoriesPage(ctx, params = {}) {
     ctx.notices.info(t('common.cancelled'), { key: 'multi' });
   }
 
-  const multiButton = createButton({ label: t('categories.multi'), icon: 'checkDouble', iconOnly: true, className: 'categories-multi', title: t('categories.multi') });
+  const multiButton = createButton({ label: t('categories.multi'), icon: 'checkDouble', iconOnly: true, className: 'categories-multi' });
   let multiFocused = false;
   /** Focused look (white background, dark icon) when it holds the focus and for as long as the multiple selection is on. */
   const showMulti = () => multiButton.classList.toggle('focused', armed || multiFocused);

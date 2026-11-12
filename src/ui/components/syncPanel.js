@@ -53,8 +53,8 @@ export function describeEpg(meta, running, locale) {
 
 /** The remove + refresh buttons at the end of a table row (labels are the aria-labels). */
 function rowButtons(removeLabel, refreshLabel) {
-  const remove = createButton({ label: removeLabel, icon: 'remove', variant: 'danger', iconOnly: true, className: 'panel-button', title: removeLabel });
-  const refresh = createButton({ label: refreshLabel, icon: 'refresh', variant: 'primary', iconOnly: true, className: 'panel-button', title: refreshLabel });
+  const remove = createButton({ label: removeLabel, icon: 'remove', variant: 'danger', iconOnly: true, className: 'panel-button' });
+  const refresh = createButton({ label: refreshLabel, icon: 'refresh', variant: 'primary', iconOnly: true, className: 'panel-button' });
   return { remove, refresh, el: createRowButtons(remove, refresh) };
 }
 
@@ -275,7 +275,7 @@ export function createTmdbPanel(ctx) {
 
 /** "Trakt" table: connected account and sync state; connect, remove and sync buttons (the last two only when connected). */
 export function createTraktPanel(ctx) {
-  const mk = (variant, name, label) => createButton({ label, icon: name, variant, iconOnly: true, className: 'panel-button', title: label });
+  const mk = (variant, name, label) => createButton({ label, icon: name, variant, iconOnly: true, className: 'panel-button' });
   const connectButton = mk('primary', 'user', t('settings.traktConnect'));
   const removeButton = mk('danger', 'remove', t('settings.traktRemove'));
   const syncButton = mk('primary', 'refresh', t('settings.traktSync'));
@@ -398,7 +398,7 @@ export function createOperationsPanel(ctx) {
     const list = ctx.operations.list();
     el.style.display = list.length ? '' : 'none'; // nothing runs: the table is not shown
     api.rows = list.map((op) => {
-      const stop = createButton({ label: t('operations.stop'), icon: 'stop', variant: 'primary', iconOnly: true, className: 'panel-button op-stop', title: t('operations.stop') });
+      const stop = createButton({ label: t('operations.stop'), icon: 'stop', variant: 'primary', iconOnly: true, className: 'panel-button op-stop' });
       const statusText = op.queued ? t('common.queued') : t('operations.since', { time: formatDateTime(op.startedAt, i18n.getLocale()) });
       body.appendChild(createTableRow({ name: op.label || t(`operations.${op.id}`), statusText, buttons: stop, className: 'op-row', withButtons: false }).el);
       return { el: stop, refresh: async () => undefined, activate: async () => ctx.operations.cancel(op.id) };

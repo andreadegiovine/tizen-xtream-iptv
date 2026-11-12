@@ -7,6 +7,7 @@ import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel } from '../focus/models.js';
 import { ensureVisible } from '../scroll.js';
 import { log } from '../../core/logger.js';
+import { openProviderDialog } from './providerSetupPage.js';
 
 const ZONE_ID = 'providers';
 const COLUMNS = 4;
@@ -57,7 +58,7 @@ export function createProvidersPage(ctx, params = {}) {
         if (cell.action === ProviderAction.ADD) {
           return createButton({ label: t('setup.title'), icon: 'add', variant: 'primary', iconOnly: true, className: 'provider-add' });
         }
-        const labelKey = cell.action === ProviderAction.USE && cell.disabled ? 'common.active' : `providers.${cell.action}`;
+        const labelKey = cell.action === ProviderAction.USE && cell.disabled ? 'providers.current' : `providers.${cell.action}`;
         // Use / Active keep their label; the others are icons only (categories: the one of the sidebar).
         const iconName = { [ProviderAction.CATEGORIES]: 'categories', [ProviderAction.EDIT]: 'edit', [ProviderAction.REMOVE]: 'remove' }[cell.action];
         return createButton({
@@ -105,7 +106,7 @@ export function createProvidersPage(ctx, params = {}) {
         ctx.router.push('categories', { providerId: provider.id, section: 'provider' });
         break;
       case ProviderAction.EDIT:
-        ctx.router.push('providerSetup', { providerId: provider.id, section: 'provider' });
+        if (await openProviderDialog(ctx, { providerId: provider.id })) await render(cells.indexOf(cell));
         break;
       case ProviderAction.REMOVE: {
         const ok = await ctx.dialogs.confirm({
@@ -136,7 +137,8 @@ export function createProvidersPage(ctx, params = {}) {
         break;
       }
       default:
-        ctx.router.push('providerSetup', { section: 'provider' });
+        // Added: it is the provider in use now (its row is the last one, before "add").
+        if (await openProviderDialog(ctx)) await render(cells.length - 1);
     }
   }
 

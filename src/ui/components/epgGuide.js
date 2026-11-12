@@ -2,6 +2,7 @@ import { h } from '../dom.js';
 import { scrollHeld } from '../scroll.js';
 import { createHint } from '../atoms/hint.js';
 import { createIconButton } from '../atoms/iconButton.js';
+import { setTip } from '../tooltip.js';
 import { createSkeletonBlock } from '../atoms/skeleton.js';
 import { createCard } from './card.js';
 import { t, i18n } from '../../i18n/index.js';
@@ -89,8 +90,10 @@ export function scrollFor(segment, start, x, width) {
  * default the one at the time the focus was on). `programmesOnly`: Left / Right skip the holes, only programmes take the focus.
  * OK held on a row selects it (channel and programmes) and shows `rowActions` ({ id, icon, label }, left to right) at its right:
  * Left / Right move between them, OK runs `onRowAction(id, entry, row)`, Back (`cancelRowMode()`) gives the normal focus back.
+ * `isScheduled(entry, programme)`: a programme whose viewing is scheduled, drawn like the focused one (`repaintScheduled()` after a change).
+ * Every programme has a tooltip: its full title, and its start and end times on the line below.
  */
-export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTimeFormat = () => 'auto', enrich = null, now = Date.now, emptyText = null, pickSegment = null, programmesOnly = false, rowActions = [], onRowAction = null, defaultRowAction = 0 }) {
+export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTimeFormat = () => 'auto', enrich = null, now = Date.now, emptyText = null, pickSegment = null, programmesOnly = false, rowActions = [], onRowAction = null, defaultRowAction = 0, isScheduled = null }) {
   let start = floorHalfHour(now()) - PAST_MS; // moves on with the half hours while the guide stays open
   let end = start + SPAN_MS + PAST_MS;
   const ruler = h('div', { class: 'epg-ruler' });
@@ -99,7 +102,7 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
   const rowsEl = h('div', { class: 'epg-rows' });
   const nowLine = h('div', { class: 'epg-now' });
   const status = createHint({ className: 'epg-status' });
-  const actionButtons = rowActions.map((a) => createIconButton({ icon: a.icon, label: a.label, title: a.label }));
+  const actionButtons = rowActions.map((a) => createIconButton({ icon: a.icon, label: a.label }));
   const actionsEl = h('div', { class: 'guide-row-actions' }, actionButtons);
   actionsEl.style.display = 'none';
   const selection = h('div', { class: 'guide-row-selection' });
@@ -296,6 +299,11 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
     return rowSegments(list, start, end);
   }
 
+  const clockText = (ms) => formatClockTime(new Date(ms), getTimeFormat(), i18n.getLocale());
+  /** The tooltip of a programme: "Full title" and, below, "08:30 -> 09:40" (its real times, also where the axis cuts it). */
+  const programmeTip = (seg) => (seg.programme ? `${seg.title || noInfo()}\n${clockText(seg.programme.start)} -> ${clockText(seg.programme.stop)}` : '');
+  const scheduled = (entry, seg) => Boolean(isScheduled && entry && seg.programme && isScheduled(entry, seg.programme));
+
   function buildRow(row) {
     const entry = entries[row];
     const track = h('div', { class: 'epg-track' });
@@ -310,6 +318,8 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
     const segNodes = segments.map((seg, segIndex) => {
       const node = h('div', { class: `epg-prog${seg.empty ? ' empty' : ''}${seg.loading ? ' loading' : ''}${seg.programme && seg.start <= now() && seg.stop > now() ? ' live' : ''}` }, h('span', { class: `epg-prog-title${seg.loading ? ' skeleton-line' : ''}`, text: seg.loading ? '' : seg.title || noInfo() }));
       node.setAttribute('data-seg', segIndex); // the pointer finds the programme under it (pointAt)
+      setTip(node, programmeTip(seg));
+      if (scheduled(entry, seg)) node.classList.add('scheduled');
       node.style.left = `${xOf(seg.start, start)}px`;
       node.style.width = `${Math.max(2, xOf(seg.stop, start) - xOf(seg.start, start))}px`;
       track.appendChild(node);
@@ -564,6 +574,10 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
       return total;
     },
     /** The guide was downloaded again: the programmes of the rows are read again (the rows and the focus stay). */
+    /** The scheduled programmes drawn again (one was added or removed). */
+    repaintScheduled() {
+      rowNodes.forEach((node) => node.segNodes.forEach((segNode, i) => segNode.classList.toggle('scheduled', scheduled(node.entry, node.segments[i]))));
+    },
     reloadProgrammes() {
       guide.clear();
       rowNodes.forEach((node) => node.el.remove());

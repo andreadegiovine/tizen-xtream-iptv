@@ -217,3 +217,32 @@ test('programmesOnly: Left / Right skip the holes, only programmes take the focu
   g.destroy();
   g.el.remove();
 });
+
+test('every programme has a tooltip (full title, then its times); the scheduled ones stay marked', async () => {
+  const now = 1000 * 30 * M;
+  const rows = [{ key: 'live:1', type: 'live', name: 'One', epgChannelId: 'one' }];
+  const guide = { one: [{ start: now - 10 * M, stop: now + 20 * M, title: 'A very long news title' }, { start: now + 20 * M, stop: now + 80 * M, title: 'Film' }] };
+  let scheduled = new Set([now + 20 * M]);
+  const g = createEpgGuide({
+    loadRows: async (offset, limit) => ({ entries: rows.slice(offset, offset + limit) }),
+    countRows: async () => rows.length,
+    programmes: async (ids) => new Map(ids.map((id) => [id, guide[id] || []])),
+    onOpen: () => undefined,
+    getTimeFormat: () => '24h',
+    isScheduled: (entry, programme) => entry.epgChannelId === 'one' && scheduled.has(programme.start),
+    now: () => now,
+  });
+  document.body.appendChild(g.el);
+  await g.start();
+  await tick();
+  await tick();
+  const progs = Array.from(g.el.querySelectorAll('.epg-prog')).filter((node) => !node.classList.contains('empty'));
+  const clock = (ms) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  // Its real start, also where the axis cuts it.
+  expect(progs[0].getAttribute('data-tip')).toBe(`A very long news title\n${clock(now - 10 * M)} -> ${clock(now + 20 * M)}`);
+  expect(progs.map((node) => node.classList.contains('scheduled'))).toEqual([false, true]);
+  scheduled = new Set();
+  g.repaintScheduled();
+  expect(g.el.querySelectorAll('.epg-prog.scheduled')).toHaveLength(0);
+  g.destroy();
+});

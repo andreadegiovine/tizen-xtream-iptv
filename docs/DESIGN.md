@@ -78,7 +78,7 @@ Decisions agreed during the design phase. Update this file when a decision chang
 
 
 ## Provider (2026-11-02)
-- The Provider section = list (`providers`) with Use/Edit/Remove per row and "Add"; the form (`providerSetup`) serves both adding and editing (`params.providerId`).
+- The Provider section = list (`providers`) with Activate ("Current" on the provider in use)/Categories/Edit/Remove per row and "Add"; adding and editing open the provider form in a dialog (`openProviderDialog`, `dialogs.panel`); the `providerSetup` page shows the same form (`createProviderSetup`) only at the first start.
 - Changing the active provider = `setActiveId` + `catalog.start()` (cancels the running job).
 
 ## Browsing the catalog (2026-11-02)
@@ -202,7 +202,8 @@ For a title with TMDB genres (`entry_genre_tmdb`, `|tmdb`) the provider rows (`e
 - Player (since patch 120): when Subtitles is pressed and a key is set (whatever tracks the engine lists), before the list opens, the TMDB id comes from the key (`movie:t…`) or from the provider row (`portableKeyFor`); notice "Downloading subtitles" (closed when the title changes or the player closes), then "Subtitles downloaded: <language>" or "none found" / "failed". The track is added to the Subtitles list (`value: 'online'`); when chosen, the page draws the cue at `engine.getTime()` every 200 ms (the engine's own track is switched off).
 
 ## Series: episode buttons and end credits (patch 118)
-- The player has no back / forward 30 s buttons any more (the pointer, left / right and rewind / fast forward seek). Series get previous / next episode buttons, visible only when that episode exists (no tooltip).
+- The player has no back / forward 30 s buttons any more (the pointer, left / right and rewind / fast forward seek). Series get previous / next episode buttons, visible only when that episode exists.
+- Tooltips (`ui/tooltip.js`, since patch 171): every button that shows only an icon has its name as a tooltip, shown after 2 s of focus (or of the pointer resting on it) by one floating box (`body > .tooltip`, never cut by an `overflow`), above by default (`setTip(el, text, 'down')`: below, as in the top bar and for the player's Back). Player buttons all have one (previous / next channel: the name of the channel it goes to); guide programmes show their full title and "08:30 -> 09:40". Dialogs: one button full width, two on one line (Cancel on the left, the confirming red one on the right).
 - End credits (`creditsStore.js`, app database, key `creditsStart`): seconds before the end, per series, under the shared key (`series:t…`, from `portableKeyFor` when the provider row has a TMDB id) or the provider's own one. The button (last on the right, tooltip "End credits start", shown only with "play the next episode" on) saves `duration - position`; pressed again ("Remove end credits start", accent colour) it deletes it. Every episode draws the part of the bar after `duration - offset` darker (`.player-credits`) and offers the next episode (10 s countdown) from that point; an episode shorter than the offset, or a series without a point, keeps the rule of the last two minutes.
 
 ## Clear button of the text fields (patch 119)

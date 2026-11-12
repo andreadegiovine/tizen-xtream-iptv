@@ -3,6 +3,7 @@ import { i18n, t, detectLocale } from './i18n/index.js';
 import { openAppDb } from './db/appDb.js';
 import { InputService, Action, isTextEditing } from './core/input.js';
 import { createPointer } from './ui/pointer.js';
+import { startTooltips } from './ui/tooltip.js';
 import { log } from './core/logger.js';
 import { providerHiddenSections } from './services/providerTypes.js';
 import { visibleFavorites } from './services/favoriteEntries.js';
@@ -629,6 +630,7 @@ async function boot() {
   // Mouse, touch, Magic Remote: the same focus as the keys (the element under the pointer), a click is OK, Back from a mouse button or
   // a click outside a dialog.
   createPointer({ focus, onBack: () => handleAction(Action.BACK), isTextEditing: () => isTextEditing(document) });
+  startTooltips();
 
   log.info('Xtream IPTV started');
   // History and progress that could not be sent last time, then what was watched only here.

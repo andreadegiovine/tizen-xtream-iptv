@@ -21,7 +21,7 @@ async function setup() {
     { key: 'live:gRai', type: 'live', name: 'Rai 1', isGroup: true, defaultId: 11, members: [{ id: 11, name: 'Rai 1 HD' }, { id: 12, name: 'Rai 1 SD' }] },
   ]);
   await dbPutMany(db, 'entry_cat', [row('live:nSky', 30), row('live:gRai', 20), row('live:i2', 10)]);
-  const engine = { available: () => true, start: jest.fn(), play: jest.fn(), pause: jest.fn(), seekTo: jest.fn(), stop: jest.fn(), getTime: () => 0, getDuration: () => 0 };
+  const engine = { available: () => true, start: jest.fn((url, opts) => (engine.handlers = opts.handlers)), play: jest.fn(), pause: jest.fn(), seekTo: jest.fn(), stop: jest.fn(), getTime: () => 0, getDuration: () => 0 };
   const now = Date.now();
   const client = { streamUrl: (type, id) => `http://h/${type}/${id}` };
   const ctx = {
@@ -42,7 +42,7 @@ async function setup() {
 }
 
 const visible = (page) => Array.from(page.el.querySelectorAll('.player-btn')).filter((b) => b.style.display !== 'none').map((b) => b.getAttribute('aria-label'));
-const focusedTip = (page) => (page.el.querySelector('.player-btn.focused .player-btn-tip') || {}).textContent;
+const focusedTip = (page) => (page.el.querySelector('.player-btn.focused') || { getAttribute: () => null }).getAttribute('data-tip');
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -52,8 +52,11 @@ test('live: end of the programme after LIVE; network, previous and next before i
   const { page, ctx, engine } = await setup();
   expect(page.el.querySelector('.player-time').textContent).toMatch(/^LIVE · ends at \d\d:\d\d$/);
   expect(page.el.querySelector('.player-now').textContent).toBe('News');
-  expect(visible(page).slice(0, 3)).toEqual(['Open the network', 'Previous channel', 'Next channel']); // Versions hidden: not a group
-  page.onAction(Action.ENTER); // focus on the controls: the first button
+  expect(visible(page).slice(0, 4)).toEqual(['Pause', 'Open the network', 'Previous channel', 'Next channel']); // Versions hidden: not a group
+  expect(visible(page)).not.toContain('Subtitles'); // the stream has no subtitle tracks
+  page.onAction(Action.ENTER); // focus on the controls: play / pause
+  expect(focusedTip(page)).toBe('Pause');
+  page.onAction(Action.RIGHT); // the network
   page.onAction(Action.RIGHT); // previous channel: the last of "show all" (wraps)
   await wait();
   expect(focusedTip(page)).toBe('Cielo');
@@ -85,7 +88,8 @@ test('live group: "Versions" lists its streams and plays the chosen one', async 
   expect(page.el.querySelector('.player-title').textContent).toBe('Rai 1');
   expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).toBe('http://h/live/11');
   ctx.dialogs.choose.mockResolvedValueOnce(12);
-  page.onAction(Action.ENTER); // focus on the first button: Versions (the group is in no network)
+  page.onAction(Action.ENTER); // focus on play / pause, then Versions (the group is in no network)
+  page.onAction(Action.RIGHT);
   page.onAction(Action.ENTER);
   await wait();
   expect(ctx.dialogs.choose.mock.calls[0][0]).toMatchObject({ options: [{ label: 'Rai 1 HD', value: 11 }, { label: 'Rai 1 SD', value: 12 }], selected: 11 });
@@ -99,7 +103,7 @@ test('live: the arrows do not change channel, they bring the controls with the f
   page.onAction(Action.DOWN);
   await wait();
   expect(engine.start.mock.calls.length).toBe(starts); // same channel
-  expect(page.el.querySelector('.player-btn.focused').getAttribute('aria-label')).toBe('Open the network'); // the first one shown
+  expect(page.el.querySelector('.player-btn.focused').getAttribute('aria-label')).toBe('Pause'); // the first one: play / pause
   page.onBack(); // out of the controls
   page.onAction(Action.UP);
   await wait();
@@ -109,5 +113,23 @@ test('live: the arrows do not change channel, they bring the controls with the f
   page.onAction(Action.CHANNEL_DOWN); // CH- changes channel: the last of "show all" (wraps)
   await wait();
   expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).toBe('http://h/live/2');
+  page.destroy();
+});
+
+test('live: Subtitles only when the stream carries subtitle tracks; play / pause, and play again goes back live', async () => {
+  const { page, engine } = await setup();
+  engine.getSubtitleTracks = () => [{ index: 0, language: 'ita' }];
+  engine.handlers.onPrepared();
+  engine.handlers.onBufferingDone();
+  await wait();
+  expect(visible(page)).toContain('Subtitles');
+  const starts = engine.start.mock.calls.length;
+  const plays = engine.play.mock.calls.length;
+  page.onAction(Action.PLAY_PAUSE);
+  expect(engine.pause).toHaveBeenCalledTimes(1);
+  page.onAction(Action.PLAY_PAUSE);
+  await wait();
+  expect(engine.start.mock.calls.length).toBe(starts + 1); // loaded again: live, not from where it stopped
+  expect(engine.play.mock.calls.length).toBe(plays); // not resumed where it was
   page.destroy();
 });

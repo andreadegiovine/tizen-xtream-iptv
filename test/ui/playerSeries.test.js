@@ -74,7 +74,7 @@ test('no back / forward 30 s buttons; previous / next episode only when there is
   expect(s.visible('Previous episode')).toBe(false);
   expect(s.visible('Next episode')).toBe(true);
   s.focus('Next episode');
-  expect(s.button('Next episode').querySelector('.player-btn-tip')).toBeNull(); // no tooltip, unlike the channel buttons
+  expect(s.button('Next episode').getAttribute('data-tip')).toBe('Next episode'); // its name as tooltip
   s.page.onAction(Action.ENTER);
   await wait();
   expect(s.engine.start).toHaveBeenLastCalledWith('http://h/series/12.mkv', expect.anything());
@@ -98,7 +98,7 @@ test('credits button: only with "play the next episode" on, last on the right', 
   const right = on.page.el.querySelectorAll('.player-group')[1];
   expect(right.lastChild).toBe(on.button('End credits start'));
   on.focus('End credits start');
-  expect(on.button('End credits start').querySelector('.player-btn-tip').textContent).toBe('End credits start');
+  expect(on.button('End credits start').getAttribute('data-tip')).toBe('End credits start');
   on.page.destroy();
 });
 

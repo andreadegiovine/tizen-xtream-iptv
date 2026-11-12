@@ -1,6 +1,6 @@
 import { createButton } from '../../src/ui/atoms/button.js';
-import { createIconButton, setIconButtonActive } from '../../src/ui/atoms/iconButton.js';
-import { createPlayerButton, setPlayerButtonIcon } from '../../src/ui/atoms/playerButton.js';
+import { createIconButton, setIconButtonActive, setIconButtonLabel } from '../../src/ui/atoms/iconButton.js';
+import { createPlayerButton, setPlayerButtonIcon, setPlayerButtonLabel } from '../../src/ui/atoms/playerButton.js';
 import { createChip, createChipLabel } from '../../src/ui/atoms/chip.js';
 import { createToggle, setToggle } from '../../src/ui/atoms/toggle.js';
 import { createTextInput } from '../../src/ui/atoms/textInput.js';
@@ -18,16 +18,18 @@ import { createMetaSeparator, createMetaRating } from '../../src/ui/atoms/metaPa
 
 const classes = (el) => Array.from(el.classList).sort().join(' ');
 
-test('button: text, primary, icon only with its accessible name and title', () => {
+test('button: text, primary, icon only with its accessible name and tooltip', () => {
   const text = createButton({ label: 'Save', variant: 'primary' });
   expect(text.tagName).toBe('BUTTON');
   expect(text.type).toBe('button');
   expect(classes(text)).toBe('btn primary');
   expect(text.textContent).toBe('Save');
-  const only = createButton({ label: 'Remove', icon: 'remove', variant: 'danger', iconOnly: true, className: 'panel-button', title: 'Remove' });
+  expect(text.getAttribute('data-tip')).toBeNull(); // its text is on it
+  const only = createButton({ label: 'Remove', icon: 'remove', variant: 'danger', iconOnly: true, className: 'panel-button' });
   expect(classes(only)).toBe('btn danger icon-only panel-button');
   expect(only.getAttribute('aria-label')).toBe('Remove');
-  expect(only.getAttribute('title')).toBe('Remove');
+  expect(only.getAttribute('data-tip')).toBe('Remove');
+  expect(only.getAttribute('data-tip-dir')).toBeNull(); // above
   expect(only.textContent).toBe('');
   expect(only.querySelector('svg.icon-remove')).not.toBeNull();
 });
@@ -38,9 +40,16 @@ test('icon box, player button and their states', () => {
   setIconButtonActive(box, false);
   expect(classes(box)).toBe('icon-btn');
   expect(createIconButton({ icon: 'pin', tag: 'span', className: 'browse-fav' }).tagName).toBe('SPAN');
-  const { el, tipEl } = createPlayerButton({ icon: 'pause', label: 'Pause', tip: true });
+  expect(box.getAttribute('data-tip')).toBe('Favourite');
+  setIconButtonLabel(box, 'Not favourite');
+  expect(box.getAttribute('aria-label')).toBe('Not favourite');
+  expect(box.getAttribute('data-tip')).toBe('Not favourite');
+  const { el } = createPlayerButton({ icon: 'pause', label: 'Pause' });
   expect(el.className).toBe('player-btn');
-  expect(tipEl.className).toBe('player-btn-tip');
+  expect(el.getAttribute('data-tip')).toBe('Pause');
+  setPlayerButtonLabel(el, 'Next channel', 'Rai 1');
+  expect(el.getAttribute('aria-label')).toBe('Next channel');
+  expect(el.getAttribute('data-tip')).toBe('Rai 1');
   setPlayerButtonIcon(el, 'play');
   expect(el.firstChild.getAttribute('class')).toContain('icon-play');
   expect(el.querySelectorAll('svg')).toHaveLength(1);
@@ -78,6 +87,9 @@ test('list row, sidebar entry, top bar entry', () => {
   expect(classes(item)).toBe('icon-only topbar-item');
   expect(item.getAttribute('aria-label')).toBe('Search');
   expect(item.querySelector('span')).toBeNull();
+  expect(item.getAttribute('data-tip')).toBe('Search');
+  expect(item.getAttribute('data-tip-dir')).toBe('down'); // the bar's tooltips open below
+  expect(createTopbarItem({ label: 'Movies' }).getAttribute('data-tip')).toBeNull();
 });
 
 test('table row and panel', () => {

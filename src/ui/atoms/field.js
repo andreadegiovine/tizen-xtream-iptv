@@ -3,6 +3,7 @@ import { t } from '../../i18n/index.js';
 import { icon } from '../icons.js';
 import { createTextInput } from './textInput.js';
 import { actionFromKeyCode, Action } from '../../core/input.js';
+import { setTip } from '../tooltip.js';
 
 // Samsung on-screen keyboard: "Done" and "Cancel" arrive as these key codes.
 export const IME_DONE = 65376;
@@ -22,7 +23,7 @@ export const IME_CANCEL = 65385;
  */
 export function createField({ label, type = 'text', placeholder = '', inputmode = '', onSubmit = null, onCancel = null, onLeave = null, trailing = null, clearable = true, defaultValue = '', onClear = null }) {
   const input = createTextInput({ type, placeholder, inputmode });
-  const clearEl = clearable ? h('span', { class: 'field-clear', 'aria-label': t('field.clear') }, icon('close')) : null;
+  const clearEl = clearable ? setTip(h('span', { class: 'field-clear', 'aria-label': t('field.clear') }, icon('close')), t('field.clear')) : null;
   const el = h('label', { class: clearable ? 'field clearable' : 'field' }, h('span', { class: 'field-label', text: label }), input, clearEl);
   // The x empties the field (or puts its default value back) and saves it at once, without the keyboard: `onClear(value)` when
   // given (a form that only empties it), otherwise the same `onSubmit` as Done.

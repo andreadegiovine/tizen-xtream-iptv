@@ -6,7 +6,7 @@ import { createHeading } from '../atoms/heading.js';
 import { createHint } from '../atoms/hint.js';
 import { createTextInput } from '../atoms/textInput.js';
 import { FocusZone } from '../focus/FocusManager.js';
-import { GridModel, ListModel } from '../focus/models.js';
+import { Dir, GridModel, ListModel } from '../focus/models.js';
 import { icon } from '../icons.js';
 
 const PIN_LENGTH = 4;
@@ -17,6 +17,28 @@ export const DIALOG_ZONE = 'dialog';
  * Modal confirmation dialog. It traps focus (its zone has no links) and gives focus back to the
  * zone that owned it. Left = cancel (default focus), right = confirm.
  */
+/**
+ * Focus model of a dialog with a list over a row of buttons (Cancel on the left, the confirming one on the right): Up / Down along the
+ * list, Down from its end to the confirming button, Left / Right between the buttons, Up from them back to the list.
+ */
+export function listThenButtons(listCount, buttons) {
+  return {
+    getCount: () => listCount() + buttons,
+    navigate(dir, index) {
+      const n = listCount();
+      if (index < n) {
+        if (dir === Dir.UP) return index > 0 ? { type: 'move', index: index - 1 } : { type: 'exit', dir };
+        if (dir === Dir.DOWN) return { type: 'move', index: index + 1 < n ? index + 1 : n + buttons - 1 };
+        return { type: 'exit', dir };
+      }
+      if (dir === Dir.LEFT) return index > n ? { type: 'move', index: index - 1 } : { type: 'exit', dir };
+      if (dir === Dir.RIGHT) return index < n + buttons - 1 ? { type: 'move', index: index + 1 } : { type: 'exit', dir };
+      if (dir === Dir.UP && n > 0) return { type: 'move', index: n - 1 };
+      return { type: 'exit', dir };
+    },
+  };
+}
+
 export function createDialogService({ focus, root = document.body }) {
   let current = null;
 
@@ -195,7 +217,7 @@ export function createDialogService({ focus, root = document.body }) {
     const rows = items.map((item) => createChoice({ label: item.name, className: 'edit-item', trailingIcon: 'remove' }));
     const list = h('div', { class: 'choice-list' }, rows);
     const buttons = [createButton({ label: cancelLabel }), createButton({ label: saveLabel, variant: 'primary' })];
-    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog search-dialog' }, createHeading({ text: title }), named ? field : null, list, h('div', { class: 'dialog-actions stacked' }, buttons)));
+    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog search-dialog' }, createHeading({ text: title }), named ? field : null, list, h('div', { class: 'dialog-actions' }, buttons)));
     root.appendChild(overlay);
     const total = () => lead + items.length + 2;
     const nodeAt = (i) => (i < lead ? field : i < lead + items.length ? rows[i - lead] : buttons[i - lead - items.length]);
@@ -210,7 +232,7 @@ export function createDialogService({ focus, root = document.body }) {
     const zone = new FocusZone({
       id: DIALOG_ZONE,
       nodes: () => Array.from({ length: total() }, (_, i) => nodeAt(i)),
-      model: new ListModel({ orientation: 'vertical', getCount: total }),
+      model: listThenButtons(() => lead + items.length, 2),
       onFocus: (i) => {
         nodeAt(i).classList.add('focused');
         revealNearest(nodeAt(i));
@@ -311,9 +333,32 @@ export function createDialogService({ focus, root = document.body }) {
     return promise;
   }
 
+  /**
+   * A dialog with content of its own (a form): `mount({ body, zoneId, close })` fills `body` (the dialog box), registers its focus zone
+   * with id `zoneId` and returns a cleanup function; `close(value)` closes it. Back closes it with `cancelValue`. Resolves with the value
+   * it was closed with.
+   */
+  function panel({ mount, className = '', cancelValue = null }) {
+    if (current) return current.promise;
+    const previous = snapshot();
+    const body = h('div', { class: className ? `dialog ${className}` : 'dialog' });
+    const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, body);
+    root.appendChild(overlay);
+    const promise = new Promise((resolve) => {
+      current = { overlay, previous, resolve, promise: null, cancelValue };
+    });
+    current.promise = promise;
+    const mine = current;
+    const cleanup = mount({ body, zoneId: DIALOG_ZONE, close });
+    if (current === mine) mine.cleanup = cleanup;
+    else if (cleanup) cleanup(); // closed while mounting
+    return promise;
+  }
+
   return {
     confirm,
     choose,
+    panel,
     search,
     editCollection,
     pin,

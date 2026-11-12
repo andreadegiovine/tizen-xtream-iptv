@@ -11,11 +11,12 @@ export function framedPage(...children) {
 }
 
 /**
- * Navigation of a form: the fields one under the other, then the actions on ONE line. Down from the last field lands on the first
- * action ("Confirm"); Left / Right move between the actions; Up from an action goes back to the last field.
+ * Navigation of a form: the fields one under the other, then the actions on ONE line. Down from the last field lands on the action
+ * `confirmAt` (the confirming one, on the right of Cancel); Left / Right move between the actions; Up from an action goes back to the
+ * last field.
  * `clearable`: each field also has its "x" (index `fieldCount + actionCount + field`), reached with Right from the field, Left goes back.
  */
-export function formModel({ fieldCount, actionCount, clearable = false }) {
+export function formModel({ fieldCount, actionCount, clearable = false, confirmAt = 0 }) {
   const total = fieldCount + actionCount;
   const move = (index) => ({ type: 'move', index });
   const exit = (dir) => ({ type: 'exit', dir });
@@ -35,7 +36,7 @@ export function formModel({ fieldCount, actionCount, clearable = false }) {
         return fieldCount > 0 ? move(fieldCount - 1) : exit(dir);
       }
       if (dir === Dir.DOWN) {
-        if (!inActions) return index < fieldCount - 1 ? move(index + 1) : actionCount > 0 ? move(fieldCount) : exit(dir);
+        if (!inActions) return index < fieldCount - 1 ? move(index + 1) : actionCount > 0 ? move(fieldCount + Math.min(confirmAt, actionCount - 1)) : exit(dir);
         return exit(dir);
       }
       if (!inActions) return exit(dir);
@@ -48,21 +49,22 @@ export function formModel({ fieldCount, actionCount, clearable = false }) {
 
 /**
  * A form: `fields` (specs of createField: { label, type... }) one under the other, a status line, then `actions`
- * ([{ label, primary, run }]) side by side. Enter / Done in a field moves to the next one (the last one moves to the first
- * action); leaving a field otherwise keeps what was typed (the form is saved by its action). Returns { el, zone, status, fields (the created fields), actionButtons } — the page registers `zone` with `focus`
+ * ([{ label, primary, run }]) side by side: Cancel on the left, the confirming (first primary) one on its right. Enter / Done in a field
+ * moves to the next one (the last one moves to the confirming action); leaving a field otherwise keeps what was typed (the form is saved by its action). Returns { el, zone, status, fields (the created fields), actionButtons } — the page registers `zone` with `focus`
  * and puts `el` where it wants.
  */
 export function createForm({ id, focus, fields: specs, actions }) {
   const status = h('div', { class: 'status', role: 'status' });
   const actionButtons = actions.map((a) => createButton({ label: a.label, variant: a.primary ? 'primary' : '' }));
   const total = specs.length + actions.length;
-  const fields = specs.map((spec, i) => createField({ ...spec, onSubmit: () => focus.focus(id, Math.min(i + 1, total - 1)), onLeave: () => undefined, onClear: () => undefined }));
+  const confirmAt = Math.max(0, actions.findIndex((a) => a.primary));
+  const fields = specs.map((spec, i) => createField({ ...spec, onSubmit: () => focus.focus(id, i + 1 < specs.length ? i + 1 : specs.length + confirmAt), onLeave: () => undefined, onClear: () => undefined }));
   const nodes = fields.map((f) => f.el).concat(actionButtons, fields.map((f) => f.clearEl));
   const el = h('div', { class: 'form' }, fields.map((f) => f.root), status, h('div', { class: 'form-actions' }, actionButtons));
   const zone = new FocusZone({
     id,
     nodes: () => nodes,
-    model: formModel({ fieldCount: fields.length, actionCount: actions.length, clearable: true }),
+    model: formModel({ fieldCount: fields.length, actionCount: actions.length, clearable: true, confirmAt }),
     onFocus: (i) => {
       nodes[i].classList.add('focused');
       ensureVisible(nodes[i], { first: i === 0 });

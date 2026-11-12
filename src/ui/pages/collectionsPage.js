@@ -1,6 +1,6 @@
 import { h } from '../dom.js';
 import { focusOnBar } from '../rowFocus.js';
-import { createIconButton } from '../atoms/iconButton.js';
+import { createIconButton, setIconButtonLabel } from '../atoms/iconButton.js';
 import { createHint } from '../atoms/hint.js';
 import { createSidebarItem } from '../atoms/sidebarItem.js';
 import { t, i18n } from '../../i18n/index.js';
@@ -119,7 +119,7 @@ export function createCollectionsPage(ctx, params = {}) {
     sepA.style.display = count.textContent ? '' : 'none';
     pinBtn.style.display = pinState ? '' : 'none';
     pinBtn.classList.toggle('active', Boolean(pinState && pinState.active));
-    pinBtn.setAttribute('aria-label', pinState && pinState.active ? t('browse.unpin') : t('browse.pin'));
+    setIconButtonLabel(pinBtn, pinState && pinState.active ? t('browse.unpin') : t('browse.pin'));
     if (!pinState) pinBtn.classList.remove('focused');
   }
 

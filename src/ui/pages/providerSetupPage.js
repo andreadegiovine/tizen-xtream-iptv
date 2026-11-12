@@ -32,10 +32,11 @@ export function normalizeAddress(input, { required = true } = {}) {
 
 /**
  * Adding (or editing) a provider in two steps: first its kind (Xtream Codes API, or an M3U playlist with an XMLTV guide), then its data.
- * Editing opens on the data of the provider's kind.
+ * Editing opens on the data of the provider's kind. Used by the first start page and by the dialog of the provider list.
+ * `zoneId`: the focus zone of its form; `onCancel()`; `onSaved({ added })` once the provider is checked and saved. Returns
+ * { title, body, start(), destroy(), step() }.
  */
-export function createProviderSetupPage(ctx, params = {}) {
-  const editId = params.providerId || null;
+export function createProviderSetup(ctx, { editId = null, firstRun = false, zoneId, onCancel = null, onSaved }) {
   const title = createHeading({ level: 1, text: t(editId ? 'setup.editTitle' : 'setup.title') });
   const body = h('div', { class: 'setup-step' });
   let form = null;
@@ -44,24 +45,25 @@ export function createProviderSetupPage(ctx, params = {}) {
   let busy = false;
   let destroyed = false;
 
+  // The confirming button: the first primary one (Cancel, when there is one, sits on its left).
+  const confirmIndex = () => Math.max(0, form.actionButtons.findIndex((b) => b.classList.contains('primary')));
+
   function show(next) {
-    if (form) ctx.focus.unregister(ZONE_ID);
+    if (form) ctx.focus.unregister(zoneId);
     while (body.firstChild) body.removeChild(body.firstChild);
     form = next;
     body.appendChild(form.el);
     ctx.focus.register(form.zone);
-    ctx.focus.focus(ZONE_ID, 0);
+    ctx.focus.focus(zoneId, form.fields.length ? 0 : confirmIndex());
   }
 
   /** Step 1: the kind of provider. */
   function chooseKind() {
     kind = null;
-    const actions = [
-      { label: t('setup.type.xtream'), primary: true, run: () => fillIn(ProviderType.XTREAM) },
-      { label: t('setup.type.m3u'), primary: true, run: () => fillIn(ProviderType.M3U) },
-    ];
-    if (!params.firstRun) actions.push({ label: t('setup.cancel'), run: () => ctx.router.back() });
-    const next = createForm({ id: ZONE_ID, focus: ctx.focus, fields: [], actions });
+    const actions = [];
+    if (onCancel && !firstRun) actions.push({ label: t('setup.cancel'), run: () => onCancel() });
+    actions.push({ label: t('setup.type.xtream'), primary: true, run: () => fillIn(ProviderType.XTREAM) }, { label: t('setup.type.m3u'), primary: true, run: () => fillIn(ProviderType.M3U) });
+    const next = createForm({ id: zoneId, focus: ctx.focus, fields: [], actions });
     next.el.insertBefore(createHint({ text: t('setup.type.hint'), className: 'setup-hint' }), next.el.firstChild);
     next.el.classList.add('setup-types');
     show(next);
@@ -71,13 +73,12 @@ export function createProviderSetupPage(ctx, params = {}) {
   function fillIn(type) {
     kind = type;
     const m3u = type === ProviderType.M3U;
-    const actions = [{ label: t('setup.verify'), primary: true, run: () => save() }];
-    if (!editId) actions.push({ label: t('setup.back'), run: () => chooseKind() });
-    else actions.push({ label: t('setup.cancel'), run: () => ctx.router.back() });
+    // Cancel (or Back to the choice) on the left, Confirm on the right.
+    const actions = [editId ? { label: t('setup.cancel'), run: () => onCancel && onCancel() } : { label: t('setup.back'), run: () => chooseKind() }, { label: t('setup.verify'), primary: true, run: () => save() }];
     const fields = m3u
       ? [{ label: t('setup.name') }, { label: t('setup.playlistUrl'), inputmode: 'url' }, { label: t('setup.epgUrl'), placeholder: t('setup.epgUrlHint'), inputmode: 'url' }]
       : [{ label: t('setup.name') }, { label: t('setup.url') }, { label: t('setup.username') }, { label: t('setup.password'), type: 'password' }];
-    show(createForm({ id: ZONE_ID, focus: ctx.focus, fields, actions }));
+    show(createForm({ id: zoneId, focus: ctx.focus, fields, actions }));
     if (editing) {
       const values = m3u ? [editing.name, editing.playlistUrl, editing.epgUrl] : [editing.name, editing.baseUrl, editing.username, editing.password];
       form.fields.forEach((field, i) => field.setValue(values[i] || ''));
@@ -106,7 +107,7 @@ export function createProviderSetupPage(ctx, params = {}) {
   async function save() {
     if (busy) return;
     busy = true;
-    const button = form.actionButtons[0];
+    const button = form.actionButtons[confirmIndex()];
     button.textContent = t('setup.verifying');
     form.status.textContent = '';
     try {
@@ -117,36 +118,28 @@ export function createProviderSetupPage(ctx, params = {}) {
         // Different server, account or playlist: its catalog may differ, so refresh the active provider.
         if (changed && (await ctx.providers.getActiveId()) === editing.id) ctx.catalog.start({ force: true });
         ctx.notices.success(t('notice.saved'), { key: 'provider' });
-        if (!destroyed) ctx.router.reset('providers', { section: 'provider' });
       } else {
         const provider = await ctx.providers.add(data);
         await ctx.providers.setActiveId(provider.id);
         await ctx.refreshAdult();
         ctx.catalog.start({ force: true });
         ctx.notices.success(t('notice.added'), { key: 'provider' });
-        if (!destroyed) {
-          if (params.firstRun) ctx.router.reset('home', { section: 'home', focusTopbar: true }); // as at every start: Home of the bar
-          else ctx.router.reset('providers', { section: 'provider' });
-        }
       }
+      if (!destroyed) onSaved({ added: !editing });
     } catch (err) {
       const appError = toAppError(err);
       log.warn('Provider verification failed', appError.code, appError.message);
       if (form) form.status.textContent = t(appError.i18nKey);
     } finally {
       busy = false;
-      if (form && form.actionButtons[0]) form.actionButtons[0].textContent = t('setup.verify');
+      if (form && !destroyed) form.actionButtons[confirmIndex()].textContent = t('setup.verify');
     }
   }
 
-  // First start: the bar (logo + placeholders) is above; the form sits at the left, in a square box, over the Home skeleton.
-  const el = params.firstRun
-    ? h('section', { class: 'page setup first-run' }, h('div', { class: 'setup-backdrop home-skeleton', 'aria-hidden': 'true' }, createHomeSkeleton()), h('div', { class: 'setup-box' }, title, body))
-    : framedPage(title, body);
-
   return {
-    el,
-    mount() {
+    title,
+    body,
+    start() {
       if (!editId) {
         chooseKind();
         return;
@@ -159,9 +152,50 @@ export function createProviderSetupPage(ctx, params = {}) {
     },
     destroy() {
       destroyed = true;
-      ctx.focus.unregister(ZONE_ID);
+      ctx.focus.unregister(zoneId);
     },
     /** Tests: the step on screen ('type' or the provider kind). */
     step: () => kind || 'type',
   };
+}
+
+/**
+ * The provider form as a page: at the first start (no provider yet), the form at the left in a square box over the Home skeleton, under
+ * the bar (logo + placeholders); otherwise in the framed page (a link to the route).
+ */
+export function createProviderSetupPage(ctx, params = {}) {
+  const setup = createProviderSetup(ctx, {
+    editId: params.providerId || null,
+    firstRun: Boolean(params.firstRun),
+    zoneId: ZONE_ID,
+    onCancel: () => ctx.router.back(),
+    onSaved: () => {
+      if (params.firstRun) ctx.router.reset('home', { section: 'home', focusTopbar: true }); // as at every start: Home of the bar
+      else ctx.router.reset('providers', { section: 'provider' });
+    },
+  });
+  const el = params.firstRun
+    ? h('section', { class: 'page setup first-run' }, h('div', { class: 'setup-backdrop home-skeleton', 'aria-hidden': 'true' }, createHomeSkeleton()), h('div', { class: 'setup-box' }, setup.title, setup.body))
+    : framedPage(setup.title, setup.body);
+  return {
+    el,
+    mount: () => setup.start(),
+    destroy: () => setup.destroy(),
+    step: () => setup.step(),
+  };
+}
+
+/** Adding (no `providerId`) or editing a provider in a dialog over the provider list. Resolves with true once saved, false when cancelled. */
+export function openProviderDialog(ctx, { providerId = null } = {}) {
+  return ctx.dialogs.panel({
+    className: 'provider-dialog',
+    cancelValue: false,
+    mount({ body, zoneId, close }) {
+      const setup = createProviderSetup(ctx, { editId: providerId, zoneId, onCancel: () => close(false), onSaved: () => close(true) });
+      body.appendChild(setup.title);
+      body.appendChild(setup.body);
+      setup.start();
+      return () => setup.destroy();
+    },
+  });
 }

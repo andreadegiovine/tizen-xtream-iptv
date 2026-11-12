@@ -42,9 +42,17 @@ test('edit box: rename and mark titles to take out; Back cancels', async () => {
   root.querySelector('input').value = 'MCU';
   focus.handle(Action.ENTER); // first title: marked
   expect(root.querySelectorAll('.edit-item.removed')).toHaveLength(1);
+  focus.handle(Action.DOWN); // second title
+  focus.handle(Action.DOWN); // Cancel and Save on one line: Down lands on Save (right)
+  const buttons = Array.from(root.querySelectorAll('.dialog-actions .btn'));
+  expect(buttons.map((btn) => btn.textContent)).toEqual(['Cancel', 'Save']);
+  expect(root.querySelector('.dialog-actions').classList.contains('stacked')).toBe(false);
+  expect(buttons[1].classList.contains('focused')).toBe(true);
+  focus.handle(Action.LEFT);
+  expect(buttons[0].classList.contains('focused')).toBe(true);
+  focus.handle(Action.UP); // back to the last title
+  expect(root.querySelectorAll('.edit-item')[1].classList.contains('focused')).toBe(true);
   focus.handle(Action.DOWN);
-  focus.handle(Action.DOWN);
-  focus.handle(Action.DOWN); // Cancel, Save
   focus.handle(Action.ENTER);
   expect(await promise).toEqual({ name: 'MCU', remove: ['a'] });
   const second = dialogs.editCollection(options);
@@ -68,8 +76,7 @@ test('edit box without a name (networks): only the titles, Save and Cancel', asy
   const promise = dialogs.editCollection({ title: 'Edit', items: [{ key: 'a', name: 'A' }], saveLabel: 'Save', cancelLabel: 'Cancel' });
   expect(root.querySelector('input')).toBeNull();
   focus.handle(Action.ENTER); // title A: marked
-  focus.handle(Action.DOWN);
-  focus.handle(Action.DOWN); // Cancel, Save
+  focus.handle(Action.DOWN); // Save
   focus.handle(Action.ENTER);
   expect(await promise).toEqual({ name: '', remove: ['a'] });
 });

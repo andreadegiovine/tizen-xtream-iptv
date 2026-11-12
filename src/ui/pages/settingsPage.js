@@ -557,12 +557,16 @@ export function createSettingsPage(ctx) {
   // The sub-pages of the sidebar: the overview (operations, catalog, device), each service, each group of preferences. Each has its
   // blocks (shown only while it is the current one) and its rows (the focus walks them in this order).
   const SECTION_ICON = { 'settings.section.general': 'settings', 'settings.section.vod': 'movie', 'settings.section.live': 'network', 'settings.section.networks': 'group', 'settings.section.advanced': 'warning' };
+  // Order: the overview, the groups of preferences, the external services, then Advanced (last).
+  const sectionPages = sections.map((section) => ({ id: section.titleKey, icon: SECTION_ICON[section.titleKey] || 'settings', label: t(section.titleKey), blocks: blocksOf(section), rows: rowsOf(section) }));
+  const advancedPage = sectionPages.filter((sub) => sub.id === 'settings.section.advanced');
   const subpages = [
     { id: 'overview', icon: 'home', label: t('settings.page.overview'), blocks: [promos.el, opsPanel.el, panel.el, devicePanel.el], rows: [...catalogRows, dbUpdateRow, dbRemoveRow], ops: true },
+    ...sectionPages.filter((sub) => sub.id !== 'settings.section.advanced'),
     { id: 'tmdb', icon: 'info', label: 'TMDB', blocks: [tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), h('div', { class: 'list' }, titleSearchRow.el)], rows: [...tmdbRows, tmdbTokenRow, tmdbTokenRow.clearRow, titleSearchRow] },
     { id: 'trakt', icon: 'user', label: 'Trakt', blocks: [traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root)], rows: [traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktIdRow.clearRow, traktSecretRow, traktSecretRow.clearRow] },
     { id: 'opensubtitles', icon: 'subtitles', label: 'OpenSubtitles', blocks: [h('div', { class: 'fields' }, openSubtitlesRow.root)], rows: [openSubtitlesRow, openSubtitlesRow.clearRow] },
-    ...sections.map((section) => ({ id: section.titleKey, icon: SECTION_ICON[section.titleKey] || 'settings', label: t(section.titleKey), blocks: blocksOf(section), rows: rowsOf(section) })),
+    ...advancedPage,
   ];
   let current = 0; // the sub-page on screen
   const pageTitle = createHeading({ level: 1, text: subpages[0].label, className: 'settings-title' });
@@ -576,7 +580,7 @@ export function createSettingsPage(ctx) {
     });
     navItems.forEach((el, n) => el.classList.toggle('current', n === i));
     pageTitle.textContent = subpages[i].label;
-    if (body.parentNode) body.parentNode.scrollTop = 0;
+    page.scrollTop = 0; // the page scrolls (the sidebar stays: sticky)
   }
   const rows = subpages.flatMap((sub) => sub.rows);
   // The rows of the sub-page on screen (the Trakt sync / remove buttons exist only while an account is connected).

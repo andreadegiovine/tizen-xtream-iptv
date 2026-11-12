@@ -1,6 +1,7 @@
 import { h } from '../dom.js';
 import { icon as iconNode } from '../icons.js';
-import { createPlayerButton, setPlayerButtonIcon } from '../atoms/playerButton.js';
+import { createPlayerButton, setPlayerButtonIcon, setPlayerButtonLabel } from '../atoms/playerButton.js';
+import { setTip } from '../tooltip.js';
 import { t, i18n } from '../../i18n/index.js';
 import { Action } from '../../core/input.js';
 import { log } from '../../core/logger.js';
@@ -63,6 +64,7 @@ export function createPlayerPage(ctx, params) {
   let lastStatus = '';
   let scrub = null; // seconds while the user drags / steps the progress bar, otherwise null
   let lastState = { position: 0, duration: 0 };
+  let resumePaused = false; // paused when the app was hidden: paused again once it plays
   let lastPosition = null; // previous polled position, to spot jumps (a seek)
   let tipTimer = null;
   let timeFormat = 'auto'; // the clock format of the top bar, for the end time
@@ -88,12 +90,13 @@ export function createPlayerPage(ctx, params) {
   const seek = h('div', { class: 'player-seek' }, bar);
   const subtitleEl = h('div', { class: 'player-subtitle' });
 
-  // Control buttons: transport at the bottom left (not for live), aspect ratio + subtitles at the bottom right.
+  // Control buttons: transport at the bottom left (live: play / pause only), aspect ratio + subtitles at the bottom right. Every button
+  // has its name as tooltip, above it (previous / next channel: the name of the channel it goes to).
   const buttonDefs = [
     // Series: previous / next episode on both sides of play / pause, shown only when there is one (the position is moved with the progress pointer).
     { id: 'prevEpisode', icon: 'previous', label: () => t('player.prevEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(-1) },
     { id: 'back30', icon: 'backward', label: () => t('player.back30', { seconds: SEEK_LONG }), vodOnly: true, run: () => controller.seekBy(-SEEK_LONG) },
-    { id: 'toggle', icon: 'pause', label: () => t('player.pause'), vodOnly: true, group: 'start', run: () => controller.togglePause() },
+    { id: 'toggle', icon: 'pause', label: () => t('player.pause'), group: 'start', run: () => togglePause() },
     { id: 'forward30', icon: 'forward', label: () => t('player.forward30', { seconds: SEEK_LONG }), vodOnly: true, run: () => controller.seekBy(SEEK_LONG) },
     { id: 'nextEpisode', icon: 'next', label: () => t('player.nextEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(1) },
     { id: 'versions', icon: 'group', label: () => t('player.versions'), liveOnly: true, hidden: true, run: () => openVersions() }, // a group with several versions
@@ -101,19 +104,17 @@ export function createPlayerPage(ctx, params) {
     { id: 'prevChannel', icon: 'previous', label: () => t('player.prevChannel'), liveOnly: true, tip: true, run: () => stepChannel(-1) },
     { id: 'nextChannel', icon: 'next', label: () => t('player.nextChannel'), liveOnly: true, tip: true, run: () => stepChannel(1) },
     { id: 'aspect', icon: 'aspect', label: () => t('player.aspect'), group: 'end', run: () => cycleAspect() },
-    { id: 'subtitles', icon: 'subtitles', label: () => t('player.subtitles'), group: 'end', run: () => subtitles.open() },
+    // Live channels: only when the stream carries subtitle tracks (DVB, teletext, WebVTT of an HLS stream), the provider gives no others.
+    { id: 'subtitles', icon: 'subtitles', label: () => t('player.subtitles'), group: 'end', hidden: isLive, run: () => subtitles.open() },
     { id: 'audio', icon: 'audio', label: () => t('player.audio'), group: 'end', hidden: true, run: () => openAudio() }, // shown once the file has several audio tracks
     { id: 'fullscreen', icon: 'fullscreen', label: () => t('player.fullscreen'), group: 'end', run: () => toggleFullscreen() }, // desktop only: the window is not always full screen
     // Series with "play the next episode" on: the end credits start here (the pointer's position), for every episode; again = removed.
-    { id: 'credits', icon: 'credits', label: () => t(creditsOffset ? 'player.credits.remove' : 'player.credits'), seriesOnly: true, hidden: true, tip: true, group: 'end', run: () => toggleCredits() },
+    { id: 'credits', icon: 'credits', label: () => t(creditsOffset ? 'player.credits.remove' : 'player.credits'), seriesOnly: true, hidden: true, group: 'end', run: () => toggleCredits() },
   ]
     .filter((def) => def.id !== 'fullscreen' || platform.toggleFullscreen)
     .filter((def) => !(isLive && def.vodOnly) && !(!isLive && def.liveOnly) && !(def.seriesOnly && params.type !== 'series') && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles' || def.id === 'audio')));
   buttonDefs.forEach((def) => {
-    // Previous / next channel: the name of the channel they go to shows above them while focused.
-    const made = createPlayerButton({ icon: def.icon, label: def.label(), tip: Boolean(def.tip) });
-    def.el = made.el;
-    def.tipEl = made.tipEl;
+    def.el = createPlayerButton({ icon: def.icon, label: def.label() }).el;
   });
   buttonDefs.forEach((def) => {
     if (def.hidden) def.el.style.display = 'none';
@@ -122,7 +123,7 @@ export function createPlayerPage(ctx, params) {
   // Full-width progress bar, then one row: previous episode, back 30 s, play/pause, forward 30 s, next episode and the time on the left, aspect ratio and subtitles on the right.
   const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('prevEpisode'), buttonEl('back30'), buttonEl('toggle'), buttonEl('forward30'), buttonEl('nextEpisode'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
   // Back for the pointer (a finger, a mouse): before the title, shown only in pointer mode (the remote has its own Back key).
-  const backEl = h('button', { class: 'player-back', type: 'button', 'aria-label': t('common.back') }, iconNode('back'));
+  const backEl = setTip(h('button', { class: 'player-back', type: 'button', 'aria-label': t('common.back') }, iconNode('back')), t('common.back'), 'down');
   const top = h('div', { class: 'player-top' }, h('div', { class: 'player-heading' }, backEl, h('div', { class: 'player-heading-text' }, titleEl, nowEl)));
   const controls = h('div', { class: 'player-controls' }, ...(isLive ? [] : [seek]), row);
   const el = h('section', { class: 'player' }, top, controls, statusEl, subtitleEl);
@@ -137,7 +138,7 @@ export function createPlayerPage(ctx, params) {
     if (!def || def.icon === name) return;
     def.icon = name;
     setPlayerButtonIcon(def.el, name);
-    def.el.setAttribute('aria-label', t(on ? 'player.fullscreen.exit' : 'player.fullscreen'));
+    setPlayerButtonLabel(def.el, t(on ? 'player.fullscreen.exit' : 'player.fullscreen'));
   }
   function syncFullscreen() {
     if (platform.toggleFullscreen) platform.isFullscreen().then(paintFullscreen).catch(() => undefined);
@@ -362,17 +363,14 @@ export function createPlayerPage(ctx, params) {
     buttonDefs.forEach((def) => {
       const on = focusMode && !barFocus && list[focusIndex] === def;
       def.el.classList.toggle('focused', on);
-      if (def.tipEl && on) fillTip(def);
+      if (def.tip && on) fillTip(def);
     });
     seek.classList.toggle('focused', focusMode && barFocus);
   }
 
-  /** The tooltip of previous / next channel: the name of the channel it goes to (the credits button: what it does). */
+  /** The tooltip of previous / next channel: the name of the channel it goes to (its name until that is known). */
   async function fillTip(def) {
-    if (def.id === 'credits') {
-      def.tipEl.textContent = def.label();
-      return;
-    }
+    if (def.id === 'credits') return;
     const key = await neighbor(def.id === 'prevChannel' ? -1 : 1);
     if (destroyed || !key) return;
     if (!neighborNames.has(key)) {
@@ -380,7 +378,17 @@ export function createPlayerPage(ctx, params) {
       const entry = await getEntry(db, key).catch(() => null);
       neighborNames.set(key, entry ? entry.name : '');
     }
-    def.tipEl.textContent = neighborNames.get(key);
+    setPlayerButtonLabel(def.el, def.label(), neighborNames.get(key));
+  }
+
+  /**
+   * Play / pause. A live channel paused starts again live (from now: the stream is not kept while paused); a movie or an episode from
+   * where it was.
+   */
+  function togglePause() {
+    resumePaused = false;
+    if (isLive && lastState.status === 'paused') play(index);
+    else controller.togglePause();
   }
 
   /** Position of play / pause among the buttons (the first button for live channels). */
@@ -480,13 +488,19 @@ export function createPlayerPage(ctx, params) {
       if (toggle.icon !== name) {
         toggle.icon = name;
         setPlayerButtonIcon(toggle.el, name);
-        toggle.el.setAttribute('aria-label', name === 'play' ? t('detail.play') : t('player.pause'));
+        setPlayerButtonLabel(toggle.el, name === 'play' ? t('detail.play') : t('player.pause'));
       }
     }
     if (state.status === 'playing' && appliedFor !== loadToken) {
       appliedFor = loadToken;
       if (engine.setAspect && aspect !== 'fit') engine.setAspect(aspect);
       if (engine.getAudioTracks) setAudioVisible(engine.getAudioTracks().length > 1);
+      if (isLive) setVisible('subtitles', Boolean(engine.getSubtitleTracks && engine.getSubtitleTracks().length));
+      if (resumePaused) {
+        // Back in the app after it was hidden while paused: paused again on the first picture.
+        resumePaused = false;
+        controller.togglePause();
+      }
     }
     if ((state.status === 'paused' || state.status === 'error' || state.status === 'recovering') && state.status !== lastStatus) showControls();
     if (state.status === 'error' && lastStatus !== 'error') showPlayerError(`${t('error.PLAYER')} ${state.error || ''}`.trim());
@@ -533,14 +547,15 @@ export function createPlayerPage(ctx, params) {
     if (document.hidden) {
       if (hiddenAt !== null) return;
       hiddenAt = Date.now();
-      log.info('App hidden: playback stopped');
+      resumePaused = lastState.status === 'paused';
+      log.info(`App hidden: playback stopped${resumePaused ? ' (it was paused)' : ''}`);
       saveProgress(true).finally(() => {
         if (hiddenAt !== null && !destroyed) controller.stop();
       });
       return;
     }
     if (hiddenAt === null) return;
-    log.info(`App visible again after ${Math.round((Date.now() - hiddenAt) / 1000)} s: playback started again`);
+    log.info(`App visible again after ${Math.round((Date.now() - hiddenAt) / 1000)} s: playback started again${resumePaused ? ', paused' : ''}`);
     hiddenAt = null;
     play(index);
   }
@@ -667,7 +682,7 @@ export function createPlayerPage(ctx, params) {
     setVisible('versions', Boolean(liveEntry && liveEntry.isGroup && (liveEntry.members || []).length > 1));
     setVisible('network', Boolean(liveEntry && liveEntry.networkKey));
     buttonDefs.forEach((def) => {
-      if (def.tipEl) def.tipEl.textContent = '';
+      if (def.tip) setPlayerButtonLabel(def.el, def.label());
     });
     paintFocus();
   }
@@ -755,9 +770,8 @@ export function createPlayerPage(ctx, params) {
   function paintCredits() {
     const def = buttonDefs.find((d) => d.id === 'credits');
     if (def) {
-      def.el.setAttribute('aria-label', def.label());
+      setPlayerButtonLabel(def.el, def.label());
       def.el.classList.toggle('active', Boolean(creditsOffset));
-      if (def.tipEl && def.el.classList.contains('focused')) def.tipEl.textContent = def.label();
     }
     drawProgress(scrub === null ? lastState.position : scrub, lastState.duration, lastState.bufferedEnd);
   }
@@ -792,11 +806,11 @@ export function createPlayerPage(ctx, params) {
       if (nextNotice !== null) play(neighborEpisode(playlist, index, 1).index);
       else if (['error', 'recovering'].includes(controller.getState().status)) play(index);
       else if (isLive) enterFocus();
-      else controller.togglePause();
+      else togglePause();
     },
-    [Action.PLAY]: () => controller.getState().status === 'paused' && controller.togglePause(),
-    [Action.PAUSE]: () => controller.getState().status === 'playing' && controller.togglePause(),
-    [Action.PLAY_PAUSE]: () => controller.togglePause(),
+    [Action.PLAY]: () => controller.getState().status === 'paused' && togglePause(),
+    [Action.PAUSE]: () => controller.getState().status === 'playing' && togglePause(),
+    [Action.PLAY_PAUSE]: () => togglePause(),
     // Live: the arrows bring the controls with the focus on the first button on the left; only CH+ / CH- change channel.
     [Action.LEFT]: () => (isLive ? enterFocus() : controller.seekBy(-SEEK_SHORT)),
     [Action.RIGHT]: () => (isLive ? enterFocus() : controller.seekBy(SEEK_SHORT)),
@@ -831,7 +845,7 @@ export function createPlayerPage(ctx, params) {
     [Action.ENTER]: () => {
       if (!barFocus) shown()[focusIndex].run();
       else if (scrub !== null) endScrub(true);
-      else controller.togglePause();
+      else togglePause();
     },
     [Action.UP]: () => {
       if (barFocus) return;

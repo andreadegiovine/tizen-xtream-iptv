@@ -119,14 +119,16 @@
 }
 
 // Settings: the sidebar of the sub-pages (the browse pages' one) and the current sub-page at its right, stretched like the framed pages.
+// Same frame as the browse pages (the page keeps their bottom padding): with a padding of its own the page grew taller than the screen
+// even with a short sub-page, scrolled a little, and the sidebar moved with it, under a still mouse too (another entry under the pointer,
+// another sub-page: it shook). The space under a long sub-page is inside its column.
 .page.settings-page {
-  padding-bottom: $gutter * 2;
-
   .settings-main {
     flex: 1;
     min-width: 0;
     max-width: 1400px;
     padding-top: $page-top;
+    padding-bottom: $gutter;
   }
 
   .settings-title {

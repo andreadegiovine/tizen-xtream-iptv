@@ -170,10 +170,16 @@ $epg-ruler: 44px;
     color: $text-muted;
   }
 
-  &.focused {
+  // Focused, and a programme whose viewing is scheduled (it stays marked); the focused one of those has the accent border.
+  &.focused,
+  &.scheduled {
     border-color: $text;
     background: $text;
     color: $bg;
+  }
+
+  &.scheduled.focused {
+    border-color: $accent;
   }
 }
 

@@ -1,7 +1,7 @@
 import { continueWatching } from '../../services/continueWatching.js';
 import { focusOnBar } from '../rowFocus.js';
 import { h } from '../dom.js';
-import { createIconButton } from '../atoms/iconButton.js';
+import { createIconButton, setIconButtonLabel } from '../atoms/iconButton.js';
 import { createHint } from '../atoms/hint.js';
 import { createSidebarItem, createSidebarItemSkeleton } from '../atoms/sidebarItem.js';
 import { createCard, createSkeletonCard } from '../components/card.js';
@@ -47,11 +47,11 @@ export function createBrowsePage(ctx, params = {}) {
     sepA.style.display = hasCount ? '' : 'none';
     favBtn.style.display = favState ? '' : 'none';
     favBtn.classList.toggle('active', !!(favState && favState.active));
-    favBtn.setAttribute('aria-label', favState && favState.active ? t('detail.unfavorite') : t('detail.favorite'));
+    setIconButtonLabel(favBtn, favState && favState.active ? t('detail.unfavorite') : t('detail.favorite'));
     const canPin = Boolean(favState && favState.onPin);
     pinBtn.style.display = canPin ? '' : 'none';
     pinBtn.classList.toggle('active', canPin && favState.pinActive);
-    pinBtn.setAttribute('aria-label', canPin && favState.pinActive ? t('browse.unpin') : t('browse.pin'));
+    setIconButtonLabel(pinBtn, canPin && favState.pinActive ? t('browse.unpin') : t('browse.pin'));
     if (!favState) favBtn.classList.remove('focused');
     if (!canPin) pinBtn.classList.remove('focused');
   }
@@ -552,6 +552,12 @@ export function createBrowsePage(ctx, params = {}) {
   let stopGuideUpdates = null;
   let stopScheduleUpdates = null;
   let scheduledCount = 0;
+  let scheduledKeys = new Set(); // `${channelId}|${start}` of the scheduled programmes: marked in the guide
+  const scheduledKey = (channelId, start) => `${channelId}|${start}`;
+  function keepScheduled(list) {
+    scheduledCount = list.length;
+    scheduledKeys = new Set(list.map((s) => scheduledKey(s.channelId, s.start)));
+  }
 
   /**
    * The rows of the guide: groups and channels with at least one programme in the hours shown (the others are left out), as the user
@@ -646,6 +652,7 @@ export function createBrowsePage(ctx, params = {}) {
       onOpen: (entry, row, programme) => ctx.openEntry(entry, programme ? { section: params.section, programme: programme.start } : { section: params.section }),
       getTimeFormat: () => timeFormat,
       enrich: ctx.enrich ? (list, guideCards) => ctx.enrich(list, guideCards, type) : null,
+      isScheduled: (entry, programme) => scheduledKeys.has(scheduledKey(entry.epgChannelId, programme.start)),
     };
     if (kind.indexOf('epgGenre:') === 0) {
       // Only the programmes of that category, on the rows that have some; the focus moves only between them, across and down.
@@ -838,7 +845,7 @@ export function createBrowsePage(ctx, params = {}) {
     const excluded = await ctx.settings.getExcluded(providerId, type);
     pinned = await ctx.pins.list(providerId, type).catch(() => []);
     // Seen before (and the catalog has not changed since): categories, genres, networks and their numbers come from the cache.
-    if (type === 'live' && ctx.schedules) scheduledCount = (await ctx.schedules.list(providerId).catch(() => [])).length;
+    if (type === 'live' && ctx.schedules) keepScheduled(await ctx.schedules.list(providerId).catch(() => []));
     sidebarVersion = await derivedVersion(db, { genres: true, locale: i18n.getLocale() }).catch(() => null);
     let cachedSidebar = ctx.pageCache ? ctx.pageCache.get(sidebarKey()) : null;
     let stale = false; // the saved copy is from before a sync / genre job: shown at once, worked out again behind it
@@ -1015,10 +1022,12 @@ export function createBrowsePage(ctx, params = {}) {
         // Scheduled programmes added or removed (here or from a channel page): the "scheduled" entry and its view follow.
         if (ctx.schedules)
           stopScheduleUpdates = ctx.schedules.onChange(async () => {
-            const n = (await ctx.schedules.list(providerId).catch(() => [])).length;
+            const list = await ctx.schedules.list(providerId).catch(() => []);
             if (destroyed) return;
+            const n = list.length;
             const had = scheduledCount > 0;
-            scheduledCount = n;
+            keepScheduled(list);
+            if (guide) guide.repaintScheduled();
             setCount('scheduled:', n);
             const wasScheduled = items[selected] && items[selected].kind === 'scheduled';
             if (had !== n > 0) rebuildSidebar();
