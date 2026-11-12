@@ -5,7 +5,7 @@ import { createHint } from '../atoms/hint.js';
 import { createSidebarItem } from '../atoms/sidebarItem.js';
 import { t, i18n } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
-import { GridModel, ListModel } from '../focus/models.js';
+import { GridModel, ListModel, sidebarModel } from '../focus/models.js';
 import { createCard } from '../components/card.js';
 import { ensureVisible, revealNearest } from '../scroll.js';
 import { SIDEBAR_ICON, columnsFor } from './browsePage.js';
@@ -180,7 +180,8 @@ export function createCollectionsPage(ctx, params = {}) {
   const catsZone = new FocusZone({
     id: CATS_ZONE,
     nodes: () => catNodes,
-    model: new ListModel({ orientation: 'vertical', getCount: () => items.length }),
+    // Right enters the grid like OK; an expand / collapse entry stays where it is.
+    model: sidebarModel({ getCount: () => items.length, enter: (i) => items[i] && !/toggle$/i.test(items[i].kind) && catsZone.onActivate(i) }),
     onFocus: (i) => {
       if (!catNodes[i]) return;
       catNodes[i].classList.add('focused');

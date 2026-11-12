@@ -17,7 +17,7 @@ import { TEXT_SIZES, applyTextSize } from '../../core/textSize.js';
 import { TIME_FORMATS, DATE_FORMATS, formatClockTime, formatClockDate } from '../../core/clock.js';
 import { t, i18n, detectLocale } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
-import { Dir } from '../focus/models.js';
+import { Dir, sidebarModel } from '../focus/models.js';
 import { LANGUAGE_OPTIONS, BUFFER_OPTIONS, SCREENSAVER_OPTIONS, SUGGESTION_SOURCE_OPTIONS, isEpgUrl } from '../../services/settings.js';
 import { ensureVisible } from '../scroll.js';
 import { createSyncPanel, createTmdbPanel, createTraktPanel, createDevicePanel, createOperationsPanel } from '../components/syncPanel.js';
@@ -28,7 +28,6 @@ import { parseTerms, termsText } from '../../services/liveGrouping.js';
 import { DEFAULT_SIMILARITY, DEFAULT_MAX_DIFF } from '../../services/liveNetworks.js';
 import { createField } from '../atoms/field.js';
 import { createSidebarItem } from '../atoms/sidebarItem.js';
-import { ListModel } from '../focus/models.js';
 import { runningVersions, lastCheck } from '../../services/updates.js';
 import { providerMediaTypes } from '../../services/providerTypes.js';
 import { APP_VERSION } from '../../core/env.js';
@@ -648,7 +647,7 @@ export function createSettingsPage(ctx) {
   const navZone = new FocusZone({
     id: NAV_ZONE,
     nodes: () => navItems,
-    model: new ListModel({ orientation: 'vertical', getCount: () => navItems.length }),
+    model: sidebarModel({ getCount: () => navItems.length, enter: () => navZone.onActivate() }), // Right enters the sub-page like OK
     onFocus: (i) => {
       navItems[i].classList.add('focused');
       if (i !== current) showSubpage(i);

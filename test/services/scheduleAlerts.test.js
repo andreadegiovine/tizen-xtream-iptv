@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { openAppDb } from '../../src/db/appDb.js';
 import { createScheduledViewing, LEAD_MS, scheduleId } from '../../src/services/scheduledViewing.js';
-import { createScheduleAlerts, alertsFor, alertId } from '../../src/services/scheduleAlerts.js';
+import { createScheduleAlerts, alertsFor, alertId, EXIT_WAIT_MS } from '../../src/services/scheduleAlerts.js';
 
 const M = 60000;
 const flush = () => new Promise((resolve) => setTimeout(resolve, 20));
@@ -120,4 +120,49 @@ test('without alerts (webOS, a browser) nothing happens', async () => {
   await expect(service.sync()).resolves.toBeUndefined();
   await expect(service.prepare()).resolves.toBeUndefined();
   await expect(service.beforeExit()).resolves.toBeUndefined();
+});
+
+describe('a system that starts closed apps only (Tizen: an alarm does not bring back an app still running)', () => {
+  async function setupTizen({ idle = () => Promise.resolve(), slow = false } = {}) {
+    const db = await openAppDb(`alerts-tz-${Math.random()}`);
+    const now = 1000 * M;
+    const schedules = createScheduledViewing({ db, now: () => now });
+    const alerts = { ...fakeAlerts(true), startsOnlyWhenClosed: true, exit: jest.fn() };
+    const doc = fakeDoc('visible');
+    const service = createScheduleAlerts({ alerts, schedules, db, texts, doc, now: () => now, idle, wait: (ms) => (slow && ms === EXIT_WAIT_MS ? new Promise(() => undefined) : Promise.resolve()) });
+    const news = { providerId: 'p', entryKey: 'live:1', entryName: 'One', channelId: 'one', title: 'News', start: now + 60 * M, stop: now + 90 * M };
+    return { service, schedules, alerts, doc, news };
+  }
+
+  test('hidden with a programme scheduled: the alarm is set, then the app exits once its saves are done', async () => {
+    let saved = false;
+    const { service, schedules, alerts, doc, news } = await setupTizen({ idle: async () => { await flush(); saved = true; } });
+    await service.sync();
+    doc.set('hidden');
+    await flush();
+    expect(alerts.exit).not.toHaveBeenCalled(); // nothing scheduled: it stays (suspended) as usual
+    doc.set('visible');
+    await schedules.add(news);
+    await flush();
+    doc.set('hidden');
+    await flush();
+    await flush();
+    expect(alerts.calls.some((c) => c[0] === 'arm')).toBe(true);
+    expect(saved).toBe(true);
+    expect(alerts.exit).toHaveBeenCalledTimes(1);
+  });
+
+  test('shown again before the saves are done: it does not exit', async () => {
+    let release;
+    const { service, schedules, alerts, doc, news } = await setupTizen({ slow: true, idle: () => new Promise((resolve) => { release = resolve; }) });
+    await service.sync();
+    await schedules.add(news);
+    await flush();
+    doc.set('hidden');
+    await flush();
+    doc.set('visible');
+    release();
+    await flush();
+    expect(alerts.exit).not.toHaveBeenCalled();
+  });
 });

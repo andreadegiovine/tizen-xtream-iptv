@@ -544,6 +544,8 @@ export function createWatchState({ store, trakt, nowMs = () => Date.now() }) {
   const read = (fn) => (...args) => pending.then(() => fn(...args));
   return {
     get: read((key) => store.get(key)),
+    /** Resolves once the writes queued so far are done. */
+    idle: () => pending.then(() => store.writes),
     recent: read((options) => store.recent(options)),
     recentForEntry: read((entryKey) => store.recentForEntry(entryKey)),
     seeds: read((limit) => store.seeds(limit)),

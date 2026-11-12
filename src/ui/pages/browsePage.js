@@ -8,7 +8,7 @@ import { createCard, createSkeletonCard } from '../components/card.js';
 import { derivedVersion, readDerivedAny, writeDerived } from '../../services/derivedStore.js';
 import { t, i18n } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
-import { ListModel } from '../focus/models.js';
+import { ListModel, sidebarModel } from '../focus/models.js';
 import { isFilterEntry, filterCardMeta } from '../components/typedRows.js';
 import { favoriteFilterEntries, openFilter } from '../../services/favoriteFilters.js';
 import { ensureVisible, revealNearest } from '../scroll.js';
@@ -754,7 +754,8 @@ export function createBrowsePage(ctx, params = {}) {
   const catsZone = new FocusZone({
     id: CATS_ZONE,
     nodes: () => catNodes,
-    model: new ListModel({ orientation: 'vertical', getCount: () => items.length }),
+    // Right enters the grid (or guide) like OK; an expand / collapse entry stays where it is.
+    model: sidebarModel({ getCount: () => items.length, enter: (i) => items[i] && !/toggle$/i.test(items[i].kind) && catsZone.onActivate(i) }),
     onFocus: (i) => {
       if (i !== selected) autoSidebar = false; // the user moved in the sidebar: the focus is theirs
       if (!catNodes[i]) return;

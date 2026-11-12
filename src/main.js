@@ -654,6 +654,7 @@ async function boot() {
     schedules: ctx.schedules,
     db,
     log,
+    idle: () => ctx.watch.idle(), // the point reached in a title, saved when the app is hidden
     texts: (s) => ({ title: t('app.name'), body: t('schedule.alertBody', { title: s.title }) }),
     confirm: (options) => dialogs.confirm(options),
     onOpen: (id, action) => {

@@ -20,6 +20,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` to do
 - **Provider credentials encrypted on the device.** Today in clear in the app database. WebCrypto would protect them from someone copying the profile (mostly desktop); the key stays on the device, so the protection is limited. Low priority.
 - **Backup and restore.** Export / import providers, favourites, collections and settings (a file, or a QR code): moving to another TV without Trakt. The file carries credentials: needs a password.
 - **Catch-up (TV archive) and profiles** stay the most asked for (see above).
+- **iOS / iPadOS version.** Analysed, no code. Capacitor 8 (`@capacitor/ios`) in `platforms/ios` like Android: native HTTP requests (providers without CORS, plain http, plus the ATS exception in Info.plist), `@capacitor/local-notifications` for scheduled viewing, landscape only, safe areas. The player is the hard part: AVPlayer plays only HLS and MP4 / MOV, so live channels would ask the `.m3u8` output of Xtream, while MKV and raw TS films need a native player (MobileVLCKit plugin, like the ExoPlayer one: audio / subtitle tracks). Phase 1 (installable app: HTTP, notifications, HLS / MP4) then phase 2 (VLCKit). Needs a Mac with Xcode; a free Apple ID signs for 7 days, the Apple Developer Program (99 €/year) for a year and TestFlight. Apple TV (tvOS) is out: no WebView, Capacitor does not support it.
 
 ## 0. TV spike
 CORS in dev and build, webapis in the remote shell, workers in the widget, AVPlay on a stream, IndexedDB quota.
@@ -880,4 +881,10 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - The tracks are looked at again every 5 s for the first minute of a stream, not only at the start: the Audio button (and Subtitles on live channels) appears for streams that list them late.
 - Desktop: the window enables Chromium's `AudioVideoTracks` feature (`webPreferences.enableBlinkFeatures`), so `video.audioTracks` exists: checked in Chromium with a WebM with two audio tracks (absent without it, listed and switched with it). Streams played through the demuxer (TS) still offer one audio track. webOS: unchanged, it depends on what the TV's web engine exposes.
 - Tests: language matching and track choice, a stream that lists its audio late with the app language chosen once. Not verified on the TV.
+
+### Patch 174 — Scheduled viewing on Tizen with the app in the background; Right from the sidebar into the grid
+- Tizen: a programme scheduled, the app left in the background (another app), nothing happened at its time. The Alarm guide says an alarm launches the app "unless it is already running", and a hidden app is still running (suspended). Now, hidden with an alarm set, the app exits (`startsOnlyWhenClosed`, `alerts.exit()` in `platforms/tizen/alerts.js`) once its saves are written (`watch.idle()`, at most 1.5 s after a 0.3 s start) and if it is still hidden; the alarm then starts it on the channel. Without scheduled programmes nothing changes (the app stays in the background). A TV app has no notifications: the app comes to the front on the channel. Coming back to the app after leaving it with a programme scheduled starts it again (Home).
+- Pages with a sidebar (Movies, TV Series, Live TV, Collections, Settings): Right on a sidebar entry enters its grid / guide / sub-page like OK (an expand / collapse entry stays); Left from the content still does not go back to the sidebar.
+- iOS version added to the open points.
+- Tests: exit after the saves only while hidden and only with an alarm, not when shown again first; the Tizen adapter; Right from the sidebar into the grid. Not verified on the TV.
 

@@ -19,7 +19,7 @@ function fakeTizen(requested = null) {
       Object.assign(this, { key, value });
     },
     application: {
-      getCurrentApplication: () => ({ appInfo: { id: 'XtrmIptv01.XtreamIPTV' }, getRequestedAppControl: () => (tizen.requested ? { appControl: tizen.requested } : null) }),
+      getCurrentApplication: () => ({ exit: tizen.exit, appInfo: { id: 'XtrmIptv01.XtreamIPTV' }, getRequestedAppControl: () => (tizen.requested ? { appControl: tizen.requested } : null) }),
     },
   };
   return tizen;
@@ -61,4 +61,13 @@ test('started by an alarm: the programme at once; brought to the front by one: f
   tizen.requested = { operation: 'http://tizen.org/appcontrol/operation/default', data: [] }; // a normal start
   win.fire('appcontrol');
   expect(opened).toEqual(['p|one|1:watch', 'p|two|2:watch']);
+});
+
+test('an alarm starts only a closed app: the adapter says so and can exit the app', () => {
+  const tizen = fakeTizen();
+  tizen.exit = jest.fn();
+  const alerts = createTizenAlerts(tizen, { addEventListener: () => undefined });
+  expect(alerts.startsOnlyWhenClosed).toBe(true);
+  alerts.exit();
+  expect(tizen.exit).toHaveBeenCalledTimes(1);
 });

@@ -85,17 +85,20 @@ test('back from a title: the focus returns to its card in the grid', async () =>
   again.destroy();
 });
 
-test('the sidebar moves only Up / Down (OK opens its grid), the grid only among its cards', async () => {
+test('the sidebar moves Up / Down, Right (or OK) opens its grid; the grid only among its cards, no Left back to the sidebar', async () => {
   const { Action } = await import('../../src/core/input.js');
   const { ctx } = await setup('browse-focus-moves');
   const page = createBrowsePage(ctx, { type: 'movie', section: 'movies', fromBar: true });
   page.mount();
   await tick(150);
-  ctx.focus.handle(Action.RIGHT);
-  expect(ctx.focus.activeId).toBe('browseCategories'); // no way right into the grid
   ctx.focus.handle(Action.UP);
-  expect(ctx.focus.activeId).toBe('browseCategories'); // nor up to the top bar
-  ctx.focus.handle(Action.ENTER); // OK on the entry on screen: into its grid
+  expect(ctx.focus.activeId).toBe('browseCategories'); // no way up to the top bar
+  ctx.focus.handle(Action.RIGHT); // Right on the entry on screen: into its grid, as OK
+  await tick(60);
+  expect(ctx.focus.activeId).toBe('browseGrid');
+  expect(page.onBack()).toBe(true);
+  expect(ctx.focus.activeId).toBe('browseCategories');
+  ctx.focus.handle(Action.ENTER); // OK does the same
   await tick(60);
   expect(ctx.focus.activeId).toBe('browseGrid');
   ctx.focus.handle(Action.LEFT);

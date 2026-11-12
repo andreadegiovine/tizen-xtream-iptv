@@ -2,6 +2,8 @@ import { kvGet, kvSet } from '../db/kv.js';
 import { LEAD_MS, scheduleId } from './scheduledViewing.js';
 
 const ASKED_KEY = 'scheduleAlertsAsked';
+export const EXIT_DELAY_MS = 300; // the other handlers of the hiding start their saves first
+export const EXIT_WAIT_MS = 1500; // at most this long for them
 
 /** The numeric id of an alert (the systems want an integer): a 31-bit hash of the schedule id, never 0. */
 export function alertId(id) {
@@ -28,10 +30,12 @@ export function alertsFor(list, { now = Date.now(), texts }) {
  * - `alerts.whileHidden`: the system shows them (Android, Tizen): they are set while the app is hidden and removed when it is shown again,
  *   where the app's own notice and the channel opening (main.js) take over; otherwise (desktop) they stay set and the adapter skips the
  *   ones that come while the window is in use.
+ * - `alerts.startsOnlyWhenClosed`: the system starts a closed app only (Tizen): hidden with an alert set, the app exits (`alerts.exit()`)
+ *   once `idle()` resolves (what it was saving, the point reached in a title) or EXIT_WAIT_MS went by, unless it is shown again first.
  * - `prepare()`: the permissions, asked the first time a programme is scheduled (`confirm` asks the user before a settings screen).
  * Without `alerts` (webOS, a browser) everything here does nothing.
  */
-export function createScheduleAlerts({ alerts, schedules, db, texts, confirm = async () => false, onOpen = () => undefined, doc = typeof document !== 'undefined' ? document : null, now = Date.now, log = null }) {
+export function createScheduleAlerts({ alerts, schedules, db, texts, confirm = async () => false, onOpen = () => undefined, doc = typeof document !== 'undefined' ? document : null, now = Date.now, log = null, idle = () => Promise.resolve(), wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
   const warn = (what, err) => log && log.warn(what, err && err.message);
   // Alerts of the system may be left from the last session (the app was closed while hidden): the first sync removes them.
   let armed = Boolean(alerts && alerts.whileHidden);
@@ -39,10 +43,24 @@ export function createScheduleAlerts({ alerts, schedules, db, texts, confirm = a
   const hidden = () => Boolean(doc && doc.visibilityState === 'hidden');
   const settle = (result) => Promise.resolve(result).catch((err) => warn('Schedule alerts failed', err));
 
+  let exitToken = 0;
+  /** Hidden with an alert set on a system that starts closed apps only: the app exits once its saves are done, if still hidden. */
+  function exitForAlarm() {
+    const token = (exitToken += 1);
+    return wait(EXIT_DELAY_MS)
+      .then(() => Promise.race([Promise.resolve(idle()).catch(() => undefined), wait(EXIT_WAIT_MS)]))
+      .then(() => {
+        if (token !== exitToken || !hidden()) return;
+        if (log) log.info('Scheduled viewing: the app exits so that the alarm can start it');
+        alerts.exit();
+      });
+  }
+
   /** Sets or removes the alerts as the state of the app asks, starting at once (no wait before the system calls). */
   function apply() {
     if (!alerts) return Promise.resolve();
     if (alerts.whileHidden && !hidden()) {
+      exitToken += 1; // shown again: no exit
       if (!armed) return Promise.resolve();
       armed = false;
       return settle(alerts.disarm());
@@ -50,7 +68,9 @@ export function createScheduleAlerts({ alerts, schedules, db, texts, confirm = a
     const list = alertsFor(scheduled, { now: now(), texts });
     if (!list.length && !armed) return Promise.resolve();
     armed = list.length > 0;
-    return settle(alerts.arm(list));
+    const set = settle(alerts.arm(list));
+    if (list.length && hidden() && alerts.startsOnlyWhenClosed && alerts.exit) return set.then(() => settle(exitForAlarm()));
+    return set;
   }
   const refresh = async () => {
     scheduled = await schedules.list();

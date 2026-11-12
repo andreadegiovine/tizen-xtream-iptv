@@ -4,7 +4,9 @@
  * when it exits; a TV in standby does not wake up for them).
  * - the app was closed: it starts, and reads the control with getRequestedAppControl();
  * - the app was hidden (another app, the TV's home): the control comes as an `appcontrol` event, without reloading the page (config.xml:
- *   the operation below with reload="disable"). */
+ *   the operation below with reload="disable").
+ * An alarm launches the app "unless it is already running" (Tizen Alarm guide): a hidden app is still running (suspended), so it would not
+ * come back. With an alarm set, a hidden app therefore exits (`startsOnlyWhenClosed`, scheduleAlerts.js), once its saves are written. */
 export const SCHEDULE_OPERATION = 'http://xtream-iptv.local/appcontrol/operation/schedule';
 const DATA_KEY = 'scheduleId';
 
@@ -26,6 +28,10 @@ export function createTizenAlerts(tizen, win) {
 
   return {
     whileHidden: true,
+    startsOnlyWhenClosed: true,
+    exit() {
+      tizen.application.getCurrentApplication().exit();
+    },
     arm(list) {
       tizen.alarm.removeAll(); // the app's alarms are only these
       list.forEach((alert) => {

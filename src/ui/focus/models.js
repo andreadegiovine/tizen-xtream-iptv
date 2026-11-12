@@ -48,3 +48,21 @@ export class ListModel {
     return exit(dir);
   }
 }
+
+/**
+ * A sidebar: Up / Down along it, Right enters its content (`enter(index)`, what OK does: an expand / collapse entry does nothing); there is
+ * no way back with Left from the content (Back is the way).
+ */
+export function sidebarModel({ getCount, enter }) {
+  const list = new ListModel({ orientation: 'vertical', getCount });
+  return {
+    getCount,
+    navigate(dir, index) {
+      if (dir === Dir.RIGHT) {
+        enter(index);
+        return exit(dir);
+      }
+      return list.navigate(dir, index);
+    },
+  };
+}
