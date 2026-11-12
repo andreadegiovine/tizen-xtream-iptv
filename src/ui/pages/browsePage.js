@@ -974,6 +974,10 @@ export function createBrowsePage(ctx, params = {}) {
   });
 
   return {
+    /** The bar's entry of this page pressed again: the focus comes to the sidebar (its entry of the page), nothing is loaded again. */
+    takeFocusFromBar() {
+      return items.length > 0 && ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
+    },
     el: pageEl,
     /** Back: a selected row of the guide lets go; from the grid / guide the focus goes to the sidebar; then the main entry; then the page is left. */
     onBack() {

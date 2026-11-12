@@ -30,7 +30,7 @@ export function createSkeletonCard() {
 }
 
 /** The icon of a card without a picture, per media type. */
-const TYPE_ICON = { movie: 'movie', series: 'series', live: 'network' };
+const TYPE_ICON = { movie: 'movie', series: 'series', episode: 'series', live: 'network' }; // an episode: the series icon
 
 export const formatRating = (rating) => (Number(rating) > 0 ? Number(rating).toFixed(1) : '');
 

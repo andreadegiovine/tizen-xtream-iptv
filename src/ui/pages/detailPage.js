@@ -447,6 +447,21 @@ export function createDetailPage(ctx, params) {
     }
   }
 
+  /** "Rewind": the point reached in the movie (or the episode that plays next) back to the start; the focus goes back to Play. */
+  async function rewind(record) {
+    try {
+      const saved = await ctx.watch.rewind(record);
+      records = records.map((r) => (r.key === saved.key ? saved : r));
+      if (destroyed) return;
+      build();
+      ctx.focus.focus('detailActions', 0);
+      ctx.notices.success(t('notice.done'), { key: 'watched' });
+    } catch (err) {
+      log.warn('Rewind failed', err && err.message);
+      ctx.notices.error(t('error.UNKNOWN'), { key: 'watched' });
+    }
+  }
+
   /** "Seen" button: marks the movie (or every episode) as watched, or forgets its history again. */
   async function toggleWatched(episodes, watched) {
     try {
@@ -508,24 +523,27 @@ export function createDetailPage(ctx, params) {
     const buttons = [];
     let note = '';
     let canResume = false;
+    let resumeRecord = null; // the movie's, or the episode's that plays next
     let startIndex = 0;
     if (entry.type === 'series') {
       if (episodes.length) {
         const pick = pickNextEpisode(episodes, records);
         startIndex = episodes.indexOf(pick.episode);
         canResume = Boolean(pick.record && shouldResume(pick.record.position, pick.record.duration));
+        resumeRecord = pick.record;
         note = `S${pick.episode.season}E${pick.episode.number}${canResume ? ` · ${formatClock(pick.record.position)}` : ''}`;
         buttons.push({ id: 'play', icon: 'play', label: t('detail.play'), run: () => play({ list: episodes, startIndex }) });
       }
     } else {
       const record = records[0];
       canResume = Boolean(record && shouldResume(record.position, record.duration));
+      resumeRecord = record;
       if (canResume) note = formatClock(record.position);
       buttons.push({ id: 'play', icon: 'play', label: t('detail.play'), run: () => play(entry.type === 'live' ? { restart: true } : {}) });
     }
-    if (canResume) {
-      buttons.push({ id: 'restart', icon: 'resume', label: t('detail.restart'), run: () => (entry.type === 'series' ? play({ list: episodes, startIndex, restart: true }) : play({ restart: true })) });
-    }
+    // Rewind (only with a point reached): the point goes back to the start (also on Trakt), nothing plays; Play then starts from the
+    // beginning. For a series, the episode that plays next.
+    if (canResume) buttons.push({ id: 'rewind', icon: 'rewind', label: t('detail.rewind'), run: () => rewind(resumeRecord) });
     const watched = isEntryWatched(episodes);
     if (buttons.length && entry.type !== 'live') {
       buttons.push({ id: 'watched', icon: 'check', active: watched, label: watched ? t('detail.unwatched') : t('detail.watched'), run: () => toggleWatched(episodes, watched) });

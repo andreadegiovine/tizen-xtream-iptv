@@ -82,6 +82,11 @@ export function createTopbar(ctx, handlers = {}) {
         api.openSearch();
         return;
       }
+      // The page on screen (the section's own, nothing opened over it): only the focus moves to it (its sidebar), nothing reloads.
+      const current = ctx.router.current;
+      const params = section.params || {};
+      const same = current && ctx.router.depth <= 1 && current.name === section.route && Object.keys(params).every((key) => (current.params || {})[key] === params[key]);
+      if (same && ctx.router.page && ctx.router.page.takeFocusFromBar && ctx.router.page.takeFocusFromBar()) return;
       // fromBar: the page takes the focus (its sidebar, its first row): the bar is only Left / Right, Back comes back to it.
       ctx.router.reset(section.route, { ...(section.params || {}), section: section.id, fromBar: true });
     },

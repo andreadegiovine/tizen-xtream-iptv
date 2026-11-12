@@ -18,6 +18,8 @@ import { faHourglassHalf } from '@fortawesome/free-solid-svg-icons/faHourglassHa
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
 import { faPause } from '@fortawesome/free-solid-svg-icons/faPause';
 import { faRotateRight } from '@fortawesome/free-solid-svg-icons/faRotateRight';
+import { faRotateLeft } from '@fortawesome/free-solid-svg-icons/faRotateLeft';
+import { faForwardFast } from '@fortawesome/free-solid-svg-icons/faForwardFast';
 import { faBackward } from '@fortawesome/free-solid-svg-icons/faBackward';
 import { faForward } from '@fortawesome/free-solid-svg-icons/faForward';
 import { faBackwardStep } from '@fortawesome/free-solid-svg-icons/faBackwardStep';
@@ -73,7 +75,8 @@ const ICONS = {
   hourglass: faHourglassHalf,
   play: faPlay,
   pause: faPause,
-  resume: faRotateRight,
+  rewind: faRotateLeft, // a title's point reached back to the start
+  goLive: faForwardFast, // a paused live channel back to now
   backward: faBackward,
   forward: faForward,
   previous: faBackwardStep,

@@ -9,3 +9,27 @@ test('the search field sits between the logo and the clock, not across the whole
   bar.closeSearch({ notify: false });
   expect(bar.el.querySelector('.topbar-clock')).not.toBeNull();
 });
+
+test('the bar entry of the page on screen only gives it the focus; another entry (or a page opened over it) loads the section', async () => {
+  const { Action } = await import('../../src/core/input.js');
+  const { TOPBAR_ZONE } = await import('../../src/ui/components/topbar.js');
+  const focus = new FocusManager();
+  const takeFocusFromBar = jest.fn(() => true);
+  const router = { depth: 1, current: { name: 'browse', params: { type: 'movie', section: 'movies' } }, page: { takeFocusFromBar }, reset: jest.fn() };
+  const bar = createTopbar({ focus, router }, {});
+  document.body.appendChild(bar.el);
+  const labels = () => Array.from(bar.el.querySelectorAll('.topbar-item:not(.topbar-back)')).map((n) => n.getAttribute('aria-label') || n.textContent);
+  focus.focus(TOPBAR_ZONE, labels().indexOf('Movies'));
+  focus.handle(Action.ENTER);
+  expect(takeFocusFromBar).toHaveBeenCalledTimes(1);
+  expect(router.reset).not.toHaveBeenCalled();
+  focus.focus(TOPBAR_ZONE, labels().indexOf('TV Series'));
+  focus.handle(Action.ENTER);
+  expect(router.reset).toHaveBeenCalledWith('browse', expect.objectContaining({ type: 'series', fromBar: true }));
+  router.depth = 2; // a title opened over Movies
+  focus.focus(TOPBAR_ZONE, labels().indexOf('Movies'));
+  focus.handle(Action.ENTER);
+  expect(router.reset).toHaveBeenCalledTimes(2);
+  expect(takeFocusFromBar).toHaveBeenCalledTimes(1);
+  document.body.innerHTML = '';
+});

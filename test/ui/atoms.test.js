@@ -116,3 +116,23 @@ test('heading, hint, placeholder, skeleton, meta parts', () => {
   expect(createMetaSeparator().textContent).toBe('·');
   expect(createMetaRating('8.2').textContent).toBe('8.2');
 });
+
+test('cards without a picture show the icon of their type: an episode the series one', async () => {
+  const { createCard } = await import('../../src/ui/components/card.js');
+  const iconOf = (type, meta) => {
+    const svg = createCard({ name: 'x' }, type, meta).el.querySelector('.card-placeholder svg');
+    return svg ? svg.getAttribute('class') : null;
+  };
+  expect(iconOf('episode')).toContain('icon-series');
+  expect(iconOf('series')).toContain('icon-series');
+  expect(iconOf('movie')).toContain('icon-movie');
+  expect(iconOf('live')).toContain('icon-network');
+  expect(iconOf('cast', { placeholder: 'user' })).toContain('icon-user');
+});
+
+test('a button with an icon and a label keeps both (the icon apart, by the stylesheet); icon only: no text', () => {
+  const both = createButton({ label: 'Add a provider', icon: 'add', variant: 'primary', iconOnly: false });
+  expect(both.textContent).toBe('Add a provider');
+  expect(both.querySelector('svg')).not.toBeNull();
+  expect(both.classList.contains('icon-only')).toBe(false);
+});

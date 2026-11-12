@@ -248,6 +248,10 @@ export function createCollectionsPage(ctx, params = {}) {
   }
 
   return {
+    /** The bar's entry of this page pressed again: the focus comes to the sidebar (its entry of the page), nothing is loaded again. */
+    takeFocusFromBar() {
+      return items.length > 0 && ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
+    },
     el: h('section', { class: 'page browse' }, h('div', { class: 'browse-body' }, catList, h('div', { class: 'browse-main' }, head, gridEl, empty))),
     /** On a genre (or favourites) Back first goes to "show all", the page is left from there. */
     onBack() {

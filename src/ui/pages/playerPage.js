@@ -18,9 +18,10 @@ import { createPlayerSubtitles } from './player/subtitles.js';
 
 const CONTROLS_MS = 4000;
 const SAVE_EVERY_MS = 10000;
-const NEXT_OFFER_S = 120; // the "next episode" notice appears this long before the end (over the end credits)
-const NEXT_MIN_DURATION_S = 240;
 const NEXT_COUNTDOWN_S = 10;
+// Without an end credits point the "next episode" notice appears as long before the end as its countdown: it reaches zero at the end.
+const NEXT_OFFER_S = NEXT_COUNTDOWN_S;
+const NEXT_MIN_DURATION_S = 240;
 const SEEK_SHORT = 10;
 const SEEK_LONG = 30;
 const SCRUB_STEP = 30;
@@ -97,6 +98,8 @@ export function createPlayerPage(ctx, params) {
     { id: 'prevEpisode', icon: 'previous', label: () => t('player.prevEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(-1) },
     { id: 'back30', icon: 'backward', label: () => t('player.back30', { seconds: SEEK_LONG }), vodOnly: true, run: () => controller.seekBy(-SEEK_LONG) },
     { id: 'toggle', icon: 'pause', label: () => t('player.pause'), group: 'start', run: () => togglePause() },
+    // Live: after a pause the channel goes on from where it stopped; this one, next to play / pause, goes back to now.
+    { id: 'goLive', icon: 'goLive', label: () => t('player.goLive'), liveOnly: true, hidden: true, run: () => goLive() },
     { id: 'forward30', icon: 'forward', label: () => t('player.forward30', { seconds: SEEK_LONG }), vodOnly: true, run: () => controller.seekBy(SEEK_LONG) },
     { id: 'nextEpisode', icon: 'next', label: () => t('player.nextEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(1) },
     { id: 'versions', icon: 'group', label: () => t('player.versions'), liveOnly: true, hidden: true, run: () => openVersions() }, // a group with several versions
@@ -121,7 +124,7 @@ export function createPlayerPage(ctx, params) {
   });
   const buttonEl = (id) => (buttonDefs.find((d) => d.id === id) || {}).el;
   // Full-width progress bar, then one row: previous episode, back 30 s, play/pause, forward 30 s, next episode and the time on the left, aspect ratio and subtitles on the right.
-  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('prevEpisode'), buttonEl('back30'), buttonEl('toggle'), buttonEl('forward30'), buttonEl('nextEpisode'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
+  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('prevEpisode'), buttonEl('back30'), buttonEl('toggle'), buttonEl('goLive'), buttonEl('forward30'), buttonEl('nextEpisode'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
   // Back for the pointer (a finger, a mouse): before the title, shown only in pointer mode (the remote has its own Back key).
   const backEl = setTip(h('button', { class: 'player-back', type: 'button', 'aria-label': t('common.back') }, iconNode('back')), t('common.back'), 'down');
   const top = h('div', { class: 'player-top' }, h('div', { class: 'player-heading' }, backEl, h('div', { class: 'player-heading-text' }, titleEl, nowEl)));
@@ -381,14 +384,17 @@ export function createPlayerPage(ctx, params) {
     setPlayerButtonLabel(def.el, def.label(), neighborNames.get(key));
   }
 
-  /**
-   * Play / pause. A live channel paused starts again live (from now: the stream is not kept while paused); a movie or an episode from
-   * where it was.
-   */
+  /** Play / pause; a live channel goes on from where it was paused, behind live: "Back to live" shows next to it until used. */
   function togglePause() {
     resumePaused = false;
-    if (isLive && lastState.status === 'paused') play(index);
-    else controller.togglePause();
+    if (isLive && lastState.status === 'playing') setVisible('goLive', true);
+    controller.togglePause();
+  }
+
+  /** A live channel behind live (it was paused) back to now: the stream is opened again. */
+  function goLive() {
+    focusIndex = startIndex();
+    play(index);
   }
 
   /** Position of play / pause among the buttons (the first button for live channels). */
@@ -568,6 +574,7 @@ export function createPlayerPage(ctx, params) {
     subtitles.reset();
     audioTrack = null;
     setAudioVisible(false);
+    setVisible('goLive', false); // opened again: live
     titleEl.textContent = [title, current().title].filter(Boolean).join(' · ');
     nowEl.textContent = '';
     liveProgramme = null;
@@ -626,10 +633,10 @@ export function createPlayerPage(ctx, params) {
     nextNotice = null;
   }
 
-  /** About two minutes before the end of an episode the next one is offered: OK plays it now (during the end credits). */
+  /** The next episode is offered NEXT_OFFER_S before the end (or from the end credits point): OK plays it now. */
   function offerNext(state) {
     if (isLive || isTrailer || nextOffered || state.status !== 'playing' || !(state.duration > NEXT_MIN_DURATION_S)) return;
-    // From the start of the end credits when the user set it for the series, otherwise about two minutes before the end.
+    // From the start of the end credits when the user set it for the series, otherwise the countdown's length before the end.
     const creditsAt = creditsStart(state.duration);
     if (creditsAt !== null ? state.position < creditsAt : state.duration - state.position > NEXT_OFFER_S) return;
     const next = neighborEpisode(playlist, index, 1);

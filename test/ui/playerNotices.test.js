@@ -70,7 +70,7 @@ describe('player notices', () => {
     page.destroy();
   });
 
-  test('two minutes before the end the next episode is offered in a notice; OK plays it; no offer before', async () => {
+  test('as long before the end as its countdown the next episode is offered in a notice; OK plays it; no offer before', async () => {
     const { page, notices, handlers, clock, engine } = setup();
     document.body.appendChild(page.el);
     page.mount();
@@ -80,7 +80,11 @@ describe('player notices', () => {
     clock.time = 1000;
     jest.advanceTimersByTime(2000);
     expect(document.body.querySelector('.notices .notice')).toBeNull();
-    clock.time = 3000 - 110;
+    clock.time = 3000 - 110; // under two minutes: not yet (it was offered from there)
+    jest.advanceTimersByTime(2000);
+    await flush();
+    expect(document.body.querySelector('.notices .notice')).toBeNull();
+    clock.time = 3000 - 10; // 10 s before the end: the countdown ends with the episode
     jest.advanceTimersByTime(2000);
     await flush();
     expect(document.body.querySelector('.notices .notice.info')).not.toBeNull();

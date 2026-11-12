@@ -131,7 +131,7 @@ test('setting the credits start: saved for the series from the end, darker bar, 
   s.page.destroy();
 });
 
-test('a point set earlier is used by every episode; without one the notice keeps the two-minute rule', async () => {
+test('a point set earlier is used by every episode; without one the notice comes 10 s before the end', async () => {
   const s = setup({ stored: { 'p|series:t1396': 200 } }); // credits 200 s before the end: at 6:40
   await wait();
   s.start();
@@ -151,7 +151,10 @@ test('a point set earlier is used by every episode; without one the notice keeps
   await wait(700);
   expect(notices()).not.toContain('Next episode in 10 seconds');
   expect(plain.page.el.querySelector('.player-credits').style.display).toBe('none');
-  plain.setTime(490000); // 1:50 before the end
+  plain.setTime(490000); // 1:50 before the end: not yet
+  await wait(700);
+  expect(notices()).not.toContain('Next episode in 10 seconds');
+  plain.setTime(590000); // 10 s before the end
   await wait(700);
   expect(notices()).toContain('Next episode in 10 seconds');
   plain.page.destroy();

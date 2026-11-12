@@ -29,6 +29,11 @@
   opacity: 0.5;
 }
 
+// An icon before the label: apart from it.
+.btn:not(.icon-only) > .icon {
+  margin: -4px 12px 0 0;
+}
+
 // Buttons that show only an icon.
 .btn.icon-only {
   display: flex;

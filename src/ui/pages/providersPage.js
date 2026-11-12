@@ -56,7 +56,7 @@ export function createProvidersPage(ctx, params = {}) {
       cells = buildCells(providers, activeId);
       nodes = cells.map((cell) => {
         if (cell.action === ProviderAction.ADD) {
-          return createButton({ label: t('setup.title'), icon: 'add', variant: 'primary', iconOnly: true, className: 'provider-add' });
+          return createButton({ label: t('setup.title'), icon: 'add', variant: 'primary', iconOnly: false, className: 'provider-add' }); // icon and label
         }
         const labelKey = cell.action === ProviderAction.USE && cell.disabled ? 'providers.current' : `providers.${cell.action}`;
         // Use / Active keep their label; the others are icons only (categories: the one of the sidebar).

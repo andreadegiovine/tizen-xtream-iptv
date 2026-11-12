@@ -661,6 +661,10 @@ export function createSettingsPage(ctx) {
   const page = h('section', { class: 'page browse settings-page' }, h('div', { class: 'browse-body' }, nav, body));
 
   return {
+    /** The bar's entry of this page pressed again: the focus comes to the sidebar (its entry of the page), nothing is loaded again. */
+    takeFocusFromBar() {
+      return ctx.focus.focus(NAV_ZONE, current);
+    },
     el: page,
     /** Back from the rows goes to the sidebar, then to its first entry; from there the top bar (main.js). */
     onBack() {

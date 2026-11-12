@@ -57,6 +57,8 @@ export function createTraktClient({ clientId = '', clientSecret = '', getCredent
     scrobble: (token, action, payload) => call(`/scrobble/${action}`, { method: 'POST', body: payload, token }),
     /** Titles stopped half way, with their progress (percent). */
     playback: (token) => call('/sync/playback?extended=full', { token }), // full: the runtime, to turn the percentage into a position
+    /** Removes one playback progress (its `id` in the playback list): the title starts again from the beginning on every device. */
+    removePlayback: (token, id) => call(`/sync/playback/${id}`, { method: 'DELETE', token }),
     lastActivities: (token) => call('/sync/last_activities', { token }), // when each kind of data last changed: tells if a full read is needed
     /**
      * The watched lists are paginated (100 items without `limit`, at most 250 a page; `extended=progress` at most 100): one page here, the

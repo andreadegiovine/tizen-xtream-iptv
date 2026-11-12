@@ -116,7 +116,7 @@ test('live: the arrows do not change channel, they bring the controls with the f
   page.destroy();
 });
 
-test('live: Subtitles only when the stream carries subtitle tracks; play / pause, and play again goes back live', async () => {
+test('live: Subtitles only when the stream carries subtitle tracks; play after a pause goes on from there, "Back to live" goes to now', async () => {
   const { page, engine } = await setup();
   engine.getSubtitleTracks = () => [{ index: 0, language: 'ita' }];
   engine.handlers.onPrepared();
@@ -125,11 +125,22 @@ test('live: Subtitles only when the stream carries subtitle tracks; play / pause
   expect(visible(page)).toContain('Subtitles');
   const starts = engine.start.mock.calls.length;
   const plays = engine.play.mock.calls.length;
+  expect(visible(page)).not.toContain('Back to live');
   page.onAction(Action.PLAY_PAUSE);
   expect(engine.pause).toHaveBeenCalledTimes(1);
+  expect(visible(page).slice(0, 2)).toEqual(['Play', 'Back to live']); // next to play / pause
   page.onAction(Action.PLAY_PAUSE);
   await wait();
-  expect(engine.start.mock.calls.length).toBe(starts + 1); // loaded again: live, not from where it stopped
-  expect(engine.play.mock.calls.length).toBe(plays); // not resumed where it was
+  expect(engine.play.mock.calls.length).toBe(plays + 1); // goes on from where it was paused
+  expect(engine.start.mock.calls.length).toBe(starts);
+  expect(visible(page)).toContain('Back to live'); // still behind live
+  page.onAction(Action.ENTER); // the controls, on play / pause
+  page.onAction(Action.RIGHT);
+  expect(page.el.querySelector('.player-btn.focused').getAttribute('aria-label')).toBe('Back to live');
+  page.onAction(Action.ENTER);
+  await wait();
+  expect(engine.start.mock.calls.length).toBe(starts + 1); // opened again: live
+  expect(visible(page)).not.toContain('Back to live');
+  expect(page.el.querySelector('.player-btn.focused').getAttribute('aria-label')).toBe('Pause');
   page.destroy();
 });
