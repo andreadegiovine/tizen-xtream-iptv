@@ -10,6 +10,12 @@ export function savedRowFocus(focus, ids) {
 }
 
 /**
+ * Whether the focus is on the top bar (or its search field) when a page is left: coming back (the search closed with its x / Back) the
+ * page does not take the focus, the bar keeps it.
+ */
+export const focusOnBar = (focus) => Boolean(focus.activeId) && focus.activeId.indexOf('topbar') === 0;
+
+/**
  * Focuses `index` in a row: a carousel first reads its cards up to there (they are read as the focus moves right), then the focus goes
  * on the card (the last one if the row has fewer now). `row`: { zone, fill? , items? }.
  */

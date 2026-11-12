@@ -4,7 +4,7 @@ import { createSkeletonLine } from '../atoms/skeleton.js';
 import { createHint } from '../atoms/hint.js';
 import { t } from '../../i18n/index.js';
 import { MediaType } from '../../services/mediaType.js';
-import { focusRowAt, savedRowFocus } from '../rowFocus.js';
+import { focusRowAt, savedRowFocus, focusOnBar } from '../rowFocus.js';
 import { createCarousel, VISIBLE_CARDS, AHEAD_CARDS } from '../components/carousel.js';
 import { createSkeletonCard } from '../components/card.js';
 import { getEntry, pageEntries } from '../../services/catalogQuery.js';
@@ -173,9 +173,10 @@ export function createHomePage(ctx, params = {}) {
       clearRows();
     },
     /** The card the focus is on, to land on it again when the page comes back. */
-    saveState: () => ({ focus: savedRowFocus(ctx.focus, carousels.map((c) => c.zone.id)) }),
+    saveState: () => ({ focus: savedRowFocus(ctx.focus, carousels.map((c) => c.zone.id)), onBar: focusOnBar(ctx.focus) }),
     restoreState(state) {
       restored = (state && state.focus) || null;
+      if (state && state.onBar) focusedOnce = true; // left from the bar (the search): it keeps the focus
     },
   };
 }

@@ -11,7 +11,6 @@ import { log } from '../../core/logger.js';
 import { formatClockTime } from '../../core/clock.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
-import { SEARCH_BAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 
 const PER_TYPE = 100; // results per type (the rows load their cards lazily)
@@ -23,7 +22,7 @@ const RECENT_ZONE = 'searchRecent';
  */
 export function createSearchPage(ctx, params = {}) {
   const status = createHint({ className: 'search-status' });
-  const rows = createTypedRows(ctx, { prefix: 'search', limit: PER_TYPE, topZone: SEARCH_BAR_ZONE, onOpen: (entry) => remember() || open(entry) });
+  const rows = createTypedRows(ctx, { prefix: 'search', limit: PER_TYPE, linkFromField: true, onOpen: (entry) => remember() || open(entry) });
 
   /** A collection opens its page; a programme opens its channel / group with the focus on it; the rest opens its detail page. */
   function open(entry) {
@@ -118,7 +117,6 @@ export function createSearchPage(ctx, params = {}) {
     if (!recent.length) return;
     if (!recentRegistered) {
       ctx.focus.register(recentZone);
-      ctx.focus.link(RECENT_ZONE, 'up', SEARCH_BAR_ZONE); // the field in the bar
       recentRegistered = true;
     }
     if (ctx.linkSearchDown) ctx.linkSearchDown(RECENT_ZONE);
@@ -198,7 +196,7 @@ export function createSearchPage(ctx, params = {}) {
     },
     getQuery: () => query,
     /** Moves the focus from the search field to the first result. */
-    focusResults: () => rows.focusFirst(),
+    focusResults: () => rows.focusFirst() || (recentRegistered && recent.length ? ctx.focus.focus(RECENT_ZONE, 0) : false),
     saveState: () => ({ query, focus: rows.savedFocus() }),
     restoreState(state) {
       if (state && state.query) {

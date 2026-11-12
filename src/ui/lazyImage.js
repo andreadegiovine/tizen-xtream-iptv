@@ -9,6 +9,20 @@ const SWEEP_AT = 400;
 // from its own scroll container, where the margins really are 600 / 1800 px.
 const groups = new Map(); // root element (null = the screen) -> { near, far }
 const watched = new Set();
+// Pictures already shown in this session (in the browser's cache): a card built again (a page that comes back) shows them at once,
+// without the skeleton sweeping over the whole row first (Home's first row "reloaded" all its posters when the page came back).
+const shown = new Set();
+const SHOWN_MAX = 4000;
+
+/** Remembers that a picture was shown (its load ended). */
+export function markShown(url) {
+  if (!url) return;
+  if (shown.size >= SHOWN_MAX) shown.clear();
+  shown.add(url);
+}
+
+/** Whether a picture was shown already in this session. */
+export const wasShown = (url) => shown.has(url);
 
 function load(img) {
   const url = img.dataset.src;

@@ -10,7 +10,7 @@ import { forgetUpdate, runningVersions } from './services/updates.js';
 import { FocusManager } from './ui/focus/FocusManager.js';
 import { Router } from './ui/router.js';
 import { createBackgroundQueue, Priority } from './services/backgroundQueue.js';
-import { createTopbar, TOPBAR_ZONE, sectionForEntry, isSearchable } from './ui/components/topbar.js';
+import { createTopbar, TOPBAR_ZONE, SEARCH_BAR_ZONE, sectionForEntry, isSearchable } from './ui/components/topbar.js';
 import { createDialogService } from './ui/components/dialog.js';
 import { createNoticeService } from './ui/components/notice.js';
 import { setAdultCheck } from './ui/components/card.js';
@@ -96,7 +96,7 @@ window.addEventListener('unhandledrejection', (event) => log.error('Unhandled re
 window.addEventListener('error', (event) => log.error('Uncaught error', event.message));
 
 
-import { updateInBackground, restartDialog } from './app/updates.js';
+import { updateInBackground, restartDialog, checkUpdates, canUpdateItself } from './app/updates.js';
 import { startInAppScheduling } from './app/scheduling.js';
 
 async function boot() {
@@ -380,10 +380,15 @@ async function boot() {
       if (router.page && router.page.getQuery && ctx.searchHistory) ctx.searchHistory.add(router.page.getQuery()).catch(() => undefined);
       if (router.page && router.page.focusResults) router.page.focusResults();
     },
+    // The search closed (its x, or Back from the field): the page under it comes back and the focus goes to the bar, on the search.
     onClose: () => {
       if (router.current && router.current.name === 'search') {
-        if (!router.back()) router.reset('home', { section: 'home' });
-      } else focus.focus(TOPBAR_ZONE, topbar.indexOfSection('search'));
+        if (!router.back()) router.reset('home', { section: 'home', focusTopbar: true });
+      }
+      const toBar = () => focus.focus(TOPBAR_ZONE, topbar.indexOfSection('search'));
+      toBar();
+      // A page whose code is read on demand mounts a moment later (and would take the focus): the bar again once it is there.
+      if (router.page && router.page.ready) router.page.ready.then(toBar);
     },
   });
   document.getElementById('topbar').appendChild(topbar.el);
@@ -598,6 +603,11 @@ async function boot() {
   const handleAction = (action) => {
     if (action === Action.BACK) {
       // An open dialog or search closes first; then the page may use Back for itself (a grid that is not the main one, the player's controls).
+      // The search open: from its results (or recent searches) Back goes to the field first; from the field it closes the search.
+      if (!dialogs.isOpen() && topbar.isSearching() && focus.activeId !== SEARCH_BAR_ZONE) {
+        focus.focus(SEARCH_BAR_ZONE, 0);
+        return;
+      }
       const overlay = dialogs.isOpen() || topbar.isSearching();
       if (!overlay && router.page && router.page.onBack && router.page.onBack()) return;
       // A section page (opened from the bar): Back from its content goes to the bar first (the bar is not reached with Up); from the
@@ -705,7 +715,19 @@ async function boot() {
   // The section pages first (the top bar opens them), then the others.
   setTimeout(() => preloadPages([LAZY_PAGES.browse, LAZY_PAGES.detail, LAZY_PAGES.player, LAZY_PAGES.settings, LAZY_PAGES.collections, LAZY_PAGES.collection, LAZY_PAGES.network, LAZY_PAGES.providers, LAZY_PAGES.categories, LAZY_PAGES.diagnostics]), window.__XI_BASE__ ? 2000 : 15000);
   // A newer build is looked for once the first page is up (a few seconds later: the start-up work goes first).
-  setTimeout(() => updateInBackground(notices, restartDialog({ dialogs, notices, isBusy: () => dialogs.isOpen() || topbar.isSearching() })).catch((err) => log.warn('Update failed', err && err.message)), 3000);
+  const askRestart = restartDialog({ dialogs, notices, isBusy: () => dialogs.isOpen() || topbar.isSearching() });
+  setTimeout(() => updateInBackground(notices, askRestart).catch((err) => log.warn('Update failed', err && err.message)), 3000);
+  // Settings › Advanced › "Check for updates" (only the packages that update themselves): now, with a word on what came out.
+  ctx.updates = {
+    available: canUpdateItself(),
+    async check() {
+      notices.info(t('update.checking'), { key: 'update' });
+      const outcome = await checkUpdates({ notices, askRestart: (version) => restartDialog({ dialogs, notices, isBusy: () => dialogs.isOpen() })(version) });
+      if (outcome === 'latest') notices.success(t('update.latest'), { key: 'update' });
+      else if (outcome === 'failed') notices.error(t('update.failed'), { key: 'update' });
+      return outcome;
+    },
+  };
   // The parental PIN is set the first time the app opens (asked again at the next start if it was skipped).
   setTimeout(() => {
     ctx.parental

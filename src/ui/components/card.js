@@ -2,7 +2,7 @@ import { h } from '../dom.js';
 import { createSkeletonLine } from '../atoms/skeleton.js';
 import { createPlaceholder } from '../atoms/placeholder.js';
 import { icon } from '../icons.js';
-import { lazySrc } from '../lazyImage.js';
+import { lazySrc, markShown, wasShown } from '../lazyImage.js';
 import { i18n, t } from '../../i18n/index.js';
 import { formatNumber } from '../../core/format.js';
 import { rotatePoster } from './imageRotator.js';
@@ -74,6 +74,7 @@ export function createCard(entry, type, meta = {}) {
       const done = () => poster.classList.remove('loading');
       node.addEventListener('load', () => {
         done();
+        markShown(node.getAttribute('src'));
         if (img === node) poster.classList.add('has-picture'); // the media type icon goes (a channel logo leaves room around it)
       });
       // The picture may fail after the card let it go (release(): `img` is null, or already another one): only this <img> goes.
@@ -100,8 +101,13 @@ export function createCard(entry, type, meta = {}) {
       probe.src = url;
       return;
     }
-    poster.classList.add('loading'); // skeleton until the picture is there
     lazySrc(img, url);
+    // Shown before in this session (the page came back): at once, from the browser's cache, without the skeleton in between.
+    if (wasShown(url)) {
+      img.setAttribute('src', url);
+      return;
+    }
+    poster.classList.add('loading'); // skeleton until the picture is there
   }
 
   /** The meta line, plus (favourite categories / genres) a number after a dot: a grey sweep stands in until it is known. */

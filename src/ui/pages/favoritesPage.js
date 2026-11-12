@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { focusOnBar } from '../rowFocus.js';
 import { createHint } from '../atoms/hint.js';
 import { visibleFavorites } from '../../services/favoriteEntries.js';
 import { t } from '../../i18n/index.js';
@@ -20,6 +21,7 @@ export function createFavoritesPage(ctx) {
   });
   let destroyed = false;
   let restored = null; // the card to land on again (a title opened from here, then Back)
+  let onBar = false;
 
   async function load() {
     const current = await ctx.active.get();
@@ -28,7 +30,8 @@ export function createFavoritesPage(ctx) {
     if (destroyed) return;
     rows.set(entries);
     status.textContent = entries.length ? '' : t('common.empty');
-    if (restored) rows.focusSaved(restored);
+    if (onBar) onBar = false;
+    else if (restored) rows.focusSaved(restored);
     else rows.focusFirst();
     restored = null;
   }
@@ -42,9 +45,10 @@ export function createFavoritesPage(ctx) {
       destroyed = true;
       rows.destroy();
     },
-    saveState: () => ({ focus: rows.savedFocus() }),
+    saveState: () => ({ focus: rows.savedFocus(), onBar: focusOnBar(ctx.focus) }),
     restoreState(state) {
       restored = (state && state.focus) || null;
+      onBar = Boolean(state && state.onBar); // left from the bar (the search): it keeps the focus
     },
   };
 }

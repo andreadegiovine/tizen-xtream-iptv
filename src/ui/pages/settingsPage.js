@@ -1,4 +1,5 @@
 import { createCodePrompt } from '../components/codePrompt.js';
+import { focusOnBar } from '../rowFocus.js';
 import { resetApp } from '../../services/resetApp.js';
 import { clearDerived } from '../../services/derivedStore.js';
 import { removeCatalogType } from '../../services/catalogSync.js';
@@ -478,14 +479,24 @@ export function createSettingsPage(ctx) {
     },
   });
   // Under the title of the overview, small: the version running; the packages that update themselves add when version.json last answered.
-  function versionEl() {
+  const versionText = () => {
     const versions = runningVersions();
     const checked = lastCheck();
     const version = versions.bundle || APP_VERSION;
     const autoupdate = typeof __AUTOUPDATE__ !== 'undefined' && __AUTOUPDATE__;
-    const text = !autoupdate ? `v${version}` : checked ? t('settings.versionLine', { version, time: formatDateTime(checked, i18n.getLocale()) }) : t('settings.versionNever', { version });
-    return createHint({ text, className: 'settings-version', muted: false });
-  }
+    return !autoupdate ? `v${version}` : checked ? t('settings.versionLine', { version, time: formatDateTime(checked, i18n.getLocale()) }) : t('settings.versionNever', { version });
+  };
+  // At the bottom of the sidebar: the version running and, for the packages that update themselves, when version.json last answered.
+  const versionHint = createHint({ text: versionText(), className: 'settings-version', muted: false });
+  // Advanced › "Check for updates" (only the packages that update themselves): looks now, downloads, asks to restart.
+  const checkUpdatesRow = {
+    el: createListRow({ label: t('update.check') }).el,
+    refresh: async () => undefined,
+    async activate() {
+      await ctx.updates.check();
+      versionHint.textContent = versionText();
+    },
+  };
   // Preferences in sections, in the order of the page. `list`: rows of the usual list; `fields`: text fields (with their reset buttons).
   const sections = [
     {
@@ -513,7 +524,7 @@ export function createSettingsPage(ctx) {
       titleKey: 'settings.section.networks',
       parts: [{ list: [liveNetworks] }, { fields: [similarityRow, similarityClearRow, maxDiffRow, maxDiffClearRow] }, { list: [ignoreNumbersRow] }],
     },
-    { titleKey: 'settings.section.advanced', list: [diagnostics, resetAll] },
+    { titleKey: 'settings.section.advanced', list: [ctx.updates && ctx.updates.available ? checkUpdatesRow : null, diagnostics, resetAll].filter(Boolean) },
   ];
   // A section is a list of rows and / or text fields, or `parts` of both in the order given.
   const partsOf = (section) => section.parts || [{ list: section.list, fields: section.fields }];
@@ -547,7 +558,7 @@ export function createSettingsPage(ctx) {
   // blocks (shown only while it is the current one) and its rows (the focus walks them in this order).
   const SECTION_ICON = { 'settings.section.general': 'settings', 'settings.section.vod': 'movie', 'settings.section.live': 'network', 'settings.section.networks': 'group', 'settings.section.advanced': 'warning' };
   const subpages = [
-    { id: 'overview', icon: 'home', label: t('settings.page.overview'), blocks: [versionEl(), promos.el, opsPanel.el, panel.el, devicePanel.el], rows: [...catalogRows, dbUpdateRow, dbRemoveRow], ops: true },
+    { id: 'overview', icon: 'home', label: t('settings.page.overview'), blocks: [promos.el, opsPanel.el, panel.el, devicePanel.el], rows: [...catalogRows, dbUpdateRow, dbRemoveRow], ops: true },
     { id: 'tmdb', icon: 'info', label: 'TMDB', blocks: [tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), h('div', { class: 'list' }, titleSearchRow.el)], rows: [...tmdbRows, tmdbTokenRow, tmdbTokenRow.clearRow, titleSearchRow] },
     { id: 'trakt', icon: 'user', label: 'Trakt', blocks: [traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root)], rows: [traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktIdRow.clearRow, traktSecretRow, traktSecretRow.clearRow] },
     { id: 'opensubtitles', icon: 'subtitles', label: 'OpenSubtitles', blocks: [h('div', { class: 'fields' }, openSubtitlesRow.root)], rows: [openSubtitlesRow, openSubtitlesRow.clearRow] },
@@ -557,7 +568,7 @@ export function createSettingsPage(ctx) {
   const pageTitle = createHeading({ level: 1, text: subpages[0].label, className: 'settings-title' });
   const sections_ = subpages.map((sub) => h('div', { class: 'settings-subpage', style: 'display:none' }, sub.blocks));
   const navItems = subpages.map((sub) => createSidebarItem({ name: sub.label, icon: sub.icon }));
-  const nav = h('div', { class: 'browse-cats settings-nav' }, navItems);
+  const nav = h('div', { class: 'browse-cats settings-nav' }, navItems, versionHint);
   function showSubpage(i) {
     current = i;
     sections_.forEach((el, n) => {
@@ -698,11 +709,12 @@ export function createSettingsPage(ctx) {
       ctx.focus.unregister(ZONE_ID);
       ctx.focus.unregister(NAV_ZONE);
     },
-    saveState: () => ({ page: current, zone: ctx.focus.activeId, index: zone.index }),
+    saveState: () => ({ page: current, zone: ctx.focus.activeId, index: zone.index, onBar: focusOnBar(ctx.focus) }),
     restoreState(state) {
       restored = state || null;
       if (!restored) return;
       showSubpage(restored.page || 0);
+      if (restored.onBar) return; // left from the bar (the search): it keeps the focus
       if (restored.zone === ZONE_ID) ctx.focus.focus(ZONE_ID, restored.index);
       else ctx.focus.focus(NAV_ZONE, current);
     },

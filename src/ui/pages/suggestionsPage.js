@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { focusOnBar } from '../rowFocus.js';
 import { createHint } from '../atoms/hint.js';
 import { t } from '../../i18n/index.js';
 import { createTypedRows } from '../components/typedRows.js';
@@ -10,6 +11,7 @@ export function createSuggestionsPage(ctx) {
   const rows = createTypedRows(ctx, { prefix: 'suggestions', onOpen: (entry) => ctx.openEntry(entry, { section: 'suggestions' }) });
   let destroyed = false;
   let restored = null; // the card to land on again (a title opened from here, then Back)
+  let onBar = false;
 
   async function load() {
     const result = await ctx.suggestions.build({ limit: 500 });
@@ -17,7 +19,8 @@ export function createSuggestionsPage(ctx) {
     rows.set(result.entries);
     if (!result.entries.length) status.textContent = t('common.empty');
     else status.textContent = result.source === 'history' ? t('suggestions.fromHistory') : t('suggestions.trending');
-    if (restored) rows.focusSaved(restored);
+    if (onBar) onBar = false;
+    else if (restored) rows.focusSaved(restored);
     else rows.focusFirst();
     restored = null;
   }
@@ -34,9 +37,10 @@ export function createSuggestionsPage(ctx) {
       destroyed = true;
       rows.destroy();
     },
-    saveState: () => ({ focus: rows.savedFocus() }),
+    saveState: () => ({ focus: rows.savedFocus(), onBar: focusOnBar(ctx.focus) }),
     restoreState(state) {
       restored = (state && state.focus) || null;
+      onBar = Boolean(state && state.onBar); // left from the bar (the search): it keeps the focus
     },
   };
 }

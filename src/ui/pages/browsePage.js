@@ -1,4 +1,5 @@
 import { continueWatching } from '../../services/continueWatching.js';
+import { focusOnBar } from '../rowFocus.js';
 import { h } from '../dom.js';
 import { createIconButton } from '../atoms/iconButton.js';
 import { createHint } from '../atoms/hint.js';
@@ -911,7 +912,9 @@ export function createBrowsePage(ctx, params = {}) {
     if (back && back.guide) guideState = back.guide;
     // Opened from the top bar: the focus goes to the sidebar (its entry of the page), the user then enters the grid or the guide.
     const fromBar = !back && Boolean(params.fromBar);
-    if (fromBar) {
+    if (back && back.onBar) {
+      // Left from the bar (the search closed): the bar keeps the focus.
+    } else if (fromBar) {
       if (items[selected] && isGuideKind(items[selected].kind) && guide && guideState) guide.restore(guideState);
       ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
     } else if (back && back.zone === CATS_ZONE) ctx.focus.focus(CATS_ZONE, selected);
@@ -1048,6 +1051,7 @@ export function createBrowsePage(ctx, params = {}) {
         epgGenresExpanded,
         zone,
         index: ctx.focus.active && ctx.focus.activeId === zone ? ctx.focus.active.index : 0,
+        onBar: focusOnBar(ctx.focus),
         guide: guide ? guide.state() : null,
       };
     },

@@ -14,8 +14,13 @@ export function createLazyPage(load, create, { errorText = '' } = {}) {
   let destroyed = false;
   let pendingState = null;
 
+  let markReady = null;
   const page = {
     el: holder,
+    /** Resolves once the real page is mounted (and its state restored), or its code could not be loaded. */
+    ready: new Promise((resolve) => {
+      markReady = resolve;
+    }),
     mount() {
       mounted = true;
       if (real) return;
@@ -31,10 +36,12 @@ export function createLazyPage(load, create, { errorText = '' } = {}) {
           });
           if (mounted && real.mount) real.mount();
           if (pendingState && real.restoreState) real.restoreState(pendingState);
+          markReady();
         })
         .catch((err) => {
           log.warn('Page code not loaded', err && err.message);
           if (!destroyed) holder.textContent = errorText;
+          markReady();
         });
     },
     restoreState(state) {

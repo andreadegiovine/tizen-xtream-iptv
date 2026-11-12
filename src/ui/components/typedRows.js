@@ -22,10 +22,10 @@ export function groupByType(entries, limit = 500) {
 
 /**
  * One carousel per media type (movies, series, channels), stacked vertically with linked focus zones.
- * Used by Favorites, Suggestions and the search results. `topZone`: where Up from the first row goes (the search field of the results;
- * none elsewhere: the top bar is reached with Back). A `collection` entry carries `collectionId` and a `subtitle` (its item count).
+ * Used by Favorites, Suggestions and the search results. `linkFromField`: Down from the search field reaches the first row (the
+ * results); Up never leaves the rows (Back goes to the field, or to the top bar). A `collection` entry carries `collectionId` and a `subtitle` (its item count).
  */
-export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite = false, topZone = null }) { // onOpen(entry): titles and favourite filters (see isFilterEntry)
+export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite = false, linkFromField = false }) { // onOpen(entry): titles and favourite filters (see isFilterEntry)
   const el = h('div', { class: 'typed-rows' });
   let carousels = [];
 
@@ -62,11 +62,10 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite
         el.appendChild(carousel.el);
         ctx.focus.register(carousel.zone);
         if (i > 0) ctx.focus.link(carousel.zone.id, 'up', carousels[i - 1].zone.id);
-        else if (topZone) ctx.focus.link(carousel.zone.id, 'up', topZone);
         if (i < carousels.length - 1) ctx.focus.link(carousel.zone.id, 'down', carousels[i + 1].zone.id);
         if (ctx.enrich && carousel.type !== 'collection' && carousel.type !== 'programme') ctx.enrich(carousel.items.map((item) => item.entry), carousel.cards, carousel.type, i > 0, { hideFavorite });
       });
-      if (topZone && ctx.linkSearchDown && carousels.length) ctx.linkSearchDown(carousels[0].zone.id);
+      if (linkFromField && ctx.linkSearchDown && carousels.length) ctx.linkSearchDown(carousels[0].zone.id);
     },
     count: () => carousels.length,
     focusFirst: () => carousels.length > 0 && ctx.focus.focus(carousels[0].zone.id, 0),

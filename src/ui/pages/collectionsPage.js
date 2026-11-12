@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { focusOnBar } from '../rowFocus.js';
 import { createIconButton } from '../atoms/iconButton.js';
 import { createHint } from '../atoms/hint.js';
 import { createSidebarItem } from '../atoms/sidebarItem.js';
@@ -241,6 +242,7 @@ export function createCollectionsPage(ctx, params = {}) {
     renderCategories();
     syncPin();
     showView();
+    if (back && back.onBar) return; // left from the bar (the search closed): the bar keeps the focus
     if ((back && back.zone === CATS_ZONE) || (!back && params.fromBar)) ctx.focus.focus(CATS_ZONE, Math.max(0, selected)); // from the bar: the sidebar
     else if (shown.length) ctx.focus.focus(GRID_ZONE, back && back.zone === GRID_ZONE ? Math.min(back.index, shown.length - 1) : 0);
   }
@@ -283,7 +285,7 @@ export function createCollectionsPage(ctx, params = {}) {
     saveState() {
       const item = items[selected];
       const zone = ctx.focus.activeId;
-      return { item: item ? { kind: item.kind, id: item.id } : null, genresExpanded, zone, index: ctx.focus.active && ctx.focus.activeId === zone ? ctx.focus.active.index : 0 };
+      return { item: item ? { kind: item.kind, id: item.id } : null, genresExpanded, zone, index: ctx.focus.active && ctx.focus.activeId === zone ? ctx.focus.active.index : 0, onBar: focusOnBar(ctx.focus) };
     },
     restoreState(state) {
       restored = state;
