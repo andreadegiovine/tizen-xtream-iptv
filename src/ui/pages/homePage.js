@@ -4,7 +4,7 @@ import { createSkeletonLine } from '../atoms/skeleton.js';
 import { createHint } from '../atoms/hint.js';
 import { t } from '../../i18n/index.js';
 import { MediaType } from '../../services/mediaType.js';
-import { TOPBAR_ZONE } from '../components/topbar.js';
+import { focusRowAt, savedRowFocus } from '../rowFocus.js';
 import { createCarousel, VISIBLE_CARDS, AHEAD_CARDS } from '../components/carousel.js';
 import { createSkeletonCard } from '../components/card.js';
 import { getEntry, pageEntries } from '../../services/catalogQuery.js';
@@ -26,7 +26,7 @@ export function createHomeSkeleton(rows = 3, cards = 9) {
   return h('div', { class: 'home-rows' }, Array.from({ length: rows }, carousel));
 }
 
-export function createHomePage(ctx) {
+export function createHomePage(ctx, params = {}) {
   const rowsEl = h('div', { class: 'home-rows' });
   const hint = createHint({ text: t('common.empty'), className: 'sync-info' });
   hint.style.display = 'none'; // shown only once the rows are known to be empty
@@ -36,6 +36,8 @@ export function createHomePage(ctx) {
   let destroyed = false;
   let wasRunning = false;
   let building = 0;
+  let restored = null; // { id, index } of the card the focus was on when the page was left (a title opened from a row)
+  let focusedOnce = false;
 
   function clearRows() {
     carousels.forEach((c) => ctx.focus.unregister(c.zone.id));
@@ -93,12 +95,19 @@ export function createHomePage(ctx) {
         enrich(c);
         c.fresh = false;
       }
-      ctx.focus.link(c.zone.id, 'up', i === 0 ? TOPBAR_ZONE : carousels[i - 1].zone.id);
+      if (i > 0) ctx.focus.link(c.zone.id, 'up', carousels[i - 1].zone.id); // the top bar is reached with Back, not Up
       if (i < carousels.length - 1) ctx.focus.link(c.zone.id, 'down', carousels[i + 1].zone.id);
     });
     if (carousels.length) {
-      ctx.focus.link(TOPBAR_ZONE, 'down', carousels[0].zone.id);
-      if (hadFocus && ctx.focus.zones.has(hadFocus.id)) ctx.focus.focus(hadFocus.id, hadFocus.index);
+      const back = restored && carousels.find((c) => c.zone.id === restored.id);
+      if (back) {
+        // Back from a title opened from a row: the focus on its card again (the row reads its cards up to it first).
+        const index = restored.index;
+        restored = null;
+        focusRowAt(ctx.focus, back, index);
+      } else if (hadFocus && ctx.focus.zones.has(hadFocus.id)) ctx.focus.focus(hadFocus.id, hadFocus.index);
+      else if (!focusedOnce && !restored && !params.focusTopbar) ctx.focus.focus(carousels[0].zone.id, 0); // opened: the first card of the first row (reached with Back: the bar keeps it)
+      focusedOnce = true;
     }
     hint.style.display = carousels.length ? 'none' : '';
   }
@@ -131,12 +140,21 @@ export function createHomePage(ctx) {
 
     // Suggestions come from TMDB / Trakt: they can take a while (or fail), so they never hold the other rows back.
     const suggested = await ctx.suggestions.build({ limit: SUGGESTION_LIMIT }).then((result) => result.entries, () => []);
+    if (!destroyed && mine === building && !suggested.length && restored) {
+      // The card to go back to was in a row that did not come this time: the first card instead.
+      restored = null;
+      if (carousels.length) ctx.focus.focus(carousels[0].zone.id, 0);
+    }
     if (destroyed || mine !== building || !suggested.length) return;
     const more = [MediaType.MOVIE, MediaType.SERIES].map((type) => {
       const all = suggested.filter((entry) => entry.type === type).map((entry) => ({ entry, type }));
       return { id: `homeSuggested-${type}`, title: t(`home.suggested.${type}`), items: all.slice(0, first), more: async (offset, count) => all.slice(offset, offset + count) };
     });
     render(definitions.concat(more));
+    if (restored && !destroyed && carousels.length) {
+      restored = null;
+      ctx.focus.focus(carousels[0].zone.id, 0);
+    }
   }
 
   return {
@@ -153,6 +171,11 @@ export function createHomePage(ctx) {
       destroyed = true;
       if (unsubscribe) unsubscribe();
       clearRows();
+    },
+    /** The card the focus is on, to land on it again when the page comes back. */
+    saveState: () => ({ focus: savedRowFocus(ctx.focus, carousels.map((c) => c.zone.id)) }),
+    restoreState(state) {
+      restored = (state && state.focus) || null;
     },
   };
 }

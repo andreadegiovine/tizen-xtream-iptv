@@ -82,8 +82,8 @@ export function createTopbar(ctx, handlers = {}) {
         api.openSearch();
         return;
       }
-      // focusTopbar: after switching section the focus stays on the bar (press Down to enter the page).
-      ctx.router.reset(section.route, { ...(section.params || {}), section: section.id, focusTopbar: true });
+      // fromBar: the page takes the focus (its sidebar, its first row): the bar is only Left / Right, Back comes back to it.
+      ctx.router.reset(section.route, { ...(section.params || {}), section: section.id, fromBar: true });
     },
   });
   ctx.focus.register(zone);
@@ -209,6 +209,7 @@ export function createTopbar(ctx, handlers = {}) {
     setVisible(visible) {
       el.style.display = visible ? '' : 'none';
     },
+    isVisible: () => el.style.display !== 'none',
     /** A page to go back to: the pointer's Back button can show. */
     setCanGoBack(on) {
       el.classList.toggle('has-back', Boolean(on));
@@ -240,9 +241,6 @@ export function createTopbar(ctx, handlers = {}) {
       el.classList.add('searching');
       renderSearch(query);
       ctx.focus.register(searchZone);
-      // While searching the section bar is empty: pages that go "up" to it are sent to the search field.
-      ctx.focus.link(TOPBAR_ZONE, 'up', SEARCH_BAR_ZONE);
-      api.syncSearchLinks();
       if (!silent) {
         ctx.focus.focus(SEARCH_BAR_ZONE, 0);
         input.focus();
@@ -270,9 +268,9 @@ export function createTopbar(ctx, handlers = {}) {
       if (notify && handlers.onClose) handlers.onClose();
     },
     /** "Down" from the search field goes where "Down" from the section bar goes (the page's first zone). */
-    syncSearchLinks() {
-      const links = ctx.focus.links.get(TOPBAR_ZONE);
-      if (searching && links && links.down) ctx.focus.link(SEARCH_BAR_ZONE, 'down', links.down);
+    /** Down from the search field: the results (or the recent searches) of the search page. */
+    linkSearchDown(zoneId) {
+      ctx.focus.link(SEARCH_BAR_ZONE, 'down', zoneId);
     },
     /** Lets main.js attach the handlers after the router exists. */
     setHandlers(next) {

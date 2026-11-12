@@ -1,6 +1,6 @@
 import { h } from '../dom.js';
 import { t } from '../../i18n/index.js';
-import { TOPBAR_ZONE } from './topbar.js';
+import { focusRowAt, savedRowFocus } from '../rowFocus.js';
 import { createCarousel } from './carousel.js';
 
 const ORDER = ['collection', 'movie', 'series', 'live', 'programme'];
@@ -22,9 +22,10 @@ export function groupByType(entries, limit = 500) {
 
 /**
  * One carousel per media type (movies, series, channels), stacked vertically with linked focus zones.
- * Used by Favorites, Suggestions and the search results. A `collection` entry carries `collectionId` and a `subtitle` (its item count).
+ * Used by Favorites, Suggestions and the search results. `topZone`: where Up from the first row goes (the search field of the results;
+ * none elsewhere: the top bar is reached with Back). A `collection` entry carries `collectionId` and a `subtitle` (its item count).
  */
-export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite = false }) { // onOpen(entry): titles and favourite filters (see isFilterEntry)
+export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite = false, topZone = null }) { // onOpen(entry): titles and favourite filters (see isFilterEntry)
   const el = h('div', { class: 'typed-rows' });
   let carousels = [];
 
@@ -60,15 +61,23 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite
       carousels.forEach((carousel, i) => {
         el.appendChild(carousel.el);
         ctx.focus.register(carousel.zone);
-        ctx.focus.link(carousel.zone.id, 'up', i === 0 ? TOPBAR_ZONE : carousels[i - 1].zone.id);
+        if (i > 0) ctx.focus.link(carousel.zone.id, 'up', carousels[i - 1].zone.id);
+        else if (topZone) ctx.focus.link(carousel.zone.id, 'up', topZone);
         if (i < carousels.length - 1) ctx.focus.link(carousel.zone.id, 'down', carousels[i + 1].zone.id);
         if (ctx.enrich && carousel.type !== 'collection' && carousel.type !== 'programme') ctx.enrich(carousel.items.map((item) => item.entry), carousel.cards, carousel.type, i > 0, { hideFavorite });
       });
-      if (carousels.length) ctx.focus.link(TOPBAR_ZONE, 'down', carousels[0].zone.id);
-      if (ctx.syncSearchLinks) ctx.syncSearchLinks();
+      if (topZone && ctx.linkSearchDown && carousels.length) ctx.linkSearchDown(carousels[0].zone.id);
     },
     count: () => carousels.length,
     focusFirst: () => carousels.length > 0 && ctx.focus.focus(carousels[0].zone.id, 0),
+    /** The card the focus is on (to land on it again when the page comes back), or null. */
+    savedFocus: () => savedRowFocus(ctx.focus, carousels.map((c) => c.zone.id)),
+    /** Focuses a saved card (its row reads its cards up to it), or the first card when its row is gone. */
+    focusSaved(saved) {
+      const row = saved && carousels.find((c) => c.zone.id === saved.id);
+      if (row) focusRowAt(ctx.focus, row, saved.index);
+      else if (carousels.length) ctx.focus.focus(carousels[0].zone.id, 0);
+    },
     destroy: clear,
   };
 }

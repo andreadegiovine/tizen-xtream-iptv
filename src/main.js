@@ -387,7 +387,7 @@ async function boot() {
     },
   });
   document.getElementById('topbar').appendChild(topbar.el);
-  ctx.syncSearchLinks = () => topbar.syncSearchLinks();
+  ctx.linkSearchDown = (zoneId) => topbar.linkSearchDown(zoneId);
   ctx.setSearchText = (text) => topbar.setQuery(text);
   ctx.refreshClock = () => topbar.refreshClock();
   ctx.screensaver = createScreensaver({ idleMs: prefs.screensaver * 60 * 1000 });
@@ -395,7 +395,7 @@ async function boot() {
   const router = new Router({
     container: document.getElementById('content'),
     routes: {
-      home: () => createHomePage(ctx),
+      home: (params) => createHomePage(ctx, params),
       comingSoon: (params) => createComingSoonPage(ctx, params),
       search: (params) => createSearchPage(ctx, params),
       suggestions: () => createSuggestionsPage(ctx),
@@ -417,7 +417,6 @@ async function boot() {
       // The search bar belongs to the results page: leaving it closes the bar, coming back reopens it.
       if (entry.name === 'search' && !topbar.isSearching()) topbar.openSearch({ query: (page && page.getQuery && page.getQuery()) || '', silent: true });
       else if (entry.name !== 'search' && topbar.isSearching()) topbar.closeSearch({ notify: false });
-      topbar.syncSearchLinks();
       topbar.setSkeleton(entry.name === 'providerSetup' && Boolean(entry.params.firstRun));
       topbar.setVisible(entry.name !== 'player');
       topbar.setCanGoBack(router.depth > 1);
@@ -427,9 +426,9 @@ async function boot() {
       ctx.refreshTopbar().catch(() => undefined);
       // Pages with their own zone take focus in mount(). When the user switched section from the bar,
       // or the page has no zone, the focus stays on (or returns to) the bar, on the current section.
-      // A page with a sidebar opened from the bar puts the focus on its sidebar itself (once it is drawn).
-      const ownsBarFocus = entry.name === 'browse' || entry.name === 'settings';
-      if ((entry.params.focusTopbar && !ownsBarFocus) || !focus.active) focus.focus(TOPBAR_ZONE, topbar.indexOfSection(section));
+      // A page takes the focus itself (its sidebar, its first row); the bar has it only when a page asks (Home reached with Back) or has
+      // nothing to focus.
+      if (entry.params.focusTopbar || !focus.active) focus.focus(TOPBAR_ZONE, topbar.indexOfSection(section));
     },
   });
   ctx.router = router;
@@ -601,6 +600,12 @@ async function boot() {
       // An open dialog or search closes first; then the page may use Back for itself (a grid that is not the main one, the player's controls).
       const overlay = dialogs.isOpen() || topbar.isSearching();
       if (!overlay && router.page && router.page.onBack && router.page.onBack()) return;
+      // A section page (opened from the bar): Back from its content goes to the bar first (the bar is not reached with Up); from the
+      // bar, the usual Back (Home, then the exit question).
+      if (!overlay && router.depth <= 1 && focus.activeId !== TOPBAR_ZONE && topbar.isVisible() && router.current && router.current.name !== 'providerSetup') {
+        focus.focus(TOPBAR_ZONE, topbar.indexOfSection(sectionForEntry(router.current)));
+        return;
+      }
       onBack();
       return;
     }

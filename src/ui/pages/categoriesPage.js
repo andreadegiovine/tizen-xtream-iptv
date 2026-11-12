@@ -7,7 +7,6 @@ import { framedPage } from '../components/formPage.js';
 import { t } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
-import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { listCategories } from '../../services/catalogQuery.js';
 import { markStale } from '../../services/catalogSync.js';
@@ -248,8 +247,6 @@ export function createCategoriesPage(ctx, params = {}) {
       ctx.focus.register(multiZone);
       ctx.focus.link(ZONE_ID, 'left', MULTI_ZONE);
       ctx.focus.link(MULTI_ZONE, 'right', ZONE_ID);
-      ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
-      ctx.focus.link(TOPBAR_ZONE, 'down', ZONE_ID);
       loadType(type).then(() => ctx.focus.focus(ZONE_ID, 0));
     },
     destroy() {

@@ -18,7 +18,6 @@ import { t, i18n, detectLocale } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { Dir } from '../focus/models.js';
 import { LANGUAGE_OPTIONS, BUFFER_OPTIONS, SCREENSAVER_OPTIONS, SUGGESTION_SOURCE_OPTIONS, isEpgUrl } from '../../services/settings.js';
-import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { createSyncPanel, createTmdbPanel, createTraktPanel, createDevicePanel, createOperationsPanel } from '../components/syncPanel.js';
 import { log } from '../../core/logger.js';
@@ -648,11 +647,17 @@ export function createSettingsPage(ctx) {
 
   return {
     el: page,
-    /** Back from the rows goes to the sidebar first; from the sidebar the page is left. */
+    /** Back from the rows goes to the sidebar, then to its first entry; from there the top bar (main.js). */
     onBack() {
-      if (ctx.focus.activeId !== ZONE_ID) return false;
-      ctx.focus.focus(NAV_ZONE, current);
-      return true;
+      if (ctx.focus.activeId === ZONE_ID) {
+        ctx.focus.focus(NAV_ZONE, current);
+        return true;
+      }
+      if (ctx.focus.activeId === NAV_ZONE && current !== 0) {
+        ctx.focus.focus(NAV_ZONE, 0); // the first entry (the overview) before the bar
+        return true;
+      }
+      return false;
     },
     mount() {
       opsPanel.mount();
@@ -679,11 +684,8 @@ export function createSettingsPage(ctx) {
       devicePanel.refresh().catch(() => undefined);
       ctx.focus.register(zone);
       ctx.focus.register(navZone);
-      ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
-      ctx.focus.link(ZONE_ID, 'left', NAV_ZONE);
-      ctx.focus.link(NAV_ZONE, 'up', TOPBAR_ZONE);
-      ctx.focus.link(NAV_ZONE, 'right', ZONE_ID);
-      ctx.focus.link(TOPBAR_ZONE, 'down', NAV_ZONE);
+      // As the other pages with a sidebar: the sidebar Up / Down (OK enters the sub-page), the rows among themselves; Back from the rows
+      // goes to the sidebar, then to its first entry, then to the top bar (main.js).
       showSubpage(restored ? restored.page || 0 : 0);
       if (restored && restored.zone === ZONE_ID) ctx.focus.focus(ZONE_ID, restored.index);
       else ctx.focus.focus(NAV_ZONE, current); // the sidebar first, as the other pages with one

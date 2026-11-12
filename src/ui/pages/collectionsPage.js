@@ -5,7 +5,6 @@ import { createSidebarItem } from '../atoms/sidebarItem.js';
 import { t, i18n } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel, ListModel } from '../focus/models.js';
-import { TOPBAR_ZONE } from '../components/topbar.js';
 import { createCard } from '../components/card.js';
 import { ensureVisible, revealNearest } from '../scroll.js';
 import { SIDEBAR_ICON, columnsFor } from './browsePage.js';
@@ -242,7 +241,7 @@ export function createCollectionsPage(ctx, params = {}) {
     renderCategories();
     syncPin();
     showView();
-    if (back && back.zone === CATS_ZONE) ctx.focus.focus(CATS_ZONE, selected);
+    if ((back && back.zone === CATS_ZONE) || (!back && params.fromBar)) ctx.focus.focus(CATS_ZONE, Math.max(0, selected)); // from the bar: the sidebar
     else if (shown.length) ctx.focus.focus(GRID_ZONE, back && back.zone === GRID_ZONE ? Math.min(back.index, shown.length - 1) : 0);
   }
 
@@ -250,33 +249,29 @@ export function createCollectionsPage(ctx, params = {}) {
     el: h('section', { class: 'page browse' }, h('div', { class: 'browse-body' }, catList, h('div', { class: 'browse-main' }, head, gridEl, empty))),
     /** On a genre (or favourites) Back first goes to "show all", the page is left from there. */
     onBack() {
+      // From the grid or its head: the sidebar first (as the other pages with one); from a collection of the sidebar: its main entry;
+      // from there the top bar (main.js).
+      if ((ctx.focus.activeId === GRID_ZONE || ctx.focus.activeId === HEAD_ZONE) && catNodes.length) {
+        ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
+        return true;
+      }
       const main = items.findIndex((item) => item.kind === 'all');
       if (main < 0 || selected === main || !catNodes.length) return false;
-      const inSidebar = ctx.focus.activeId === CATS_ZONE;
       selected = main;
       catNodes.forEach((node, n) => node.classList.toggle('current', n === main));
       syncPin();
       showView();
-      if (inSidebar) ctx.focus.focus(CATS_ZONE, main);
-      else {
-        revealCurrent();
-        if (shown.length) ctx.focus.focus(GRID_ZONE, 0);
-        else ctx.focus.focus(CATS_ZONE, main);
-      }
+      ctx.focus.focus(CATS_ZONE, main);
       return true;
     },
     mount() {
       ctx.focus.register(catsZone);
       ctx.focus.register(gridZone);
       ctx.focus.register(headZone);
-      ctx.focus.link(HEAD_ZONE, 'up', TOPBAR_ZONE);
+      // Each zone keeps the focus: the sidebar Up / Down (OK opens its grid), the grid between its cards (Up from the first row: the
+      // buttons of its head), the top bar only with Back (grid → sidebar → bar).
       ctx.focus.link(HEAD_ZONE, 'down', GRID_ZONE);
-      ctx.focus.link(HEAD_ZONE, 'left', CATS_ZONE);
-      ctx.focus.link(CATS_ZONE, 'up', TOPBAR_ZONE);
-      ctx.focus.link(CATS_ZONE, 'right', GRID_ZONE);
-      ctx.focus.link(GRID_ZONE, 'left', CATS_ZONE);
       ctx.focus.link(GRID_ZONE, 'up', HEAD_ZONE);
-      ctx.focus.link(TOPBAR_ZONE, 'down', HEAD_ZONE);
       init().catch((err) => log.warn('Collections init failed', err && err.message));
     },
     destroy() {

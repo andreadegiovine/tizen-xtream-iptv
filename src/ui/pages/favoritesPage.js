@@ -19,6 +19,7 @@ export function createFavoritesPage(ctx) {
     },
   });
   let destroyed = false;
+  let restored = null; // the card to land on again (a title opened from here, then Back)
 
   async function load() {
     const current = await ctx.active.get();
@@ -27,7 +28,9 @@ export function createFavoritesPage(ctx) {
     if (destroyed) return;
     rows.set(entries);
     status.textContent = entries.length ? '' : t('common.empty');
-    rows.focusFirst();
+    if (restored) rows.focusSaved(restored);
+    else rows.focusFirst();
+    restored = null;
   }
 
   return {
@@ -38,6 +41,10 @@ export function createFavoritesPage(ctx) {
     destroy() {
       destroyed = true;
       rows.destroy();
+    },
+    saveState: () => ({ focus: rows.savedFocus() }),
+    restoreState(state) {
+      restored = (state && state.focus) || null;
     },
   };
 }

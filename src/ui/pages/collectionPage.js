@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { focusRowAt, savedRowFocus } from '../rowFocus.js';
 import { createIconButton } from '../atoms/iconButton.js';
 import { createChip, createChipLabel } from '../atoms/chip.js';
 import { createHint } from '../atoms/hint.js';
@@ -8,7 +9,6 @@ import { createMetaText } from '../atoms/metaParts.js';
 import { t } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
-import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { createCarousel } from '../components/carousel.js';
 import { createImageRotator } from '../components/imageRotator.js';
@@ -30,6 +30,7 @@ export function createCollectionPage(ctx, params) {
   let rows = [];
   let destroyed = false;
   let focusedOnce = false;
+  let restoredFocus = null; // { id, index } saved when the page was left
   let backdropToken = 0;
 
   const poster = h('div', { class: 'detail-poster' });
@@ -49,17 +50,22 @@ export function createCollectionPage(ctx, params) {
   };
 
   function setRows(next) {
-    const keep = ctx.focus.activeId && rows.some((r) => r.id === ctx.focus.activeId) ? { id: ctx.focus.activeId, index: ctx.focus.active.index } : null;
+    let keep = ctx.focus.activeId && rows.some((r) => r.id === ctx.focus.activeId) ? { id: ctx.focus.activeId, index: ctx.focus.active.index } : null;
+    // Coming back (a title opened from the row): the focus on its card again, once the row is there.
+    if (!keep && restoredFocus && next.some((r) => r.id === restoredFocus.id)) {
+      keep = restoredFocus;
+      restoredFocus = null;
+      focusedOnce = true;
+    }
     rows.forEach((r) => ctx.focus.unregister(r.id));
     rows = next;
     rows.forEach((r, i) => {
       ctx.focus.register(r.zone);
-      ctx.focus.link(r.id, 'up', i === 0 ? TOPBAR_ZONE : rows[i - 1].id);
+      if (i > 0) ctx.focus.link(r.id, 'up', rows[i - 1].id); // no way up to the top bar: Back leaves the page
       if (i < rows.length - 1) ctx.focus.link(r.id, 'down', rows[i + 1].id);
     });
-    if (rows.length) ctx.focus.link(TOPBAR_ZONE, 'down', rows[0].id);
     const target = keep && rows.find((r) => r.id === keep.id);
-    if (target) ctx.focus.focus(target.id, keep.index);
+    if (target) focusRowAt(ctx.focus, target, keep.index);
     else if (rows.length && !focusedOnce) {
       focusedOnce = true;
       ctx.focus.focus(rows[0].id, 0);
@@ -164,7 +170,7 @@ export function createCollectionPage(ctx, params) {
         onOpen: (item) => ctx.openEntry(item.entry, { section: 'collections' }),
       });
       itemsEl.appendChild(carousel.el);
-      next.push({ id: 'collectionItems', zone: carousel.zone });
+      next.push({ id: 'collectionItems', zone: carousel.zone, fill: carousel.fill });
       if (ctx.enrich) {
         ['movie', 'series', 'live'].forEach((type) => {
           const at = members.map((entry, i) => (entry.type === type && i < carousel.cards.length ? i : -1)).filter((i) => i >= 0);
@@ -244,9 +250,14 @@ export function createCollectionPage(ctx, params) {
       rows.forEach((r) => ctx.focus.unregister(r.id));
       rows = [];
     },
-    saveState: () => ({}),
-    restoreState() {
-      /* nothing to restore */
+    saveState: () => ({ focus: savedRowFocus(ctx.focus, rows.map((r) => r.id)) }),
+    restoreState(state) {
+      restoredFocus = (state && state.focus) || null;
+      const row = restoredFocus && rows.find((r) => r.id === restoredFocus.id);
+      if (row) {
+        focusRowAt(ctx.focus, row, restoredFocus.index);
+        restoredFocus = null;
+      }
     },
   };
 }

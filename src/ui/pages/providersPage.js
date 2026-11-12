@@ -5,7 +5,6 @@ import { t, i18n } from '../../i18n/index.js';
 import { formatDate } from '../../core/format.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { GridModel } from '../focus/models.js';
-import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
 import { log } from '../../core/logger.js';
 
@@ -160,8 +159,6 @@ export function createProvidersPage(ctx, params = {}) {
     el: h('section', { class: 'page framed providers' }, h('div', { class: 'page-container' }, createHeading({ level: 1, text: t('nav.provider') }), list)),
     mount() {
       ctx.focus.register(zone);
-      ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
-      ctx.focus.link(TOPBAR_ZONE, 'down', ZONE_ID);
       // Opens on the provider list: the first thing to do here is pick or edit a provider.
       render(params.focusIndex || 0);
     },

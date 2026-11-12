@@ -8,7 +8,6 @@ import { derivedVersion, readDerivedAny, writeDerived } from '../../services/der
 import { t, i18n } from '../../i18n/index.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
-import { TOPBAR_ZONE } from '../components/topbar.js';
 import { isFilterEntry, filterCardMeta } from '../components/typedRows.js';
 import { favoriteFilterEntries, openFilter } from '../../services/favoriteFilters.js';
 import { ensureVisible, revealNearest } from '../scroll.js';
@@ -708,7 +707,6 @@ export function createBrowsePage(ctx, params = {}) {
     count.textContent = '';
     renderHead();
     guideHost.style.display = '';
-    ctx.focus.link(CATS_ZONE, 'right', GUIDE_ZONE);
     ctx.focus.link(HEAD_ZONE, 'down', GUIDE_ZONE);
     if (guide && guideKind !== kind) {
       guide.destroy();
@@ -729,7 +727,6 @@ export function createBrowsePage(ctx, params = {}) {
   function hideGuide() {
     gridEl.style.display = '';
     guideHost.style.display = 'none';
-    ctx.focus.link(CATS_ZONE, 'right', GRID_ZONE);
     ctx.focus.link(HEAD_ZONE, 'down', GRID_ZONE);
   }
 
@@ -768,6 +765,11 @@ export function createBrowsePage(ctx, params = {}) {
         selected = Math.min(selected, items.length - 1);
         rebuildSidebar(item.kind);
         return;
+      }
+      // OK on the entry already on screen: into its grid (or guide) as it is, without reading it again.
+      if (i === selected) {
+        if (isGuideKind(item.kind) && guide && guide.count && ctx.focus.focus(GUIDE_ZONE, 0)) return;
+        if (!isGuideKind(item.kind) && entries.length && ctx.focus.focus(GRID_ZONE, Math.min(gridZone.index, entries.length - 1))) return;
       }
       selected = i;
       catNodes.forEach((node, n) => node.classList.toggle('current', n === i));
@@ -908,7 +910,7 @@ export function createBrowsePage(ctx, params = {}) {
     // watching after its last title was marked as seen).
     if (back && back.guide) guideState = back.guide;
     // Opened from the top bar: the focus goes to the sidebar (its entry of the page), the user then enters the grid or the guide.
-    const fromBar = !back && Boolean(params.focusTopbar);
+    const fromBar = !back && Boolean(params.fromBar);
     if (fromBar) {
       if (items[selected] && isGuideKind(items[selected].kind) && guide && guideState) guide.restore(guideState);
       ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
@@ -983,14 +985,10 @@ export function createBrowsePage(ctx, params = {}) {
       ctx.focus.register(gridZone);
       ctx.focus.register(guideZone);
       ctx.focus.register(headZone);
-      ctx.focus.link(HEAD_ZONE, 'up', TOPBAR_ZONE);
+      // Each zone keeps the focus: the sidebar Up / Down (OK opens its grid), the grid between its cards (Up from the first row: the
+      // buttons of its head), the top bar only with Back (grid → sidebar → bar).
       ctx.focus.link(HEAD_ZONE, 'down', GRID_ZONE);
-      ctx.focus.link(HEAD_ZONE, 'left', CATS_ZONE);
-      ctx.focus.link(CATS_ZONE, 'up', TOPBAR_ZONE);
-      ctx.focus.link(CATS_ZONE, 'right', GRID_ZONE);
-      ctx.focus.link(GRID_ZONE, 'left', CATS_ZONE);
       ctx.focus.link(GRID_ZONE, 'up', HEAD_ZONE);
-      ctx.focus.link(GUIDE_ZONE, 'left', CATS_ZONE);
       if (type === 'live') {
         // A new guide download: the rows (channels with programmes) and their programmes are read again.
         if (ctx.epg && ctx.epg.onUpdated)
@@ -1026,7 +1024,6 @@ export function createBrowsePage(ctx, params = {}) {
           });
       }
       ctx.focus.link(GUIDE_ZONE, 'up', HEAD_ZONE);
-      ctx.focus.link(TOPBAR_ZONE, 'down', HEAD_ZONE);
       init().catch((err) => log.warn('Browse init failed', err && err.message));
     },
     destroy() {

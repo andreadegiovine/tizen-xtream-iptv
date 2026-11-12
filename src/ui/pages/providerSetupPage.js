@@ -7,7 +7,6 @@ import { M3uClient } from '../../services/m3uClient.js';
 import { ProviderType, providerType } from '../../services/providerTypes.js';
 import { AppError, ErrorCode, toAppError } from '../../core/errors.js';
 import { log } from '../../core/logger.js';
-import { TOPBAR_ZONE } from '../components/topbar.js';
 import { createForm, framedPage } from '../components/formPage.js';
 import { createHomeSkeleton } from './homePage.js';
 
@@ -51,8 +50,6 @@ export function createProviderSetupPage(ctx, params = {}) {
     form = next;
     body.appendChild(form.el);
     ctx.focus.register(form.zone);
-    ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE);
-    ctx.focus.link(TOPBAR_ZONE, 'down', ZONE_ID);
     ctx.focus.focus(ZONE_ID, 0);
   }
 

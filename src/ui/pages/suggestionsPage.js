@@ -9,6 +9,7 @@ export function createSuggestionsPage(ctx) {
   const status = createHint({ text: t('suggestions.loading'), className: 'search-status' });
   const rows = createTypedRows(ctx, { prefix: 'suggestions', onOpen: (entry) => ctx.openEntry(entry, { section: 'suggestions' }) });
   let destroyed = false;
+  let restored = null; // the card to land on again (a title opened from here, then Back)
 
   async function load() {
     const result = await ctx.suggestions.build({ limit: 500 });
@@ -16,7 +17,9 @@ export function createSuggestionsPage(ctx) {
     rows.set(result.entries);
     if (!result.entries.length) status.textContent = t('common.empty');
     else status.textContent = result.source === 'history' ? t('suggestions.fromHistory') : t('suggestions.trending');
-    rows.focusFirst();
+    if (restored) rows.focusSaved(restored);
+    else rows.focusFirst();
+    restored = null;
   }
 
   return {
@@ -30,6 +33,10 @@ export function createSuggestionsPage(ctx) {
     destroy() {
       destroyed = true;
       rows.destroy();
+    },
+    saveState: () => ({ focus: rows.savedFocus() }),
+    restoreState(state) {
+      restored = (state && state.focus) || null;
     },
   };
 }

@@ -39,7 +39,7 @@ const catName = (page, ctx) => page.el.querySelectorAll('.browse-cat')[ctx.focus
 
 test('opened from the top bar: the focus goes to the sidebar entry of the page, not to the grid', async () => {
   const { ctx } = await setup('browse-focus-bar');
-  const page = createBrowsePage(ctx, { type: 'movie', section: 'movies', focusTopbar: true });
+  const page = createBrowsePage(ctx, { type: 'movie', section: 'movies', fromBar: true });
   page.mount();
   await tick(150);
   expect(ctx.focus.activeId).toBe('browseCategories');
@@ -71,16 +71,38 @@ test('Back from the grid goes to the sidebar first; from the sidebar of the main
 
 test('back from a title: the focus returns to its card in the grid', async () => {
   const { ctx } = await setup('browse-focus-return');
-  const page = createBrowsePage(ctx, { type: 'movie', section: 'movies', focusTopbar: true });
+  const page = createBrowsePage(ctx, { type: 'movie', section: 'movies', fromBar: true });
   page.mount();
   await tick(150);
   ctx.focus.focus('browseGrid', 2);
   const state = page.saveState();
   page.destroy();
-  const again = createBrowsePage(ctx, { type: 'movie', section: 'movies', focusTopbar: true });
+  const again = createBrowsePage(ctx, { type: 'movie', section: 'movies', fromBar: true });
   again.restoreState(state);
   again.mount();
   await tick(150);
   expect(active(ctx)).toBe('browseGrid:2');
   again.destroy();
+});
+
+test('the sidebar moves only Up / Down (OK opens its grid), the grid only among its cards', async () => {
+  const { Action } = await import('../../src/core/input.js');
+  const { ctx } = await setup('browse-focus-moves');
+  const page = createBrowsePage(ctx, { type: 'movie', section: 'movies', fromBar: true });
+  page.mount();
+  await tick(150);
+  ctx.focus.handle(Action.RIGHT);
+  expect(ctx.focus.activeId).toBe('browseCategories'); // no way right into the grid
+  ctx.focus.handle(Action.UP);
+  expect(ctx.focus.activeId).toBe('browseCategories'); // nor up to the top bar
+  ctx.focus.handle(Action.ENTER); // OK on the entry on screen: into its grid
+  await tick(60);
+  expect(ctx.focus.activeId).toBe('browseGrid');
+  ctx.focus.handle(Action.LEFT);
+  expect(ctx.focus.activeId).toBe('browseGrid'); // the first card: no way left to the sidebar
+  ctx.focus.handle(Action.UP);
+  expect(ctx.focus.activeId).toBe('browseGrid'); // "Show all" has no buttons in its head: nowhere up (not the top bar)
+  expect(page.onBack()).toBe(true);
+  expect(ctx.focus.activeId).toBe('browseCategories');
+  page.destroy();
 });

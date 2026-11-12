@@ -14,8 +14,8 @@ import { t, i18n } from '../../i18n/index.js';
 import { icon } from '../icons.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
-import { TOPBAR_ZONE } from '../components/topbar.js';
 import { ensureVisible } from '../scroll.js';
+import { focusRowAt, savedRowFocus } from '../rowFocus.js';
 import { createCarousel } from '../components/carousel.js';
 import { createSelectField } from '../atoms/selectField.js';
 import { getEntry, listCategories, listNetworks, createMergeSearch } from '../../services/catalogQuery.js';
@@ -55,6 +55,7 @@ export function createDetailPage(ctx, params) {
   let autoFocus = null; // { id, index } of a row the page focused by itself before the play button existed
   // Opened from the guide on a programme: once the list is there, the focus starts on it (its start time, or null).
   let landOn = typeof params.programme === 'number' ? params.programme : null;
+  let restoredFocus = null; // { id, index } saved when the page was left (see saveState)
 
   let backdropUrl = '';
   let posterUrl = '';
@@ -253,6 +254,13 @@ export function createDetailPage(ctx, params) {
     const landing = landOn !== null && next.find((r) => r.id === 'detailEpg');
     if (landing) landOn = null; // only the first time the programme list is there
     let keep = ctx.focus.activeId && rows.some((r) => r.id === ctx.focus.activeId) ? { id: ctx.focus.activeId, index: ctx.focus.active.index } : null;
+    // Coming back to the page (a title opened from one of its rows, the player): the focus where it was, once its row is there.
+    if (!keep && restoredFocus && next.some((r) => r.id === restoredFocus.id)) {
+      keep = restoredFocus;
+      restoredFocus = null;
+      focusedOnce = true;
+      autoFocus = null;
+    }
     // The details of a series arrive after the first build: the focus the page chose on its own moves to the play button once it exists.
     const hasActions = next.some((r) => r.id === 'detailActions');
     if (keep && autoFocus && hasActions && keep.id === autoFocus.id && keep.index === autoFocus.index) keep = null;
@@ -269,16 +277,15 @@ export function createDetailPage(ctx, params) {
     }
     rows.forEach((r, i) => {
       ctx.focus.register(r.zone);
-      ctx.focus.link(r.id, 'up', i === 0 ? TOPBAR_ZONE : rows[i - 1].id);
+      if (i > 0) ctx.focus.link(r.id, 'up', rows[i - 1].id); // no way up to the top bar: Back is the only way out of a title
       if (i < rows.length - 1) ctx.focus.link(r.id, 'down', rows[i + 1].id);
     });
-    if (rows.length) ctx.focus.link(TOPBAR_ZONE, 'down', rows[0].id);
     const target = keep && rows.find((r) => r.id === keep.id);
     if (landing) {
       focusedOnce = true;
       autoFocus = null;
       ctx.focus.focus(landing.id, landing.zone.index);
-    } else if (target) ctx.focus.focus(target.id, keep.index);
+    } else if (target) focusRowAt(ctx.focus, target, keep.index);
     else if (rows.length && (!focusedOnce || (autoFocus && hasActions))) {
       const actions = rows.find((r) => r.id === 'detailActions') || rows[0];
       focusedOnce = true;
@@ -363,7 +370,7 @@ export function createDetailPage(ctx, params) {
       onOpen: null, // not clickable yet
     });
     castEl.appendChild(carousel.el);
-    next.push({ id: 'detailCast', zone: carousel.zone });
+    next.push({ id: 'detailCast', zone: carousel.zone, fill: carousel.fill });
   }
 
   function renderRelated(next) {
@@ -377,7 +384,7 @@ export function createDetailPage(ctx, params) {
       onAdded: (list, made) => ctx.enrich && ctx.enrich(list.map((item) => item.entry), made, entry.type, true),
     });
     relatedEl.appendChild(carousel.el);
-    next.push({ id: 'detailRelated', zone: carousel.zone });
+    next.push({ id: 'detailRelated', zone: carousel.zone, fill: carousel.fill });
     if (ctx.enrich) ctx.enrich(related.slice(0, carousel.cards.length), carousel.cards, entry.type, true);
   }
 
@@ -414,7 +421,7 @@ export function createDetailPage(ctx, params) {
       onOpen: (item) => play({ list: episodes, startIndex: episodes.indexOf(item.episode) }),
     });
     episodesEl.appendChild(carousel.el);
-    next.push({ id: 'detailEpisodes', zone: carousel.zone });
+    next.push({ id: 'detailEpisodes', zone: carousel.zone, fill: carousel.fill });
   }
 
   function isEntryWatched(episodes) {
@@ -785,9 +792,17 @@ export function createDetailPage(ctx, params) {
       rows.forEach((r) => ctx.focus.unregister(r.id));
       rows = [];
     },
-    saveState: () => ({}),
-    restoreState() {
-      /* focus is restored by load(): records refresh after returning from the player */
+    /** Where the focus was (a card of a row, a button), to land on it again when the page comes back. */
+    saveState: () => ({ focus: savedRowFocus(ctx.focus, rows.map((r) => r.id)) }),
+    restoreState(state) {
+      restoredFocus = (state && state.focus) || null;
+      if (!restoredFocus) return;
+      const row = rows.find((r) => r.id === restoredFocus.id);
+      if (row) {
+        // The rows are there already (the page was built before this call).
+        focusRowAt(ctx.focus, row, restoredFocus.index);
+        restoredFocus = null;
+      }
     },
   };
 }
