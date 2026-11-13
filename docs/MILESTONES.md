@@ -888,3 +888,7 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - iOS version added to the open points.
 - Tests: exit after the saves only while hidden and only with an alarm, not when shown again first; the Tizen adapter; Right from the sidebar into the grid. Not verified on the TV.
 
+### Patch 175 — Right from a sidebar only moves the focus
+- Right on a sidebar (Movies, TV Series, Live TV, Collections, Settings) no longer acts like OK: it moves the focus into the grid / guide / sub-page on screen (where its focus was), without opening the sidebar entry that has the focus; OK still opens it. Left from the content still does not go back.
+- Test: another entry focused, Right lands in the grid on screen and the page title does not change. Not verified on the TV.
+

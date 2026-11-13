@@ -751,11 +751,17 @@ export function createBrowsePage(ctx, params = {}) {
     onLongActivate: () => guide && guide.longActivate(),
   });
 
+  /** The focus into what is on screen: the guide, or the grid where it was (nothing when empty). */
+  function enterContent() {
+    if (guideHost.style.display !== 'none') return Boolean(guide && guide.count) && ctx.focus.focus(GUIDE_ZONE);
+    return entries.length > 0 && ctx.focus.focus(GRID_ZONE, Math.min(gridZone.index, entries.length - 1));
+  }
+
   const catsZone = new FocusZone({
     id: CATS_ZONE,
     nodes: () => catNodes,
-    // Right enters the grid (or guide) like OK; an expand / collapse entry stays where it is.
-    model: sidebarModel({ getCount: () => items.length, enter: (i) => items[i] && !/toggle$/i.test(items[i].kind) && catsZone.onActivate(i) }),
+    // Right: the focus into the grid (or guide) on screen, whatever sidebar entry has the focus (nothing is opened: OK does that).
+    model: sidebarModel({ getCount: () => items.length, enter: () => enterContent() }),
     onFocus: (i) => {
       if (i !== selected) autoSidebar = false; // the user moved in the sidebar: the focus is theirs
       if (!catNodes[i]) return;

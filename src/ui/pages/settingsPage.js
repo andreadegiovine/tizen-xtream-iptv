@@ -647,7 +647,7 @@ export function createSettingsPage(ctx) {
   const navZone = new FocusZone({
     id: NAV_ZONE,
     nodes: () => navItems,
-    model: sidebarModel({ getCount: () => navItems.length, enter: () => navZone.onActivate() }), // Right enters the sub-page like OK
+    model: sidebarModel({ getCount: () => navItems.length, enter: () => navZone.onActivate() }), // Right: the focus into the sub-page on screen (the one of the focused entry)
     onFocus: (i) => {
       navItems[i].classList.add('focused');
       if (i !== current) showSubpage(i);

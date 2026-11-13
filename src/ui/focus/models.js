@@ -50,8 +50,8 @@ export class ListModel {
 }
 
 /**
- * A sidebar: Up / Down along it, Right enters its content (`enter(index)`, what OK does: an expand / collapse entry does nothing); there is
- * no way back with Left from the content (Back is the way).
+ * A sidebar: Up / Down along it, Right moves the focus into the content on screen (`enter(index)`: nothing is opened, OK does that);
+ * there is no way back with Left from the content (Back is the way).
  */
 export function sidebarModel({ getCount, enter }) {
   const list = new ListModel({ orientation: 'vertical', getCount });

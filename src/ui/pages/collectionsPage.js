@@ -180,8 +180,8 @@ export function createCollectionsPage(ctx, params = {}) {
   const catsZone = new FocusZone({
     id: CATS_ZONE,
     nodes: () => catNodes,
-    // Right enters the grid like OK; an expand / collapse entry stays where it is.
-    model: sidebarModel({ getCount: () => items.length, enter: (i) => items[i] && !/toggle$/i.test(items[i].kind) && catsZone.onActivate(i) }),
+    // Right: the focus into the grid on screen, whatever sidebar entry has the focus (nothing is opened: OK does that).
+    model: sidebarModel({ getCount: () => items.length, enter: () => shown.length > 0 && ctx.focus.focus(GRID_ZONE, Math.min(gridZone.index, shown.length - 1)) }),
     onFocus: (i) => {
       if (!catNodes[i]) return;
       catNodes[i].classList.add('focused');
