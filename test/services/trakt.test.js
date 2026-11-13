@@ -502,6 +502,7 @@ describe('rewind: the point reached back to the start, also on Trakt', () => {
     expect(playbackMatches(items, { entryKey: 'movie:t5' }).map((i) => i.id)).toEqual([1]);
     expect(playbackMatches(items, { entryKey: 'series:t9', episodeKey: 's1e3' }).map((i) => i.id)).toEqual([3]);
     expect(playbackMatches(items, { entryKey: 'movie:p:12' })).toEqual([]); // no tmdb id: nothing on Trakt
+    expect(playbackMatches(items, { entryKey: 'series:t9' }).map((i) => i.id)).toEqual([2, 3]); // a whole series: every episode
   });
 
   test('clearProgress removes the playback entry and the point waiting to be sent', async () => {
@@ -536,3 +537,38 @@ describe('rewind: the point reached back to the start, also on Trakt', () => {
     expect(trakt.clearProgress).toHaveBeenCalledWith(rec);
   });
 });
+
+describe('rewind of a whole series', () => {
+  test('every episode forgotten here, the show out of the Trakt history and its playback points removed', async () => {
+    const store = new WatchStore(await appDb());
+    const trakt = { reportManual: jest.fn().mockResolvedValue(true), clearProgress: jest.fn().mockResolvedValue(true) };
+    const ws = createWatchState({ store, trakt });
+    const ep = (n, position) => ({ key: `series:t9|s1e${n}`, entryKey: 'series:t9', episodeKey: `s1e${n}`, type: 'series', providerId: 'p', duration: 100, position });
+    await store.save(ep(1, 100));
+    await store.save(ep(2, 40));
+    await store.save({ key: 'movie:t5', entryKey: 'movie:t5', type: 'movie', duration: 100, position: 40 });
+    expect(await ws.rewindSeries('p', 'series:t9')).toBe(2);
+    expect(await ws.recentForEntry('series:t9')).toEqual([]);
+    expect((await ws.get('movie:t5')).position).toBe(40); // other titles untouched
+    expect(trakt.reportManual).toHaveBeenCalledWith('series:t9', false);
+    expect(trakt.clearProgress).toHaveBeenCalledWith({ entryKey: 'series:t9' });
+  });
+
+  test('clearProgress of a whole series removes the points of all its episodes', async () => {
+    const db = await appDb();
+    await kvSet(db, 'trakt.token', { accessToken: 'AT', refreshToken: 'RT', expiresAt: Date.now() + 90 * 24 * 3600 * 1000 });
+    const removed = [];
+    const client = {
+      enabled: true,
+      playback: async () => ({ ok: true, data: [{ id: 7, type: 'episode', show: { ids: { tmdb: 9 } }, episode: { season: 1, number: 2 } }, { id: 8, type: 'episode', show: { ids: { tmdb: 9 } }, episode: { season: 2, number: 1 } }, { id: 9, type: 'movie', movie: { ids: { tmdb: 9 } } }] }),
+      removePlayback: async (token, id) => {
+        removed.push(id);
+        return { ok: true, status: 204 };
+      },
+    };
+    const service = createTraktService({ db, client, wait: async () => {} });
+    expect(await service.clearProgress({ entryKey: 'series:t9' })).toBe(true);
+    expect(removed).toEqual([7, 8]);
+  });
+});
+

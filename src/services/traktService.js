@@ -53,12 +53,14 @@ export function progressPayload(record) {
   return ep ? { show: { ids: { tmdb } }, episode: { season: Number(ep[1]), number: Number(ep[2]) }, progress } : null;
 }
 
-/** The playback entries of Trakt that are the point reached in `record`'s movie or episode (tmdb ids only). */
+/** The playback entries of Trakt that are the point reached in `record`'s movie or episode, or in every episode of a series without `episodeKey` (tmdb ids only). */
 export function playbackMatches(items, record) {
   const match = /^(movie|series):t(\d+)$/.exec(record.entryKey || '');
   if (!match || !Array.isArray(items)) return [];
   const tmdb = Number(match[2]);
   if (match[1] === 'movie') return items.filter((item) => item && item.type === 'movie' && item.movie && item.movie.ids && Number(item.movie.ids.tmdb) === tmdb);
+  const showOf = (item) => item && item.type === 'episode' && item.show && item.show.ids && Number(item.show.ids.tmdb) === tmdb;
+  if (!record.episodeKey) return items.filter(showOf); // the whole series
   const ep = /^s(\d+)e(\d+)$/.exec(record.episodeKey || '');
   if (!ep) return [];
   return items.filter(
@@ -317,16 +319,17 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
       }
     },
     /**
-     * "Rewind": the point reached in a movie / episode removed from Trakt (its playback progress), and the one waiting to be sent with it.
-     * Never throws. Resolves true when Trakt has no point for it any more.
+     * "Rewind": the point reached in a movie / episode (every episode of a series: `record` without `episodeKey`) removed from Trakt (its
+     * playback progress), and the one waiting to be sent with it. Never throws. Resolves true when Trakt has no point for it any more.
      */
     async clearProgress(record) {
       try {
-        const payload = progressPayload({ ...record, position: 1, duration: 2 }); // the same title / episode as a point would name
-        if (!payload || !(await service.isConnected())) return false;
+        const wholeSeries = /^series:t\d+$/.test(record.entryKey || '') && !record.episodeKey;
+        const payload = wholeSeries ? null : progressPayload({ ...record, position: 1, duration: 2 }); // the same title / episode as a point would name
+        if ((!payload && !wholeSeries) || !(await service.isConnected())) return false;
         const waiting = await kvGet(db, PROGRESS_KEY, {});
         const kept = waiting[record.entryKey];
-        if (kept && JSON.stringify({ ...kept.payload, progress: 0 }) === JSON.stringify({ ...payload, progress: 0 })) await forgetWaiting(record.entryKey, kept.savedAt);
+        if (kept && (wholeSeries || JSON.stringify({ ...kept.payload, progress: 0 }) === JSON.stringify({ ...payload, progress: 0 }))) await forgetWaiting(record.entryKey, kept.savedAt);
         const access = await token();
         if (!access) return false;
         const list = await client.playback(access);
@@ -585,6 +588,19 @@ export function createWatchState({ store, trakt, nowMs = () => Date.now() }) {
         const saved = await store.save({ ...record, position: 0 }, now);
         if (trakt && trakt.clearProgress) await trakt.clearProgress(record).catch(() => false);
         return saved;
+      }),
+    /**
+     * "Rewind" a series: the state of all its episodes forgotten (points reached and watched), here and on Trakt (history and playback
+     * progress), so it starts again from the first episode. Resolves with the number of records removed.
+     */
+    rewindSeries: (providerId, entryKey) =>
+      queued(async () => {
+        const count = await store.clearEntry(providerId, entryKey);
+        if (trakt) {
+          await trakt.reportManual(entryKey, false).catch(() => false);
+          if (trakt.clearProgress) await trakt.clearProgress({ entryKey }).catch(() => false);
+        }
+        return count;
       }),
     /** The point reached in a title (pause, close): told to Trakt, which keeps it as playback progress. Never throws. */
     reportProgress(record) {

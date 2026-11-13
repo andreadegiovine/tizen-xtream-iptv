@@ -447,11 +447,16 @@ export function createDetailPage(ctx, params) {
     }
   }
 
-  /** "Rewind": the point reached in the movie (or the episode that plays next) back to the start; the focus goes back to Play. */
+  /** "Rewind": the point reached in the movie, or the state of every episode of the series, back to the start; the focus goes back to Play. */
   async function rewind(record) {
     try {
-      const saved = await ctx.watch.rewind(record);
-      records = records.map((r) => (r.key === saved.key ? saved : r));
+      if (entry.type === 'series') {
+        await ctx.watch.rewindSeries(providerId, entry.key);
+        await reloadRecords();
+      } else {
+        const saved = await ctx.watch.rewind(record);
+        records = records.map((r) => (r.key === saved.key ? saved : r));
+      }
       if (destroyed) return;
       build();
       ctx.focus.focus('detailActions', 0);
@@ -541,9 +546,10 @@ export function createDetailPage(ctx, params) {
       if (canResume) note = formatClock(record.position);
       buttons.push({ id: 'play', icon: 'play', label: t('detail.play'), run: () => play(entry.type === 'live' ? { restart: true } : {}) });
     }
-    // Rewind (only with a point reached): the point goes back to the start (also on Trakt), nothing plays; Play then starts from the
-    // beginning. For a series, the episode that plays next.
-    if (canResume) buttons.push({ id: 'rewind', icon: 'rewind', label: t('detail.rewind'), run: () => rewind(resumeRecord) });
+    // Rewind (only with a state: a point reached; for a series any episode started or watched): the state goes back to the start (also on
+    // Trakt), nothing plays; Play then starts from the beginning (a series from its first episode).
+    const seriesState = entry.type === 'series' && records.some((r) => r.watched || r.position > 0);
+    if (canResume || seriesState) buttons.push({ id: 'rewind', icon: 'rewind', label: t('detail.rewind'), run: () => rewind(resumeRecord) });
     const watched = isEntryWatched(episodes);
     if (buttons.length && entry.type !== 'live') {
       buttons.push({ id: 'watched', icon: 'check', active: watched, label: watched ? t('detail.unwatched') : t('detail.watched'), run: () => toggleWatched(episodes, watched) });

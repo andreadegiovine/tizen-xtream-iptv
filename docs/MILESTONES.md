@@ -892,3 +892,7 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - Right on a sidebar (Movies, TV Series, Live TV, Collections, Settings) no longer acts like OK: it moves the focus into the grid / guide / sub-page on screen (where its focus was), without opening the sidebar entry that has the focus; OK still opens it. Left from the content still does not go back.
 - Test: another entry focused, Right lands in the grid on screen and the page title does not change. Not verified on the TV.
 
+### Patch 176 — Rewind of a series: the whole series
+- Title page of a series: "Rewind" no longer resets only the episode that plays next: every episode's state (points reached and watched) is forgotten (`watch.rewindSeries`: local records removed; on Trakt the show is taken out of the history and the playback points of all its episodes are removed, `playbackMatches` without `episodeKey`). The button shows when any episode was started or watched; afterwards Play starts from the first episode. Movies unchanged.
+- Tests: the whole series matched and removed on Trakt, the local records of the series only. Browser check with the mock: a series with a watched and a started episode, Rewind clears both, the note goes back to S1E1, focus on Play. Not verified on the TV.
+
